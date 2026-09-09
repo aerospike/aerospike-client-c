@@ -28,7 +28,7 @@
  * codepoint). Out-of-bounds indexes are clamped by the server.
  *
  * All functions in this module, including as_operations_to_string(), require
- * server version 8.1.3 or later. When ctx is not NULL and not empty, the
+ * server version 8.2.0 or later. When ctx is not NULL and not empty, the
  * operation targets a string nested inside a list or map. The ctx-navigated
  * leaf must already be an Aerospike string; operations
  * on non-string leaves return AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE.
@@ -87,22 +87,36 @@ typedef enum as_string_write_flags_e {
 	AS_STRING_WRITE_FLAGS_DEFAULT = 0,
 
 	/**
-	 * Create new values only. Valid on insert, overwrite, concat, append,
-	 * prepend, pad_start, pad_end, and repeat. Returns AEROSPIKE_ERR_BIN_EXISTS
-	 * if the bin already exists. Mutually exclusive with
-	 * AS_STRING_WRITE_FLAGS_UPDATE_ONLY. Invalid with a CDT context path.
+	 * Apply the operation only if the bin does not already exist. Against a live
+	 * bin the server returns AEROSPIKE_ERR_BIN_EXISTS. Valid only on the eight
+	 * additive create ops: insert, overwrite, concat, append, prepend, pad_start,
+	 * pad_end, and repeat. On any other string modify op the server rejects it
+	 * with AEROSPIKE_ERR_REQUEST_INVALID via that op's flag mask.
+	 * AS_STRING_WRITE_FLAGS_CREATE_ONLY combined with
+	 * AS_STRING_WRITE_FLAGS_UPDATE_ONLY is AEROSPIKE_ERR_REQUEST_INVALID, and
+	 * AS_STRING_WRITE_FLAGS_CREATE_ONLY on a CDT context path is
+	 * AEROSPIKE_ERR_REQUEST_INVALID. None of those three rejections is
+	 * suppressible by AS_STRING_WRITE_FLAGS_NO_FAIL: the server raises them while
+	 * parsing the operation's arguments, upstream of every NO_FAIL test.
 	 */
 	AS_STRING_WRITE_FLAGS_CREATE_ONLY = 1,
 
 	/**
-	 * Update existing values only. Mutually exclusive with
-	 * AS_STRING_WRITE_FLAGS_CREATE_ONLY.
+	 * Apply the operation only to an existing bin, disabling bin creation. On a
+	 * missing bin the operation is a silent no-op and the bin is not created.
+	 * Valid on all string modify ops. Mutually exclusive with
+	 * AS_STRING_WRITE_FLAGS_CREATE_ONLY; combining the two is
+	 * AEROSPIKE_ERR_REQUEST_INVALID.
 	 */
 	AS_STRING_WRITE_FLAGS_UPDATE_ONLY = 2,
 
 	/**
-	 * Do not raise an error if a modify operation cannot be applied.
-	 * The record is left unchanged.
+	 * Do not raise an error when the modify itself cannot be applied. The
+	 * operation becomes a silent success and the bin is left at its unmodified
+	 * prior value. AS_STRING_WRITE_FLAGS_NO_FAIL does not suppress every
+	 * failure. AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE and ill-formed UTF-8 in the
+	 * bin surface regardless of the flag, as do the argument-parsing rejections
+	 * listed on AS_STRING_WRITE_FLAGS_CREATE_ONLY.
 	 */
 	AS_STRING_WRITE_FLAGS_NO_FAIL = 4
 } as_string_write_flags;
@@ -294,7 +308,8 @@ as_operations_string_char_at(as_operations* ops, const char* name, as_cdt_ctx* c
 
 /**
  * Create string find operation that returns the codepoint index of the first
- * occurrence of needle, or -1 if not found.
+ * occurrence of needle, or -1 if not found. Matching is Unicode canonical, not
+ * byte-exact.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
@@ -325,6 +340,7 @@ as_operations_string_find_occurrence(
 
 /**
  * Create string contains operation that returns true if the bin contains needle.
+ * Matching is Unicode canonical, not byte-exact.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
@@ -338,7 +354,8 @@ as_operations_string_contains(as_operations* ops, const char* name, as_cdt_ctx* 
 
 /**
  * Create string starts_with operation that returns true if the bin begins with
- * prefix.
+ * prefix. Matching is Unicode canonical, not byte-exact: a precomposed prefix
+ * matches a decomposed bin and vice versa.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
@@ -354,7 +371,8 @@ as_operations_string_starts_with(
 
 /**
  * Create string ends_with operation that returns true if the bin ends with
- * suffix.
+ * suffix. Matching is Unicode canonical, not byte-exact: a precomposed suffix
+ * matches a decomposed bin and vice versa.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
@@ -370,7 +388,8 @@ as_operations_string_ends_with(
 
 /**
  * Create string to_integer operation that parses the string as an int64.
- * Returns AEROSPIKE_ERR_OP_NOT_APPLICABLE if the bin cannot be parsed as an
+ * Returns AEROSPIKE_ERR_OP_NOT_APPLICABLE with
+ * AS_SUB_OPNOT_STRING_CONVERSION_FAILED (10) if the bin cannot be parsed as an
  * integer.
  *
  * @param ops Operations array.
@@ -384,7 +403,12 @@ as_operations_string_to_integer(as_operations* ops, const char* name, as_cdt_ctx
 
 /**
  * Create string to_double operation that parses the string as a 64-bit float.
- * Returns AEROSPIKE_ERR_OP_NOT_APPLICABLE if the bin cannot be parsed as a double.
+ * Returns AEROSPIKE_ERR_OP_NOT_APPLICABLE with
+ * AS_SUB_OPNOT_STRING_CONVERSION_FAILED (10) if the bin cannot be parsed as a
+ * double.
+ * as_operations_string_is_numeric() is not a reliable pre-flight for this op:
+ * AS_STRING_NUMERIC_FLOAT requires a `.` followed by a digit, so `"5"` is false
+ * under AS_STRING_NUMERIC_FLOAT even though it parses as a double.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
@@ -507,7 +531,8 @@ as_operations_string_split_separator(
 
 /**
  * Create string b64_decode operation that treats the bin as base64 text and
- * returns the decoded bytes as a blob.
+ * returns the decoded bytes as a blob. Returns AEROSPIKE_ERR_OP_NOT_APPLICABLE
+ * with AS_SUB_OPNOT_STRING_B64_INVALID (13) if the bin does not hold valid base64.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
@@ -561,7 +586,9 @@ as_operations_string_regex_compare_flags(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY, AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and
+ * AS_STRING_WRITE_FLAGS_NO_FAIL all apply.
  * @param index Index of the codepoint to insert at.
  * @param value The value to insert.
  *
@@ -581,7 +608,9 @@ as_operations_string_insert(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY, AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and
+ * AS_STRING_WRITE_FLAGS_NO_FAIL all apply.
  * @param index Index of the codepoint to overwrite at.
  * @param value The value to overwrite.
  *
@@ -599,7 +628,9 @@ as_operations_string_overwrite(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY, AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and
+ * AS_STRING_WRITE_FLAGS_NO_FAIL all apply.
  * @param value The value to append.
  *
  * @ingroup string_operations
@@ -616,7 +647,9 @@ as_operations_string_concat(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY, AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and
+ * AS_STRING_WRITE_FLAGS_NO_FAIL all apply.
  * @param values The list of values to append. This function takes ownership and frees heap memory associated with this parameter.
  *
  * @ingroup string_operations
@@ -634,7 +667,9 @@ as_operations_string_concat_list(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY, AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and
+ * AS_STRING_WRITE_FLAGS_NO_FAIL all apply.
  * @param value The value to append.
  *
  * @ingroup string_operations
@@ -652,7 +687,9 @@ as_operations_string_append(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY, AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and
+ * AS_STRING_WRITE_FLAGS_NO_FAIL all apply.
  * @param value The value to prepend.
  *
  * @ingroup string_operations
@@ -663,15 +700,19 @@ as_operations_string_prepend(
 	);
 
 /**
- * Create string snip operation that removes codepoints from start through the
- * end of the string. This uses the 1-arg wire form; policy flags are not sent.
- * Use as_operations_string_snip() when non-default policy flags are required.
+ * Create string snip operation that removes the codepoints from start through the
+ * end of the string, truncating it. Negative start counts from the end of the
+ * string. The server's snip argument list is positional — start, end, flags —
+ * so this 1-arg form cannot carry policy flags without also supplying an
+ * explicit end; policy is accepted for signature parity with the other modify
+ * operations and is not transmitted. Use as_operations_string_snip() when write
+ * flags must be honored.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
  * @param policy String policy. Ignored on the wire for this overload.
- * @param start First codepoint to remove, inclusive.
+ * @param start First codepoint to remove, inclusive (negative counts from end).
  *
  * @ingroup string_operations
 */
@@ -688,7 +729,9 @@ as_operations_string_snip_start(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and AS_STRING_WRITE_FLAGS_NO_FAIL apply.
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY is rejected by the server on this op.
  * @param start First codepoint to remove, inclusive.
  * @param end One past the last codepoint to remove, exclusive.
  *
@@ -702,12 +745,15 @@ as_operations_string_snip(
 
 /**
  * Create string replace operation that replaces the first occurrence of needle
- * with replacement.
+ * with replacement. Needle matching is Unicode canonical, not byte-exact: a
+ * precomposed needle matches a decomposed occurrence in the bin and vice versa.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and AS_STRING_WRITE_FLAGS_NO_FAIL apply.
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY is rejected by the server on this op.
  * @param needle The string to replace.
  * @param replacement The string to replace with.
  *
@@ -721,12 +767,14 @@ as_operations_string_replace(
 
 /**
  * Create string replace_all operation that replaces every occurrence of needle
- * with replacement.
+ * with replacement. Needle matching is Unicode canonical, not byte-exact.
  *
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and AS_STRING_WRITE_FLAGS_NO_FAIL apply.
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY is rejected by the server on this op.
  * @param needle The string to replace.
  * @param replacement The string to replace with.
  *
@@ -744,7 +792,9 @@ as_operations_string_replace_all(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and AS_STRING_WRITE_FLAGS_NO_FAIL apply.
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY is rejected by the server on this op.
  *
  * @ingroup string_operations
 */
@@ -759,7 +809,9 @@ as_operations_string_upper(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and AS_STRING_WRITE_FLAGS_NO_FAIL apply.
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY is rejected by the server on this op.
  *
  * @ingroup string_operations
 */
@@ -775,7 +827,9 @@ as_operations_string_lower(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and AS_STRING_WRITE_FLAGS_NO_FAIL apply.
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY is rejected by the server on this op.
  *
  * @ingroup string_operations
 */
@@ -791,7 +845,9 @@ as_operations_string_case_fold(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and AS_STRING_WRITE_FLAGS_NO_FAIL apply.
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY is rejected by the server on this op.
  */
 AS_EXTERN bool
 as_operations_string_normalize_nfc(
@@ -805,7 +861,9 @@ as_operations_string_normalize_nfc(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and AS_STRING_WRITE_FLAGS_NO_FAIL apply.
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY is rejected by the server on this op.
  *
  * @ingroup string_operations
 */
@@ -821,7 +879,9 @@ as_operations_string_trim_start(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and AS_STRING_WRITE_FLAGS_NO_FAIL apply.
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY is rejected by the server on this op.
  *
  * @ingroup string_operations
 */
@@ -836,7 +896,9 @@ as_operations_string_trim_end(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and AS_STRING_WRITE_FLAGS_NO_FAIL apply.
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY is rejected by the server on this op.
  *
  * @ingroup string_operations
 */
@@ -853,7 +915,9 @@ as_operations_string_trim(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY, AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and
+ * AS_STRING_WRITE_FLAGS_NO_FAIL all apply.
  * @param target_length The target length of the string.
  * @param pad_string The string to pad with.
 *
@@ -873,7 +937,9 @@ as_operations_string_pad_start(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY, AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and
+ * AS_STRING_WRITE_FLAGS_NO_FAIL all apply.
  * @param target_length The target length of the string.
  * @param pad_string The string to pad with.
  *
@@ -891,7 +957,9 @@ as_operations_string_pad_end(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY, AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and
+ * AS_STRING_WRITE_FLAGS_NO_FAIL all apply.
  * @param count The number of times to repeat the string. Must be non-negative.
  *
  * @ingroup string_operations
@@ -908,7 +976,10 @@ as_operations_string_repeat(
  * @param ops Operations array.
  * @param name Name of string bin.
  * @param ctx Optional path into a string nested inside a list or map.
- * @param policy String policy.
+ * @param policy String policy. AS_STRING_WRITE_FLAGS_DEFAULT,
+ * AS_STRING_WRITE_FLAGS_UPDATE_ONLY, and AS_STRING_WRITE_FLAGS_NO_FAIL apply.
+ * AS_STRING_WRITE_FLAGS_CREATE_ONLY is rejected by the server on this op.
+ * AS_STRING_WRITE_FLAGS_NO_FAIL also suppresses a regex compile failure.
  * @param pattern The regex pattern to match against.
  * @param replacement The string to replace with.
  * @param flags The regex flags to use.
@@ -922,10 +993,12 @@ as_operations_string_regex_replace(
 	);
 
 /**
- * Create to_string operation that converts an integer, double, string, or blob
- * bin to its string representation. Returns AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE for
- * any other bin type. This top-level operation does not accept ctx and does not
- * send a msgpack payload.
+ * Create to_string operation that converts an integer, double, bool, string, or
+ * blob bin to its string representation. Returns
+ * AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE for any other bin type. A blob bin whose
+ * bytes are not valid UTF-8 returns AEROSPIKE_ERR_OP_NOT_APPLICABLE with
+ * AS_SUB_OPNOT_STRING_UTF8_INVALID (11). This top-level operation does not
+ * accept ctx and does not send a msgpack payload.
  *
  * @param ops Operations array.
  * @param name Name of string bin.

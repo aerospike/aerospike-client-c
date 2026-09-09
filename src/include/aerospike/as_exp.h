@@ -2212,7 +2212,7 @@ as_exp_destroy_base64(char* base64)
  * Create expression that concatenates the string items of a list and returns the
  * result as a single string, with no separator between items. Every item must be
  * a string. An empty list yields an empty string.
- * Requires server version 8.1.3 or later.
+ * Requires server version 8.2.0 or later.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
  * @param __bin			List bin or list value expression.
@@ -2229,7 +2229,7 @@ as_exp_destroy_base64(char* base64)
  * __separator between consecutive items, and returns the result as a single
  * string. Every item must be a string. An empty list yields an empty string,
  * and a single-item list yields that item with no separator applied.
- * Requires server version 8.1.3 or later.
+ * Requires server version 8.2.0 or later.
  *
  * @param __ctx			Optional context path for nested CDT (as_cdt_ctx).
  * @param __separator	Separator string expression.
@@ -3575,7 +3575,7 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create expression that returns the base64 text of the whole blob bin as a string.
- * Requires server version 8.1.3 or later.
+ * Requires server version 8.2.0 or later.
  *
  * @param __bin			A blob bin expression to apply this function to.
  * @return (string expression)
@@ -3591,7 +3591,7 @@ as_exp_destroy_base64(char* base64)
  * of the blob. This uses the 1-arg wire form. Use as_exp_bit_b64_encode_range()
  * when invert_size semantics are required. Note the span is expressed in bytes,
  * unlike the bit offsets and sizes other bit expressions take.
- * Requires server version 8.1.3 or later.
+ * Requires server version 8.2.0 or later.
  *
  * @param __byte_offset	Byte offset into the blob. Negative values count from the end.
  * @param __bin			A blob bin expression to apply this function to.
@@ -3610,7 +3610,7 @@ as_exp_destroy_base64(char* base64)
  * than forward from __byte_offset, so a __byte_size of 0 means to the end of the
  * blob. Note the span is expressed in bytes, unlike the bit offsets and sizes
  * other bit expressions take.
- * Requires server version 8.1.3 or later.
+ * Requires server version 8.2.0 or later.
  *
  * @param __byte_offset	Byte offset into the blob. Negative values count from the end.
  * @param __byte_size	Number of bytes to encode.
@@ -3840,12 +3840,17 @@ as_exp_destroy_base64(char* base64)
  * corresponding as_operations_string_*() operate API; as_exp_to_string() mirrors
  * as_operations_to_string().
  *
- * Requires server version 8.1.3 or later.
+ * Requires server version 8.2.0 or later.
  *
  * Unlike operate-level string ops, these macros do not take as_cdt_ctx. To target
  * a string nested inside a list or map, extract the leaf with
  * as_exp_list_get_by_index() or as_exp_map_get_by_key() and pass the result as
  * the operand expression.
+ *
+ * On modify expressions, only AS_STRING_WRITE_FLAGS_NO_FAIL is meaningful in
+ * __policy. AS_STRING_WRITE_FLAGS_CREATE_ONLY and AS_STRING_WRITE_FLAGS_UPDATE_ONLY
+ * are bin-existence predicates and do not carry over to a source expression.
+ * Modify expressions return a new value and do not change the underlying bin.
  */
 
 //---------------------------------
@@ -3917,6 +3922,7 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create an expression that performs an as_operations_string_find operation.
+ * Matching is Unicode canonical, not byte-exact.
  *
  * @param __needle		The string to search for.
  * @param __bin			A bin expression to apply this function to.
@@ -3930,6 +3936,8 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create an expression that performs an as_operations_string_find_occurrence operation.
+ * Matching is Unicode canonical, not byte-exact. Negative occurrences search backward
+ * (-1 is the last match).
  *
  * @param __needle		The string to search for.
  * @param __occurrence	The occurrence of the string to search for.
@@ -3946,6 +3954,7 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create an expression that performs an as_operations_string_contains operation.
+ * Matching is Unicode canonical, not byte-exact.
  *
  * @param __needle		The string to search for.
  * @param __bin			A bin expression to apply this function to.
@@ -3959,6 +3968,7 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create an expression that performs an as_operations_string_starts_with operation.
+ * Matching is Unicode canonical, not byte-exact.
  *
  * @param __prefix		The string to search for.
  * @param __bin			A bin expression to apply this function to.
@@ -3972,6 +3982,7 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create an expression that performs an as_operations_string_ends_with operation.
+ * Matching is Unicode canonical, not byte-exact.
  *
  * @param __suffix		The string to search for.
  * @param __bin			A bin expression to apply this function to.
@@ -3985,6 +3996,9 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create an expression that performs an as_operations_string_to_integer operation.
+ * Returns AEROSPIKE_ERR_OP_NOT_APPLICABLE with
+ * AS_SUB_OPNOT_STRING_CONVERSION_FAILED (10) if the source cannot be parsed as an
+ * integer.
  *
  * @param __bin			A bin expression to apply this function to.
  * @return (integer bin) The integer value of the string in the bin.
@@ -3996,6 +4010,9 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create an expression that performs an as_operations_string_to_double operation.
+ * Returns AEROSPIKE_ERR_OP_NOT_APPLICABLE with
+ * AS_SUB_OPNOT_STRING_CONVERSION_FAILED (10) if the source cannot be parsed as a
+ * double.
  *
  * @param __bin			A bin expression to apply this function to.
  * @return (double bin) The double value of the string in the bin.
@@ -4103,6 +4120,8 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create an expression that performs an as_operations_string_b64_decode operation.
+ * Returns AEROSPIKE_ERR_OP_NOT_APPLICABLE with AS_SUB_OPNOT_STRING_B64_INVALID
+ * (13) if the source does not hold valid base64.
  *
  * @param __bin			A bin expression to apply this function to.
  * @return (blob bin) The blob value of the string in the bin.
@@ -4168,7 +4187,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_insert operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __index		The index of the codepoint to insert at.
  * @param __value		The value to insert.
  * @param __bin			A bin expression to apply this function to.
@@ -4185,7 +4207,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_overwrite operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __index		The index of the codepoint to overwrite at.
  * @param __value		The value to overwrite.
  * @param __bin			A bin expression to apply this function to.
@@ -4202,7 +4227,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_concat operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __value		The value to append.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The string in the bin with the value appended.
@@ -4217,7 +4245,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_concat_list operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __values		An expression that evaluates to the list of values to append
  *						(e.g. as_exp_val_list() or a sub-expression yielding a list).
  *						Unlike as_exp_string_concat(), this value is not auto-wrapped
@@ -4237,7 +4268,10 @@ as_exp_destroy_base64(char* base64)
  * Unlike legacy AS_OPERATOR_APPEND operations, this string-package expression
  * uses Unicode codepoint semantics.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __value		The value to append.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The string in the bin with the value appended.
@@ -4254,7 +4288,10 @@ as_exp_destroy_base64(char* base64)
  * Unlike legacy AS_OPERATOR_PREPEND operations, this string-package expression
  * uses Unicode codepoint semantics.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __value		The value to prepend.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The string in the bin with the value prepended.
@@ -4267,12 +4304,16 @@ as_exp_destroy_base64(char* base64)
 		__bin
 
 /**
- * Create expression that removes codepoints from __start through the end of the
- * string. This uses the 1-arg wire form; policy flags are not sent. Use
- * as_exp_string_snip() when non-default policy flags are required.
+ * Create expression that removes the codepoints of __bin from __start through the
+ * end and returns the truncated string. Negative __start counts from the end of
+ * the string. The server's snip argument list is positional — start, end, flags
+ * — so this 1-arg form cannot carry policy flags without also supplying an
+ * explicit end; __policy is accepted for signature parity with the other modify
+ * expressions and is not transmitted. Use as_exp_string_snip() when write flags
+ * must be honored.
  *
- * @param __policy		The string policy. Ignored on the wire for this overload.
- * @param __start		First codepoint to remove, inclusive.
+ * @param __policy		String policy. Ignored on the wire for this overload.
+ * @param __start		First codepoint to remove, inclusive (negative counts from end).
  * @param __bin			A bin expression to apply this function to.
  * @return (string expression)
  * @ingroup expression
@@ -4284,8 +4325,12 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create an expression that performs an as_operations_string_snip operation.
+ * Removes the half-open codepoint range [__start, __end).
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __start		First codepoint to remove, inclusive.
  * @param __end			One past the last codepoint to remove, exclusive.
  * @param __bin			A bin expression to apply this function to.
@@ -4301,8 +4346,12 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create an expression that performs an as_operations_string_replace operation.
+ * Needle matching is Unicode canonical, not byte-exact.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __needle		The string to replace.
  * @param __replacement	The string to replace with.
  * @param __bin			A bin expression to apply this function to.
@@ -4318,8 +4367,12 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create an expression that performs an as_operations_string_replace_all operation.
+ * Needle matching is Unicode canonical, not byte-exact.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __needle		The string to replace.
  * @param __replacement	The string to replace with.
  * @param __bin			A bin expression to apply this function to.
@@ -4335,7 +4388,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_upper operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The string in the bin with the value uppercased.
  * @ingroup expression
@@ -4348,7 +4404,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_lower operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The string in the bin with the value lowercased.
  * @ingroup expression
@@ -4361,7 +4420,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_case_fold operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The string in the bin with the value case folded.
  * @ingroup expression
@@ -4374,7 +4436,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_normalize_nfc operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The string in the bin with the value normalized.
  * @ingroup expression
@@ -4387,7 +4452,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_trim_start operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The string in the bin with the value trimmed.
  * @ingroup expression
@@ -4400,7 +4468,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_trim_end operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The string in the bin with the value trimmed.
  * @ingroup expression
@@ -4413,7 +4484,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_trim operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The string in the bin with the value trimmed.
  * @ingroup expression
@@ -4426,7 +4500,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_pad_start operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __target_length	The target length of the string.
  * @param __pad_string		The string to pad with.
  * @param __bin			A bin expression to apply this function to.
@@ -4443,7 +4520,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_pad_end operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __target_length	The target length of the string.
  * @param __pad_string		The string to pad with.
  * @param __bin			A bin expression to apply this function to.
@@ -4460,7 +4540,10 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create an expression that performs an as_operations_string_repeat operation.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __count		The number of times to repeat the string.
  * @param __bin			A bin expression to apply this function to.
  * @return (string bin) The string in the bin with the value repeated.
@@ -4474,8 +4557,12 @@ as_exp_destroy_base64(char* base64)
 
 /**
  * Create an expression that performs an as_operations_string_regex_replace operation.
+ * AS_STRING_WRITE_FLAGS_NO_FAIL also suppresses a regex compile failure.
  *
- * @param __policy		The string policy.
+ * @param __policy		String policy. Only AS_STRING_WRITE_FLAGS_NO_FAIL is
+ *						meaningful here. AS_STRING_WRITE_FLAGS_CREATE_ONLY and
+ *						AS_STRING_WRITE_FLAGS_UPDATE_ONLY are bin-existence
+ *						predicates and do not carry over to a source expression.
  * @param __pattern		The regex pattern to match against.
  * @param __replacement	The string to replace with.
  * @param __flags		The regex flags to use.
@@ -4493,7 +4580,9 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create expression that returns the string representation of __bin, where
  * __bin may be any expression yielding an integer, float, string, boolean, or
- * blob value. Returns an error for any other source type.
+ * blob value. Returns AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE for any other source
+ * type. A blob source whose bytes are not valid UTF-8 returns
+ * AEROSPIKE_ERR_OP_NOT_APPLICABLE with AS_SUB_OPNOT_STRING_UTF8_INVALID (11).
  *
  * @param __bin			Operand expression (INT, FLOAT, STR, BOOL, or BLOB).
  * @return (string expression)

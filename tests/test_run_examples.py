@@ -175,7 +175,7 @@ class PrerequisiteTests(unittest.TestCase):
                 "ttl_support": False,
                 "enterprise": False,
                 "strong_consistency": False,
-                "min_server_version": "8.1.3",
+                "min_server_version": "8.2.0",
                 "udf": False,
                 "secondary_index": False,
             }
@@ -190,7 +190,7 @@ class PrerequisiteTests(unittest.TestCase):
 
         reason = run_examples.evaluate_prerequisites(example, facts)
 
-        self.assertEqual(reason, "requires server version >= 8.1.3")
+        self.assertEqual(reason, "requires server version >= 8.2.0")
 
     def test_requirement_boundary_constants_match_plan(self):
         self.assertEqual(

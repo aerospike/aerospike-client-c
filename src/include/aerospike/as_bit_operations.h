@@ -670,7 +670,7 @@ as_operations_bit_get_int(
  * Server returns the base64 text of the whole blob bin as a string.
  * This is the encode direction; as_operations_string_b64_decode() is the decode
  * direction and takes a string bin back to a blob.
- * Requires server version 8.1.3 or later.
+ * Requires server version 8.2.0 or later.
  *
  * @ingroup bit_operations
  */
@@ -683,7 +683,7 @@ as_operations_bit_b64_encode(as_operations* ops, const char* name, as_cdt_ctx* c
  * wire form. Use as_operations_bit_b64_encode_range() when invert_size semantics are
  * required. Note the span is expressed in bytes, unlike the bit offsets and sizes
  * other bit read operations take.
- * Requires server version 8.1.3 or later.
+ * Requires server version 8.2.0 or later.
  *
  * @ingroup bit_operations
  */
@@ -700,7 +700,7 @@ as_operations_bit_b64_encode_from(
  * rather than forward from byte_offset, so a byte_size of 0 means to the end of
  * the blob. Note the span is expressed in bytes, unlike the bit offsets and
  * sizes other bit read operations take.
- * Requires server version 8.1.3 or later.
+ * Requires server version 8.2.0 or later.
  *
  * @ingroup bit_operations
  */

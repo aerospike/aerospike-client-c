@@ -71,7 +71,7 @@ server_supports_exp_membership(void)
 		return false;
 	}
 
-	bool supported = as_version_compare(&node->version, &as_server_version_8_1_3) >= 0;
+	bool supported = as_version_compare(&node->version, &as_server_version_8_2_0) >= 0;
 	as_node_release(node);
 	return supported;
 }
@@ -86,7 +86,7 @@ server_supports_exp_path_select_apply(void)
 		return false;
 	}
 
-	bool supported = as_version_compare(&node->version, &as_server_version_8_1_3) >= 0;
+	bool supported = as_version_compare(&node->version, &as_server_version_8_2_0) >= 0;
 	as_node_release(node);
 	return supported;
 }
@@ -867,7 +867,7 @@ TEST(exp_base64, "exp base64")
 TEST(exp_select, "exp select and apply")
 {
 	if (! server_supports_exp_path_select_apply()) {
-		info("skipping expression path select/apply; requires server >= 8.1.3");
+		info("skipping expression path select/apply; requires server >= 8.2.0");
 		return;
 	}
 
@@ -980,7 +980,7 @@ TEST(exp_select, "exp select and apply")
 TEST(exp_in_list, "as_exp_in_list string and int membership")
 {
 	if (! server_supports_exp_membership()) {
-		info("skipping as_exp_in_list; requires server >= 8.1.3");
+		info("skipping as_exp_in_list; requires server >= 8.2.0");
 		return;
 	}
 
@@ -1099,7 +1099,7 @@ TEST(exp_in_list, "as_exp_in_list string and int membership")
 TEST(exp_map_keys_values, "as_exp_map_keys_in and as_exp_map_values_in")
 {
 	if (! server_supports_exp_membership()) {
-		info("skipping map key/value expression helpers; requires server >= 8.1.3");
+		info("skipping map key/value expression helpers; requires server >= 8.2.0");
 		return;
 	}
 

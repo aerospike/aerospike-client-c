@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -741,7 +741,7 @@ as_operations_list_get_range_from(
  * a non-string item returns AEROSPIKE_ERR_REQUEST_INVALID. An empty list returns an empty
  * string.
  * This is the inverse of as_operations_string_split().
- * Requires server version 8.1.3 or later.
+ * Requires server version 8.2.0 or later.
  *
  * @ingroup list_operations
  */
@@ -756,7 +756,7 @@ as_operations_list_join(as_operations* ops, const char* name, as_cdt_ctx* ctx);
  * returns an empty string, and a single-item list returns that item with no
  * separator applied.
  * This is the inverse of as_operations_string_split_separator().
- * Requires server version 8.1.3 or later.
+ * Requires server version 8.2.0 or later.
  *
  * @param ops Operations array.
  * @param name Name of list bin.

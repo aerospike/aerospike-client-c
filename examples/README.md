@@ -138,8 +138,10 @@ truncated by the client/server, without the caller doing any of its own sorting.
 
 ### vector_knn
 
-	as_record_set_raw_typep()  (native VECTOR bin)
-	as_operations_exp_read()   (project a VectorExp distance)
+	as_vector_value_new_float32()
+	as_record_set_vector()
+	as_exp_vector_dist()
+	as_operations_exp_read()
 	as_query_order_by()
 	as_query_top_k()
 
@@ -149,8 +151,7 @@ native VECTOR bin, then runs foreground queries that attach a read-expression op
 computing a per-record distance to a fixed query vector - `euclideanDistance`
 (ordered ascending: nearest first) and `dotProduct` (ordered descending) - and
 returns only the k best, fully ranked. KNN reuses the same Top-K machinery that
-orders by any scalar bin; the distance is a plain VectorExp operator packed
-inline as msgpack.
+orders by any scalar bin.
 
 
 ## Scan Examples

@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/aerospike.h>
+#include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_query.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_integer.h>
@@ -415,6 +416,88 @@ TEST(query_topk_merge_string_case_insensitive_asc,
 }
 
 //---------------------------------
+// Server integration tests
+//---------------------------------
+
+#define TOPK_INTEGRATION_RECORDS 20
+#define TOPK_INTEGRATION_K 5
+
+typedef struct topk_integration_result_s {
+	uint32_t count;
+	int64_t scores[TOPK_INTEGRATION_K];
+} topk_integration_result;
+
+static bool
+topk_integration_callback(const as_val* val, void* udata)
+{
+	if (! val) {
+		return true;
+	}
+
+	topk_integration_result* result = (topk_integration_result*)udata;
+
+	if (result->count < TOPK_INTEGRATION_K) {
+		result->scores[result->count] =
+			as_record_get_int64(as_record_fromval(val), "score", -1);
+	}
+	result->count++;
+	return true;
+}
+
+static void
+topk_integration_remove_records(void)
+{
+	for (uint32_t i = 0; i < TOPK_INTEGRATION_RECORDS; i++) {
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
+
+		as_error err;
+		aerospike_key_remove(as, &err, NULL, &key);
+	}
+}
+
+TEST(query_topk_integer_desc_server,
+	"server query returns the globally ranked top-k integer values")
+{
+	topk_integration_remove_records();
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+
+	for (uint32_t i = 0; i < TOPK_INTEGRATION_RECORDS; i++) {
+		as_record_set_int64(&rec, "score", (int64_t)i);
+
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
+
+		as_error err;
+		assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+	}
+	as_record_destroy(&rec);
+
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, TOPK_INTEGRATION_K);
+
+	topk_integration_result result = {0};
+	as_error err;
+	as_status status =
+		aerospike_query_foreach(as, &err, NULL, &query, topk_integration_callback, &result);
+
+	as_query_destroy(&query);
+	topk_integration_remove_records();
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(result.count, TOPK_INTEGRATION_K);
+
+	for (uint32_t i = 0; i < TOPK_INTEGRATION_K; i++) {
+		assert_int_eq(result.scores[i], TOPK_INTEGRATION_RECORDS - 1 - i);
+	}
+}
+
+//---------------------------------
 // Suite
 //---------------------------------
 
@@ -433,4 +516,5 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_validate_projection_missing_bin);
 	suite_add(query_topk_merge_integer_desc);
 	suite_add(query_topk_merge_string_case_insensitive_asc);
+	suite_add(query_topk_integer_desc_server);
 }

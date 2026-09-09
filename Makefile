@@ -151,6 +151,7 @@ AEROSPIKE += as_pipe.o
 AEROSPIKE += as_policy.o
 AEROSPIKE += as_proto.o
 AEROSPIKE += as_query.o
+AEROSPIKE += as_query_topk.o
 AEROSPIKE += as_query_validate.o
 AEROSPIKE += as_record.o
 AEROSPIKE += as_record_hooks.o

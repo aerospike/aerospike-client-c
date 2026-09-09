@@ -37,6 +37,8 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_string.h>
+#include <aerospike/as_string_operations.h>
+#include <aerospike/as_subcode.h>
 #include <aerospike/as_version.h>
 
 #include "../test.h"
@@ -113,6 +115,20 @@ build_error_filter(void)
 {
 	as_exp_build(bad_filter, as_exp_cmp_eq(as_exp_int(5), as_exp_float(6.0)));
 	return bad_filter;
+}
+
+static bool
+server_supports_extended_errors(void)
+{
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (! node) {
+		return false;
+	}
+
+	bool supported = as_version_compare(&node->version, &as_server_version_8_2_0) >= 0;
+	as_node_release(node);
+	return supported;
 }
 
 #define assert_build_trace_message(_msg) \
@@ -196,28 +212,18 @@ teardown_write_only_client(void)
 static bool
 before_sync(atf_suite* suite)
 {
-	as_nodes* nodes = as_nodes_reserve(as->cluster);
-    as_node* node = NULL;
+	(void)suite;
 
-    for (uint32_t i = 0; i < nodes->size; i++) {
-        if (as_node_is_active(nodes->array[i])) {
-            node = nodes->array[i];
-            break;
-        }
-    }
+	if (! server_supports_extended_errors()) {
+		as_node* node = as_node_get_random(as->cluster);
 
-    if (!node) {
-        as_nodes_release(nodes);
-        return false;
-    }
-
-    if (as_version_compare(&node->version, &as_server_version_8_1_3) < 0) {
-        info("Skipping error_detail_sync suite: server %u.%u.%u < 8.1.3",
-             node->version.major, node->version.minor, node->version.patch);
-        as_nodes_release(nodes);
-        return false;
-    }
-    as_nodes_release(nodes);
+		if (node) {
+			info("Skipping error_detail_sync suite: extended errors require server >= 8.2.0 (found %u.%u.%u)",
+				 node->version.major, node->version.minor, node->version.patch);
+			as_node_release(node);
+		}
+		return false;
+	}
 
 	as_error err;
 	as_key key;
@@ -1376,6 +1382,28 @@ TEST(ed_sync_param_bits_size, "5.22.1 param bits size out of range verbosity 2")
 	as_operations_destroy(&ops);
 }
 
+// 5.24.1 String pad with empty filler returns PARAMETER_ERROR subcode at verbosity 1.
+TEST(ed_sync_string_pad_empty_param, "5.24.1 string pad empty param subcode verbosity 1")
+{
+	as_error err;
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "error_detail_test");
+
+	as_policy_operate po;
+	as_policy_operate_init(&po);
+	po.base.error_detail_verbosity = AS_ERROR_DETAIL_SUBCODE;
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_string_pad_start(&ops, "sbin", NULL, NULL, 10, "");
+
+	as_status status = aerospike_key_operate(as, &err, &po, &key, &ops, NULL);
+	as_operations_destroy(&ops);
+
+	assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
+	assert_int_eq(err.subcode, AS_SUB_PARAM_STRING_OP_PARAMS_INVALID);
+}
+
 // 5.23.1 Expression-op failure keeps shared status/subcode semantics and adds trace at v3.
 TEST(ed_sync_exp_trace_cross_verbosity, "5.23.1 expression trace adds v3-only detail")
 {
@@ -2470,28 +2498,18 @@ TEST(ed_async_query_start_top_level_message, "6.11 async query start failure kee
 static bool
 before_async(atf_suite* suite)
 {
-	as_nodes* nodes = as_nodes_reserve(as->cluster);
-    as_node* node = NULL;
+	(void)suite;
 
-    for (uint32_t i = 0; i < nodes->size; i++) {
-        if (as_node_is_active(nodes->array[i])) {
-            node = nodes->array[i];
-            break;
-        }
-    }
+	if (! server_supports_extended_errors()) {
+		as_node* node = as_node_get_random(as->cluster);
 
-    if (!node) {
-        as_nodes_release(nodes);
-        return false;
-    }
-
-    if (as_version_compare(&node->version, &as_server_version_8_1_3) < 0) {
-        info("Skipping error_detail_async suite: server %u.%u.%u < 8.1.3",
-             node->version.major, node->version.minor, node->version.patch);
-        as_nodes_release(nodes);
-        return false;
-    }
-    as_nodes_release(nodes);
+		if (node) {
+			info("Skipping error_detail_async suite: extended errors require server >= 8.2.0 (found %u.%u.%u)",
+				 node->version.major, node->version.minor, node->version.patch);
+			as_node_release(node);
+		}
+		return false;
+	}
 
 	as_monitor_init(&monitor);
 
@@ -2596,6 +2614,7 @@ SUITE(error_detail_sync, "error detail sync integration tests")
 	suite_add(ed_sync_udf_apply_filtered_no_detail);
 	suite_add(ed_sync_bin_not_found_hll);
 	suite_add(ed_sync_param_bits_size);
+	suite_add(ed_sync_string_pad_empty_param);
 	suite_add(ed_sync_exp_trace_cross_verbosity);
 	suite_add(ed_sync_query_filter_build_failure_v3);
 	suite_add(ed_sync_query_start_top_level_message);

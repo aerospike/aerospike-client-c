@@ -96,7 +96,7 @@ server_supports_list_join(void)
 		return false;
 	}
 
-	bool supported = as_version_compare(&node->version, &as_server_version_8_1_3) >= 0;
+	bool supported = as_version_compare(&node->version, &as_server_version_8_2_0) >= 0;
 	as_node_release(node);
 	return supported;
 }
@@ -4035,7 +4035,7 @@ TEST(list_check_bin_name_length_handling, "test bin name length handling")
 TEST(list_join, "List join strings")
 {
 	if (! server_supports_list_join()) {
-		info("skipping list join; requires server >= 8.1.3");
+		info("skipping list join; requires server >= 8.2.0");
 		return;
 	}
 
@@ -4096,7 +4096,7 @@ TEST(list_join, "List join strings")
 TEST(list_join_empty, "List join empty list")
 {
 	if (! server_supports_list_join()) {
-		info("skipping list join empty; requires server >= 8.1.3");
+		info("skipping list join empty; requires server >= 8.2.0");
 		return;
 	}
 
@@ -4133,7 +4133,7 @@ TEST(list_join_empty, "List join empty list")
 TEST(list_join_non_string_item_fails, "List join rejects non-string items")
 {
 	if (! server_supports_list_join()) {
-		info("skipping list join non-string item; requires server >= 8.1.3");
+		info("skipping list join non-string item; requires server >= 8.2.0");
 		return;
 	}
 
@@ -4171,7 +4171,7 @@ TEST(list_join_non_string_item_fails, "List join rejects non-string items")
 TEST(list_join_nested, "List join nested list context")
 {
 	if (! server_supports_list_join()) {
-		info("skipping list join nested; requires server >= 8.1.3");
+		info("skipping list join nested; requires server >= 8.2.0");
 		return;
 	}
 

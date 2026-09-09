@@ -1,0 +1,98 @@
+name: Test Report
+description: >
+  Parses JUnit XML test results from all matrix combinations and writes a
+  single deduplicated test-count line to the job summary.
+  A test is marked failed if it failed in ANY combination, passed only if
+  it passed in ALL combinations.
+
+inputs:
+  pattern:
+    description: 'Glob pattern for JUnit XML files (recursive)'
+    required: false
+    default: 'test-results/**/*.xml'
+
+outputs:
+  total:
+    description: 'Total unique tests'
+    value: ${{ steps.parse.outputs.total }}
+  passed:
+    description: 'Tests that passed in every combination'
+    value: ${{ steps.parse.outputs.passed }}
+  skipped:
+    description: 'Tests that were skipped in every combination'
+    value: ${{ steps.parse.outputs.skipped }}
+  failed:
+    description: 'Tests that failed in at least one combination'
+    value: ${{ steps.parse.outputs.failed }}
+
+runs:
+  using: composite
+  steps:
+    - name: Parse results
+      id: parse
+      shell: python3 {0}
+      run: |
+        import glob, os, sys
+        from collections import Counter
+        import xml.etree.ElementTree as ET
+
+        PASS, SKIP, FAIL = 0, 1, 2
+
+        def outcome(tc):
+            if tc.find("failure") is not None or tc.find("error") is not None:
+                return FAIL
+            if tc.find("skipped") is not None:
+                return SKIP
+            return PASS
+
+        files = sorted(glob.glob("${{ inputs.pattern }}", recursive=True))
+        if not files:
+            print("No test result files found — skipping summary.", file=sys.stderr)
+            sys.exit(0)
+
+        worst, fails = {}, {}
+
+        for path in files:
+            ctx = os.path.splitext(os.path.basename(path))[0]
+            try:
+                root = ET.parse(path).getroot()
+                for suite in (root.findall("testsuite") if root.tag == "testsuites" else [root]):
+                    sn = suite.get("name", "")
+                    for tc in suite.findall("testcase"):
+                        key = f"{sn}::{tc.get('name', '')}"
+                        o = outcome(tc)
+                        worst[key] = max(worst.get(key, PASS), o)
+                        if o == FAIL:
+                            if key in fails:
+                                fails[key][1] += 1
+                            else:
+                                fails[key] = [ctx, 1]
+            except Exception as exc:
+                print(f"WARN: could not parse {path}: {exc}", file=sys.stderr)
+
+        counts = Counter(worst.values())
+        total, failed, skipped, passed = len(worst), counts[FAIL], counts[SKIP], counts[PASS]
+
+        if out := os.environ.get("GITHUB_OUTPUT"):
+            with open(out, "a") as f:
+                f.write(f"total={total}\npassed={passed}\nskipped={skipped}\nfailed={failed}\n")
+
+        if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
+            if total:
+                icon = "✅" if not failed else "❌"
+                text = (
+                    f"{icon} **{total} tests** &nbsp;"
+                    f"  {passed} ✅"
+                    f"  {skipped} 💤"
+                    f"  {failed} ❌\n\n"
+                )
+                if failed:
+                    text += "**Failed tests:**\n\n"
+                    for key, (first, n) in fails.items():
+                        extra = f" +{n - 1} more" if n > 1 else ""
+                        text += f"- `{key}` — {first}{extra}\n"
+                    text += "\n"
+                with open(summary, "a") as f:
+                    f.write(text)
+
+        print(f"total={total} passed={passed} skipped={skipped} failed={failed}")

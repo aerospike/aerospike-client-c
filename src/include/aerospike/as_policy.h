@@ -622,9 +622,12 @@ typedef struct as_policy_base_s {
 	 * 0 - disabled (no error details returned). Default.
 	 * 1 - return subcode only.
 	 * 2 - return subcode and human-readable message.
+	 * 3 - return subcode, message, and expression trace diagnostics appended to
+	 *     message fields when present.
 	 *
-	 * When enabled and the server returns error details, as_error.subcode will contain the
-	 * numeric subcode and as_error.message will contain the server-authored message.
+	 * Expression trace text is best-effort diagnostic output. It may be truncated
+	 * to fit AS_ERROR_MESSAGE_MAX_SIZE, may include operand values, and is not a
+	 * machine-readable API.
 	 */
 	uint8_t error_detail_verbosity;
 } as_policy_base;
@@ -2308,6 +2311,19 @@ static inline void
 as_policy_txn_roll_copy(const as_policy_txn_roll* src, as_policy_txn_roll* trg)
 {
 	*trg = *src;
+}
+
+/**
+ * @private
+ * Get union of send key policies.
+ */
+static inline as_policy_key
+as_policy_key_resolve(as_policy_key def_key, as_policy_key rec_key)
+{
+	if (def_key == AS_POLICY_KEY_SEND || rec_key == AS_POLICY_KEY_SEND) {
+		return AS_POLICY_KEY_SEND;
+	}
+	return AS_POLICY_KEY_DIGEST;
 }
 
 /**

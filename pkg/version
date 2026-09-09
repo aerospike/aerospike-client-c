@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [ -n "${RELEASE_VERSION:-}" ]; then
+  echo "$RELEASE_VERSION"
+  exit 0
+fi
+
 rev=`git describe`
 subbuild=`echo $rev | awk -F'-' '{print $2}'`
 

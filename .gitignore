@@ -11,6 +11,7 @@ Version.java
 *.pyc
 modules/.*
 target/
+target-*/
 client_test-valgrind
 *.code-workspace
 
@@ -65,6 +66,10 @@ xcuserdata
 ########################
 *.pem
 
+# IDE
+.idea/
+compile_commands.json
+
 # Windows
 *.suo
 *.user
@@ -76,3 +81,5 @@ x64
 ipch
 packages
 packages/repositories.config
+CLAUDE.md
+.idea

@@ -38,6 +38,8 @@
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#else
+#include <io.h>
 #endif
 
 typedef struct as_pipe_connection {

@@ -538,6 +538,30 @@ TEST(scan_async_single_node, "scan single node")
 	assert_false(check.failed);
 }
 
+TEST(scan_async_ops_and_apply_rejected, "async scan rejects combined ops and UDF apply")
+{
+	as_error err;
+	as_string str;
+	as_string_init(&str, "bar", false);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_add_write(&ops, "foo", (as_bin_value*)&str);
+
+	as_scan scan;
+	as_scan_init(&scan, NS, SET1);
+	scan.ops = &ops;
+	as_scan_apply_each(&scan, "aerospike_scan_test", "scan_noop", NULL);
+
+	// Validation happens synchronously before any async work is dispatched, so
+	// no monitor/listener wait is needed here.
+	as_status status = aerospike_scan_async(as, &err, NULL, &scan, 0, scan_listener, NULL, 0);
+	as_scan_destroy(&scan);
+
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -553,4 +577,5 @@ SUITE(scan_async, "Scan Async Tests")
 	suite_add(scan_async_set1_select);
 	suite_add(scan_async_set1_nodata);
 	suite_add(scan_async_single_node);
+	suite_add(scan_async_ops_and_apply_rejected);
 }

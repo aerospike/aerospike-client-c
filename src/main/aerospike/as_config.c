@@ -22,6 +22,7 @@
 #include <aerospike/mod_lua_config.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include <string.h>
 
 //---------------------------------
 // Functions
@@ -262,16 +263,18 @@ as_config_add_hosts(as_config* config, const char* string, uint16_t default_port
 			if (more) {
 				if (! isdigit(*p)) {
 					cf_free(host.name);
+					cf_free(host.tls_name);
 					return false;
 				}
 				host.port = (uint16_t)strtol(p, (char**)&p, 10);
-				
+
 				if (*p) {
 					if (*p == ',') {
 						p++;
 					}
 					else {
 						cf_free(host.name);
+						cf_free(host.tls_name);
 						return false;
 					}
 				}
@@ -340,19 +343,27 @@ as_config_clear_hosts(as_config* config)
 bool
 as_config_set_user(as_config* config, const char* user, const char* password)
 {
-	if (user && *user) {
-		if (as_strncpy(config->user, user, sizeof(config->user))) {
-			return false;
-		}
-
-		if (as_strncpy(config->password, password, sizeof(config->password))) {
-			return false;
-		}
-		return true;
-	}
-	else {
+	if (! (user && *user)) {
 		return false;
 	}
+
+	if (! (password && *password)) {
+		return false;
+	}
+
+	if (strlen(user) >= sizeof(config->user)) {
+		return false;
+	}
+
+	if (strlen(password) >= sizeof(config->password)) {
+		return false;
+	}
+
+	// Neither field is touched unless both are valid and fit, so a false
+	// return above leaves config->user and config->password completely unmodified.
+	as_strncpy(config->user, user, sizeof(config->user));
+	as_strncpy(config->password, password, sizeof(config->password));
+	return true;
 }
 
 void

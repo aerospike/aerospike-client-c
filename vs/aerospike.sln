@@ -9,6 +9,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "examples", "examples", "{8A
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "get", "examples\get\get.vcxproj", "{36173784-C50D-4830-A458-7FFADE886796}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "connect", "examples\connect\connect.vcxproj", "{3E9115F2-9416-456A-A670-D572FB1EC107}"
+EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "append", "examples\append\append.vcxproj", "{E10BF3F1-434A-4943-A2C0-E24509FD3FF9}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "expire", "examples\expire\expire.vcxproj", "{579C7153-B9E8-4101-BE85-458C0EB2BFB1}"
@@ -37,11 +39,15 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "scan", "examples\scan\scan.
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "scan-background", "examples\scan-background\scan-background.vcxproj", "{3F64535F-701E-431C-AE89-D096FA72DA2B}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "scan-projection", "examples\scan-projection\scan-projection.vcxproj", "{49C9D93C-510A-467C-83AA-C61AC6976DE9}"
+EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "geo-simple", "examples\geo-simple\geo-simple.vcxproj", "{507471A4-8C66-445A-A12F-0F731DD684D3}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "geo-filter", "examples\geo-filter\geo-filter.vcxproj", "{EE451FB1-F60E-47AE-8C5C-6C2FBFBFBF42}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "query", "examples\query\query.vcxproj", "{1A577336-B786-4C38-B6B2-CF15A3C92850}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "query-projection", "examples\query-projection\query-projection.vcxproj", "{35AA40E3-04F6-4D62-B17C-A906F6C9101D}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "query-aggregate", "examples\query-aggregate\query-aggregate.vcxproj", "{AB80C0E8-FE90-478D-8EE9-C30165DDD010}"
 EndProject
@@ -113,6 +119,24 @@ Global
 		{36173784-C50D-4830-A458-7FFADE886796}.Release|x64.ActiveCfg = Release|x64
 		{36173784-C50D-4830-A458-7FFADE886796}.Release|x64.Build.0 = Release|x64
 		{36173784-C50D-4830-A458-7FFADE886796}.Release|x86.ActiveCfg = Release|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Debug libevent|x64.ActiveCfg = Debug libevent|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Debug libevent|x64.Build.0 = Debug libevent|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Debug libevent|x86.ActiveCfg = Debug libevent|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Debug libuv|x64.ActiveCfg = Debug libuv|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Debug libuv|x64.Build.0 = Debug libuv|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Debug libuv|x86.ActiveCfg = Debug libuv|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Debug|x64.ActiveCfg = Debug|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Debug|x64.Build.0 = Debug|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Debug|x86.ActiveCfg = Debug|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Release libevent|x64.ActiveCfg = Release libevent|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Release libevent|x64.Build.0 = Release libevent|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Release libevent|x86.ActiveCfg = Release libevent|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Release libuv|x64.ActiveCfg = Release libuv|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Release libuv|x64.Build.0 = Release libuv|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Release libuv|x86.ActiveCfg = Release libuv|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Release|x64.ActiveCfg = Release|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Release|x64.Build.0 = Release|x64
+		{3E9115F2-9416-456A-A670-D572FB1EC107}.Release|x86.ActiveCfg = Release|x64
 		{E10BF3F1-434A-4943-A2C0-E24509FD3FF9}.Debug libevent|x64.ActiveCfg = Debug libevent|x64
 		{E10BF3F1-434A-4943-A2C0-E24509FD3FF9}.Debug libevent|x64.Build.0 = Debug libevent|x64
 		{E10BF3F1-434A-4943-A2C0-E24509FD3FF9}.Debug libevent|x86.ActiveCfg = Release|x64
@@ -351,6 +375,24 @@ Global
 		{BA6749C0-141F-489B-93A6-A72346E61425}.Release|x64.ActiveCfg = Release|x64
 		{BA6749C0-141F-489B-93A6-A72346E61425}.Release|x64.Build.0 = Release|x64
 		{BA6749C0-141F-489B-93A6-A72346E61425}.Release|x86.ActiveCfg = Release|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Debug libevent|x64.ActiveCfg = Debug libevent|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Debug libevent|x64.Build.0 = Debug libevent|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Debug libevent|x86.ActiveCfg = Debug libevent|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Debug libuv|x64.ActiveCfg = Debug libuv|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Debug libuv|x64.Build.0 = Debug libuv|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Debug libuv|x86.ActiveCfg = Debug libuv|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Debug|x64.ActiveCfg = Debug|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Debug|x64.Build.0 = Debug|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Debug|x86.ActiveCfg = Debug|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Release libevent|x64.ActiveCfg = Release libevent|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Release libevent|x64.Build.0 = Release libevent|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Release libevent|x86.ActiveCfg = Release libevent|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Release libuv|x64.ActiveCfg = Release libuv|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Release libuv|x64.Build.0 = Release libuv|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Release libuv|x86.ActiveCfg = Release libuv|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Release|x64.ActiveCfg = Release|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Release|x64.Build.0 = Release|x64
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9}.Release|x86.ActiveCfg = Release|x64
 		{3F64535F-701E-431C-AE89-D096FA72DA2B}.Debug libevent|x64.ActiveCfg = Debug libevent|x64
 		{3F64535F-701E-431C-AE89-D096FA72DA2B}.Debug libevent|x64.Build.0 = Debug libevent|x64
 		{3F64535F-701E-431C-AE89-D096FA72DA2B}.Debug libevent|x86.ActiveCfg = Debug libevent|x64
@@ -423,6 +465,24 @@ Global
 		{1A577336-B786-4C38-B6B2-CF15A3C92850}.Release|x64.ActiveCfg = Release|x64
 		{1A577336-B786-4C38-B6B2-CF15A3C92850}.Release|x64.Build.0 = Release|x64
 		{1A577336-B786-4C38-B6B2-CF15A3C92850}.Release|x86.ActiveCfg = Release|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Debug libevent|x64.ActiveCfg = Debug libevent|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Debug libevent|x64.Build.0 = Debug libevent|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Debug libevent|x86.ActiveCfg = Debug libevent|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Debug libuv|x64.ActiveCfg = Debug libuv|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Debug libuv|x64.Build.0 = Debug libuv|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Debug libuv|x86.ActiveCfg = Debug libuv|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Debug|x64.ActiveCfg = Debug|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Debug|x64.Build.0 = Debug|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Debug|x86.ActiveCfg = Debug|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Release libevent|x64.ActiveCfg = Release libevent|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Release libevent|x64.Build.0 = Release libevent|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Release libevent|x86.ActiveCfg = Release libevent|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Release libuv|x64.ActiveCfg = Release libuv|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Release libuv|x64.Build.0 = Release libuv|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Release libuv|x86.ActiveCfg = Release libuv|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Release|x64.ActiveCfg = Release|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Release|x64.Build.0 = Release|x64
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D}.Release|x86.ActiveCfg = Release|x64
 		{AB80C0E8-FE90-478D-8EE9-C30165DDD010}.Debug libevent|x64.ActiveCfg = Debug libevent|x64
 		{AB80C0E8-FE90-478D-8EE9-C30165DDD010}.Debug libevent|x64.Build.0 = Debug libevent|x64
 		{AB80C0E8-FE90-478D-8EE9-C30165DDD010}.Debug libevent|x86.ActiveCfg = Debug libevent|x64
@@ -603,6 +663,7 @@ Global
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{36173784-C50D-4830-A458-7FFADE886796} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
+		{3E9115F2-9416-456A-A670-D572FB1EC107} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 		{E10BF3F1-434A-4943-A2C0-E24509FD3FF9} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 		{579C7153-B9E8-4101-BE85-458C0EB2BFB1} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 		{B12AFF5E-D263-4288-A887-F774503AF5AF} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
@@ -617,9 +678,11 @@ Global
 		{D021AE97-3168-43A4-9851-2F3471F1EADD} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 		{BA6749C0-141F-489B-93A6-A72346E61425} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 		{3F64535F-701E-431C-AE89-D096FA72DA2B} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
+		{49C9D93C-510A-467C-83AA-C61AC6976DE9} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 		{507471A4-8C66-445A-A12F-0F731DD684D3} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 		{EE451FB1-F60E-47AE-8C5C-6C2FBFBFBF42} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 		{1A577336-B786-4C38-B6B2-CF15A3C92850} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
+		{35AA40E3-04F6-4D62-B17C-A906F6C9101D} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 		{AB80C0E8-FE90-478D-8EE9-C30165DDD010} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 		{48242998-2002-4B4C-A610-296C2E94677B} = {8A83023F-8205-4B01-BCA8-D7F41949245B}
 		{05EA735B-3AE2-4BDC-B56D-A87D66FD4BB5} = {8A83023F-8205-4B01-BCA8-D7F41949245B}

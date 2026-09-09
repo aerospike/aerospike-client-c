@@ -21,6 +21,8 @@
 #include <aerospike/aerospike_udf.h>
 
 #include <aerospike/as_arraylist.h>
+#include <aerospike/as_cdt_ctx.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_exp_operations.h>
@@ -28,6 +30,7 @@
 #include <aerospike/as_hashmap_iterator.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_list.h>
+#include <aerospike/as_list_operations.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_record.h>
@@ -35,6 +38,7 @@
 #include <aerospike/as_string.h>
 #include <aerospike/as_udf.h>
 #include <aerospike/as_val.h>
+#include <aerospike/as_version.h>
 
 #include "../test.h"
 #include "../util/log_helper.h"
@@ -82,6 +86,20 @@ typedef struct list_order_type_s
  *****************************************************************************/
 
 #define LUA_DIR AS_START_DIR "src/test/lua/"
+
+static bool
+server_supports_list_join(void)
+{
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (! node) {
+		return false;
+	}
+
+	bool supported = as_version_compare(&node->version, &as_server_version_8_1_3) >= 0;
+	as_node_release(node);
+	return supported;
+}
 
 static bool
 load_udf(const char* filename)
@@ -4014,6 +4032,191 @@ TEST(list_check_bin_name_length_handling, "test bin name length handling")
 	as_record_destroy(prec);
 }
 
+TEST(list_join, "List join strings")
+{
+	if (! server_supports_list_join()) {
+		info("skipping list join; requires server >= 8.1.3");
+		return;
+	}
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 9999);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &key);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_arraylist list;
+	as_arraylist_init(&list, 3, 0);
+	as_arraylist_append_str(&list, "alpha");
+	as_arraylist_append_str(&list, "beta");
+	as_arraylist_append_str(&list, "gamma");
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_list(&rec, BIN_NAME, (as_list*)&list);
+
+	status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_operations ops;
+	as_operations_inita(&ops, 2);
+	as_operations_list_join(&ops, BIN_NAME, NULL);
+	as_operations_list_join_separator(&ops, BIN_NAME, NULL, ", ");
+
+	as_record* prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_bin* results = prec->bins.entries;
+	assert_string_eq(as_string_get((as_string*)results[0].valuep), "alphabetagamma");
+	assert_string_eq(as_string_get((as_string*)results[1].valuep), "alpha, beta, gamma");
+	as_record_destroy(prec);
+
+	as_exp_build(join_exp, as_exp_list_join_separator(NULL, ", ", as_exp_bin_list(BIN_NAME)));
+	as_exp_build(join_no_sep_exp, as_exp_list_join(NULL, as_exp_bin_list(BIN_NAME)));
+
+	as_operations_inita(&ops, 2);
+	as_operations_exp_read(&ops, "joined", join_exp, AS_EXP_READ_DEFAULT);
+	as_operations_exp_read(&ops, "joined_no_sep", join_no_sep_exp, AS_EXP_READ_DEFAULT);
+
+	prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	as_operations_destroy(&ops);
+	as_exp_destroy(join_exp);
+	as_exp_destroy(join_no_sep_exp);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_string_eq(as_record_get_str(prec, "joined"), "alpha, beta, gamma");
+	assert_string_eq(as_record_get_str(prec, "joined_no_sep"), "alphabetagamma");
+	as_record_destroy(prec);
+}
+
+TEST(list_join_empty, "List join empty list")
+{
+	if (! server_supports_list_join()) {
+		info("skipping list join empty; requires server >= 8.1.3");
+		return;
+	}
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 9998);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &key);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_arraylist list;
+	as_arraylist_init(&list, 0, 0);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_list(&rec, BIN_NAME, (as_list*)&list);
+
+	status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_list_join_separator(&ops, BIN_NAME, NULL, ",");
+
+	as_record* prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_string_eq(as_record_get_str(prec, BIN_NAME), "");
+	as_record_destroy(prec);
+}
+
+TEST(list_join_non_string_item_fails, "List join rejects non-string items")
+{
+	if (! server_supports_list_join()) {
+		info("skipping list join non-string item; requires server >= 8.1.3");
+		return;
+	}
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 9997);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &key);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_arraylist list;
+	as_arraylist_init(&list, 2, 0);
+	as_arraylist_append_str(&list, "alpha");
+	as_arraylist_append_int64(&list, 7);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_list(&rec, BIN_NAME, (as_list*)&list);
+
+	status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_list_join(&ops, BIN_NAME, NULL);
+
+	as_record* prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	as_operations_destroy(&ops);
+	assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
+	assert_null(prec);
+}
+
+TEST(list_join_nested, "List join nested list context")
+{
+	if (! server_supports_list_join()) {
+		info("skipping list join nested; requires server >= 8.1.3");
+		return;
+	}
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 9996);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &key);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	as_arraylist inner;
+	as_arraylist_init(&inner, 2, 0);
+	as_arraylist_append_str(&inner, "x");
+	as_arraylist_append_str(&inner, "y");
+
+	as_arraylist outer;
+	as_arraylist_init(&outer, 2, 0);
+	as_arraylist_append_str(&outer, "skip");
+	as_arraylist_append(&outer, (as_val*)&inner);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_list(&rec, BIN_NAME, (as_list*)&outer);
+
+	status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_cdt_ctx ctx;
+	as_cdt_ctx_inita(&ctx, 1);
+	as_cdt_ctx_add_list_index(&ctx, 1);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_list_join_separator(&ops, BIN_NAME, &ctx, "-");
+
+	as_record* prec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+	as_operations_destroy(&ops);
+	as_cdt_ctx_destroy(&ctx);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_string_eq(as_record_get_str(prec, BIN_NAME), "x-y");
+	as_record_destroy(prec);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -4044,6 +4247,10 @@ SUITE(list_basics, "aerospike list basic tests")
 	suite_add(list_create);
 	suite_add(list_exp_mod);
 	suite_add(list_exp_read);
+	suite_add(list_join);
+	suite_add(list_join_empty);
+	suite_add(list_join_non_string_item_fails);
+	suite_add(list_join_nested);
 
 	// Requires Aerospike 5.6.
 	suite_add(exp_returns_list);

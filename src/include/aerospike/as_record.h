@@ -27,6 +27,7 @@
 #include <aerospike/as_geojson.h>
 #include <aerospike/as_util.h>
 #include <aerospike/as_val.h>
+#include <aerospike/as_vector_value.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -640,6 +641,29 @@ AS_EXTERN bool
 as_record_set_bytes(as_record* rec, const char* name, as_bytes * value);
 
 /**
+ * Set specified bin's value to a vector, serialized as an as_bytes tagged
+ * AS_BYTES_VECTOR. The serialized buffer is owned by the record and released
+ * when the record is destroyed; `value` may be destroyed independently after
+ * this call.
+ *
+ * @code
+ * as_vector_value* vec = as_vector_value_new_float32(data, 128);
+ * as_record_set_vector(rec, "embedding", vec);
+ * as_vector_value_destroy(vec);
+ * @endcode
+ *
+ * @param rec		The record containing the bin.
+ * @param name		The name of the bin.
+ * @param value		The vector to serialize into the bin.
+ *
+ * @return true on success, false on failure (including an invalid vector).
+ *
+ * @relates as_record
+ */
+AS_EXTERN bool
+as_record_set_vector(as_record* rec, const char* name, const as_vector_value* value);
+
+/**
  * Set specified bin's value to an as_list.
  *
  * @code
@@ -892,6 +916,27 @@ as_record_get_geojson(const as_record* rec, const char* name);
  */
 AS_EXTERN as_bytes*
 as_record_get_bytes(const as_record* rec, const char* name);
+
+/**
+ * Get specified bin's value as a newly allocated vector, deserialized from an
+ * as_bytes bin tagged AS_BYTES_VECTOR. The caller owns the result and must
+ * release it with as_vector_value_destroy().
+ *
+ * @code
+ * as_vector_value* vec = as_record_get_vector(rec, "embedding");
+ * // ... use vec ...
+ * as_vector_value_destroy(vec);
+ * @endcode
+ *
+ * @param rec		The record containing the bin.
+ * @param name		The name of the bin.
+ *
+ * @return a new vector if the bin exists and holds a vector, otherwise NULL.
+ *
+ * @relates as_record
+ */
+AS_EXTERN as_vector_value*
+as_record_get_vector(const as_record* rec, const char* name);
 
 /**
  * Get specified bin's value as an as_list.

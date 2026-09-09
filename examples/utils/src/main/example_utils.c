@@ -25,6 +25,7 @@
 // Includes
 //
 
+#include <ctype.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,6 +54,13 @@
 
 #if defined(_MSC_VER)
 #undef _UNICODE  // Use ASCII version on windows.
+#include <io.h>
+#define ACCESS _access
+#define PATH_LIST_SEPARATOR ';'
+#else
+#include <unistd.h>
+#define ACCESS access
+#define PATH_LIST_SEPARATOR ':'
 #endif
 #include <getopt.h>
 
@@ -173,6 +181,7 @@ static char g_password[AS_PASSWORD_SIZE];
 // -k <key string>
 //
 static char g_key_str[MAX_KEY_STR_SIZE];
+static bool g_require_durable_delete;
 
 //------------------------------------------------
 // TLS configuration variables.
@@ -185,6 +194,12 @@ as_auth_mode g_auth_mode = AS_AUTH_INTERNAL;
 //
 
 static void usage(const char* short_opts);
+static bool example_path_exists(const char* path);
+static bool example_join_path(const char* root, const char* relative_path,
+		char* buffer, size_t buffer_size);
+static bool example_is_absolute_path(const char* path);
+static bool example_try_resource_roots(const char* roots, const char* relative_path,
+		char* buffer, size_t buffer_size);
 
 
 //==========================================================
@@ -370,6 +385,138 @@ example_get_opts(int argc, char* argv[], int which_opts)
 	return true;
 }
 
+void
+example_get_context(example_context* context)
+{
+	if (! context) {
+		return;
+	}
+
+	context->args.host = g_host;
+	context->args.port = g_port;
+	context->args.user = g_user;
+	context->args.password = g_password;
+	context->args.auth_mode = g_auth_mode;
+	context->args.tls = &g_tls;
+	context->args.namespace_name = g_namespace;
+	context->args.set = g_set;
+	context->args.key_string = g_key_str;
+	context->args.n_keys = g_n_keys;
+	context->resource_roots = getenv("EXAMPLE_RESOURCE_ROOTS");
+	context->repo_root = getenv("EXAMPLE_REPO_ROOT");
+}
+
+static bool
+example_path_exists(const char* path)
+{
+	return path && *path && ACCESS(path, 0) == 0;
+}
+
+static bool
+example_join_path(const char* root, const char* relative_path, char* buffer,
+		size_t buffer_size)
+{
+	if (! root || ! *root || ! relative_path || ! *relative_path || ! buffer ||
+			buffer_size == 0) {
+		return false;
+	}
+
+	int written = snprintf(buffer, buffer_size, "%s%s%s", root,
+			root[strlen(root) - 1] == '/' ? "" : "/", relative_path);
+	return written > 0 && (size_t)written < buffer_size;
+}
+
+static bool
+example_is_absolute_path(const char* path)
+{
+	if (! path || ! *path) {
+		return false;
+	}
+
+	if (path[0] == '/') {
+		return true;
+	}
+
+#if defined(_MSC_VER)
+	return isalpha((unsigned char)path[0]) && path[1] == ':';
+#else
+	return false;
+#endif
+}
+
+static bool
+example_try_resource_roots(const char* roots, const char* relative_path,
+		char* buffer, size_t buffer_size)
+{
+	if (! roots || ! *roots) {
+		return false;
+	}
+
+	char local[4096];
+
+	if (strlen(roots) >= sizeof(local)) {
+		return false;
+	}
+
+	strcpy(local, roots);
+	char separator[2] = {PATH_LIST_SEPARATOR, '\0'};
+#if defined(_MSC_VER)
+	char* saveptr = NULL;
+	char* root = strtok_s(local, separator, &saveptr);
+#else
+	char* saveptr = NULL;
+	char* root = strtok_r(local, separator, &saveptr);
+#endif
+
+	while (root) {
+		if (example_join_path(root, relative_path, buffer, buffer_size) &&
+				example_path_exists(buffer)) {
+			return true;
+		}
+#if defined(_MSC_VER)
+		root = strtok_s(NULL, separator, &saveptr);
+#else
+		root = strtok_r(NULL, separator, &saveptr);
+#endif
+	}
+
+	return false;
+}
+
+bool
+example_resolve_resource_path(const char* relative_path, char* buffer,
+		size_t buffer_size)
+{
+	example_context context;
+	example_get_context(&context);
+
+	if (! relative_path || ! *relative_path || ! buffer || buffer_size == 0) {
+		return false;
+	}
+
+	if (example_is_absolute_path(relative_path)) {
+		int written = snprintf(buffer, buffer_size, "%s", relative_path);
+		return written > 0 && (size_t)written < buffer_size;
+	}
+
+	if (example_path_exists(relative_path)) {
+		int written = snprintf(buffer, buffer_size, "%s", relative_path);
+		return written > 0 && (size_t)written < buffer_size;
+	}
+
+	if (example_try_resource_roots(context.resource_roots, relative_path, buffer,
+			buffer_size)) {
+		return true;
+	}
+
+	if (example_join_path(context.repo_root, relative_path, buffer, buffer_size) &&
+			example_path_exists(buffer)) {
+		return true;
+	}
+
+	return false;
+}
+
 //------------------------------------------------
 // Display supported command line options.
 //
@@ -519,6 +666,11 @@ example_connect_to_aerospike_with_udf_config(aerospike* p_as,
 	as_config_lua_init(&lua);
 	
 	if (lua_user_path) {
+		if (strlen(lua_user_path) >= sizeof(lua.user_path)) {
+			LOG("resolved UDF path exceeds max supported length (%u): %s",
+					(unsigned int)(sizeof(lua.user_path) - 1), lua_user_path);
+			exit(-1);
+		}
 		strcpy(lua.user_path, lua_user_path);
 	}
 	
@@ -583,6 +735,29 @@ example_cleanup(aerospike* p_as)
 // Database Operation Helpers
 //
 
+as_status
+example_remove_record(aerospike* p_as, as_error* err, const as_key* key)
+{
+	as_status status = aerospike_key_remove(p_as, err, NULL, key);
+
+	if (status == AEROSPIKE_ERR_FAIL_FORBIDDEN) {
+		g_require_durable_delete = true;
+		as_policy_remove policy;
+		as_policy_remove_init(&policy);
+		policy.durable_delete = true;
+		status = aerospike_key_remove(p_as, err, &policy, key);
+	}
+
+	return status;
+}
+
+void
+example_init_batch_remove_policy(as_policy_batch_remove* policy)
+{
+	as_policy_batch_remove_init(policy);
+	policy->durable_delete = g_require_durable_delete;
+}
+
 //------------------------------------------------
 // Read the whole test record from the database.
 //
@@ -625,7 +800,12 @@ example_remove_test_record(aerospike* p_as)
 	// Try to remove the test record from the database. If the example has not
 	// inserted the record, or it has already been removed, this call will
 	// return as_status AEROSPIKE_ERR_RECORD_NOT_FOUND - which we just ignore.
-	aerospike_key_remove(p_as, &err, NULL, &g_key);
+	as_status status = example_remove_record(p_as, &err, &g_key);
+
+	if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		LOG("example_remove_test_record(): example_remove_record() returned %d - %s",
+				err.code, err.message);
+	}
 }
 
 //------------------------------------------------
@@ -688,7 +868,12 @@ example_remove_test_records(aerospike* p_as)
 		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
 
 		// Ignore errors - just trying to leave the database as we found it.
-		aerospike_key_remove(p_as, &err, NULL, &key);
+		as_status status = example_remove_record(p_as, &err, &key);
+
+		if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+			LOG("example_remove_test_records(): example_remove_record() returned %d - %s for key %u",
+					err.code, err.message, i);
+		}
 	}
 }
 

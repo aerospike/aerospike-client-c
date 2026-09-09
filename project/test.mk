@@ -3,6 +3,7 @@
 ###############################################################################
 
 TEST_AEROSPIKE = aerospike_test.c
+TEST_AEROSPIKE += config_basics.c
 TEST_AEROSPIKE += aerospike_batch/*.c
 TEST_AEROSPIKE += aerospike_bit/*.c
 TEST_AEROSPIKE += aerospike_index/*.c
@@ -22,6 +23,7 @@ TEST_AEROSPIKE += filter_exp.c
 TEST_AEROSPIKE += exp_operate.c
 TEST_AEROSPIKE += transaction.c
 TEST_AEROSPIKE += transaction_async.c
+TEST_AEROSPIKE += vector.c
 
 TEST_SOURCE = $(wildcard $(addprefix $(SOURCE_TEST)/, $(TEST_AEROSPIKE)))
 

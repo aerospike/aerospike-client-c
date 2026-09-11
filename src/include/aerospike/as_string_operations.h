@@ -90,8 +90,8 @@ typedef enum as_string_write_flags_e {
 	 * Apply the operation only if the bin does not already exist. Against a live
 	 * bin the server returns AEROSPIKE_ERR_BIN_EXISTS. Valid only on the eight
 	 * additive create ops: insert, overwrite, concat, append, prepend, pad_start,
-	 * pad_end, and repeat. On any other string modify op the server rejects it
-	 * with AEROSPIKE_ERR_REQUEST_INVALID via that op's flag mask.
+	 * pad_end, and repeat. On any other string modify op the server rejects
+	 * CREATE_ONLY during argument parsing with AEROSPIKE_ERR_REQUEST_INVALID.
 	 * AS_STRING_WRITE_FLAGS_CREATE_ONLY combined with
 	 * AS_STRING_WRITE_FLAGS_UPDATE_ONLY is AEROSPIKE_ERR_REQUEST_INVALID, and
 	 * AS_STRING_WRITE_FLAGS_CREATE_ONLY on a CDT context path is

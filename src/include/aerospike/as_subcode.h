@@ -69,7 +69,9 @@
 #define AS_SUB_NONE                                        0
 
 //------------------------------------------------------------
-// Subcodes paired with AEROSPIKE_ERR_PARAM (AS_ERR_PARAMETER)
+// Subcodes paired with AEROSPIKE_ERR_REQUEST_INVALID (server
+// AS_ERR_PARAMETER, status 4). AS_SUB_PARAM_* names follow proto.h;
+// not client-side AEROSPIKE_ERR_PARAM (-2).
 //------------------------------------------------------------
 
 /**
@@ -123,9 +125,8 @@
 
 /**
  * String regex argument is invalid (non-ICU idiom or ICU compile failure at
- * parse). Paired with AEROSPIKE_ERR_REQUEST_INVALID (status 4). The server
- * deliberately uses the same subcode value for ICU compile failures and
- * guided non-ICU rejections.
+ * parse). The server deliberately uses the same subcode value for ICU compile
+ * failures and guided non-ICU rejections.
  * App use: validate regex patterns against the ICU dialect before sending.
  */
 #define AS_SUB_PARAM_STRING_REGEX_INVALID                  10

@@ -772,6 +772,11 @@ as_query_validate_topk(
 			query->top_k, query->max_records);
 	}
 
+	if (! qb->cluster->has_order_by) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"order_by/top_k is not supported by all nodes in the cluster");
+	}
+
 	if (! qb->is_new) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"order_by/top_k requires server support for partition queries (server too old)");

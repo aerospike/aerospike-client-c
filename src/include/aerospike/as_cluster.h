@@ -397,6 +397,12 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Do all cluster nodes support query order-by.
+	 */
+	bool has_order_by;
+
+	/**
+	 * @private
 	 * Fail on cluster init if seed node and all peers are not reachable.
 	 */
 	bool fail_if_not_connected;

@@ -5,6 +5,8 @@ if [ -n "${RELEASE_VERSION:-}" ]; then
   exit 0
 fi
 
+cd `dirname $0`
+
 rev=`git describe`
 subbuild=`echo $rev | awk -F'-' '{print $2}'`
 

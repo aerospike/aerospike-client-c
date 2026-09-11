@@ -17,6 +17,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_query.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_operations.h>
@@ -256,6 +257,27 @@ TEST(query_topk_validate_projection_missing_bin, "order_by bin missing from proj
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
 
 	as_query_destroy(&query);
+}
+
+TEST(query_topk_validate_server_support,
+	"order_by/top_k is rejected unless every cluster node supports it")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+
+	bool has_order_by = as->cluster->has_order_by;
+	as->cluster->has_order_by = false;
+
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+
+	as->cluster->has_order_by = has_order_by;
+	as_query_destroy(&query);
+
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
 }
 
 //---------------------------------
@@ -514,6 +536,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_validate_background_rejected);
 	suite_add(query_topk_validate_max_records_inconsistent);
 	suite_add(query_topk_validate_projection_missing_bin);
+	suite_add(query_topk_validate_server_support);
 	suite_add(query_topk_merge_integer_desc);
 	suite_add(query_topk_merge_string_case_insensitive_asc);
 	suite_add(query_topk_integer_desc_server);

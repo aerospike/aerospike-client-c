@@ -2779,6 +2779,113 @@ aerospike_query_partitions_async(
 	return as_query_partition_async(cluster, err, policy, query, pt, listener, udata, event_loop);
 }
 
+//---------------------------------
+// Min/Max (built on order_by/top_k)
+//---------------------------------
+
+typedef struct {
+	const char* bin_name;
+	as_val* value;
+} as_query_scalar_capture;
+
+static bool
+as_query_scalar_capture_cb(const as_val* val, void* udata)
+{
+	as_query_scalar_capture* cap = (as_query_scalar_capture*)udata;
+
+	if (! val) {
+		// Final completion signal - nothing to capture. top_k(1) guarantees at most one
+		// non-NULL callback ever happens before this one.
+		return true;
+	}
+
+	as_record* rec = as_record_fromval(val);
+	as_bin_value* bv = as_record_get(rec, cap->bin_name);
+
+	if (bv) {
+		// Detach just the bin value from the record: bump its refcount so it survives
+		// the as_record_destroy() the query framework performs right after this callback
+		// returns (see as_query_topk_flush_sync()), instead of copying/keeping the
+		// whole record alive.
+		cap->value = as_val_reserve(bv);
+	}
+
+	return true;
+}
+
+static as_status
+aerospike_query_min_max(
+	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
+	const char* bin_name, as_query_order_by_type type, as_order direction, as_val** value
+	)
+{
+	*value = NULL;
+
+	if (! bin_name || *bin_name == 0) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "bin_name is required");
+	}
+
+	// The order-by bin must be part of the projection (existing Top-K rule). If the
+	// caller already set up a projection, just require bin_name be one of the projected
+	// names. Otherwise, project only bin_name ourselves - this is also what shrinks the
+	// server's response down to (effectively) just the value we care about.
+	if (query->select.entries) {
+		bool found = false;
+
+		for (uint16_t i = 0; i < query->select.size; i++) {
+			if (strcmp(query->select.entries[i], bin_name) == 0) {
+				found = true;
+				break;
+			}
+		}
+
+		if (! found) {
+			return as_error_update(err, AEROSPIKE_ERR_PARAM,
+				"bin_name '%s' must be included in query's existing select projection", bin_name);
+		}
+	}
+	else if (! as_query_select_init(query, 1) || ! as_query_select(query, bin_name)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Failed to project bin_name");
+	}
+
+	as_query_order_by(query, bin_name, type, direction, AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(query, 1);
+
+	as_query_scalar_capture cap = { .bin_name = bin_name, .value = NULL };
+	as_status status =
+		aerospike_query_foreach(as, err, policy, query, as_query_scalar_capture_cb, &cap);
+
+	if (status == AEROSPIKE_OK) {
+		// NULL is a legitimate outcome: no record in the result set had bin_name with a
+		// value matching the declared type (Top-K's NIL-sorts-worst rule excludes those
+		// records from ever winning min/max).
+		*value = cap.value;
+	}
+	else if (cap.value) {
+		as_val_destroy(cap.value);
+	}
+
+	return status;
+}
+
+as_status
+aerospike_query_min(
+	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
+	const char* bin_name, as_query_order_by_type type, as_val** value
+	)
+{
+	return aerospike_query_min_max(as, err, policy, query, bin_name, type, AS_ORDER_ASCENDING, value);
+}
+
+as_status
+aerospike_query_max(
+	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
+	const char* bin_name, as_query_order_by_type type, as_val** value
+	)
+{
+	return aerospike_query_min_max(as, err, policy, query, bin_name, type, AS_ORDER_DESCENDING, value);
+}
+
 const as_policy_write*
 as_policy_write_merge(
 	aerospike* as, const as_policy_write* src, as_policy_write* mrg, as_policy_key* pkey

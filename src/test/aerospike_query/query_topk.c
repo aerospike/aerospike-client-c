@@ -520,6 +520,108 @@ TEST(query_topk_integer_desc_server,
 }
 
 //---------------------------------
+// Min/Max tests (aerospike_query_min()/aerospike_query_max(), built on order_by/top_k)
+//---------------------------------
+
+#define MINMAX_RECORDS 10
+
+static void
+minmax_remove_records(void)
+{
+	for (uint32_t i = 0; i < MINMAX_RECORDS; i++) {
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
+
+		as_error err;
+		aerospike_key_remove(as, &err, NULL, &key);
+	}
+}
+
+TEST(query_min_max_integer_server, "aerospike_query_min()/aerospike_query_max() find the global extremes")
+{
+	minmax_remove_records();
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+
+	// Scores 0..9, so min == 0, max == 9. Every record has the bin - no NIL exclusion
+	// exercised here (that's covered by the merge-level tests above).
+	for (uint32_t i = 0; i < MINMAX_RECORDS; i++) {
+		as_record_set_int64(&rec, "score", (int64_t)i);
+
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
+
+		as_error put_err;
+		assert_int_eq(aerospike_key_put(as, &put_err, NULL, &key, &rec), AEROSPIKE_OK);
+	}
+	as_record_destroy(&rec);
+
+	as_query min_query;
+	as_query_init(&min_query, NAMESPACE, SET);
+
+	as_val* min_value = NULL;
+	as_error err;
+	as_status status =
+		aerospike_query_min(as, &err, NULL, &min_query, "score", AS_QUERY_ORDER_BY_INTEGER, &min_value);
+	as_query_destroy(&min_query);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_not_null(min_value);
+	assert_int_eq(as_integer_get((as_integer*)min_value), 0);
+	as_val_destroy(min_value);
+
+	as_query max_query;
+	as_query_init(&max_query, NAMESPACE, SET);
+
+	as_val* max_value = NULL;
+	status =
+		aerospike_query_max(as, &err, NULL, &max_query, "score", AS_QUERY_ORDER_BY_INTEGER, &max_value);
+	as_query_destroy(&max_query);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_not_null(max_value);
+	assert_int_eq(as_integer_get((as_integer*)max_value), MINMAX_RECORDS - 1);
+	as_val_destroy(max_value);
+
+	minmax_remove_records();
+}
+
+TEST(query_min_max_empty_result, "aerospike_query_min() returns a NULL value (not an error) when nothing matches")
+{
+	minmax_remove_records(); // Ensure the set is empty.
+
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+
+	as_val* value = (as_val*)0x1; // Sentinel - must be overwritten with NULL.
+	as_error err;
+	as_status status =
+		aerospike_query_min(as, &err, NULL, &query, "score", AS_QUERY_ORDER_BY_INTEGER, &value);
+	as_query_destroy(&query);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_null(value);
+}
+
+TEST(query_min_max_bin_not_in_projection, "aerospike_query_min() rejects bin_name missing from an existing projection")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_select_init(&query, 1);
+	as_query_select(&query, "some_other_bin");
+
+	as_val* value = NULL;
+	as_error err;
+	as_status status =
+		aerospike_query_min(as, &err, NULL, &query, "score", AS_QUERY_ORDER_BY_INTEGER, &value);
+	as_query_destroy(&query);
+
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_null(value);
+}
+
+//---------------------------------
 // Suite
 //---------------------------------
 
@@ -540,4 +642,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_merge_integer_desc);
 	suite_add(query_topk_merge_string_case_insensitive_asc);
 	suite_add(query_topk_integer_desc_server);
+	suite_add(query_min_max_integer_server);
+	suite_add(query_min_max_empty_result);
+	suite_add(query_min_max_bin_not_in_projection);
 }

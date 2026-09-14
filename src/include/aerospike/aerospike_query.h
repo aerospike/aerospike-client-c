@@ -376,6 +376,84 @@ aerospike_query_partitions_async(
 	);
 
 /**
+ * Find the minimum value of a scalar bin across a query's result set, using the Top-K
+ * (`order_by`/`top_k`) mechanism internally (`ORDER BY bin_name ASC LIMIT 1`). Sets
+ * query's select/order_by/top_k fields as a side effect - see as_query_order_by() and
+ * as_query_top_k() for the restrictions this inherits (foreground queries only, no
+ * aggregation UDF, no short queries, etc).
+ *
+ * Records that don't have bin_name, or have it with a type other than the declared
+ * type, are excluded rather than winning the minimum by accident.
+ *
+ * @code
+ * as_query query;
+ * as_query_init(&query, "test", "demo");
+ * as_query_where_init(&query, 1);
+ * as_query_where(&query, "bin2", as_integer_equals(100));
+ *
+ * as_val* value = NULL;
+ * if (aerospike_query_min(&as, &err, NULL, &query, "score", AS_QUERY_ORDER_BY_DOUBLE, &value)
+ *     != AEROSPIKE_OK) {
+ *     fprintf(stderr, "error(%d) %s at [%s:%d]", err.code, err.message, err.file, err.line);
+ * }
+ * else if (value) {
+ *     printf("min score: %f\n", as_double_get((as_double*)value));
+ *     as_val_destroy(value);
+ * }
+ * else {
+ *     printf("no matching record had bin 'score'\n");
+ * }
+ * as_query_destroy(&query);
+ * @endcode
+ *
+ * @param as			Aerospike cluster instance.
+ * @param err			Error detail structure that is populated if an error occurs.
+ * @param policy		Query policy configuration parameters, pass in NULL for default.
+ * @param query			Query definition.
+ * @param bin_name		Name of the scalar bin to minimize. Must be in the query's
+ *						projection if one is already set, otherwise the projection is set
+ *						to just this bin.
+ * @param type			Scalar type of bin_name's value. See as_query_order_by_type.
+ * @param value			Output: the minimum value found (caller must as_val_destroy() it),
+ *						or NULL if no record in the result set qualified. Always set to
+ *						NULL on entry.
+ *
+ * @return AEROSPIKE_OK on success, otherwise an error.
+ * @ingroup query_operations
+ */
+AS_EXTERN as_status
+aerospike_query_min(
+	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
+	const char* bin_name, as_query_order_by_type type, as_val** value
+	);
+
+/**
+ * Find the maximum value of a scalar bin across a query's result set. Same behavior,
+ * restrictions, and side effects as aerospike_query_min(), but ranks descending
+ * (`ORDER BY bin_name DESC LIMIT 1`) instead of ascending.
+ *
+ * @param as			Aerospike cluster instance.
+ * @param err			Error detail structure that is populated if an error occurs.
+ * @param policy		Query policy configuration parameters, pass in NULL for default.
+ * @param query			Query definition.
+ * @param bin_name		Name of the scalar bin to maximize. Must be in the query's
+ *						projection if one is already set, otherwise the projection is set
+ *						to just this bin.
+ * @param type			Scalar type of bin_name's value. See as_query_order_by_type.
+ * @param value			Output: the maximum value found (caller must as_val_destroy() it),
+ *						or NULL if no record in the result set qualified. Always set to
+ *						NULL on entry.
+ *
+ * @return AEROSPIKE_OK on success, otherwise an error.
+ * @ingroup query_operations
+ */
+AS_EXTERN as_status
+aerospike_query_max(
+	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
+	const char* bin_name, as_query_order_by_type type, as_val** value
+	);
+
+/**
  * Apply user defined function on records that match the query filter. Records are not returned to 
  * the client. This asynchronous server call will return before the command is complete. The user
  * can optionally wait for command completion.

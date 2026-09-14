@@ -136,6 +136,18 @@ ordering by name in ascending, case-insensitive order - each limited to the top
 truncated by the client/server, without the caller doing any of its own sorting.
 
 
+### min_max
+
+	aerospike_query_min()
+	aerospike_query_max()
+
+This example demonstrates MIN/MAX aggregation. It writes a batch of records
+with an integer "score" bin holding distinct values, then calls
+aerospike_query_min() and aerospike_query_max() to find the minimum and
+maximum score across every record in the set. These calls hand back just the
+winning bin's value (an as_val), not a whole record.
+
+
 ### vector_knn
 
 	as_vector_value_new_float32()

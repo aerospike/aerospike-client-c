@@ -200,15 +200,16 @@ jobs:
     strategy:
       fail-fast: true
       matrix: ${{ fromJSON(needs.compute-release-matrix.outputs.matrix-json) }}
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
     with:
-      gh-workflows-ref:       a9e883e43e0d4679ff1a250ea1ef577332a81722
+      gh-workflows-ref:       b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
       jf-build-name:          aerospike-client-c
       jf-build-id:            ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-${{ matrix.distro }}-${{ matrix.arch }}
       jf-project:             ${{ vars.JFROG_PROJECT }}
       runs-on:                ${{ matrix.runs-on }}
       build-env:              ${{ matrix.build-env }}
       matrix-json-data:       ${{ toJSON(matrix) }}
+      job-name:               linux-build-${{ matrix.distro }}-${{ matrix.arch }}
       gh-source-path:         aerospike-client-c
       working-directory:      aerospike-client-c
       gh-artifact-directory:  target/packages
@@ -272,11 +273,11 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: aerospike/shared-workflows
-          ref: a9e883e43e0d4679ff1a250ea1ef577332a81722
+          ref: b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
           path: shared-workflows
 
       - name: Set up GPG
-        uses: aerospike/shared-workflows/.github/actions/setup-gpg@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
         with:
           gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
           gpg-public-key:  ${{ secrets.GPG_PUBLIC_KEY }}
@@ -304,13 +305,14 @@ jobs:
   build-mac-artifacts:
     name: mac / build
     needs: get-version
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
     with:
-      gh-workflows-ref:      a9e883e43e0d4679ff1a250ea1ef577332a81722
+      gh-workflows-ref:      b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
       jf-build-name:         aerospike-client-c
       jf-build-id:           ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-mac-arm64
       jf-project:            ${{ vars.JFROG_PROJECT }}
       runs-on:               macos-14
+      job-name:              mac-build-arm64
       gh-source-path:        aerospike-client-c
       working-directory:     aerospike-client-c
       gh-artifact-directory: target/packages
@@ -337,9 +339,9 @@ jobs:
     name: mac / sign (Apple)
     if: ${{ !inputs.dry-run }}
     needs: build-mac-artifacts
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-mac-artifacts.yaml@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-mac-artifacts.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
     with:
-      gh-workflows-ref:      a9e883e43e0d4679ff1a250ea1ef577332a81722
+      gh-workflows-ref:      b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
       gh-unsigned-artifacts: mac-build-artifacts
       signing-identity:      'Developer ID Application: Aerospike, Inc.'
       installer-identity:    'Developer ID Installer: Aerospike, Inc.'
@@ -362,9 +364,9 @@ jobs:
       always() && !cancelled() &&
       needs.build-mac-artifacts.result == 'success' &&
       (needs.sign-mac-apple.result == 'success' || needs.sign-mac-apple.result == 'skipped')
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
     with:
-      gh-workflows-ref:      a9e883e43e0d4679ff1a250ea1ef577332a81722
+      gh-workflows-ref:      b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
       gh-unsigned-artifacts: mac-build-artifacts
       gh-artifact-name:      mac-signed-artifacts
       runs-on:               ubuntu-22.04
@@ -435,13 +437,14 @@ jobs:
     name: windows / publish build-info
     needs: build-windows-dlls
     if: always() && !cancelled() && needs.build-windows-dlls.result == 'success'
-    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_execute-build.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
     with:
-      gh-workflows-ref:      a9e883e43e0d4679ff1a250ea1ef577332a81722
+      gh-workflows-ref:      b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
       jf-build-name:         aerospike-client-c
       jf-build-id:           ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo-windows-amd64
       jf-project:            ${{ vars.JFROG_PROJECT }}
       runs-on:               ubuntu-24.04
+      job-name:              windows-publish-buildinfo-amd64
       gh-source-path:        aerospike-client-c
       working-directory:     aerospike-client-c
       gh-artifact-directory: target/packages
@@ -513,9 +516,9 @@ jobs:
     name: windows / sign nupkg
     if: ${{ !inputs.dry-run }}
     needs: pack-nuget
-    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
     with:
-      gh-workflows-ref:      a9e883e43e0d4679ff1a250ea1ef577332a81722
+      gh-workflows-ref:      b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
       gh-unsigned-artifacts: win-unsigned-nupkg
       gh-artifact-name:      win-signed-nupkg
       nuget-environment:     PROD
@@ -579,9 +582,9 @@ jobs:
       always() && !cancelled() &&
       needs.collect-release-artifacts.result == 'success' &&
       needs.publish-windows-buildinfo.result == 'success'
-    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_deploy-artifacts.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
     with:
-      gh-workflows-ref:      a9e883e43e0d4679ff1a250ea1ef577332a81722
+      gh-workflows-ref:      b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
       jf-build-name:         aerospike-client-c
       jf-build-id:           ${{ github.run_id }}-${{ github.run_attempt }}
       jf-metadata-build-id:  ${{ github.run_id }}-${{ github.run_attempt }}-buildinfo
@@ -677,9 +680,9 @@ jobs:
       needs.generate-api-docs.result     == 'success' &&
       needs.deploy-artifacts.result      == 'success' &&
       needs.check-existing-bundle.result == 'success'
-    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
+    uses: aerospike/shared-workflows/.github/workflows/reusable_create-release-bundle.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
     with:
-      gh-workflows-ref:   a9e883e43e0d4679ff1a250ea1ef577332a81722
+      gh-workflows-ref:   b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
       jf-project:         ${{ vars.JFROG_PROJECT }}
       jf-bundle-name:     aerospike-client-c
       version:            ${{ needs.get-version.outputs.version }}
@@ -707,7 +710,7 @@ jobs:
           oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
 
       - name: Promote release bundle
-        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
+        uses: aerospike/shared-workflows/.github/actions/promote-release-bundle@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
         with:
           bundle-name:   ${{ env.JF_BUNDLE_NAME }}
           version:       ${{ needs.get-version.outputs.version }}

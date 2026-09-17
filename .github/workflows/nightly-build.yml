@@ -74,5 +74,5 @@ jobs:
       valgrind:     true
       run-mac:      true 
       run-windows:  true
-      check-doc-lint: false
+      enforce-doxygen-warnings: false
     secrets: inherit

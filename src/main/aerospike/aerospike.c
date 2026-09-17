@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -310,7 +310,7 @@ aerospike_connect(aerospike* as, as_error* err)
 	return status;
 }
 
-void as_event_close_cluster(aerospike* as);
+as_status as_event_close_cluster(aerospike* as, as_error* err);
 
 /**
  * Close connections to the cluster
@@ -339,8 +339,9 @@ aerospike_close(aerospike* as, as_error* err)
 		}
 		
 		if (as_event_loop_size > 0 && !as_event_single_thread) {
-			// Async configurations will attempt to wait till pending async commands have completed.
-			as_event_close_cluster(as);
+			// Async configurations will attempt to wait till pending async commands
+			// have completed.
+			as_event_close_cluster(as, err);
 		}
 		else {
 			// Close sync only configurations immediately.

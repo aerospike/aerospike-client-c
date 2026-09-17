@@ -380,7 +380,7 @@ run_to_string(aerospike* as)
 	as_key_init_str(&key, g_namespace, g_set, "stringexp_tostring");
 
 	as_error err;
-	aerospike_key_remove(as, &err, NULL, &key);
+	example_remove_record(as, &err, &key);
 
 	as_record put_rec;
 	as_record_inita(&put_rec, 1);
@@ -407,7 +407,7 @@ static void
 put(aerospike* as, as_key* key, const char* value)
 {
 	as_error err;
-	aerospike_key_remove(as, &err, NULL, key);
+	example_remove_record(as, &err, key);
 
 	as_record rec;
 	as_record_inita(&rec, 1);

@@ -86,6 +86,16 @@ typedef struct as_batch_result_s {
 	as_status result;
 
 	/**
+	 * Server error detail subcode for this row. When absent, this field is 0.
+	 */
+	uint32_t subcode;
+
+	/**
+	 * NULL-terminated row error detail message. NULL when no row detail is present.
+	 */
+	char* message;
+
+	/**
 	 * Is it possible that the write command may have completed even though an error
 	 * occurred for this record. This may be the case when a client error occurs (like timeout)
 	 * after the command was sent to the server.

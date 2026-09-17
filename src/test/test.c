@@ -16,6 +16,7 @@
  */
 #include "test.h"
 #include <aerospike/as_error.h>
+#include <aerospike/as_sleep.h>
 #include <aerospike/as_string_builder.h>
 #include <sys/types.h>
 #include <stdio.h>
@@ -28,6 +29,35 @@
 
 #define out stdout
 #define LOG_MESSAGE_MAX 1024
+
+/******************************************************************************
+ * atf_wait
+ *****************************************************************************/
+
+bool
+atf_is_ci(void)
+{
+	bool is_ci = getenv("GITHUB_ACTIONS") != NULL || getenv("CI") != NULL;
+
+	printf("%sINFO: CI detected: %s.\n", ATF_LOG_PREFIX, is_ci ? "true" : "false");
+	return is_ci;
+}
+
+bool
+atf_wait_until(atf_wait_predicate predicate, void* udata, uint32_t max_retries, uint32_t sleep_ms)
+{
+	for (uint32_t i = 0; ; i++) {
+		if (predicate(udata)) {
+			return true;
+		}
+
+		if (i >= max_retries) {
+			return false;
+		}
+
+		as_sleep(sleep_ms);
+	}
+}
 
 /******************************************************************************
  * atf_test

@@ -160,8 +160,8 @@ main(int argc, char* argv[])
 	LOG("create failed as expected");
 
 	// Remove the record from the database so we can demonstrate create success.
-	if (aerospike_key_remove(&as, &err, NULL, &g_key) != AEROSPIKE_OK) {
-		LOG("aerospike_key_remove() returned %d - %s", err.code, err.message);
+	if (example_remove_record(&as, &err, &g_key) != AEROSPIKE_OK) {
+		LOG("example_remove_record() returned %d - %s", err.code, err.message);
 		example_cleanup(&as);
 		exit(-1);
 	}

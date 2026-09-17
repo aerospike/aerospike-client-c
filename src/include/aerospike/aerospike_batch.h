@@ -84,6 +84,16 @@ typedef struct as_batch_base_record_s {
 	as_status result;
 
 	/**
+	 * Server error detail subcode for this row. When absent, this field is 0.
+	 */
+	uint32_t subcode;
+
+	/**
+	 * NULL-terminated row error detail message. NULL when no row detail is present.
+	 */
+	char* message;
+
+	/**
 	 * Type of batch record.
 	 */
 	as_batch_type type;
@@ -111,6 +121,8 @@ typedef struct as_batch_read_record_s {
 	as_key key;
 	as_record record;
 	as_status result;
+	uint32_t subcode;
+	char* message;
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt; // Will always be false for reads.
@@ -160,6 +172,8 @@ typedef struct as_batch_write_record_s {
 	as_key key;
 	as_record record;  // Contains results of operations from ops field.
 	as_status result;
+	uint32_t subcode;
+	char* message;
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt;
@@ -191,6 +205,8 @@ typedef struct as_batch_apply_record_s {
 	as_key key;
 	as_record record;
 	as_status result;
+	uint32_t subcode;
+	char* message;
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt;
@@ -234,6 +250,8 @@ typedef struct as_batch_remove_record_s {
 	as_key key;
 	as_record record;
 	as_status result;
+	uint32_t subcode;
+	char* message;
 	as_batch_type type;
 	bool has_write;
 	bool in_doubt;
@@ -477,8 +495,8 @@ as_batch_remove_reserve(as_batch_records* records)
 }
 
 /**
- * Destroy keys and records in record list. It's the responsility of the caller to
- * free additional user specified fields in the record.
+ * Destroy keys, records, and allocated row error detail messages in record list.
+ * It's the responsibility of the caller to free additional user specified fields in the record.
  *
  * @relates as_batch_records
  * @ingroup batch_operations
@@ -487,8 +505,8 @@ AS_EXTERN void
 as_batch_records_destroy(as_batch_records* records);
 
 /**
- * Destroy keys and records in record list. It's the responsility of the caller to
- * free additional user specified fields in the record.
+ * Destroy keys, records, and allocated row error detail messages in record list.
+ * It's the responsibility of the caller to free additional user specified fields in the record.
  *
  * @deprecated Use as_batch_records_destroy() instead.
  * @relates as_batch_records

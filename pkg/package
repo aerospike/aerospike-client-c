@@ -88,9 +88,13 @@ do
   tar cf - -C $stageDir/final $packageName | gzip -c > $stageDir/packages/$packageName.tgz
 done
 
-# Create docs using last build.
-echo Make docs
-make -C $baseDir docs
+# Skip with SKIP_DOCS=1 when docs are produced outside pkg/package (e.g. release CI).
+if [ "${SKIP_DOCS:-0}" = 1 ]; then
+  echo "Skipping docs (SKIP_DOCS=1)"
+else
+  echo Make docs
+  make -C $baseDir docs
+fi
 
 # Initialize package directory
 packageDir=$baseDir/target/packages

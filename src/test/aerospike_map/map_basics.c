@@ -73,7 +73,7 @@ server_supports_map_keys_in_ctx(void)
 		return false;
 	}
 
-	bool supported = as_version_compare(&node->version, &as_server_version_8_1_3) >= 0;
+	bool supported = as_version_compare(&node->version, &as_server_version_8_2_0) >= 0;
 	as_node_release(node);
 	return supported;
 }
@@ -1961,7 +1961,7 @@ TEST(map_nested, "Nested Map")
 TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with path select")
 {
 	if (! server_supports_map_keys_in_ctx()) {
-		info("skipping MAP_KEYS_IN context path select; requires server >= 8.1.3");
+		info("skipping MAP_KEYS_IN context path select; requires server >= 8.2.0");
 		return;
 	}
 
@@ -2064,7 +2064,7 @@ TEST(map_nested_map_keys_in, "Nested map MAP_KEYS_IN context with path select")
 TEST(map_keys_in_and_filter, "MAP_KEYS_IN with AND expression filter on path select")
 {
 	if (! server_supports_map_keys_in_ctx()) {
-		info("skipping MAP_KEYS_IN context path select filter; requires server >= 8.1.3");
+		info("skipping MAP_KEYS_IN context path select filter; requires server >= 8.2.0");
 		return;
 	}
 

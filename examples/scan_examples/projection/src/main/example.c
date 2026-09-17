@@ -47,9 +47,6 @@
 // Constants
 //
 
-const char* NAMESPACE = "test";
-const char* SET = "demo1";
-
 //==========================================================
 // Forward Declarations
 //
@@ -69,30 +66,16 @@ int
 main(int argc, char* argv[])
 {
 	// Parse command line arguments.
-	if (argc != 3) {
-		printf("Usage: %s <host> <port>\n", argv[0]);
+	if (! example_get_opts(argc, argv, EXAMPLE_MULTI_KEY_OPTS)) {
 		return -1;
 	}
 
-	const char* host = argv[1];
-	int port = atoi(argv[2]);
-
-	// Initialize Aerospike client.
-	as_config config;
-	as_config_init(&config);
-	as_config_add_host(&config, host, port);
-
+	// Connect to the aerospike database cluster.
 	aerospike as;
-	aerospike_init(&as, &config);
+	example_connect_to_aerospike(&as);
 
-	as_error err;
-	if (aerospike_connect(&as, &err) != AEROSPIKE_OK) {
-		printf("Failed to connect to Aerospike: %s\n", err.message);
-		aerospike_destroy(&as);
-		return -1;
-	}
-
-	printf("Connected to Aerospike at %s:%d\n", host, port);
+	// Start clean.
+	example_remove_test_records(&as);
 
 	insert_records(&as);
 
@@ -104,6 +87,8 @@ main(int argc, char* argv[])
 
 	// Cleanup and disconnect
 	cleanup_example(&as);
+
+	as_error err;
 	aerospike_close(&as, &err);
 	aerospike_destroy(&as);
 
@@ -122,7 +107,7 @@ example_scan_with_read_operations(aerospike* as)
 
 	as_error err;
 	as_scan scan;
-	as_scan_init(&scan, NAMESPACE, SET);
+	as_scan_init(&scan, g_namespace, g_set);
 
 	// Create operations to read specific bins and perform calculations
 	as_operations ops;
@@ -158,7 +143,7 @@ example_scan_with_expression_read_operations(aerospike* as)
 
 	as_error err;
 	as_scan scan;
-	as_scan_init(&scan, NAMESPACE, SET);
+	as_scan_init(&scan, g_namespace, g_set);
 
 	// Create operations using expressions to read bin values
 	as_operations ops;
@@ -213,7 +198,7 @@ example_scan_with_write_operations(aerospike* as)
 
 	as_error err;
 	as_scan scan;
-	as_scan_init(&scan, NAMESPACE, SET);
+	as_scan_init(&scan, g_namespace, g_set);
 
 	// Create operations to modify records
 	as_operations ops;
@@ -257,8 +242,7 @@ example_scan_with_write_operations(aerospike* as)
 void
 cleanup_example(aerospike* as)
 {
-	// This function could be used to clean up any test data
-	// For this example, we'll leave the data as-is
+	example_remove_test_records(as);
 	printf("\nExample cleanup completed.\n");
 }
 
@@ -314,7 +298,7 @@ insert_records(aerospike* p_as)
 		// No need to destroy a stack as_key object, if we only use
 		// as_key_init_int64().
 		as_key key;
-		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
+		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
 
 		// In general it's ok to reset a bin value - all as_record_set_... calls
 		// destroy any previous value.

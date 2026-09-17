@@ -56,6 +56,7 @@ runs:
           -e DISTRO="${DISTRO}" \
           -e VALGRIND="${VALGRIND}" \
           -e JUNIT_XML="${JUNIT_XML}" \
+          ${CI:+-e CI="$CI"} \
           ${{ inputs.container }} \
           bash -c '
             set -euo pipefail
@@ -66,8 +67,10 @@ runs:
             # Provision compiler, openssl, libyaml, zlib, the chosen event lib,
             # and Valgrind (when requested) for this distro.  RHEL variants build
             # Valgrind from source; other distros install the packaged version.
+            # docs=false: this job only runs make all + tests, never make docs
+            # or make package, so doxygen/graphviz/cmake/flex/bison are not needed.
             bash "${GITHUB_WORKSPACE}/.github/script/install_deps.bash" \
-              "${DISTRO}" "${EVENT_LIB}" "${VALGRIND}"
+              "${DISTRO}" "${EVENT_LIB}" "${VALGRIND}" "false"
 
             git config --global --add safe.directory "${GITHUB_WORKSPACE}"
             make clean

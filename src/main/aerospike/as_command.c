@@ -27,6 +27,7 @@
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_socket.h>
+#include <aerospike/as_string_builder.h>
 #include <aerospike/as_txn.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_clock.h>
@@ -295,8 +296,7 @@ as_command_write_header_write(
 	}
 
 	uint8_t txn_attr = on_locking_only ? AS_MSG_INFO4_TXN_ON_LOCKING_ONLY : 0;
-	txn_attr |= (policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
-				& AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
+	txn_attr |= as_command_info4_error_detail(policy->error_detail_verbosity);
 
 #if defined USE_XDR
 	read_attr |= AS_MSG_INFO1_XDR;
@@ -331,8 +331,7 @@ as_command_write_header_read(
 	cmd[9] = read_attr;
 	cmd[10] = write_attr;
 	cmd[11] = info_attr;
-	cmd[12] = (policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
-			  & AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
+	cmd[12] = as_command_info4_error_detail(policy->error_detail_verbosity);
 	cmd[13] = 0;
 	*(uint32_t*)&cmd[14] = 0;
 	*(int*)&cmd[18] = cf_swap_to_be32(read_ttl);
@@ -356,8 +355,7 @@ as_command_write_header_read_header(
 	cmd[9] = read_attr;
 	cmd[10] = 0;
 	cmd[11] = info_attr;
-	cmd[12] = (policy->error_detail_verbosity << AS_MSG_INFO4_ERROR_VERBOSITY_SHIFT)
-			  & AS_MSG_INFO4_ERROR_VERBOSITY_MASK;
+	cmd[12] = as_command_info4_error_detail(policy->error_detail_verbosity);
 	cmd[13] = 0;
 	*(uint32_t*)&cmd[14] = 0;
 	*(int*)&cmd[18] = cf_swap_to_be32(read_ttl);
@@ -1134,14 +1132,14 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 
 	uint8_t* p = buf + sizeof(as_msg);
 
-	status = as_command_parse_fields(&p, err, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
+	status = as_command_parse_fields(&p, err, node, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
 
 	if (msg->result_code) {
-		as_error_update_status(err, msg->result_code);
+		as_error_set_node(err, node, msg->result_code);
 		return msg->result_code;
 	}
 
@@ -1162,10 +1160,12 @@ as_command_parse_header(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 
 as_status
 as_command_parse_fields_txn(
-	uint8_t** pp, as_error* err, as_msg* msg, as_txn* txn, const uint8_t* digest, const char* set,
-	bool is_write
+	uint8_t** pp, as_error* err, as_node* node, as_msg* msg, as_txn* txn, const uint8_t* digest,
+	const char* set, bool is_write
 	)
 {
+	as_error_clear_server_detail(err);
+
 	uint8_t* p = *pp;
 	uint64_t version = 0;
 	uint32_t len;
@@ -1188,7 +1188,7 @@ as_command_parse_fields_txn(
 			}
 		}
 		else if (type == AS_FIELD_ERROR_DETAILS && len > 0) {
-			as_command_parse_error_details(err, p, len);
+			as_command_parse_error_details(err, node, p, len, msg->result_code);
 		}
 		p += len;
 	}
@@ -1299,21 +1299,45 @@ as_command_skip_msgpack_value(uint8_t** pp, uint8_t* end)
 			return true;
 
 		case 0xcc: // uint8
+		case 0xd0: // int8
 			*pp += 1;
 			return *pp <= end;
 
 		case 0xcd: // uint16
+		case 0xd1: // int16
 			*pp += 2;
 			return *pp <= end;
 
 		case 0xce: // uint32
 		case 0xca: // float32
+		case 0xd2: // int32
 			*pp += 4;
 			return *pp <= end;
 
 		case 0xcf: // uint64
 		case 0xcb: // float64
+		case 0xd3: // int64
 			*pp += 8;
+			return *pp <= end;
+
+		case 0xd4: // fixext 1
+			*pp += 2; // type + data
+			return *pp <= end;
+
+		case 0xd5: // fixext 2
+			*pp += 3; // type + data
+			return *pp <= end;
+
+		case 0xd6: // fixext 4
+			*pp += 5; // type + data
+			return *pp <= end;
+
+		case 0xd7: // fixext 8
+			*pp += 9; // type + data
+			return *pp <= end;
+
+		case 0xd8: // fixext 16
+			*pp += 17; // type + data
 			return *pp <= end;
 
 		case 0xd9: // str8
@@ -1321,6 +1345,13 @@ as_command_skip_msgpack_value(uint8_t** pp, uint8_t* end)
 			if (*pp >= end) return false;
 			uint32_t len = **pp;
 			(*pp) += 1 + len;
+			return *pp <= end;
+		}
+
+		case 0xc7: { // ext8
+			if (*pp >= end) return false;
+			uint32_t len = **pp;
+			(*pp) += 2 + len; // len + type + data
 			return *pp <= end;
 		}
 
@@ -1332,11 +1363,25 @@ as_command_skip_msgpack_value(uint8_t** pp, uint8_t* end)
 			return *pp <= end;
 		}
 
+		case 0xc8: { // ext16
+			if (*pp + 2 > end) return false;
+			uint32_t len = cf_swap_from_be16(*(uint16_t*)*pp);
+			*pp += 3 + len; // len + type + data
+			return *pp <= end;
+		}
+
 		case 0xdb: // str32
 		case 0xc6: { // bin32
 			if (*pp + 4 > end) return false;
 			uint32_t len = cf_swap_from_be32(*(uint32_t*)*pp);
 			*pp += 4 + len;
+			return *pp <= end;
+		}
+
+		case 0xc9: { // ext32
+			if (*pp + 4 > end) return false;
+			uint32_t len = cf_swap_from_be32(*(uint32_t*)*pp);
+			*pp += 5 + len; // len + type + data
 			return *pp <= end;
 		}
 
@@ -1437,6 +1482,68 @@ as_command_read_msgpack_uint(uint8_t** pp, uint8_t* end, uint64_t* out)
 }
 
 static bool
+as_command_read_msgpack_map_header(uint8_t** pp, uint8_t* end, uint32_t* out)
+{
+	if (*pp >= end) {
+		return false;
+	}
+
+	uint8_t type = **pp;
+	(*pp)++;
+
+	if ((type & 0xf0) == 0x80) {
+		*out = type & 0x0f;
+		return true;
+	}
+
+	if (type == 0xde) {
+		if (*pp + 2 > end) return false;
+		*out = cf_swap_from_be16(*(uint16_t*)*pp);
+		*pp += 2;
+		return true;
+	}
+
+	if (type == 0xdf) {
+		if (*pp + 4 > end) return false;
+		*out = cf_swap_from_be32(*(uint32_t*)*pp);
+		*pp += 4;
+		return true;
+	}
+	return false;
+}
+
+static bool
+as_command_read_msgpack_array_header(uint8_t** pp, uint8_t* end, uint32_t* out)
+{
+	if (*pp >= end) {
+		return false;
+	}
+
+	uint8_t type = **pp;
+	(*pp)++;
+
+	if ((type & 0xf0) == 0x90) {
+		*out = type & 0x0f;
+		return true;
+	}
+
+	if (type == 0xdc) {
+		if (*pp + 2 > end) return false;
+		*out = cf_swap_from_be16(*(uint16_t*)*pp);
+		*pp += 2;
+		return true;
+	}
+
+	if (type == 0xdd) {
+		if (*pp + 4 > end) return false;
+		*out = cf_swap_from_be32(*(uint32_t*)*pp);
+		*pp += 4;
+		return true;
+	}
+	return false;
+}
+
+static bool
 as_command_read_msgpack_str(uint8_t** pp, uint8_t* end, char** out, uint32_t* out_len)
 {
 	if (*pp >= end) {
@@ -1461,6 +1568,11 @@ as_command_read_msgpack_str(uint8_t** pp, uint8_t* end, char** out, uint32_t* ou
 		len = cf_swap_from_be16(*(uint16_t*)*pp);
 		*pp += 2;
 	}
+	else if (type == 0xdb) {
+		if (*pp + 4 > end) return false;
+		len = cf_swap_from_be32(*(uint32_t*)*pp);
+		*pp += 4;
+	}
 	else {
 		return false;
 	}
@@ -1475,8 +1587,605 @@ as_command_read_msgpack_str(uint8_t** pp, uint8_t* end, char** out, uint32_t* ou
 	return true;
 }
 
+static inline void
+as_command_copy_msgpack_str(char* dst, size_t capacity, const char* src, uint32_t len)
+{
+	if (capacity == 0) {
+		return;
+	}
+
+	size_t copy_len = len < capacity - 1 ? len : capacity - 1;
+	memcpy(dst, src, copy_len);
+	dst[copy_len] = '\0';
+}
+
+enum {
+	AS_ERROR_DETAIL_KEY_SUBCODE = 1,
+	AS_ERROR_DETAIL_KEY_MESSAGE = 2,
+	AS_ERROR_DETAIL_KEY_EXP_TRACE = 3,
+
+	AS_EXP_TRACE_KEY_PHASE = 1,
+	AS_EXP_TRACE_KEY_BYTE_OFFSET = 2,
+	AS_EXP_TRACE_KEY_OP = 3,
+	AS_EXP_TRACE_KEY_DEPTH = 4,
+	AS_EXP_TRACE_KEY_PATH = 5,
+	AS_EXP_TRACE_KEY_SNIPPET = 6,
+	AS_EXP_TRACE_KEY_OUTCOME = 7,
+	AS_EXP_TRACE_KEY_LANG = 8,
+	AS_EXP_TRACE_KEY_AEL_OFFSET = 9,
+	AS_EXP_TRACE_KEY_AEL_SPAN = 10,
+	AS_EXP_TRACE_KEY_PRIVATE_AEL_LINE = 11,
+	AS_EXP_TRACE_KEY_PRIVATE_AEL_COL = 12,
+	AS_EXP_TRACE_KEY_OPERANDS = 13,
+
+	AS_EXP_TRACE_PHASE_BUILD = 1,
+	AS_EXP_TRACE_PHASE_EVAL = 2,
+
+	AS_EXP_TRACE_OUTCOME_FAULT = 1,
+	AS_EXP_TRACE_OUTCOME_FALSE = 2,
+	AS_EXP_TRACE_OUTCOME_ABSENT = 3,
+
+	AS_EXP_TRACE_LANG_MSGPACK = 1,
+	AS_EXP_TRACE_LANG_AEL = 2,
+
+	AS_EXP_TRACE_OP_MAX_SIZE = 32,
+	AS_EXP_TRACE_PATH_MAX_DEPTH = 16,
+	// Server may splice a "..." sentinel in addition to the 16-frame cap.
+	AS_EXP_TRACE_PATH_MAX_SIZE = AS_EXP_TRACE_PATH_MAX_DEPTH + 1,
+	AS_EXP_TRACE_SNIPPET_MAX_SIZE = 256,
+	AS_EXP_TRACE_OPERAND_MAX_SIZE = 49
+};
+
+typedef struct as_exp_trace_detail_s {
+	bool has_phase;
+	uint8_t phase;
+
+	bool has_byte_offset;
+	uint64_t byte_offset;
+
+	bool has_op;
+	char op[AS_EXP_TRACE_OP_MAX_SIZE];
+
+	bool has_depth;
+	uint16_t depth;
+
+	bool has_path;
+	uint8_t path_size;
+	char path[AS_EXP_TRACE_PATH_MAX_SIZE][AS_EXP_TRACE_OP_MAX_SIZE];
+
+	bool has_snippet;
+	char snippet[AS_EXP_TRACE_SNIPPET_MAX_SIZE];
+
+	bool has_outcome;
+	uint8_t outcome;
+
+	bool has_lang;
+	uint8_t lang;
+
+	bool has_ael_offset;
+	uint32_t ael_offset;
+
+	bool has_ael_span;
+	uint32_t ael_span;
+
+	bool has_operands;
+	char lhs[AS_EXP_TRACE_OPERAND_MAX_SIZE];
+	char rhs[AS_EXP_TRACE_OPERAND_MAX_SIZE];
+} as_exp_trace_detail;
+
+typedef struct as_trace_writer_s {
+	char* buf;
+	size_t capacity;
+	size_t pos;
+	bool truncated;
+} as_trace_writer;
+
+static inline void
+as_exp_trace_detail_reset(as_exp_trace_detail* trace)
+{
+	memset(trace, 0, sizeof(as_exp_trace_detail));
+}
+
+static inline bool
+as_exp_trace_has_data(const as_exp_trace_detail* trace)
+{
+	return trace->has_phase || trace->has_byte_offset || trace->has_op || trace->has_depth ||
+		trace->has_path || trace->has_snippet || trace->has_outcome || trace->has_lang ||
+		trace->has_ael_offset || trace->has_ael_span || trace->has_operands;
+}
+
+static bool
+as_trace_write_raw(as_trace_writer* w, const char* str, size_t reserve)
+{
+	size_t len = strlen(str);
+
+	if (w->capacity == 0 || w->pos >= w->capacity - 1) {
+		w->truncated = true;
+		return false;
+	}
+
+	size_t avail = w->capacity - 1 - w->pos;
+
+	if (avail <= reserve || len > avail - reserve) {
+		w->truncated = true;
+		return false;
+	}
+
+	memcpy(w->buf + w->pos, str, len);
+	w->pos += len;
+	w->buf[w->pos] = '\0';
+	return true;
+}
+
+static bool
+as_trace_write_u64(as_trace_writer* w, uint64_t val, size_t reserve)
+{
+	char tmp[32];
+	snprintf(tmp, sizeof(tmp), "%" PRIu64, val);
+	return as_trace_write_raw(w, tmp, reserve);
+}
+
+static bool
+as_trace_write_escaped(as_trace_writer* w, const char* str, uint32_t len, size_t reserve)
+{
+	static const char hex[] = "0123456789ABCDEF";
+
+	for (uint32_t i = 0; i < len && str[i] != '\0'; i++) {
+		unsigned char c = (unsigned char)str[i];
+		char esc[4];
+		size_t esc_len;
+
+		switch (c) {
+		case '\\':
+			esc[0] = '\\';
+			esc[1] = '\\';
+			esc_len = 2;
+			break;
+		case '"':
+			esc[0] = '\\';
+			esc[1] = '"';
+			esc_len = 2;
+			break;
+		case '\n':
+			esc[0] = '\\';
+			esc[1] = 'n';
+			esc_len = 2;
+			break;
+		case '\r':
+			esc[0] = '\\';
+			esc[1] = 'r';
+			esc_len = 2;
+			break;
+		case '\t':
+			esc[0] = '\\';
+			esc[1] = 't';
+			esc_len = 2;
+			break;
+		default:
+			if (c < 0x20) {
+				esc[0] = '\\';
+				esc[1] = 'x';
+				esc[2] = hex[c >> 4];
+				esc[3] = hex[c & 0x0f];
+				esc_len = 4;
+			}
+			else {
+				esc[0] = (char)c;
+				esc_len = 1;
+			}
+			break;
+		}
+
+		size_t avail = w->capacity - 1 - w->pos;
+
+		if (avail <= reserve || esc_len > avail - reserve) {
+			w->truncated = true;
+			return false;
+		}
+
+		memcpy(w->buf + w->pos, esc, esc_len);
+		w->pos += esc_len;
+		w->buf[w->pos] = '\0';
+	}
+	return true;
+}
+
+static bool
+as_trace_write_field_prefix(as_trace_writer* w, bool* has_field, const char* name)
+{
+	if (*has_field && !as_trace_write_raw(w, " ", 1)) {
+		return false;
+	}
+
+	if (!as_trace_write_raw(w, name, 1) || !as_trace_write_raw(w, "=", 1)) {
+		return false;
+	}
+
+	*has_field = true;
+	return true;
+}
+
+static bool
+as_trace_write_string_field(
+	as_trace_writer* w, bool* has_field, const char* name, const char* value
+	)
+{
+	if (!as_trace_write_field_prefix(w, has_field, name) || !as_trace_write_raw(w, "\"", 2)) {
+		return false;
+	}
+
+	as_trace_write_escaped(w, value, (uint32_t)strlen(value), 2);
+	return as_trace_write_raw(w, "\"", 1);
+}
+
+static bool
+as_trace_write_u64_field(
+	as_trace_writer* w, bool* has_field, const char* name, uint64_t value
+	)
+{
+	return as_trace_write_field_prefix(w, has_field, name) &&
+		as_trace_write_u64(w, value, 1);
+}
+
+static const char*
+as_exp_trace_phase_string(uint8_t phase)
+{
+	switch (phase) {
+	case AS_EXP_TRACE_PHASE_BUILD:
+		return "build";
+	case AS_EXP_TRACE_PHASE_EVAL:
+		return "eval";
+	default:
+		return NULL;
+	}
+}
+
+static const char*
+as_exp_trace_outcome_string(uint8_t outcome)
+{
+	switch (outcome) {
+	case AS_EXP_TRACE_OUTCOME_FAULT:
+		return "fault";
+	case AS_EXP_TRACE_OUTCOME_FALSE:
+		return "false";
+	case AS_EXP_TRACE_OUTCOME_ABSENT:
+		return "absent";
+	default:
+		return NULL;
+	}
+}
+
+static const char*
+as_exp_trace_lang_string(uint8_t lang)
+{
+	switch (lang) {
+	case AS_EXP_TRACE_LANG_MSGPACK:
+		return "msgpack";
+	case AS_EXP_TRACE_LANG_AEL:
+		return "ael";
+	default:
+		return NULL;
+	}
+}
+
+static bool
+as_trace_write_array_string(as_trace_writer* w, const char* value, size_t reserve)
+{
+	if (!as_trace_write_raw(w, "\"", reserve + 1)) {
+		return false;
+	}
+
+	as_trace_write_escaped(w, value, (uint32_t)strlen(value), reserve + 1);
+	return as_trace_write_raw(w, "\"", reserve);
+}
+
+static bool
+as_trace_write_path_field(as_trace_writer* w, bool* has_field, const as_exp_trace_detail* trace)
+{
+	if (!as_trace_write_field_prefix(w, has_field, "path") || !as_trace_write_raw(w, "[", 2)) {
+		return false;
+	}
+
+	for (uint8_t i = 0; i < trace->path_size; i++) {
+		if (i > 0 && !as_trace_write_raw(w, ",", 2)) {
+			break;
+		}
+
+		if (!as_trace_write_array_string(w, trace->path[i], 2)) {
+			break;
+		}
+	}
+	return as_trace_write_raw(w, "]", 1);
+}
+
+static bool
+as_trace_write_operands_field(as_trace_writer* w, bool* has_field, const as_exp_trace_detail* trace)
+{
+	if (!as_trace_write_field_prefix(w, has_field, "operands") || !as_trace_write_raw(w, "[", 2)) {
+		return false;
+	}
+
+	(void)as_trace_write_array_string(w, trace->lhs, 3);
+	(void)as_trace_write_raw(w, ",", 2);
+	(void)as_trace_write_array_string(w, trace->rhs, 2);
+	return as_trace_write_raw(w, "]", 1);
+}
+
+static void
+as_command_render_exp_trace_suffix(char* dst, size_t capacity, const as_exp_trace_detail* trace)
+{
+	as_trace_writer w = {
+		.buf = dst,
+		.capacity = capacity,
+		.pos = 0,
+		.truncated = false
+	};
+	bool has_field = false;
+
+	dst[0] = '\0';
+
+	if (!as_trace_write_raw(&w, "; exp_trace={", 1)) {
+		return;
+	}
+
+	if (trace->has_phase) {
+		const char* phase = as_exp_trace_phase_string(trace->phase);
+
+		if (phase) {
+			(void)as_trace_write_string_field(&w, &has_field, "phase", phase);
+		}
+		else {
+			(void)as_trace_write_u64_field(&w, &has_field, "phase", trace->phase);
+		}
+	}
+
+	if (trace->has_byte_offset) {
+		(void)as_trace_write_u64_field(&w, &has_field, "byte_offset", trace->byte_offset);
+	}
+
+	if (trace->has_op) {
+		(void)as_trace_write_string_field(&w, &has_field, "op", trace->op);
+	}
+
+	if (trace->has_depth) {
+		(void)as_trace_write_u64_field(&w, &has_field, "depth", trace->depth);
+	}
+
+	if (trace->has_path) {
+		(void)as_trace_write_path_field(&w, &has_field, trace);
+	}
+
+	if (trace->has_snippet) {
+		(void)as_trace_write_string_field(&w, &has_field, "snippet", trace->snippet);
+	}
+
+	if (trace->has_outcome) {
+		const char* outcome = as_exp_trace_outcome_string(trace->outcome);
+
+		if (outcome) {
+			(void)as_trace_write_string_field(&w, &has_field, "outcome", outcome);
+		}
+		else {
+			(void)as_trace_write_u64_field(&w, &has_field, "outcome", trace->outcome);
+		}
+	}
+
+	if (trace->has_lang) {
+		const char* lang = as_exp_trace_lang_string(trace->lang);
+
+		if (lang) {
+			(void)as_trace_write_string_field(&w, &has_field, "lang", lang);
+		}
+		else {
+			(void)as_trace_write_u64_field(&w, &has_field, "lang", trace->lang);
+		}
+	}
+
+	if (trace->has_ael_offset) {
+		(void)as_trace_write_u64_field(&w, &has_field, "ael_offset", trace->ael_offset);
+	}
+
+	if (trace->has_ael_span) {
+		(void)as_trace_write_u64_field(&w, &has_field, "ael_span", trace->ael_span);
+	}
+
+	if (trace->has_operands) {
+		(void)as_trace_write_operands_field(&w, &has_field, trace);
+	}
+
+	(void)as_trace_write_raw(&w, "}", 0);
+}
+
+static bool
+as_command_parse_exp_trace_operands(uint8_t** pp, uint8_t* end, as_exp_trace_detail* trace)
+{
+	uint8_t* value = *pp;
+	uint8_t* p = value;
+	uint32_t count;
+
+	if (!as_command_read_msgpack_array_header(&p, end, &count) || count != 2) {
+		return as_command_skip_msgpack_value(pp, end);
+	}
+
+	char* lhs;
+	uint32_t lhs_len;
+	char* rhs;
+	uint32_t rhs_len;
+
+	if (!as_command_read_msgpack_str(&p, end, &lhs, &lhs_len) ||
+		!as_command_read_msgpack_str(&p, end, &rhs, &rhs_len)) {
+		*pp = value;
+		return as_command_skip_msgpack_value(pp, end);
+	}
+
+	trace->has_operands = true;
+	as_command_copy_msgpack_str(trace->lhs, sizeof(trace->lhs), lhs, lhs_len);
+	as_command_copy_msgpack_str(trace->rhs, sizeof(trace->rhs), rhs, rhs_len);
+	*pp = p;
+	return true;
+}
+
+static bool
+as_command_parse_exp_trace(uint8_t** pp, uint8_t* end, as_exp_trace_detail* trace)
+{
+	uint8_t* p = *pp;
+	uint32_t n_entries;
+
+	if (!as_command_read_msgpack_map_header(&p, end, &n_entries)) {
+		return false;
+	}
+	as_exp_trace_detail_reset(trace);
+
+	for (uint32_t i = 0; i < n_entries; i++) {
+		uint64_t key;
+
+		if (!as_command_read_msgpack_uint(&p, end, &key)) {
+			return false;
+		}
+
+		switch (key) {
+		case AS_EXP_TRACE_KEY_PHASE: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_phase = true;
+			trace->phase = (uint8_t)val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_BYTE_OFFSET: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_byte_offset = true;
+			trace->byte_offset = val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_OP: {
+			char* str;
+			uint32_t str_len;
+
+			if (!as_command_read_msgpack_str(&p, end, &str, &str_len)) {
+				return false;
+			}
+			trace->has_op = true;
+			as_command_copy_msgpack_str(trace->op, sizeof(trace->op), str, str_len);
+			break;
+		}
+		case AS_EXP_TRACE_KEY_DEPTH: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_depth = true;
+			trace->depth = (uint16_t)val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_PATH: {
+			uint32_t count;
+
+			if (!as_command_read_msgpack_array_header(&p, end, &count)) {
+				return false;
+			}
+			trace->has_path = true;
+			trace->path_size = 0;
+
+			for (uint32_t j = 0; j < count; j++) {
+				char* str;
+				uint32_t str_len;
+
+				if (!as_command_read_msgpack_str(&p, end, &str, &str_len)) {
+					return false;
+				}
+
+				if (trace->path_size < AS_EXP_TRACE_PATH_MAX_SIZE) {
+					as_command_copy_msgpack_str(trace->path[trace->path_size],
+						sizeof(trace->path[trace->path_size]), str, str_len);
+					trace->path_size++;
+				}
+			}
+			break;
+		}
+		case AS_EXP_TRACE_KEY_SNIPPET: {
+			char* str;
+			uint32_t str_len;
+
+			if (!as_command_read_msgpack_str(&p, end, &str, &str_len)) {
+				return false;
+			}
+			trace->has_snippet = true;
+			as_command_copy_msgpack_str(trace->snippet, sizeof(trace->snippet), str, str_len);
+			break;
+		}
+		case AS_EXP_TRACE_KEY_OUTCOME: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_outcome = true;
+			trace->outcome = (uint8_t)val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_LANG: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_lang = true;
+			trace->lang = (uint8_t)val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_AEL_OFFSET: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_ael_offset = true;
+			trace->ael_offset = (uint32_t)val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_AEL_SPAN: {
+			uint64_t val;
+
+			if (!as_command_read_msgpack_uint(&p, end, &val)) {
+				return false;
+			}
+			trace->has_ael_span = true;
+			trace->ael_span = (uint32_t)val;
+			break;
+		}
+		case AS_EXP_TRACE_KEY_OPERANDS:
+			if (!as_command_parse_exp_trace_operands(&p, end, trace)) {
+				return false;
+			}
+			break;
+		case AS_EXP_TRACE_KEY_PRIVATE_AEL_LINE:
+		case AS_EXP_TRACE_KEY_PRIVATE_AEL_COL:
+			if (!as_command_skip_msgpack_value(&p, end)) {
+				return false;
+			}
+			break;
+		default:
+			if (!as_command_skip_msgpack_value(&p, end)) {
+				return false;
+			}
+			break;
+		}
+	}
+
+	*pp = p;
+	return true;
+}
+
 void
-as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
+as_command_parse_error_details(as_error* err, as_node* node, uint8_t* buf, uint32_t len, uint8_t result_code)
 {
 	if (len == 0 || buf == NULL) {
 		return;
@@ -1484,57 +2193,60 @@ as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
 
 	uint8_t* p = buf;
 	uint8_t* end = buf + len;
-
-	uint8_t type = *p;
-	p++;
-
 	uint32_t n_entries;
 
-	if ((type & 0xf0) == 0x80) {
-		n_entries = type & 0x0f;
-	}
-	else if (type == 0xde) {
-		if (p + 2 > end) return;
-		n_entries = cf_swap_from_be16(*(uint16_t*)p);
-		p += 2;
-	}
-	else if (type == 0xdf) {
-		if (p + 4 > end) return;
-		n_entries = cf_swap_from_be32(*(uint32_t*)p);
-		p += 4;
-	}
-	else {
+	if (!as_command_read_msgpack_map_header(&p, end, &n_entries)) {
 		return;
 	}
 
 	bool has_subcode = false;
 	uint64_t subcode = 0;
+	bool has_message = false;
 	char* msg_str = NULL;
 	uint32_t msg_len = 0;
+	bool has_exp_trace = false;
+	as_exp_trace_detail exp_trace;
 
 	for (uint32_t i = 0; i < n_entries; i++) {
 		uint64_t key;
 
 		if (!as_command_read_msgpack_uint(&p, end, &key)) {
-			return;
+			break;
 		}
 
-		if (key == 1) {
+		if (key == AS_ERROR_DETAIL_KEY_SUBCODE) {
 			uint64_t val;
+
 			if (!as_command_read_msgpack_uint(&p, end, &val)) {
-				return;
+				break;
 			}
 			subcode = val;
 			has_subcode = true;
 		}
-		else if (key == 2) {
+		else if (key == AS_ERROR_DETAIL_KEY_MESSAGE) {
 			if (!as_command_read_msgpack_str(&p, end, &msg_str, &msg_len)) {
-				return;
+				break;
+			}
+			has_message = true;
+		}
+		else if (key == AS_ERROR_DETAIL_KEY_EXP_TRACE) {
+			uint8_t* trace_pos = p;
+			as_exp_trace_detail trace;
+
+			if (as_command_parse_exp_trace(&trace_pos, end, &trace)) {
+				if (as_exp_trace_has_data(&trace)) {
+					exp_trace = trace;
+					has_exp_trace = true;
+				}
+				p = trace_pos;
+			}
+			else if (!as_command_skip_msgpack_value(&p, end)) {
+				break;
 			}
 		}
 		else {
 			if (!as_command_skip_msgpack_value(&p, end)) {
-				return;
+				break;
 			}
 		}
 	}
@@ -1543,25 +2255,34 @@ as_command_parse_error_details(as_error* err, uint8_t* buf, uint32_t len)
 		err->subcode = (uint32_t)subcode;
 	}
 
-	if (has_subcode && msg_str) {
-		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "%.*s (subcode=%" PRIu64 ")",
-				 (int)msg_len, msg_str, subcode);
+	as_string_builder sb;
+	as_string_builder_assign(&sb, sizeof(err->message), err->message);
+
+	if (node) {
+		as_string_builder_append(&sb, as_node_get_address_string(node));
+		as_string_builder_append_char(&sb, ' ');
 	}
-	else if (has_subcode) {
-		snprintf(err->message, AS_ERROR_MESSAGE_MAX_SIZE, "error subcode=%" PRIu64, subcode);
+
+	if (has_message) {
+		as_string_builder_append_chars(&sb, msg_str, msg_len);
 	}
-	else if (msg_str) {
-		uint32_t copy_len = msg_len < AS_ERROR_MESSAGE_MAX_SIZE - 1
-							? msg_len : AS_ERROR_MESSAGE_MAX_SIZE - 1;
-		memcpy(err->message, msg_str, copy_len);
-		err->message[copy_len] = '\0';
+	else {
+		as_string_builder_append(&sb, as_error_string(result_code));
+	}
+
+	if (has_exp_trace) {
+		char suffix[AS_ERROR_MESSAGE_MAX_SIZE];
+		as_command_render_exp_trace_suffix(suffix, sizeof(suffix), &exp_trace);
+		as_string_builder_append(&sb, suffix);
 	}
 }
 
 uint8_t*
-as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields)
+as_command_parse_fields_err(uint8_t* p, as_error* err, as_node* node, as_msg* msg)
 {
-	for (uint32_t i = 0; i < n_fields; i++) {
+	as_error_clear_server_detail(err);
+
+	for (uint32_t i = 0; i < msg->n_fields; i++) {
 		uint32_t field_size = cf_swap_from_be32(*(uint32_t*)p);
 		p += 4;
 
@@ -1569,13 +2290,21 @@ as_command_parse_fields_err(uint8_t* p, as_error* err, uint32_t n_fields)
 			uint8_t field_type = *p;
 
 			if (field_type == AS_FIELD_ERROR_DETAILS && field_size > 1) {
-				as_command_parse_error_details(err, p + 1, field_size - 1);
+				as_command_parse_error_details(err, node, p + 1, field_size - 1, msg->result_code);
 			}
 		}
 
 		p += field_size;
 	}
 	return p;
+}
+
+as_status
+as_command_parse_error(as_error* err, as_node* node, as_msg* msg, uint8_t* p)
+{
+	as_command_parse_fields_err(p, err, node, msg);
+	as_error_set_node(err, node, msg->result_code);
+	return err->code;
 }
 
 uint8_t*
@@ -1777,7 +2506,13 @@ as_command_parse_success_failure_bins(uint8_t** pp, as_error* err, as_msg* msg, 
 		
 		uint32_t value_size = (op_size - (name_size + 4));
 
-		if (strcmp(name, "SUCCESS") == 0) {
+		// If strcmp() was used and gcc -O3 option is enabled, valgrind reports
+		// a "Conditional jump or move depends on uninitialised value(s)" on the name.
+		// The compiler optimized the bin name string comparison below into a word sized load
+		// that reads past the null terminator.
+		//
+		// Fix by comparing the length and using memcmp().
+		if (name_len == 7 && memcmp(name, "SUCCESS", name_len) == 0) {
 			if (value) {
 				as_command_parse_value(p, type, value_size, value);
 			}
@@ -1785,7 +2520,7 @@ as_command_parse_success_failure_bins(uint8_t** pp, as_error* err, as_msg* msg, 
 			return AEROSPIKE_OK;
 		}
 		
-		if (strcmp(name, "FAILURE") == 0) {
+		if (name_len == 7 && memcmp(name, "FAILURE", name_len) == 0) {
 			as_val* val = 0;
 			as_command_parse_value(p, type, value_size, &val);
 			
@@ -1807,7 +2542,7 @@ as_command_parse_success_failure_bins(uint8_t** pp, as_error* err, as_msg* msg, 
 }
 
 static as_status
-as_command_parse_udf_error(as_error* err, as_status status, as_val* val)
+as_command_parse_udf_error(as_error* err, as_node* node, as_status status, as_val* val)
 {
 	if (val && val->type == AS_STRING) {
 		char* begin = ((as_string*)val)->value;
@@ -1820,20 +2555,22 @@ as_command_parse_udf_error(as_error* err, as_status status, as_val* val)
 				int code = atoi(++p);
 				
 				if (code > 0) {
-					return as_error_set_message(err, code, begin);
+					return as_error_set_udf(err, node, code, begin);
 				}
 			}
 		}
-		return as_error_set_message(err, status, begin);
+		return as_error_set_udf(err, node, status, begin);
 	}
-	return as_error_set_message(err, status, as_error_string(status));
+	return as_error_set_node(err, node, status);
 }
 
 as_status
-as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status status)
+as_command_parse_udf_failure(
+	uint8_t* p, as_error* err, as_node* node, as_msg* msg, as_status status
+	)
 {
 	as_bin_name name;
-	
+
 	for (uint32_t i = 0; i < msg->n_ops; i++) {
 		uint32_t op_size = cf_swap_from_be32(*(uint32_t*)p);
 		p += 5;
@@ -1847,17 +2584,23 @@ as_command_parse_udf_failure(uint8_t* p, as_error* err, as_msg* msg, as_status s
 		p += name_size;
 		
 		uint32_t value_size = (op_size - (name_size + 4));
-		
-		if (strcmp(name, "FAILURE") == 0) {
+
+		// If strcmp() was used and gcc -O3 option is enabled, valgrind reports
+		// a "Conditional jump or move depends on uninitialised value(s)" on the name.
+		// The compiler optimized the bin name string comparison below into a word sized load
+		// that reads past the null terminator.
+		//
+		// Fix by comparing the length and using memcmp().
+		if (name_len == 7 && memcmp(name, "FAILURE", name_len) == 0) {
 			as_val* val = 0;
 			as_command_parse_value(p, type, value_size, &val);
-			status = as_command_parse_udf_error(err, status, val);
+			status = as_command_parse_udf_error(err, node, status, val);
 			as_val_destroy(val);
 			return status;
 		}
 		p += value_size;
 	}
-	return as_error_set_message(err, status, as_error_string(status));
+	return as_error_set_node(err, node, status);
 }
 
 static as_status
@@ -2019,7 +2762,7 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 	}
 
 	uint8_t* p = buf + sizeof(as_msg);
-	status = as_command_parse_fields(&p, err, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
+	status = as_command_parse_fields(&p, err, node, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -2070,12 +2813,12 @@ as_command_parse_result(as_error* err, as_command* cmd, as_node* node, uint8_t* 
 		}
 
 		case AEROSPIKE_ERR_UDF: {
-			status = as_command_parse_udf_failure(p, err, msg, status);
+			status = as_command_parse_udf_failure(p, err, node, msg, status);
 			break;
 		}
 
 		default:
-			as_error_update_address(err, status, as_node_get_address_string(node));
+			as_error_set_node(err, node, status);
 			break;
 	}
 	return status;
@@ -2095,7 +2838,7 @@ as_command_parse_success_failure(
 	}
 
 	uint8_t* p = buf + sizeof(as_msg);
-	status = as_command_parse_fields(&p, err, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
+	status = as_command_parse_fields(&p, err, node, msg, cmd->policy->txn, cmd->key, cmd->flags == 0);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -2116,7 +2859,7 @@ as_command_parse_success_failure(
 		}
 			
 		case AEROSPIKE_ERR_UDF: {
-			status = as_command_parse_udf_failure(p, err, msg, status);
+			status = as_command_parse_udf_failure(p, err, node, msg, status);
 			if (val) {
 				*val = 0;
 			}
@@ -2124,7 +2867,7 @@ as_command_parse_success_failure(
 		}
 
 		default:
-			as_error_update_address(err, status, as_node_get_address_string(node));
+			as_error_set_node(err, node, status);
 			if (val) {
 				*val = 0;
 			}

@@ -78,6 +78,14 @@ cd `dirname $0`
 platform=`./platform`
 rev=`./version`
 
+# RELEASE_VERSION is only exported by CI for a release cut (see get-version/pkg/version).
+# 1 glues release to distro, 0 keeps dash-separated.
+if [ -n "${RELEASE_VERSION:-}" ]; then
+  isGaRelease=1
+else
+  isGaRelease=0
+fi
+
 # Create library package.
 buildDir=$stageDir/BUILD
 
@@ -122,8 +130,20 @@ de|ub)
   CreatePackage usr opt $os
   mkdir -p $buildDir/DEBIAN
   install -m 755 deb/postinst.client $buildDir/DEBIAN/postinst
-  sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$rev/g" -e "s/@ARCH@/$arch/g" < deb/client$pkgSuffix.spec > $buildDir/DEBIAN/control
-  fakeroot dpkg-deb --build $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix"_"$rev"-"$platform"_"$arch.deb
+  # DEB's release-number workaround is local to this branch only -- RPM reads
+  # $rev too and must not see it (it already has its own Release: field).
+  debRev=$rev
+  if [ "$isGaRelease" = "1" ]
+  then
+    debRev="$rev-1"
+  fi
+  sed -e "s/@EVENTNAME@/$eventName/g" -e "s/@EVENTDESC@/$eventDesc/g" -e "s/@VERSION@/$debRev/g" -e "s/@ARCH@/$arch/g" < deb/client$pkgSuffix.spec > $buildDir/DEBIAN/control
+  if [ "$isGaRelease" = "1" ]
+  then
+    fakeroot dpkg-deb --build $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix"_"$debRev$platform"_"$arch.deb
+  else
+    fakeroot dpkg-deb --build $buildDir $targetDir/aerospike-client-c$eventName$pkgSuffix"_"$debRev"-"$platform"_"$arch.deb
+  fi
   ;;
 
 ma)

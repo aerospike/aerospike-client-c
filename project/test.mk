@@ -3,6 +3,7 @@
 ###############################################################################
 
 TEST_AEROSPIKE = aerospike_test.c
+TEST_AEROSPIKE += config_basics.c
 TEST_AEROSPIKE += aerospike_batch/*.c
 TEST_AEROSPIKE += aerospike_bit/*.c
 TEST_AEROSPIKE += aerospike_index/*.c

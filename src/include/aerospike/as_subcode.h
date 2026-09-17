@@ -49,6 +49,15 @@
  */
 #define AS_ERROR_DETAIL_MESSAGE    2
 
+/**
+ * Request all supported error detail from the server on error responses:
+ * subcode, human-readable message, and expression trace diagnostics appended to
+ * the message when present.
+ *
+ * Set on as_policy_base.error_detail_verbosity.
+ */
+#define AS_ERROR_DETAIL_EXP_TRACE    3
+
 //---------------------------------
 // Subcodes
 //---------------------------------
@@ -60,7 +69,9 @@
 #define AS_SUB_NONE                                        0
 
 //------------------------------------------------------------
-// Subcodes paired with AEROSPIKE_ERR_PARAM (AS_ERR_PARAMETER)
+// Subcodes paired with AEROSPIKE_ERR_REQUEST_INVALID (server
+// AS_ERR_PARAMETER, status 4). AS_SUB_PARAM_* names follow proto.h;
+// not client-side AEROSPIKE_ERR_PARAM (-2).
 //------------------------------------------------------------
 
 /**
@@ -92,6 +103,39 @@
  * App use: prune least-valuable bins and retry.
  */
 #define AS_SUB_PARAM_BIN_COUNT_TOO_LARGE                   5
+
+/**
+ * String modify op received invalid parameters (empty pad string, negative
+ * repeat count, negative pad target length, etc.).
+ * App use: validate pad/repeat arguments locally before sending.
+ */
+#define AS_SUB_PARAM_STRING_OP_PARAMS_INVALID              6
+
+/**
+ * String op CTX envelope is malformed (SERVER-1483 nested shape).
+ * App use: verify the client emits `[0xFF, ctx_list, [sub_op, args...]]`.
+ */
+#define AS_SUB_PARAM_STRING_CTX_MALFORMED                  8
+
+/**
+ * String overwrite resolved index is outside the string bounds.
+ * App use: refresh strlen and recompute the index before retrying.
+ */
+#define AS_SUB_PARAM_STRING_INDEX_OUT_OF_BOUNDS            9
+
+/**
+ * String regex argument is invalid (non-ICU idiom or ICU compile failure at
+ * parse). The server deliberately uses the same subcode value for ICU compile
+ * failures and guided non-ICU rejections.
+ * App use: validate regex patterns against the ICU dialect before sending.
+ */
+#define AS_SUB_PARAM_STRING_REGEX_INVALID                  10
+
+/**
+ * Ill-formed UTF-8 in a string op argument.
+ * App use: validate application-supplied strings before packing the request.
+ */
+#define AS_SUB_PARAM_STRING_UTF8_INVALID                   11
 
 //----------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_CLUSTER (AS_ERR_UNAVAILABLE)
@@ -266,6 +310,30 @@
  * App use: harmonize sketches (fold/strip minhash) before retry.
  */
 #define AS_SUB_OPNOT_HLL_INTERSECT_MINHASH_MISMATCH        9
+
+/**
+ * String conversion failed for an OP_NOT_APPLICABLE operation path.
+ * App use: inspect source and requested destination encoding/type.
+ */
+#define AS_SUB_OPNOT_STRING_CONVERSION_FAILED              10
+
+/**
+ * Source blob/string is not valid UTF-8 for an OP_NOT_APPLICABLE operation path.
+ * App use: validate or transcode input before retry.
+ */
+#define AS_SUB_OPNOT_STRING_UTF8_INVALID                   11
+
+/**
+ * Regex pattern exceeded a server limit for an OP_NOT_APPLICABLE string operation.
+ * App use: simplify the pattern or reduce input size before retry.
+ */
+#define AS_SUB_OPNOT_STRING_REGEX_LIMIT_EXCEEDED           12
+
+/**
+ * Base64 input is malformed for an OP_NOT_APPLICABLE string operation.
+ * App use: validate or sanitize base64 input before retry.
+ */
+#define AS_SUB_OPNOT_STRING_B64_INVALID                    13
 
 //----------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_FILTERED_OUT

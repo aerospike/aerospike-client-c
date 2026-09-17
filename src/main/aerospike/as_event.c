@@ -25,6 +25,7 @@
 #include <aerospike/as_proto.h>
 #include <aerospike/as_query_validate.h>
 #include <aerospike/as_shm_cluster.h>
+#include <aerospike/as_thread.h>
 #include <aerospike/as_txn.h>
 #include <citrusleaf/alloc.h>
 #include <pthread.h>
@@ -1503,7 +1504,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 }
 
 static as_status
-as_event_command_parse_fields(as_event_command* cmd, as_error* err, as_msg* msg, uint8_t** pp)
+as_event_command_parse_fields_txn(as_event_command* cmd, as_error* err, as_msg* msg, uint8_t** pp)
 {
 	as_set set;
 	as_digest_value digest;
@@ -1514,31 +1515,38 @@ as_event_command_parse_fields(as_event_command* cmd, as_error* err, as_msg* msg,
 		return status;
 	}
 
-	return as_command_parse_fields_txn(pp, err, msg, cmd->txn, digest, set, (cmd->flags & AS_ASYNC_FLAGS_READ) == 0);
+	return as_command_parse_fields_txn(pp, err, cmd->node, msg, cmd->txn, digest, set,
+		(cmd->flags & AS_ASYNC_FLAGS_READ) == 0);
+}
+
+static bool
+as_event_command_parse_fields(as_event_command* cmd, as_error* err, as_msg* msg, uint8_t** pp)
+{
+	if (cmd->txn) {
+		as_status status = as_event_command_parse_fields_txn(cmd, err, msg, pp);
+
+		if (status != AEROSPIKE_OK) {
+			as_event_response_error(cmd, err);
+			return false;
+		}
+	}
+	else {
+		*pp = as_command_parse_fields_err(*pp, err, cmd->node, msg);
+	}
+	return true;
 }
 
 bool
 as_event_command_parse_header(as_event_command* cmd)
 {
 	as_error err;
-	err.message[0] = '\0';
-	err.subcode = 0;
-
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);
 	p += sizeof(as_msg);
 
-	if (cmd->txn) {
-		as_status status = as_event_command_parse_fields(cmd, &err, msg, &p);
-
-		if (status != AEROSPIKE_OK) {
-			as_event_response_error(cmd, &err);
-			return true;
-		}
-	}
-	else {
-		p = as_command_parse_fields_err(p, &err, msg->n_fields);
+	if (!as_event_command_parse_fields(cmd, &err, msg, &p)) {
+		return true;
 	}
 
 	if (msg->result_code == AEROSPIKE_OK) {
@@ -1547,7 +1555,7 @@ as_event_command_parse_header(as_event_command* cmd)
 		as_event_command_release(cmd);
 	}
 	else {
-		as_error_update_status(&err, msg->result_code);
+		as_error_set_node(&err, cmd->node, msg->result_code);
 		as_event_response_error(cmd, &err);
 	}
 	return true;
@@ -1557,28 +1565,16 @@ bool
 as_event_command_parse_result(as_event_command* cmd)
 {
 	as_error err;
-	err.message[0] = '\0';
-	err.subcode = 0;
-
-	as_status status;
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);
 	p += sizeof(as_msg);
 
-	if (cmd->txn) {
-		status = as_event_command_parse_fields(cmd, &err, msg, &p);
-
-		if (status != AEROSPIKE_OK) {
-			as_event_response_error(cmd, &err);
-			return true;
-		}
-	}
-	else {
-		p = as_command_parse_fields_err(p, &err, msg->n_fields);
+	if (!as_event_command_parse_fields(cmd, &err, msg, &p)) {
+		return true;
 	}
 
-	status = msg->result_code;
+	as_status status = msg->result_code;
 
 	switch (status) {
 		case AEROSPIKE_OK: {
@@ -1631,13 +1627,13 @@ as_event_command_parse_result(as_event_command* cmd)
 		}
 			
 		case AEROSPIKE_ERR_UDF: {
-			as_command_parse_udf_failure(p, &err, msg, status);
+			as_command_parse_udf_failure(p, &err, cmd->node, msg, status);
 			as_event_response_error(cmd, &err);
 			break;
 		}
 			
 		default: {
-			as_error_update_address(&err, status, as_node_get_address_string(cmd->node));
+			as_error_set_node(&err, cmd->node, status);
 			as_event_response_error(cmd, &err);
 			break;
 		}
@@ -1649,28 +1645,16 @@ bool
 as_event_command_parse_success_failure(as_event_command* cmd)
 {
 	as_error err;
-	err.message[0] = '\0';
-	err.subcode = 0;
-
-	as_status status;
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)cmd->buf;
 	as_msg_swap_header_from_be(msg);
 	p += sizeof(as_msg);
 
-	if (cmd->txn) {
-		status = as_event_command_parse_fields(cmd, &err, msg, &p);
-
-		if (status != AEROSPIKE_OK) {
-			as_event_response_error(cmd, &err);
-			return true;
-		}
-	}
-	else {
-		p = as_command_parse_fields_err(p, &err, msg->n_fields);
+	if (!as_event_command_parse_fields(cmd, &err, msg, &p)) {
+		return true;
 	}
 
-	status = msg->result_code;
+	as_status status = msg->result_code;
 
 	switch (status) {
 		case AEROSPIKE_OK: {
@@ -1690,13 +1674,13 @@ as_event_command_parse_success_failure(as_event_command* cmd)
 		}
 			
 		case AEROSPIKE_ERR_UDF: {
-			as_command_parse_udf_failure(p, &err, msg, status);
+			as_command_parse_udf_failure(p, &err, cmd->node, msg, status);
 			as_event_response_error(cmd, &err);
 			break;
 		}
 			
 		default: {
-			as_error_update_address(&err, status, as_node_get_address_string(cmd->node));
+			as_error_set_node(&err, cmd->node, status);
 			as_event_response_error(cmd, &err);
 			break;
 		}
@@ -1708,6 +1692,8 @@ bool
 as_event_command_parse_deadline(as_event_command* cmd)
 {
 	as_error err;
+	as_error_init(&err);
+
 	uint8_t* p = cmd->buf + cmd->pos;
 	as_msg* msg = (as_msg*)p;
 	as_msg_swap_header_from_be(msg);
@@ -2458,13 +2444,7 @@ as_event_close_cluster_event_loop(
 
 	if (as_aaf_uint32_rls(&state->event_loop_count, -1) == 0) {
 		as_fence_acq();
-		as_cluster_destroy(state->cluster);
-		aerospike_destroy_internal(state->as);
-
-		if (state->monitor) {
-			as_monitor_notify(state->monitor);
-		}
-		cf_free(state);
+		as_monitor_notify(state->monitor);
 	}
 }
 
@@ -2490,25 +2470,13 @@ as_event_close_cluster_cb(as_event_loop* event_loop, as_event_close_state* state
 	as_event_close_cluster_event_loop(event_loop, state, event_state);
 }
 
-void
-as_event_close_cluster(aerospike* as)
+static void
+as_event_close_cluster_in_thread(as_event_close_state* state)
 {
-	if (as_event_loop_size == 0) {
-		return;
-	}
+	as_monitor* monitor = cf_malloc(sizeof(as_monitor));
+	as_monitor_init(monitor);
 
-	as_monitor* monitor = NULL;
-
-	if (! as_in_event_loops()) {
-		monitor = cf_malloc(sizeof(as_monitor));
-		as_monitor_init(monitor);
-	}
-
-	as_event_close_state* state = cf_malloc(sizeof(as_event_close_state));
 	state->monitor = monitor;
-	state->as = as;
-	state->cluster = as->cluster;
-	state->event_loop_count = as_event_loop_size;
 
 	// Send cluster close notification to async event loops.
 	for (uint32_t i = 0; i < as_event_loop_size; i++) {
@@ -2521,11 +2489,54 @@ as_event_close_cluster(aerospike* as)
 		}
 	}
 
-	// Deadlock would occur if we wait from an event loop thread.
-	// Only wait when not in event loop thread.
-	if (monitor) {
-		as_monitor_wait(monitor);
-		as_monitor_destroy(monitor);
-		cf_free(monitor);
+	as_monitor_wait(monitor);
+	as_monitor_destroy(monitor);
+	cf_free(monitor);
+
+	as_cluster_destroy(state->cluster);
+	aerospike_destroy_internal(state->as);
+	cf_free(state);
+}
+
+static void*
+as_event_close_cluster_thread_cb(void* data)
+{
+	as_thread_set_name("closecluster");
+	as_event_close_state* state = data;
+	as_event_close_cluster_in_thread(state);
+	return NULL;
+}
+
+as_status
+as_event_close_cluster(aerospike* as, as_error* err)
+{
+	if (as_event_loop_size == 0) {
+		return AEROSPIKE_OK;
 	}
+
+	as_event_close_state* state = cf_malloc(sizeof(as_event_close_state));
+	state->monitor = NULL;
+	state->as = as;
+	state->cluster = as->cluster;
+	state->event_loop_count = as_event_loop_size;
+
+	if (as_in_event_loops()) {
+		// Deadlock would occur if we wait for all event loop responses from an event loop thread.
+		// Instead, create a new thread to run async cluster close and return.
+		pthread_t thread;
+
+		int rv = pthread_create(&thread, NULL, as_event_close_cluster_thread_cb, state);
+
+		if (rv != 0) {
+			cf_free(state);
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+				"Failed to create cluster close thread: %s", strerror(errno));
+		}
+
+		pthread_detach(thread);
+	}
+	else {
+		as_event_close_cluster_in_thread(state);
+	}
+	return AEROSPIKE_OK;
 }

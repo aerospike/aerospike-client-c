@@ -185,19 +185,40 @@ jobs:
 
           pick_api_docs_from_run() {
             local run_id="$1"
-            local run_sha snap picked
+            local run_sha snap picked total
             run_sha=$(gh api "/repos/${repo}/actions/runs/${run_id}" --jq '.head_sha')
             snap="${expected}-${TARGET_SHA:0:8}"
-            picked=$(gh api "/repos/${repo}/actions/runs/${run_id}/artifacts" \
-              | jq --arg expected "$expected" --arg snap "$snap" '
-                [.artifacts[] | select(.expired == false and (.name | startswith("api-docs-")))] as $all |
-                ($all | map(select(.name == $expected)) | .[0]) //
-                ($all | map(select(.name == $snap)) | .[0]) //
-                ($all | .[0])')
-            [ -n "$picked" ] && [ "$picked" != "null" ] || {
-              echo "::error::No api-docs artifact on run ${run_id} for commit ${TARGET_SHA}"
+
+            # Full release builds often exceed the default page size (30). api-docs is
+            # uploaded early, so newest-first listing can push it onto page 2+ — without
+            # --paginate the lookup intermittently fails (same run succeeds later once
+            # short-lived artifacts disappear). Flatten all pages, then select.
+            # --jq '.artifacts[]' applies per page; jq -s reassembles the full list.
+            picked=$(
+              gh api --paginate "/repos/${repo}/actions/runs/${run_id}/artifacts?per_page=100" \
+                --jq '.artifacts[]' \
+              | jq -s --arg expected "$expected" --arg snap "$snap" '
+                  map(select(.expired == false and (.name | startswith("api-docs-")))) as $all |
+                  ($all | map(select(.name == $expected)) | .[0]) //
+                  ($all | map(select(.name == $snap)) | .[0]) //
+                  ($all | .[0]) //
+                  empty
+                '
+            )
+            if [ -z "$picked" ] || [ "$picked" = "null" ]; then
+              total=$(
+                gh api --paginate "/repos/${repo}/actions/runs/${run_id}/artifacts?per_page=100" \
+                  --jq '.artifacts[]' \
+                | jq -s 'length'
+              )
+              echo "::error::No api-docs artifact on run ${run_id} for commit ${TARGET_SHA} (scanned ${total} artifacts across all pages)"
+              echo "Artifact names on that run:"
+              gh api --paginate "/repos/${repo}/actions/runs/${run_id}/artifacts?per_page=100" \
+                --jq '.artifacts[]' \
+                | jq -r -s '.[].name' \
+                | sed 's/^/  - /' || true
               exit 1
-            }
+            fi
             emit "$run_id" "$(echo "$picked" | jq -r '.name')" "$(echo "$picked" | jq -r '.id')" "$run_sha"
           }
 

@@ -98,6 +98,7 @@ jobs:
             --body  "Automated version bump to \`$TARGET_VERSION\`. Review and merge before running \`push-to-stage.yml\`." \
             --draft)
           echo "PR opened: $PR_URL"
+          echo "PR_URL=$PR_URL" >> "$GITHUB_ENV"
 
       - name: Summary
         run: |
@@ -109,11 +110,13 @@ jobs:
             echo "| Version | \`$TARGET_VERSION\` |"
             echo "| Branch  | \`$TARGET_BRANCH\` |"
             echo "| Dry run | \`$IS_DRY_RUN\` |"
+            echo "| Base commit | \`$(git rev-parse --short HEAD)\` |"
             echo ""
             if [ "$IS_DRY_RUN" = "true" ]; then
               echo "> **Dry run** — no commits were made."
             else
-              echo "- Opened draft PR: bump-version/\`$TARGET_VERSION\` → \`$TARGET_BRANCH\`."
+              echo "- Opened draft PR: [bump-version/\`$TARGET_VERSION\` → \`$TARGET_BRANCH\`]($PR_URL)."
+              echo "- Branch \`bump-version/$TARGET_VERSION\` branched off from \`$TARGET_BRANCH\` @ \`$(git rev-parse --short HEAD)\`."
               echo "- **Next:** review and merge the PR, then manually run \`push-to-stage.yml\` (C Client Build & Release) on \`$TARGET_BRANCH\` with \`dry-run: false\`."
               echo ""
               echo "_After the release build, open a PR from \`$TARGET_BRANCH\` to \`master\`._"

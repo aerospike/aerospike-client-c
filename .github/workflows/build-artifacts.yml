@@ -762,9 +762,9 @@ jobs:
       oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
     secrets: inherit
 
-  # Auto-promote the new bundle to TEST for normal release; skipped on dry-run.
-  auto-promote-test:
-    name: promote to TEST
+  # Auto-promote the new bundle to DEV for normal release; skipped on dry-run.
+  auto-promote-dev:
+    name: promote to DEV
     needs:
       - get-version
       - create-release-bundle
@@ -784,7 +784,7 @@ jobs:
         with:
           bundle-name:   ${{ env.JF_BUNDLE_NAME }}
           version:       ${{ needs.get-version.outputs.version }}
-          environment:   TEST
+          environment:   DEV
           jf-project:    ${{ vars.JFROG_PROJECT }}
           # Exclude legacy JFrog Pipelines repos (DEV-tagged, no CI write access) from distribution.
           exclude-repos: pipelines-templates-local

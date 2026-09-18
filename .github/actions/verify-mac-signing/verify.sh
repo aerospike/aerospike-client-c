@@ -61,12 +61,12 @@ verify_pkg() {
 # Count validation
 # ---------------------------------------------------------------------------
 
-# validate_count <pkg_files_array_name> <expected>
+# validate_count <expected> <actual> <first_file>
+# Avoids bash 4.3+ nameref (local -n) for macOS bash 3.2 compat.
 validate_count() {
-  local -n _files=$1
-  local expected=$2 actual=${#_files[@]}
+  local expected=$1 actual=$2 first_file=$3
 
-  [[ -f "${_files[0]}" ]] \
+  [[ -f "$first_file" ]] \
     || { err "No .pkg files in '$SIGNED_DIR' — signing produced no output."; return 1; }
 
   [[ $actual -eq $expected ]] \
@@ -82,7 +82,7 @@ validate_count() {
 main() {
   local pkg_files=( "$SIGNED_DIR"/*.pkg ) failed=0
 
-  validate_count pkg_files "$EXPECTED_COUNT"
+  validate_count "$EXPECTED_COUNT" "${#pkg_files[@]}" "${pkg_files[0]}"
 
   for pkg in "${pkg_files[@]}"; do
     if verify_pkg "$pkg"; then

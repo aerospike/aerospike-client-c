@@ -1839,8 +1839,12 @@ as_cluster_destroy(as_cluster* cluster)
 	as_vector_destroy(cluster->gc);
 		
 	// Flush and destroy the timeout recovery queue.
+	// Pending recover entries still own their sockets; abort closes them
+	// (SSL_free) before freeing the recover record. Destroy alone would
+	// orphan the SSL object.
 	as_conn_recover* cr;
 	while (as_queue_mt_pop(&cluster->recover_queue, &cr, AS_QUEUE_NOWAIT)) {
+		as_conn_recover_abort(cr);
 		as_conn_recover_destroy(cr);
 	}
 	as_queue_mt_destroy(&cluster->recover_queue);

@@ -11,6 +11,7 @@ on:
   push:
     branches:
       - stage
+      - CLIENT-5486-fix-notarization-issue-for-mac-os-package
   workflow_dispatch:
 
 jobs:

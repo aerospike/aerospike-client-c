@@ -1,0 +1,24 @@
+name: Verify macOS Package Signing
+description: >
+  Verifies that every .pkg in signed-dir is Apple-signed and notarized.
+  Asserts signed count == expected-count, then runs pkgutil + spctl in
+  parallel across all packages and fails loudly on any mismatch.
+
+inputs:
+  signed-dir:
+    description: Directory containing the signed .pkg files
+    required: false
+    default: signed-artifacts
+  expected-count:
+    description: Expected .pkg count — must equal the unsigned build count
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Verify all .pkg files are signed and notarized
+      shell: bash
+      run: |
+        bash "${{ github.action_path }}/verify.sh" \
+          "${{ inputs.signed-dir }}" \
+          "${{ inputs.expected-count }}"

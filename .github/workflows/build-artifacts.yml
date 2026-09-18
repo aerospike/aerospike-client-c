@@ -334,18 +334,44 @@ jobs:
         rm -f target/packages/*.zip  # Linux owns the source zip; removing avoids duplicate-artifact 422 on create-release-bundle.
     secrets: inherit
 
+  # Count .pkg files in the unsigned build artifact and expose as output
+  # so verify-mac-signing can assert signed count == unsigned count.
+  count-mac-pkgs:
+    name: mac / count unsigned pkgs
+    needs: build-mac-artifacts
+    runs-on: ubuntu-24.04
+    outputs:
+      pkg-count: ${{ steps.count.outputs.pkg-count }}
+    steps:
+      - name: Download unsigned mac artifacts
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: mac-build-artifacts
+          path: unsigned-artifacts
+
+      - name: Count .pkg files
+        id: count
+        run: |
+          count=$(find unsigned-artifacts -name "*.pkg" | wc -l | tr -d ' ')
+          echo "pkg-count=$count" >> "$GITHUB_OUTPUT"
+          echo "Unsigned .pkg count: $count"
+          if [[ $count -eq 0 ]]; then
+            echo "::error::No .pkg files found in mac-build-artifacts — build may have failed."
+            exit 1
+          fi
+
   # Apple code-sign and notarize .pkg files; overwrites mac-build-artifacts in-place. Skipped on dry-run.
   sign-mac-apple:
     name: mac / sign (Apple)
     if: ${{ !inputs.dry-run }}
-    needs: build-mac-artifacts
+    needs: [build-mac-artifacts, count-mac-pkgs]
     uses: aerospike/shared-workflows/.github/workflows/reusable_sign-mac-artifacts.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
     with:
       gh-workflows-ref:      b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
       gh-unsigned-artifacts: mac-build-artifacts
       signing-identity:      'Developer ID Application: Aerospike, Inc.'
       installer-identity:    'Developer ID Installer: Aerospike, Inc.'
-      artifact-glob:         '**/*.pkg'
+      artifact-glob:         '*.pkg'
       notarize:              true
       runs-on:               macos-14
     secrets:
@@ -356,14 +382,41 @@ jobs:
       apple-notarization-password: ${{ secrets.APPLE_NOTARIZATION_PASSWORD }}
       apple-team-id:               ${{ secrets.APPLE_TEAM_ID }}
 
+  # Verify Apple signing produced at least one signed .pkg; fails the pipeline
+  # early if the reusable step silently signed 0 files (e.g. glob mismatch).
+  verify-mac-signing:
+    name: mac / verify signing
+    if: ${{ !inputs.dry-run }}
+    needs: [sign-mac-apple, count-mac-pkgs]
+    runs-on: macos-14
+    steps:
+      - name: Checkout action
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          sparse-checkout: .github/actions/verify-mac-signing
+          sparse-checkout-cone-mode: true
+
+      - name: Download signed mac artifacts
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          name: mac-build-artifacts
+          path: signed-artifacts
+
+      - name: Check all .pkg files are signed
+        uses: ./.github/actions/verify-mac-signing
+        with:
+          signed-dir:     signed-artifacts
+          expected-count: ${{ needs.count-mac-pkgs.outputs.pkg-count }}
+
   # GPG-sign all artifacts; runs even when Apple-sign is skipped on dry-run.
   sign-mac-gpg:
     name: mac / sign (GPG)
-    needs: [build-mac-artifacts, sign-mac-apple]
+    needs: [build-mac-artifacts, verify-mac-signing]
     if: |
       always() && !cancelled() &&
       needs.build-mac-artifacts.result == 'success' &&
-      (needs.sign-mac-apple.result == 'success' || needs.sign-mac-apple.result == 'skipped')
+      (needs.sign-mac-apple.result == 'success' || needs.sign-mac-apple.result == 'skipped') &&
+      (needs.verify-mac-signing.result == 'success' || needs.verify-mac-signing.result == 'skipped')
     uses: aerospike/shared-workflows/.github/workflows/reusable_sign-artifacts.yaml@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
     with:
       gh-workflows-ref:      b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860
@@ -607,6 +660,7 @@ jobs:
     if: always() && !cancelled() && needs.deploy-artifacts.result == 'success'
     steps:
       - name: Setup JFrog CLI
+        id: jfrog-setup
         uses: step-security/setup-jfrog-cli@3054b554c0fb4915b3d58847fb7730c593dbb934 # v5.0.0
         env:
           JF_URL: ${{ vars.JFROG_PLATFORM_URL }}
@@ -616,52 +670,68 @@ jobs:
 
       - name: Check existing bundle status
         env:
-          VERSION:       ${{ needs.get-version.outputs.version }}
-          JFROG_PROJECT: ${{ vars.JFROG_PROJECT }}
+          VERSION:         ${{ needs.get-version.outputs.version }}
+          JFROG_PROJECT:   ${{ vars.JFROG_PROJECT }}
+          JF_URL:          ${{ vars.JFROG_PLATFORM_URL }}
+          JF_ACCESS_TOKEN: ${{ steps.jfrog-setup.outputs.oidc-token }}
         run: |
           set -euo pipefail
           BUNDLE_NAME="aerospike-client-c"
-          api="/lifecycle/api/v2/release_bundle/records/${BUNDLE_NAME}/${VERSION}?project=${JFROG_PROJECT}"
 
-          echo "Querying bundle: ${BUNDLE_NAME}@${VERSION} (project: ${JFROG_PROJECT})"
-          HTTP_CODE=$(jf rt curl "$api" -o /tmp/bundle.json -s -w "%{http_code}")
+          # Step 1: Check existence via native jf CLI.
+          # jf release-bundle-search routes to the lifecycle service correctly (no /artifactory/ rewrite).
+          echo "Checking if bundle ${BUNDLE_NAME}@${VERSION} exists (project: ${JFROG_PROJECT})..."
+          versions_json=$(jf release-bundle-search versions "$BUNDLE_NAME" \
+            --project="$JFROG_PROJECT" --format=json)
+          version_exists=$(echo "$versions_json" | jq -r \
+            --arg v "$VERSION" \
+            '.release_bundles[]? | select(.release_bundle_version == $v) | .release_bundle_version')
 
-          echo "HTTP status: ${HTTP_CODE}"
-
-          if [[ "$HTTP_CODE" == "404" ]]; then
+          if [[ -z "$version_exists" ]]; then
             echo "Bundle ${BUNDLE_NAME}@${VERSION} not found — safe to create."
             exit 0
           fi
 
+          echo "Bundle ${BUNDLE_NAME}@${VERSION} exists. Fetching promotion stage..."
+
+          # Step 2: Get the actual promotion environment via promotion/records.
+          # /lifecycle/* lives on the platform URL; jf rt curl rewrites to /artifactory/... and 404s.
+          # The release_bundle/records endpoint returns artifact lists, not promotion status —
+          # promotion/records is the correct source (same pattern as promote-bundle.yml).
+          platform_url="${JF_URL%/}"
+          REPO="${JFROG_PROJECT}-release-bundles-v2"
+          promo_url="${platform_url}/lifecycle/api/v2/promotion/records/${BUNDLE_NAME}?project=${JFROG_PROJECT}&repository_key=${REPO}&filter_by=${VERSION}&order_by=created_millis&order_asc=true"
+
+          HTTP_CODE=$(curl -sS -o /tmp/promo.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${JF_ACCESS_TOKEN}" \
+            -H "Accept: application/json" \
+            "$promo_url")
+
           if [[ "$HTTP_CODE" != "200" ]]; then
-            echo "Unexpected response ${HTTP_CODE} when querying bundle:"
-            cat /tmp/bundle.json
+            echo "::error::Failed to fetch promotion records for ${BUNDLE_NAME}@${VERSION} (HTTP ${HTTP_CODE})."
+            cat /tmp/promo.json
             exit 1
           fi
 
-          STATUS=$(jq -r '.status // "UNKNOWN"' /tmp/bundle.json)
-          echo "Existing bundle status: ${STATUS}"
+          current_env=$(jq -r \
+            '[.promotions[]? | select(.status == "COMPLETED")] | sort_by(.created_millis) | .[-1] | .environment // "NONE"' \
+            /tmp/promo.json)
+          echo "Current promotion stage: ${current_env}"
 
           IS_PROMOTED=$(jq -rn \
-            --arg s "$STATUS" \
+            --arg s "$current_env" \
             'if ($s == "TEST" or $s == "STAGE" or $s == "PREVIEW" or $s == "PROD") then "true" else "false" end')
 
           if [[ "$IS_PROMOTED" == "true" ]]; then
-            echo "::error::Bundle ${BUNDLE_NAME}@${VERSION} is already at '${STATUS}'." \
+            echo "::error::Bundle ${BUNDLE_NAME}@${VERSION} is already at '${current_env}'." \
               "Refusing to overwrite a promoted bundle. Bump the version or promote manually."
             exit 1
           fi
 
-          echo "Bundle exists at '${STATUS}' (not yet promoted). Deleting stale bundle..."
-          HTTP_DEL=$(jf rt curl -X DELETE "$api" -o /tmp/del.json -s -w "%{http_code}")
-          echo "Delete HTTP status: ${HTTP_DEL}"
-
-          if [[ "$HTTP_DEL" != "200" && "$HTTP_DEL" != "202" && "$HTTP_DEL" != "204" ]]; then
-            echo "Failed to delete stale bundle (HTTP ${HTTP_DEL}):"
-            cat /tmp/del.json
-            exit 1
-          fi
-
+          # Bundle is only at DEV or has no promotions yet — safe to delete and recreate.
+          echo "Bundle exists at '${current_env}' (not yet promoted). Deleting stale bundle..."
+          jf release-bundle-delete-local "$BUNDLE_NAME" "$VERSION" \
+            --project="$JFROG_PROJECT" --quiet
           echo "Stale bundle deleted. Proceeding with creation."
 
   # Release bundle Content is driven by build-info at create time. Include both the
@@ -692,9 +762,9 @@ jobs:
       oidc-audience:      ${{ vars.JFROG_OIDC_AUDIENCE }}
     secrets: inherit
 
-  # Auto-promote the new bundle to TEST for normal release; skipped on dry-run.
-  auto-promote-test:
-    name: promote to TEST
+  # Auto-promote the new bundle to DEV for normal release; skipped on dry-run.
+  auto-promote-dev:
+    name: promote to DEV
     needs:
       - get-version
       - create-release-bundle
@@ -714,7 +784,7 @@ jobs:
         with:
           bundle-name:   ${{ env.JF_BUNDLE_NAME }}
           version:       ${{ needs.get-version.outputs.version }}
-          environment:   TEST
+          environment:   DEV
           jf-project:    ${{ vars.JFROG_PROJECT }}
           # Exclude legacy JFrog Pipelines repos (DEV-tagged, no CI write access) from distribution.
           exclude-repos: pipelines-templates-local

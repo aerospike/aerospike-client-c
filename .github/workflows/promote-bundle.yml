@@ -447,12 +447,19 @@ jobs:
             echo "::error::${COMMIT} is not reachable from origin/${HEAD_BRANCH}."
             exit 1
           fi
-          if ! git merge-base --is-ancestor "origin/${TARGET_BRANCH}" "$COMMIT"; then
+
+          # Ensure stage was not merged to master before promotion completed.
+          # Hard failure for STAGE/PROD; warning only for DEV/TEST to allow validation to proceed.
+          if git merge-base --is-ancestor "origin/${TARGET_BRANCH}" "$COMMIT"; then
+            echo "OK: ${COMMIT} is on ${HEAD_BRANCH} and descends from ${TARGET_BRANCH}."
+          elif [[ "$TARGET_ENV" == "DEV" || "$TARGET_ENV" == "TEST" ]]; then
+            echo "::warning::origin/${TARGET_BRANCH} is not an ancestor of ${COMMIT} (stage may have been merged to master before promotion)."
+            echo "OK: proceeding for ${TARGET_ENV} — fix cadence before promoting to STAGE."
+          else
             echo "::error::origin/${TARGET_BRANCH} is not reachable from ${COMMIT}."
+            echo "::error::For ${TARGET_ENV}, stage must not be merged to master before promotion. Rebuild from updated stage."
             exit 1
           fi
-
-          echo "OK: ${COMMIT} is on ${HEAD_BRANCH} and descends from ${TARGET_BRANCH}."
 
       - name: Promote release bundle
         id: promote

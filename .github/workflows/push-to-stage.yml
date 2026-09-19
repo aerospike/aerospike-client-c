@@ -11,6 +11,7 @@ on:
   push:
     branches:
       - stage
+      - CLIENT-5493_more-note-issues
   workflow_dispatch:
 
 jobs:

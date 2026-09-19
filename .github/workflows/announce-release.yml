@@ -34,6 +34,7 @@ env:
   BASE_REF_BRANCH: ${{ github.event_name == 'workflow_dispatch' && 'master' || github.ref_name }}
   HEAD_REF_BRANCH: ${{ github.event_name == 'workflow_dispatch' && 'stage' || github.ref_name }}
   BUILD_RUN_ID: ${{ inputs.build-run-id || '' }}
+  ARTIFACTS_PAGE_SIZE: ${{ vars.ARTIFACTS_PAGE_SIZE || '50' }}
   
 defaults:
   run:
@@ -185,38 +186,35 @@ jobs:
 
           pick_api_docs_from_run() {
             local run_id="$1"
-            local run_sha snap picked total
+            local run_sha snap picked artifacts_url total_count
             run_sha=$(gh api "/repos/${repo}/actions/runs/${run_id}" --jq '.head_sha')
             snap="${expected}-${TARGET_SHA:0:8}"
+            artifacts_url="/repos/${repo}/actions/runs/${run_id}/artifacts"
 
-            # Full release builds often exceed the default page size (30). api-docs is
-            # uploaded early, so newest-first listing can push it onto page 2+ — without
-            # --paginate the lookup intermittently fails (same run succeeds later once
-            # short-lived artifacts disappear). Flatten all pages, then select.
-            # --jq '.artifacts[]' applies per page; jq -s reassembles the full list.
-            picked=$(
-              gh api --paginate "/repos/${repo}/actions/runs/${run_id}/artifacts?per_page=100" \
-                --jq '.artifacts[]' \
-              | jq -s --arg expected "$expected" --arg snap "$snap" '
-                  map(select(.expired == false and (.name | startswith("api-docs-")))) as $all |
-                  ($all | map(select(.name == $expected)) | .[0]) //
-                  ($all | map(select(.name == $snap)) | .[0]) //
-                  ($all | .[0]) //
-                  empty
-                '
-            )
+            # Attempt 1: exact release name e.g. api-docs-7.6.1 — 1 API call, no pagination.
+            picked=$(gh api "${artifacts_url}?name=${expected}&per_page=1" \
+              --jq '.artifacts[] | select(.expired == false)' 2>/dev/null | head -1 || true)
+
+            # Attempt 2: snapshot name e.g. api-docs-7.6.1-abc12345 — catches builds where
+            # pkg/version appends a commit hash suffix that the release name does not have.
             if [ -z "$picked" ] || [ "$picked" = "null" ]; then
-              total=$(
-                gh api --paginate "/repos/${repo}/actions/runs/${run_id}/artifacts?per_page=100" \
-                  --jq '.artifacts[]' \
-                | jq -s 'length'
-              )
-              echo "::error::No api-docs artifact on run ${run_id} for commit ${TARGET_SHA} (scanned ${total} artifacts across all pages)"
-              echo "Artifact names on that run:"
-              gh api --paginate "/repos/${repo}/actions/runs/${run_id}/artifacts?per_page=100" \
-                --jq '.artifacts[]' \
-                | jq -r -s '.[].name' \
-                | sed 's/^/  - /' || true
+              picked=$(gh api "${artifacts_url}?name=${snap}&per_page=1" \
+                --jq '.artifacts[] | select(.expired == false)' 2>/dev/null | head -1 || true)
+            fi
+
+            # Attempt 3: Scans up to ARTIFACTS_PAGE_SIZE artifacts.
+            if [ -z "$picked" ] || [ "$picked" = "null" ]; then
+              echo "Falling back to prefix scan (ARTIFACTS_PAGE_SIZE=${ARTIFACTS_PAGE_SIZE})"
+              total_count=$(gh api "${artifacts_url}?per_page=1" --jq '.total_count')
+              if (( total_count > ARTIFACTS_PAGE_SIZE )); then
+                echo "::warning::Run ${run_id} has ${total_count} artifacts — exceeds ARTIFACTS_PAGE_SIZE (${ARTIFACTS_PAGE_SIZE}); api-docs-* may not be found. Consider bumping the variable."
+              fi
+              picked=$(gh api "${artifacts_url}?per_page=${ARTIFACTS_PAGE_SIZE}" \
+                --jq '[.artifacts[] | select(.expired == false and (.name | startswith("api-docs-")))] | .[0] // empty')
+            fi
+
+            if [ -z "$picked" ] || [ "$picked" = "null" ]; then
+              echo "::error::No api-docs artifact found on run ${run_id} for commit ${TARGET_SHA}"
               exit 1
             fi
             emit "$run_id" "$(echo "$picked" | jq -r '.name')" "$(echo "$picked" | jq -r '.id')" "$run_sha"

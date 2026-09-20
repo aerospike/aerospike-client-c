@@ -17,13 +17,14 @@ on:
         required: true
         description: 'JFrog release bundle version to promote (e.g. 7.5.0)'
       build_number:
-        description: JFrog build number to promote (e.g. 363)
+        description: 'JFrog build number to promote (e.g. 35431493597-1)'
         required: true
         type: string
       bundle_name:
-        description: Jfrog Bundle name
+        description: 'JFrog bundle name'
         required: true
         type: string
+        default: aerospike-client-c
       environment:
         type: choice
         required: true
@@ -415,10 +416,11 @@ jobs:
       - name: Sanity-check commit topology
         id: topology
         env:
-          COMMIT:       ${{ steps.commit.outputs.commit }}
-          DRY_RUN:      ${{ env.IS_DRY_RUN }}
-          TARGET_BRANCH:   ${{ env.TARGET_BRANCH }}
-          HEAD_BRANCH: ${{ env.HEAD_BRANCH }}
+          COMMIT:        ${{ steps.commit.outputs.commit }}
+          DRY_RUN:       ${{ env.IS_DRY_RUN }}
+          TARGET_ENV:    ${{ env.TARGET_ENV }}
+          TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
+          HEAD_BRANCH:   ${{ env.HEAD_BRANCH }}
         run: |
           set -euo pipefail
 
@@ -447,12 +449,19 @@ jobs:
             echo "::error::${COMMIT} is not reachable from origin/${HEAD_BRANCH}."
             exit 1
           fi
-          if ! git merge-base --is-ancestor "origin/${TARGET_BRANCH}" "$COMMIT"; then
+
+          # Ensure stage was not merged to master before promotion completed.
+          # Hard failure for STAGE/PROD; warning only for DEV/TEST to allow validation to proceed.
+          if git merge-base --is-ancestor "origin/${TARGET_BRANCH}" "$COMMIT"; then
+            echo "OK: ${COMMIT} is on ${HEAD_BRANCH} and descends from ${TARGET_BRANCH}."
+          elif [[ "$TARGET_ENV" == "DEV" || "$TARGET_ENV" == "TEST" ]]; then
+            echo "::warning::origin/${TARGET_BRANCH} is not an ancestor of ${COMMIT} (stage may have been merged to master before promotion)."
+            echo "OK: proceeding for ${TARGET_ENV} — fix cadence before promoting to STAGE."
+          else
             echo "::error::origin/${TARGET_BRANCH} is not reachable from ${COMMIT}."
+            echo "::error::For ${TARGET_ENV}, stage must not be merged to master before promotion. Rebuild from updated stage."
             exit 1
           fi
-
-          echo "OK: ${COMMIT} is on ${HEAD_BRANCH} and descends from ${TARGET_BRANCH}."
 
       - name: Promote release bundle
         id: promote

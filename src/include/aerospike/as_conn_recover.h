@@ -67,7 +67,18 @@ as_conn_recover_create(
 
 /**
  * @private
+ * Close the recovered socket and mark the recover record complete.
+ * Call this before as_conn_recover_destroy() when the socket has not already
+ * been put back in the pool or closed (for example, during cluster teardown).
+ */
+void
+as_conn_recover_abort(as_conn_recover* self);
+
+/**
+ * @private
  * Dispose of a heap-allocated as_conn_recover instance.
+ * Does not close the socket; the caller must first abort, recover (put in pool),
+ * or otherwise release socket ownership.
  */
 void
 as_conn_recover_destroy(as_conn_recover* self);

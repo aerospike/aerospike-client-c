@@ -2,7 +2,8 @@
 # verify-mac-signing.sh
 # Usage: verify-mac-signing.sh <signed-dir> <expected-count>
 #
-# Verifies every .pkg in <signed-dir> is Apple-signed and Gatekeeper-accepted.
+# Verifies every loose .pkg in <signed-dir> is Apple-signed and Gatekeeper-accepted,
+# and that every .pkg embedded in *_mac_*.tgz matches those signed copies.
 # Fails if signed count != expected-count or any package fails either check.
 
 set -euo pipefail
@@ -48,12 +49,15 @@ check_gatekeeper() {
   fi
 }
 
-# verify_pkg <pkg>
+# verify_pkg <pkg> [label]
 # Runs both checks. Returns 1 if either fails.
 verify_pkg() {
-  local pkg="$1" failed=0
+  local pkg="$1" label="${2:-$(basename "$pkg")}" failed=0
   check_signature  "$pkg" || failed=1
   check_gatekeeper "$pkg" || failed=1
+  if [[ $failed -eq 0 ]]; then
+    pass "$label"
+  fi
   return $failed
 }
 
@@ -76,6 +80,56 @@ validate_count() {
 }
 
 # ---------------------------------------------------------------------------
+# Tarball checks — catch unsigned pkgs still embedded after make package
+# ---------------------------------------------------------------------------
+
+# verify_tarballs
+# Extracts each *_mac_*.tgz and runs the same checks on embedded .pkg files.
+verify_tarballs() {
+  local tgz work top pkg name failed=0
+  local tarballs=( "$SIGNED_DIR"/*_mac_*.tgz )
+
+  # Bash 3.2: unmatched glob stays literal when nullglob is off.
+  if [[ ${#tarballs[@]} -eq 1 && ! -f "${tarballs[0]}" ]]; then
+    err "No *_mac_*.tgz in '$SIGNED_DIR' — distribution archives missing."
+    return 1
+  fi
+
+  log "Checking ${#tarballs[@]} distribution tarball(s)..."
+
+  for tgz in "${tarballs[@]}"; do
+    work=$(mktemp -d)
+    tar -xzf "$tgz" -C "$work"
+    # pkg/package uses basename-without-.tgz as the top-level directory.
+    top="$work/$(basename "$tgz" .tgz)"
+    if [[ ! -d "$top" ]]; then
+      err "$(basename "$tgz") — expected top-level directory '$(basename "$tgz" .tgz)'"
+      rm -rf "$work"
+      failed=1
+      continue
+    fi
+
+    local found=0
+    for pkg in "$top"/*.pkg; do
+      [[ -f "$pkg" ]] || continue
+      found=1
+      name=$(basename "$pkg")
+      if ! verify_pkg "$pkg" "$(basename "$tgz")/$name"; then
+        failed=1
+      fi
+    done
+
+    if [[ $found -eq 0 ]]; then
+      err "$(basename "$tgz") — no .pkg files inside"
+      failed=1
+    fi
+    rm -rf "$work"
+  done
+
+  return $failed
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -84,16 +138,15 @@ main() {
 
   validate_count "$EXPECTED_COUNT" "${#pkg_files[@]}" "${pkg_files[0]}"
 
+  log "Checking loose .pkg files..."
   for pkg in "${pkg_files[@]}"; do
-    if verify_pkg "$pkg"; then
-      pass "$(basename "$pkg")"
-    else
-      failed=1
-    fi
+    verify_pkg "$pkg" || failed=1
   done
 
+  verify_tarballs || failed=1
+
   [[ $failed -eq 0 ]] || { err "One or more .pkg files failed verification."; exit 1; }
-  log "All ${#pkg_files[@]} .pkg files signed and notarized."
+  log "All loose .pkg files and tarball contents signed and notarized."
 }
 
 main

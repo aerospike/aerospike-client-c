@@ -1,8 +1,9 @@
 name: Verify macOS Package Signing
 description: >
-  Verifies that every .pkg in signed-dir is Apple-signed and notarized.
-  Asserts signed count == expected-count, then runs pkgutil + spctl in
-  parallel across all packages and fails loudly on any mismatch.
+  Verifies that every loose .pkg in signed-dir is Apple-signed and notarized,
+  and that every .pkg embedded in *_mac_*.tgz is likewise signed (catches
+  stale unsigned copies left by pkg/package). Asserts signed count ==
+  expected-count, then runs pkgutil + spctl and fails loudly on any mismatch.
 
 inputs:
   signed-dir:

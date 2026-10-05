@@ -24,7 +24,6 @@
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
-#include <aerospike/as_metrics_writer.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_peers.h>
 #include <aerospike/as_shm_cluster.h>
@@ -581,79 +580,13 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 as_status
 as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_policy* policy)
 {
-	bool custom_listener = policy->metrics_listeners.enable_listener != NULL;
-
-	if (custom_listener) {
-		// Ensure all listeners and user data has been defined.
-		if (! (policy->metrics_listeners.enable_listener && policy->metrics_listeners.snapshot_listener &&
-			   policy->metrics_listeners.node_close_listener &&  policy->metrics_listeners.disable_listener &&
-			   policy->metrics_listeners.udata)) {
-			return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "All metrics listeners and udata must be defined");
-		}
-	}
-
-	as_status status = AEROSPIKE_OK;
-
-	if (cluster->metrics_enabled) {
-		cluster->metrics_enabled = false;
-		status = cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
-
-		if (status != AEROSPIKE_OK) {
-			// Disabling old metrics should not prevent new metrics from being created.
-			// Log error and continue processing.
-			as_log_warn("Metrics disable error: %s %s", as_error_string(status), err->message);
-		}
-	}
-
-	as_error_reset(err);
-
-	if (custom_listener) {
-		// Copy listeners from policy.
-		cluster->metrics_listeners = policy->metrics_listeners;
-	}
-	else {
-		// Create default metrics writer and set cluster llsteners.
-		status = as_metrics_writer_create(err, policy, &cluster->metrics_listeners);
-		
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-	}
-
-	cluster->metrics_interval = policy->interval;
-	cluster->metrics_latency_columns = policy->latency_columns;
-	cluster->metrics_latency_shift = policy->latency_shift;
-
-	as_nodes* nodes = as_nodes_reserve(cluster);
-	
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node* node = nodes->array[i];
-		as_node_enable_metrics(node, policy);
-	}
-	as_nodes_release(nodes);
-
-	status = cluster->metrics_listeners.enable_listener(err, cluster->metrics_listeners.udata);
-	
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
-	cluster->metrics_enabled = true;
-	return status;
+	return as_metrics_runtime_enable(err, cluster, policy);
 }
 
 as_status
 as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
 {
-	as_status status = AEROSPIKE_OK;
-	as_error_reset(err);
-
-	if (cluster->metrics_enabled) {
-		cluster->metrics_enabled = false;
-		status = cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
-	}
-
-	return status;
+	return as_metrics_runtime_disable(err, cluster);
 }
 
 static void
@@ -672,7 +605,7 @@ as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_t
 		pthread_mutex_lock(&cluster->metrics_lock);
 
 		if (cluster->metrics_enabled) {
-			status = cluster->metrics_listeners.node_close_listener(&err, node, node->cluster->metrics_listeners.udata);
+			status = as_metrics_runtime_node_close(&err, cluster, node);
 		}
 		pthread_mutex_unlock(&cluster->metrics_lock);
 		
@@ -815,22 +748,9 @@ as_cluster_manage(as_cluster* cluster)
 
 	as_cluster_tend_recover_queue(cluster);
 
-	// Call metrics listener every metrics_interval when enabled.
+	// Periodic metrics export runs on the metrics thread, not during tend.
 	as_status status = AEROSPIKE_OK;
 	as_error err;
-	
-	pthread_mutex_lock(&cluster->metrics_lock);
-
-	if (cluster->metrics_enabled && cluster->tend_count % cluster->metrics_interval == 0) {
-		status = cluster->metrics_listeners.snapshot_listener(&err, cluster, cluster->metrics_listeners.udata);
-	}
-	pthread_mutex_unlock(&cluster->metrics_lock);
-
-	if (status != AEROSPIKE_OK) {
-		// Metrics failures should not interrupt cluster tend.
-		// Log warning and continue processing.
-		as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
-	}
 
 	const char* path = cluster->as->config.config_provider.path;
 	uint32_t config_interval = cluster->config_interval / cluster->tend_interval;
@@ -1825,6 +1745,13 @@ as_cluster_destroy(as_cluster* cluster)
 	}
 	else {
 		pthread_mutex_unlock(&cluster->tend_lock);
+	}
+
+	if (cluster->metrics_runtime || cluster->metrics_enabled) {
+		as_error metrics_err;
+		pthread_mutex_lock(&cluster->metrics_lock);
+		as_metrics_runtime_disable(&metrics_err, cluster);
+		pthread_mutex_unlock(&cluster->metrics_lock);
 	}
 
 	// Shutdown thread pool.

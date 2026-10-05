@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -20,12 +20,6 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_metrics.h>
 #include <aerospike/as_status.h>
-#include <stdio.h>
-
-#if defined(_MSC_VER)
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,44 +30,89 @@ extern "C" {
 //---------------------------------
 
 /**
- * Default metrics listener. This implementation writes periodic metrics snapshots to a file which
- * will later be read and forwarded to OpenTelemetry by a separate offline application.
+ * Built-in learn-metrics file exporter. Embeds as_metrics_exporter as its first field.
+ * The log line format is unchanged (legacy camelCase segment names).
  */
-typedef struct as_metrics_writer_s {
-	char report_dir[256];
-	FILE* file;
-	as_vector* labels;
-	uint64_t max_size;
-	uint64_t size;
-	uint8_t latency_columns;
-	uint8_t latency_shift;
-#ifdef _MSC_VER
-	FILETIME prev_process_times_kernel;
-	FILETIME prev_system_times_kernel;
-	FILETIME prev_process_times_user;
-	FILETIME prev_system_times_user;
-	HANDLE process;
-	DWORD pid;
-#endif
-	bool enable;
-} as_metrics_writer;
+typedef struct as_metrics_file_exporter_s as_metrics_file_exporter;
+
+/**
+ * @deprecated
+ * Listener-based file writer. Use as_metrics_file_exporter with
+ * as_metrics_policy_add_exporter(), or set report_dir and let enable install it.
+ */
+typedef as_metrics_file_exporter as_metrics_writer;
 
 //---------------------------------
 // Functions
 //---------------------------------
 
+/**
+ * Create the learn-metrics file exporter.
+ *
+ * The caller owns the exporter when it is passed to as_metrics_policy_add_exporter().
+ * Destroy it after metrics are disabled. Do not destroy an exporter that enable
+ * installed itself from report_dir; disable destroys that instance.
+ *
+ * The first Export opens report_dir/metrics-<timestamp>.log and writes the header.
+ * Later exports append a cluster line and one node line per nodes_departed entry.
+ */
+AS_EXTERN as_status
+as_metrics_file_exporter_create(
+	as_error* err, const as_metrics_policy* policy, as_metrics_exporter** exporter
+	);
+
+/**
+ * Close the metrics file and free a file exporter created by
+ * as_metrics_file_exporter_create() or as_metrics_writer_create().
+ */
+AS_EXTERN void
+as_metrics_file_exporter_destroy(as_metrics_exporter* exporter);
+
+/**
+ * @private
+ * Open the metrics log immediately. The convenience exporter installed from
+ * report_dir uses this so aerospike_enable_metrics() fails if the log cannot
+ * be created. Later Export calls append cluster lines.
+ */
+AS_EXTERN as_status
+as_metrics_file_exporter_open(as_error* err, as_metrics_exporter* exporter);
+
+/**
+ * @deprecated
+ * Create the file writer and install it as a four-callback listener.
+ * Prefer as_metrics_file_exporter_create() and as_metrics_policy_add_exporter().
+ * A non-empty report_dir already installs this exporter when no listeners or
+ * exporters are set.
+ */
 AS_EXTERN as_status
 as_metrics_writer_create(as_error* err, const as_metrics_policy* policy, as_metrics_listeners* listeners);
 
+/**
+ * @deprecated
+ * Listener enable callback used by as_metrics_writer_create().
+ */
 AS_EXTERN as_status
 as_metrics_writer_enable(as_error* err, void* udata);
 
+/**
+ * @deprecated
+ * Listener snapshot callback used by as_metrics_writer_create().
+ */
 AS_EXTERN as_status
 as_metrics_writer_snapshot(as_error* err, as_cluster* cluster, void* udata);
 
+/**
+ * @deprecated
+ * Listener node-close callback used by as_metrics_writer_create().
+ */
 AS_EXTERN as_status
 as_metrics_writer_node_close(as_error* err, struct as_node_s* node, void* udata);
 
+/**
+ * @deprecated
+ * Listener disable callback used by as_metrics_writer_create(). Writes a final
+ * cluster line and destroys the writer.
+ */
 AS_EXTERN as_status
 as_metrics_writer_disable(as_error* err, struct as_cluster_s* cluster, void* udata);
 

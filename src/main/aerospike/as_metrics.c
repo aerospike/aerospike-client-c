@@ -431,18 +431,24 @@ as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cp
 static ULONGLONG
 as_metrics_filetime_difference(FILETIME* prev_kernel, FILETIME* prev_user, FILETIME* cur_kernel, FILETIME* cur_user)
 {
-	LARGE_INTEGER a1, a2;
-	a1.LowPart = prev_kernel->dwLowDateTime;
-	a1.HighPart = prev_kernel->dwHighDateTime;
-	a2.LowPart = prev_user->dwLowDateTime;
-	a2.HighPart = prev_user->dwHighDateTime;
+	LARGE_INTEGER prev_kernel_time;
+	prev_kernel_time.LowPart = prev_kernel->dwLowDateTime;
+	prev_kernel_time.HighPart = prev_kernel->dwHighDateTime;
 
-	LARGE_INTEGER b1, b2;
-	b1.LowPart = cur_kernel->dwLowDateTime;
-	b1.HighPart = cur_kernel->dwHighDateTime;
-	b2.LowPart = cur_user->dwLowDateTime;
-	b2.HighPart = cur_user->dwHighDateTime;
-	return (b1.QuadPart - a1.QuadPart) + (b2.QuadPart - a2.QuadPart);
+	LARGE_INTEGER prev_user_time;
+	prev_user_time.LowPart = prev_user->dwLowDateTime;
+	prev_user_time.HighPart = prev_user->dwHighDateTime;
+
+	LARGE_INTEGER cur_kernel_time;
+	cur_kernel_time.LowPart = cur_kernel->dwLowDateTime;
+	cur_kernel_time.HighPart = cur_kernel->dwHighDateTime;
+
+	LARGE_INTEGER cur_user_time;
+	cur_user_time.LowPart = cur_user->dwLowDateTime;
+	cur_user_time.HighPart = cur_user->dwHighDateTime;
+
+	return (cur_kernel_time.QuadPart - prev_kernel_time.QuadPart) +
+		(cur_user_time.QuadPart - prev_user_time.QuadPart);
 }
 
 static as_status

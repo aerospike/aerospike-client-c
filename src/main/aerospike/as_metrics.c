@@ -316,7 +316,7 @@ static void as_metrics_runtime_free(as_metrics_runtime* rt);
 
 #if defined(__linux__)
 static as_status
-as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cpu_usage, uint32_t* mem)
+as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cpu_usage, uint64_t* mem)
 {
 	(void)state;
 	FILE* proc_stat = fopen("/proc/self/stat", "r");
@@ -327,10 +327,10 @@ as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cp
 
 	uint64_t utime, stime;
 	long long unsigned int starttime;
-	uint64_t vsize;
+	int64_t rss;
 	int matched = fscanf(proc_stat,
-		"%*d %*s %*s %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %llu %lu %*ld",
-		&utime, &stime, &starttime, &vsize);
+		"%*d %*s %*s %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %llu %*lu %ld",
+		&utime, &stime, &starttime, &rss);
 
 	fclose(proc_stat);
 
@@ -338,7 +338,14 @@ as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cp
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating memory and CPU usage");
 	}
 
-	double vm_usage = vsize / 1024.0;
+	// rss is resident pages, not VmSize. cluster.memory.bytes is that RSS in bytes.
+	long page_size = sysconf(_SC_PAGE_SIZE);
+
+	if (rss < 0 || page_size <= 0) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating memory usage");
+	}
+
+	double mem_bytes = (double)rss * (double)page_size;
 	float u_time_sec = utime / sysconf(_SC_CLK_TCK);
 	float s_time_sec = stime / sysconf(_SC_CLK_TCK);
 	float start_time_sec = starttime / sysconf(_SC_CLK_TCK);
@@ -351,9 +358,8 @@ as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cp
 
 	double cpu_usage_d = (u_time_sec + s_time_sec) / (info.uptime - start_time_sec) * 100;
 	cpu_usage_d = cpu_usage_d + 0.5 - (cpu_usage_d < 0);
-	vm_usage = vm_usage + 0.5 - (vm_usage < 0);
 	*cpu_usage = (uint32_t)cpu_usage_d;
-	*mem = (uint32_t)vm_usage;
+	*mem = (uint64_t)mem_bytes;
 	return AEROSPIKE_OK;
 }
 #elif defined(__APPLE__)
@@ -403,7 +409,7 @@ as_metrics_process_cpu_load(void)
 }
 
 static as_status
-as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cpu_usage, uint32_t* mem)
+as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cpu_usage, uint64_t* mem)
 {
 	(void)state;
 	double cpu_usage_d = as_metrics_process_cpu_load();
@@ -418,7 +424,7 @@ as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cp
 	}
 
 	*cpu_usage = (uint32_t)(cpu_usage_d + 0.5);
-	*mem = (uint32_t)(mem_d + 0.5);
+	*mem = (uint64_t)(mem_d + 0.5);
 	return AEROSPIKE_OK;
 }
 #elif defined(_MSC_VER)
@@ -440,7 +446,7 @@ as_metrics_filetime_difference(FILETIME* prev_kernel, FILETIME* prev_user, FILET
 }
 
 static as_status
-as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cpu_usage, uint32_t* mem)
+as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cpu_usage, uint64_t* mem)
 {
 	if (!state->process) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating CPU usage");
@@ -476,12 +482,12 @@ as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cp
 
 	PROCESS_MEMORY_COUNTERS mem_counter;
 	GetProcessMemoryInfo(GetCurrentProcess(), &mem_counter, sizeof(mem_counter));
-	*mem = (uint32_t)mem_counter.WorkingSetSize;
+	*mem = (uint64_t)mem_counter.WorkingSetSize;
 	return AEROSPIKE_OK;
 }
 #else
 static as_status
-as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cpu_usage, uint32_t* mem)
+as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cpu_usage, uint64_t* mem)
 {
 	(void)state;
 	(void)cpu_usage;
@@ -732,7 +738,7 @@ as_metrics_snapshot_create(
 {
 	*snapshot = NULL;
 	uint32_t cpu_usage = 0;
-	uint32_t mem = 0;
+	uint64_t mem = 0;
 
 	if (cpu) {
 		as_status status = as_metrics_read_cpu_mem(err, cpu, &cpu_usage, &mem);

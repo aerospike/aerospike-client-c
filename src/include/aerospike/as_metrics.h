@@ -206,11 +206,13 @@ typedef struct as_metrics_snapshot_s {
 	uint64_t retry_count;
 
 	/**
-	 * Process CPU and memory figures written to the learn-metrics log.
-	 * Units match the existing file exporter (platform-specific).
+	 * Process CPU percent and resident set size in bytes, written to the
+	 * learn-metrics log. RSS is the memory the process is using, not its
+	 * virtual address space. Stored as uint64_t because this client is
+	 * 64-bit only and RSS can exceed 4 GB.
 	 */
 	uint32_t cpu;
-	uint32_t mem;
+	uint64_t mem;
 
 	as_metrics_event_loop_snapshot* event_loops;
 	uint32_t event_loop_count;

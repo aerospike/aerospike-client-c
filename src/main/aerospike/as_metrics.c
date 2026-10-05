@@ -328,10 +328,9 @@ as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cp
 	uint64_t utime, stime;
 	long long unsigned int starttime;
 	uint64_t vsize;
-	int64_t rss;
 	int matched = fscanf(proc_stat,
-		"%*d %*s %*s %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %llu %lu %ld",
-		&utime, &stime, &starttime, &vsize, &rss);
+		"%*d %*s %*s %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %llu %lu %*ld",
+		&utime, &stime, &starttime, &vsize);
 
 	fclose(proc_stat);
 
@@ -339,7 +338,6 @@ as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cp
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating memory and CPU usage");
 	}
 
-	int64_t page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024;
 	double vm_usage = vsize / 1024.0;
 	float u_time_sec = utime / sysconf(_SC_CLK_TCK);
 	float s_time_sec = stime / sysconf(_SC_CLK_TCK);
@@ -356,8 +354,6 @@ as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cp
 	vm_usage = vm_usage + 0.5 - (vm_usage < 0);
 	*cpu_usage = (uint32_t)cpu_usage_d;
 	*mem = (uint32_t)vm_usage;
-	(void)rss;
-	(void)page_size_kb;
 	return AEROSPIKE_OK;
 }
 #elif defined(__APPLE__)

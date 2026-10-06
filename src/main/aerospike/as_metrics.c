@@ -766,7 +766,6 @@ as_metrics_snapshot_create(
 	snap->retry_count = as_cluster_get_retry_count(cluster);
 	snap->latency_columns = cluster->metrics_latency_columns;
 	snap->latency_shift = cluster->metrics_latency_shift;
-	snap->node_count = 0;
 
 	if (labels && labels->size > 0) {
 		snap->labels = cf_calloc(labels->size, sizeof(as_metrics_label));
@@ -791,7 +790,7 @@ as_metrics_snapshot_create(
 	}
 
 	as_nodes* nodes = as_nodes_reserve(cluster);
-	snap->node_count = nodes->size;
+	snap->nodes_count = nodes->size;
 
 	if (nodes->size > 0) {
 		snap->nodes = cf_calloc(nodes->size, sizeof(as_metrics_node_snapshot*));
@@ -801,7 +800,6 @@ as_metrics_snapshot_create(
 		as_metrics_node_snapshot* node_snap = NULL;
 		as_metrics_node_snapshot_create(nodes->array[i], &node_snap);
 		snap->nodes[i] = node_snap;
-		snap->nodes_count = i + 1;
 	}
 	as_nodes_release(nodes);
 	*snapshot = snap;

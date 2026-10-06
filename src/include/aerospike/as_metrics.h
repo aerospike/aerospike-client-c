@@ -198,7 +198,6 @@ typedef struct as_metrics_snapshot_s {
 	as_metrics_label* labels;
 	uint32_t label_count;
 
-	uint32_t node_count;
 	uint32_t recover_queue_size;
 	uint32_t invalid_node_count;
 	uint64_t delay_queue_timeout_count;

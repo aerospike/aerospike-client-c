@@ -284,17 +284,16 @@ typedef struct as_metrics_exporter_slot_s {
 	bool owned;
 } as_metrics_exporter_slot;
 
-struct as_metrics_cpu_state_s {
 #if defined(_MSC_VER)
+struct as_metrics_cpu_state_s {
 	FILETIME prev_process_times_kernel;
 	FILETIME prev_system_times_kernel;
 	FILETIME prev_process_times_user;
 	FILETIME prev_system_times_user;
 	HANDLE process;
 	DWORD pid;
-#endif
-	bool initialized;
 };
+#endif
 
 typedef struct as_metrics_runtime_s as_metrics_runtime;
 
@@ -454,7 +453,7 @@ as_metrics_filetime_difference(FILETIME* prev_kernel, FILETIME* prev_user, FILET
 static as_status
 as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cpu_usage, uint64_t* mem)
 {
-	if (!state->process) {
+	if (!state || !state->process) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating CPU usage");
 	}
 
@@ -505,8 +504,8 @@ as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cp
 as_metrics_cpu_state*
 as_metrics_cpu_state_create(void)
 {
-	as_metrics_cpu_state* state = cf_calloc(1, sizeof(as_metrics_cpu_state));
 #if defined(_MSC_VER)
+	as_metrics_cpu_state* state = cf_calloc(1, sizeof(as_metrics_cpu_state));
 	state->pid = GetCurrentProcessId();
 	state->process = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, state->pid);
 
@@ -515,11 +514,11 @@ as_metrics_cpu_state_create(void)
 		GetProcessTimes(state->process, &dummy, &dummy, &state->prev_process_times_kernel, &state->prev_process_times_user);
 		GetSystemTimes(0, &state->prev_system_times_kernel, &state->prev_system_times_user);
 	}
-	state->initialized = true;
-#else
-	state->initialized = true;
-#endif
 	return state;
+#else
+	// Linux and macOS read CPU and memory directly. They do not keep samples between snapshots.
+	return NULL;
+#endif
 }
 
 void
@@ -745,13 +744,10 @@ as_metrics_snapshot_create(
 	*snapshot = NULL;
 	uint32_t cpu_usage = 0;
 	uint64_t mem = 0;
+	as_status status = as_metrics_read_cpu_mem(err, cpu, &cpu_usage, &mem);
 
-	if (cpu) {
-		as_status status = as_metrics_read_cpu_mem(err, cpu, &cpu_usage, &mem);
-
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
 
 	as_metrics_snapshot* snap = cf_calloc(1, sizeof(as_metrics_snapshot));

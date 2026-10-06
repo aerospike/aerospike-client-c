@@ -455,7 +455,8 @@ as_metrics_labels_destroy(as_vector* labels);
 
 /**
  * @private
- * Create CPU sampling state for snapshot builds.
+ * Create Windows CPU sampling state. Returns NULL on other platforms, which
+ * read CPU and memory without keeping samples between snapshots.
  */
 AS_EXTERN as_metrics_cpu_state*
 as_metrics_cpu_state_create(void);
@@ -470,7 +471,8 @@ as_metrics_cpu_state_destroy(as_metrics_cpu_state* state);
 /**
  * @private
  * Copy current cluster metrics into a snapshot. Does not include nodes_departed;
- * the caller attaches those. `labels` may be NULL. `cpu` may be NULL (cpu and mem stay 0).
+ * the caller attaches those. `labels` may be NULL. `cpu` may be NULL except on
+ * Windows, where it holds the previous sample. CPU and memory are still read.
  */
 AS_EXTERN as_status
 as_metrics_snapshot_create(

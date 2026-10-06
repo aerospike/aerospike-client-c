@@ -491,8 +491,8 @@ as_metrics_snapshot_destroy(as_metrics_snapshot* snapshot);
  * @private
  * Copy one node's metrics. Used for nodes_departed and by the deprecated file listener.
  */
-AS_EXTERN as_status
-as_metrics_node_snapshot_create(as_error* err, struct as_node_s* node, as_metrics_node_snapshot** snapshot);
+AS_EXTERN void
+as_metrics_node_snapshot_create(struct as_node_s* node, as_metrics_node_snapshot** snapshot);
 
 /**
  * @private

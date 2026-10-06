@@ -516,11 +516,7 @@ as_metrics_writer_node_close(as_error* err, as_node* node, void* udata)
 	}
 
 	as_metrics_node_snapshot* snapshot = NULL;
-	as_status status = as_metrics_node_snapshot_create(err, node, &snapshot);
-
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
+	as_metrics_node_snapshot_create(node, &snapshot);
 
 	char now_str[128];
 	timestamp_to_string(now_str, sizeof(now_str));
@@ -531,7 +527,7 @@ as_metrics_writer_node_close(as_error* err, as_node* node, void* udata)
 	as_string_builder_append_char(&sb, ' ');
 	as_metrics_write_node(&sb, snapshot);
 	as_string_builder_append_newline(&sb);
-	status = as_metrics_write_line(mw, sb.data, err);
+	as_status status = as_metrics_write_line(mw, sb.data, err);
 	as_string_builder_destroy(&sb);
 	as_metrics_node_snapshot_destroy(snapshot);
 	return status;

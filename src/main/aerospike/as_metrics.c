@@ -604,10 +604,9 @@ as_metrics_node_snapshot_destroy(as_metrics_node_snapshot* snapshot)
 	cf_free(snapshot);
 }
 
-as_status
-as_metrics_node_snapshot_create(as_error* err, as_node* node, as_metrics_node_snapshot** snapshot)
+void
+as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapshot)
 {
-	(void)err;
 	as_metrics_node_snapshot* snap = cf_calloc(1, sizeof(as_metrics_node_snapshot));
 	snap->name = as_metrics_strdup_or_empty(node->name);
 
@@ -694,7 +693,6 @@ as_metrics_node_snapshot_create(as_error* err, as_node* node, as_metrics_node_sn
 	}
 
 	*snapshot = snap;
-	return AEROSPIKE_OK;
 }
 
 void
@@ -801,13 +799,7 @@ as_metrics_snapshot_create(
 
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_metrics_node_snapshot* node_snap = NULL;
-		as_status status = as_metrics_node_snapshot_create(err, nodes->array[i], &node_snap);
-
-		if (status != AEROSPIKE_OK) {
-			as_nodes_release(nodes);
-			as_metrics_snapshot_destroy(snap);
-			return status;
-		}
+		as_metrics_node_snapshot_create(nodes->array[i], &node_snap);
 		snap->nodes[i] = node_snap;
 		snap->nodes_count = i + 1;
 	}
@@ -1175,15 +1167,8 @@ as_metrics_runtime_node_close(as_error* err, as_cluster* cluster, as_node* node)
 
 	if (rt && rt->slots && rt->slots->size > 0) {
 		as_metrics_node_snapshot* snap = NULL;
-		as_status snap_status = as_metrics_node_snapshot_create(err, node, &snap);
-
-		if (snap_status == AEROSPIKE_OK) {
-			as_vector_append(rt->departed, &snap);
-		}
-		else {
-			as_log_warn("Metrics node snapshot error: %s %s", as_error_string(snap_status), err->message);
-			as_error_reset(err);
-		}
+		as_metrics_node_snapshot_create(node, &snap);
+		as_vector_append(rt->departed, &snap);
 	}
 
 	if (cluster->metrics_listeners.node_close_listener) {

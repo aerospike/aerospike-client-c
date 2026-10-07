@@ -80,14 +80,6 @@ typedef struct as_metrics_listeners_s {
 } as_metrics_listeners;
 
 /**
- * Histogram bucket unit. Default is milliseconds, matching learn-metrics.
- */
-typedef enum as_metrics_latency_unit_e {
-	AS_METRICS_LATENCY_MILLISECONDS = 0,
-	AS_METRICS_LATENCY_MICROSECONDS = 1
-} as_metrics_latency_unit;
-
-/**
  * Metrics label that is applied when exporting metrics.
  */
 typedef struct {

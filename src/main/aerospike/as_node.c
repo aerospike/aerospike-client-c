@@ -1547,7 +1547,7 @@ as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 				latency->ref_count = 1;
 				latency->shift = policy->latency_shift;
 				latency->size = policy->latency_columns;
-				latency->unit = (uint8_t)policy->latency_unit;
+				latency->unit = policy->latency_unit;
 
 				as_store_ptr_rls((void**)&metrics->latency[j], latency);
 
@@ -1608,17 +1608,17 @@ as_node_append_metrics(as_node* node, const char* ns)
 
 		uint8_t latency_columns;
 		uint8_t latency_shift;
-		uint8_t latency_unit;
+		as_metrics_latency_unit latency_unit;
 
 		if (cluster->metrics_enabled) {
 			latency_columns = cluster->metrics_latency_columns;
 			latency_shift = cluster->metrics_latency_shift;
-			latency_unit = (uint8_t)cluster->metrics_latency_unit;
+			latency_unit = cluster->metrics_latency_unit;
 		}
 		else {
 			latency_columns = 1;
 			latency_shift = 1;
-			latency_unit = (uint8_t)AS_METRICS_LATENCY_MILLISECONDS;
+			latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
 		}
 
 		for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {

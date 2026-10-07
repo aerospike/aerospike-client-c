@@ -204,7 +204,7 @@ as_metrics_ensure_open(as_metrics_file_exporter* mw, as_error* err)
 }
 
 static void
-as_metrics_write_conn(as_string_builder* sb, const as_metrics_conn_snapshot* stats)
+as_metrics_write_conn_snapshot(as_string_builder* sb, const as_metrics_conn_snapshot* stats)
 {
 	as_string_builder_append_uint(sb, stats->in_use);
 	as_string_builder_append_char(sb, ',');
@@ -242,7 +242,7 @@ as_metrics_write_latencies(as_string_builder* sb, const as_metrics_namespace_sna
 }
 
 static void
-as_metrics_write_node(as_string_builder* sb, const as_metrics_node_snapshot* node_snapshot)
+as_metrics_write_node_snapshot(as_string_builder* sb, const as_metrics_node_snapshot* node_snapshot)
 {
 	as_string_builder_append_char(sb, '[');
 	as_string_builder_append(sb, node_snapshot->name ? node_snapshot->name : "");
@@ -251,9 +251,9 @@ as_metrics_write_node(as_string_builder* sb, const as_metrics_node_snapshot* nod
 	as_string_builder_append_char(sb, ',');
 	as_string_builder_append_uint(sb, node_snapshot->port);
 	as_string_builder_append_char(sb, ',');
-	as_metrics_write_conn(sb, &node_snapshot->sync);
+	as_metrics_write_conn_snapshot(sb, &node_snapshot->sync);
 	as_string_builder_append_char(sb, ',');
-	as_metrics_write_conn(sb, &node_snapshot->async);
+	as_metrics_write_conn_snapshot(sb, &node_snapshot->async);
 	as_string_builder_append(sb, ",[");
 
 	for (uint32_t i = 0; i < node_snapshot->namespace_count; i++) {
@@ -342,7 +342,7 @@ as_metrics_write_cluster_line(as_error* err, as_metrics_file_exporter* mw, const
 		if (i > 0) {
 			as_string_builder_append_char(&sb, ',');
 		}
-		as_metrics_write_node(&sb, snapshot->nodes[i]);
+		as_metrics_write_node_snapshot(&sb, snapshot->nodes[i]);
 	}
 	as_string_builder_append(&sb, "]]");
 	as_string_builder_append_newline(&sb);
@@ -360,7 +360,7 @@ as_metrics_write_departed(as_error* err, as_metrics_file_exporter* mw, const as_
 		as_string_builder_inita(&sb, 16384, true);
 		as_string_builder_append(&sb, snapshot->timestamp);
 		as_string_builder_append_char(&sb, ' ');
-		as_metrics_write_node(&sb, snapshot->nodes_departed[i]);
+		as_metrics_write_node_snapshot(&sb, snapshot->nodes_departed[i]);
 		as_string_builder_append_newline(&sb);
 
 		as_status status = as_metrics_write_line(mw, sb.data, err);
@@ -529,7 +529,7 @@ as_metrics_writer_node_close(as_error* err, as_node* node, void* udata)
 	as_string_builder_inita(&sb, 16384, true);
 	as_string_builder_append(&sb, now_str);
 	as_string_builder_append_char(&sb, ' ');
-	as_metrics_write_node(&sb, snapshot);
+	as_metrics_write_node_snapshot(&sb, snapshot);
 	as_string_builder_append_newline(&sb);
 	as_status status = as_metrics_write_line(mw, sb.data, err);
 	as_string_builder_destroy(&sb);

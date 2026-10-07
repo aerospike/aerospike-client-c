@@ -53,7 +53,7 @@ typedef as_metrics_file_exporter as_metrics_writer;
  * Destroy it after metrics are disabled. Do not destroy an exporter that enable
  * installed itself from report_dir; disable destroys that instance.
  *
- * The first Export opens report_dir/metrics-<timestamp>.log and writes the header.
+ * The first Export opens report_dir/metrics-YYYYMMDDHHMMSS.log and writes the header.
  * Later exports append a cluster line and one node line per nodes_departed entry.
  */
 AS_EXTERN as_status

@@ -59,7 +59,7 @@ typedef struct metrics_test_exporter_s {
 } metrics_test_exporter;
 
 static as_status metrics_test_export(
-	as_metrics_exporter* exporter, as_error* err, const as_metrics_snapshot* snapshot);
+	as_metrics_exporter* exporter, as_error* err, const as_metrics_snapshot* metrics_snapshot);
 
 typedef struct metrics_listener_counts_s {
 	int enable;
@@ -118,12 +118,12 @@ metrics_exporter_new(bool fail)
 
 static as_status
 metrics_test_export(
-	as_metrics_exporter* exporter, as_error* err, const as_metrics_snapshot* snapshot)
+	as_metrics_exporter* exporter, as_error* err, const as_metrics_snapshot* metrics_snapshot)
 {
 	metrics_test_exporter* self = (metrics_test_exporter*)exporter;
 	as_incr_uint32(&self->calls);
 
-	if (snapshot && snapshot->metrics_enabled) {
+	if (metrics_snapshot && metrics_snapshot->metrics_enabled) {
 		as_incr_uint32(&self->enabled_calls);
 	}
 
@@ -375,45 +375,45 @@ metrics_remove_dir(const char* dir)
 }
 
 static bool
-metrics_identity_ok(const as_metrics_snapshot* snap)
+metrics_identity_ok(const as_metrics_snapshot* metrics_snapshot)
 {
-	if (!snap->cluster_name || !snap->client_type || !snap->client_version || !snap->app_id) {
+	if (!metrics_snapshot->cluster_name || !metrics_snapshot->client_type || !metrics_snapshot->client_version || !metrics_snapshot->app_id) {
 		return false;
 	}
 
-	if (strcmp(snap->client_type, "c") != 0 || snap->client_version[0] == '\0' ||
-			snap->app_id[0] == '\0') {
+	if (strcmp(metrics_snapshot->client_type, "c") != 0 || metrics_snapshot->client_version[0] == '\0' ||
+			metrics_snapshot->app_id[0] == '\0') {
 		return false;
 	}
 
 	// Local timestamp is "YYYY-MM-DD HH:MM:SS".
-	if (strlen(snap->timestamp) != 19 || snap->timestamp[4] != '-' || snap->timestamp[7] != '-' ||
-			snap->timestamp[10] != ' ' || snap->timestamp[13] != ':' || snap->timestamp[16] != ':') {
+	if (strlen(metrics_snapshot->timestamp) != 19 || metrics_snapshot->timestamp[4] != '-' || metrics_snapshot->timestamp[7] != '-' ||
+			metrics_snapshot->timestamp[10] != ' ' || metrics_snapshot->timestamp[13] != ':' || metrics_snapshot->timestamp[16] != ':') {
 		return false;
 	}
 
 	// On-demand snapshots do not attach nodes removed since the last periodic export.
-	return snap->nodes_departed_count == 0 && snap->nodes_departed == NULL;
+	return metrics_snapshot->nodes_departed_count == 0 && metrics_snapshot->nodes_departed == NULL;
 }
 
 static bool
-metrics_nodes_ok(const as_metrics_snapshot* snap)
+metrics_nodes_ok(const as_metrics_snapshot* metrics_snapshot)
 {
-	if (snap->nodes_count == 0 || !snap->nodes) {
+	if (metrics_snapshot->nodes_count == 0 || !metrics_snapshot->nodes) {
 		return false;
 	}
 
 	bool has_sync_conn = false;
 
-	for (uint32_t i = 0; i < snap->nodes_count; i++) {
-		as_metrics_node_snapshot* node = snap->nodes[i];
+	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
+		as_metrics_node_snapshot* node_snapshot = metrics_snapshot->nodes[i];
 
-		if (!node || !node->name || node->name[0] == '\0' || !node->address || node->address[0] == '\0' ||
-				node->port == 0) {
+		if (!node_snapshot || !node_snapshot->name || node_snapshot->name[0] == '\0' || !node_snapshot->address || node_snapshot->address[0] == '\0' ||
+				node_snapshot->port == 0) {
 			return false;
 		}
 
-		if (node->sync.opened > 0 || node->sync.in_pool > 0 || node->sync.in_use > 0) {
+		if (node_snapshot->sync.opened > 0 || node_snapshot->sync.in_pool > 0 || node_snapshot->sync.in_use > 0) {
 			has_sync_conn = true;
 		}
 	}
@@ -421,13 +421,13 @@ metrics_nodes_ok(const as_metrics_snapshot* snap)
 }
 
 static bool
-metrics_conn_failures_zero(const as_metrics_snapshot* snap)
+metrics_conn_failures_zero(const as_metrics_snapshot* metrics_snapshot)
 {
-	for (uint32_t i = 0; i < snap->nodes_count; i++) {
-		as_metrics_node_snapshot* node = snap->nodes[i];
+	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
+		as_metrics_node_snapshot* node_snapshot = metrics_snapshot->nodes[i];
 
-		if (node->conn_open_failures != 0 || node->conn_tls_handshake_failures != 0 ||
-				node->conn_auth_failures != 0) {
+		if (node_snapshot->conn_open_failures != 0 || node_snapshot->conn_tls_handshake_failures != 0 ||
+				node_snapshot->conn_auth_failures != 0) {
 			return false;
 		}
 	}
@@ -435,10 +435,10 @@ metrics_conn_failures_zero(const as_metrics_snapshot* snap)
 }
 
 static bool
-metrics_namespaces_empty(const as_metrics_snapshot* snap)
+metrics_namespaces_empty(const as_metrics_snapshot* metrics_snapshot)
 {
-	for (uint32_t i = 0; i < snap->nodes_count; i++) {
-		if (snap->nodes[i]->namespace_count != 0) {
+	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
+		if (metrics_snapshot->nodes[i]->namespace_count != 0) {
 			return false;
 		}
 	}
@@ -446,24 +446,24 @@ metrics_namespaces_empty(const as_metrics_snapshot* snap)
 }
 
 static uint64_t
-metrics_write_latency_total(const as_metrics_snapshot* snap)
+metrics_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
 {
 	uint64_t total = 0;
 
-	for (uint32_t i = 0; i < snap->nodes_count; i++) {
-		as_metrics_node_snapshot* node = snap->nodes[i];
+	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
+		as_metrics_node_snapshot* node_snapshot = metrics_snapshot->nodes[i];
 
-		for (uint32_t j = 0; j < node->namespace_count; j++) {
-			as_metrics_namespace_snapshot* ns = &node->namespaces[j];
+		for (uint32_t j = 0; j < node_snapshot->namespace_count; j++) {
+			as_metrics_namespace_snapshot* namespace_snapshot = &node_snapshot->namespaces[j];
 
-			if (!ns->name || strcmp(ns->name, "test") != 0) {
+			if (!namespace_snapshot->name || strcmp(namespace_snapshot->name, "test") != 0) {
 				continue;
 			}
 
-			as_metrics_latency_snapshot* latency = &ns->latencies[AS_LATENCY_TYPE_WRITE];
+			as_metrics_latency_snapshot* latency_snapshot = &namespace_snapshot->latencies[AS_LATENCY_TYPE_WRITE];
 
-			for (uint8_t k = 0; k < latency->bucket_count; k++) {
-				total += latency->buckets[k];
+			for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
+				total += latency_snapshot->buckets[k];
 			}
 		}
 	}
@@ -471,25 +471,25 @@ metrics_write_latency_total(const as_metrics_snapshot* snap)
 }
 
 static bool
-metrics_test_namespace_ok(const as_metrics_snapshot* snap, uint8_t bucket_count)
+metrics_test_namespace_ok(const as_metrics_snapshot* metrics_snapshot, uint8_t bucket_count)
 {
 	bool found = false;
 
-	for (uint32_t i = 0; i < snap->nodes_count; i++) {
-		as_metrics_node_snapshot* node = snap->nodes[i];
+	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
+		as_metrics_node_snapshot* node_snapshot = metrics_snapshot->nodes[i];
 
-		for (uint32_t j = 0; j < node->namespace_count; j++) {
-			as_metrics_namespace_snapshot* ns = &node->namespaces[j];
+		for (uint32_t j = 0; j < node_snapshot->namespace_count; j++) {
+			as_metrics_namespace_snapshot* namespace_snapshot = &node_snapshot->namespaces[j];
 
-			if (!ns->name || strcmp(ns->name, "test") != 0) {
+			if (!namespace_snapshot->name || strcmp(namespace_snapshot->name, "test") != 0) {
 				continue;
 			}
 
 			found = true;
-			as_metrics_latency_snapshot* latency = &ns->latencies[AS_LATENCY_TYPE_WRITE];
+			as_metrics_latency_snapshot* latency_snapshot = &namespace_snapshot->latencies[AS_LATENCY_TYPE_WRITE];
 
-			if (latency->type != AS_LATENCY_TYPE_WRITE || latency->bucket_count != bucket_count ||
-					!latency->buckets) {
+			if (latency_snapshot->type != AS_LATENCY_TYPE_WRITE || latency_snapshot->bucket_count != bucket_count ||
+					!latency_snapshot->buckets) {
 				return false;
 			}
 		}
@@ -593,11 +593,11 @@ TEST(metrics_snapshot_without_cluster, "on-demand snapshot requires a connected 
 	aerospike_init(&client, &config);
 
 	as_error err;
-	as_metrics_snapshot* snap = NULL;
-	as_status status = aerospike_get_metrics_snapshot(&client, &err, &snap);
+	as_metrics_snapshot* metrics_snapshot = NULL;
+	as_status status = aerospike_get_metrics_snapshot(&client, &err, &metrics_snapshot);
 
 	assert_int_eq(status, AEROSPIKE_ERR_CLIENT);
-	assert_null(snap);
+	assert_null(metrics_snapshot);
 
 	aerospike_destroy(&client);
 }
@@ -607,33 +607,33 @@ TEST(metrics_snapshot_before_enable, "on-demand snapshot works while periodic ex
 	metrics_disable();
 
 	as_error err;
-	as_metrics_snapshot* snap = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
-	assert_not_null(snap);
+	as_metrics_snapshot* metrics_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
+	assert_not_null(metrics_snapshot);
 
-	assert_false(snap->metrics_enabled);
-	assert_false(snap->operational_metrics_enabled);
-	assert_false(snap->usage_metrics_enabled);
-	assert_int_eq(snap->latency_columns, 0);
-	assert_int_eq(snap->latency_shift, 0);
-	assert_int_eq(snap->latency_unit, AS_METRICS_LATENCY_MILLISECONDS);
-	assert_int_eq(snap->cpu, 0);
-	assert_int_eq((int64_t)snap->mem, 0);
-	assert_int_eq(snap->label_count, 0);
-	assert_int_eq(snap->event_loop_count, as_event_loop_size);
-	assert_true(metrics_identity_ok(snap));
-	assert_true(metrics_nodes_ok(snap));
-	assert_true(metrics_conn_failures_zero(snap));
-	assert_true(metrics_namespaces_empty(snap));
+	assert_false(metrics_snapshot->metrics_enabled);
+	assert_false(metrics_snapshot->operational_metrics_enabled);
+	assert_false(metrics_snapshot->usage_metrics_enabled);
+	assert_int_eq(metrics_snapshot->latency_columns, 0);
+	assert_int_eq(metrics_snapshot->latency_shift, 0);
+	assert_int_eq(metrics_snapshot->latency_unit, AS_METRICS_LATENCY_MILLISECONDS);
+	assert_int_eq(metrics_snapshot->cpu, 0);
+	assert_int_eq((int64_t)metrics_snapshot->mem, 0);
+	assert_int_eq(metrics_snapshot->label_count, 0);
+	assert_int_eq(metrics_snapshot->event_loop_count, as_event_loop_size);
+	assert_true(metrics_identity_ok(metrics_snapshot));
+	assert_true(metrics_nodes_ok(metrics_snapshot));
+	assert_true(metrics_conn_failures_zero(metrics_snapshot));
+	assert_true(metrics_namespaces_empty(metrics_snapshot));
 
 	if (as_event_loop_size > 0) {
-		assert_not_null(snap->event_loops);
+		assert_not_null(metrics_snapshot->event_loops);
 	}
 	else {
-		assert_null(snap->event_loops);
+		assert_null(metrics_snapshot->event_loops);
 	}
 
-	as_metrics_snapshot_destroy(snap);
+	as_metrics_snapshot_destroy(metrics_snapshot);
 }
 
 TEST(metrics_enable_leaves_operational_off, "metrics.enabled does not turn on operational or usage")
@@ -646,30 +646,30 @@ TEST(metrics_enable_leaves_operational_off, "metrics.enabled does not turn on op
 
 	assert_int_eq(metrics_put(&err, "metrics-master-only"), AEROSPIKE_OK);
 
-	as_metrics_snapshot* snap = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
-	assert_true(snap->metrics_enabled);
-	assert_false(snap->operational_metrics_enabled);
-	assert_false(snap->usage_metrics_enabled);
-	assert_int_eq(snap->latency_columns, 7);
-	assert_int_eq(snap->latency_shift, 1);
-	assert_int_eq(snap->latency_unit, AS_METRICS_LATENCY_MILLISECONDS);
-	assert_int_eq(snap->cpu, 0);
-	assert_int_eq((int64_t)snap->mem, 0);
-	assert_true(metrics_namespaces_empty(snap));
-	assert_true(metrics_conn_failures_zero(snap));
-	assert_true(metrics_nodes_ok(snap));
-	as_metrics_snapshot_destroy(snap);
+	as_metrics_snapshot* metrics_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
+	assert_true(metrics_snapshot->metrics_enabled);
+	assert_false(metrics_snapshot->operational_metrics_enabled);
+	assert_false(metrics_snapshot->usage_metrics_enabled);
+	assert_int_eq(metrics_snapshot->latency_columns, 7);
+	assert_int_eq(metrics_snapshot->latency_shift, 1);
+	assert_int_eq(metrics_snapshot->latency_unit, AS_METRICS_LATENCY_MILLISECONDS);
+	assert_int_eq(metrics_snapshot->cpu, 0);
+	assert_int_eq((int64_t)metrics_snapshot->mem, 0);
+	assert_true(metrics_namespaces_empty(metrics_snapshot));
+	assert_true(metrics_conn_failures_zero(metrics_snapshot));
+	assert_true(metrics_nodes_ok(metrics_snapshot));
+	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	metrics_disable();
 
 	// Pull stays available after periodic export stops. Counters are not reset.
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
-	assert_false(snap->metrics_enabled);
-	assert_false(snap->operational_metrics_enabled);
-	assert_true(metrics_nodes_ok(snap));
-	assert_true(snap->command_count > 0);
-	as_metrics_snapshot_destroy(snap);
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
+	assert_false(metrics_snapshot->metrics_enabled);
+	assert_false(metrics_snapshot->operational_metrics_enabled);
+	assert_true(metrics_nodes_ok(metrics_snapshot));
+	assert_true(metrics_snapshot->command_count > 0);
+	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	as_metrics_policy_destroy(&policy);
 }
@@ -684,25 +684,25 @@ TEST(metrics_operational_namespace_latency, "operational metrics copy namespace 
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
 	assert_int_eq(metrics_put(&err, "metrics-operational-1"), AEROSPIKE_OK);
 
-	as_metrics_snapshot* first = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &first), AEROSPIKE_OK);
-	assert_true(first->metrics_enabled);
-	assert_true(first->operational_metrics_enabled);
-	assert_false(first->usage_metrics_enabled);
-	assert_true(first->mem > 0);
-	assert_true(metrics_test_namespace_ok(first, 7));
-	assert_true(metrics_conn_failures_zero(first));
+	as_metrics_snapshot* first_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &first_snapshot), AEROSPIKE_OK);
+	assert_true(first_snapshot->metrics_enabled);
+	assert_true(first_snapshot->operational_metrics_enabled);
+	assert_false(first_snapshot->usage_metrics_enabled);
+	assert_true(first_snapshot->mem > 0);
+	assert_true(metrics_test_namespace_ok(first_snapshot, 7));
+	assert_true(metrics_conn_failures_zero(first_snapshot));
 
-	uint64_t before = metrics_write_latency_total(first);
+	uint64_t before = metrics_write_latency_total(first_snapshot);
 	assert_true(before > 0);
-	as_metrics_snapshot_destroy(first);
+	as_metrics_snapshot_destroy(first_snapshot);
 
 	assert_int_eq(metrics_put(&err, "metrics-operational-2"), AEROSPIKE_OK);
 
-	as_metrics_snapshot* second = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &second), AEROSPIKE_OK);
-	assert_true(metrics_write_latency_total(second) > before);
-	as_metrics_snapshot_destroy(second);
+	as_metrics_snapshot* second_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &second_snapshot), AEROSPIKE_OK);
+	assert_true(metrics_write_latency_total(second_snapshot) > before);
+	as_metrics_snapshot_destroy(second_snapshot);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
@@ -719,14 +719,14 @@ TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on 
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
 	assert_int_eq(metrics_put(&err, "metrics-microseconds"), AEROSPIKE_OK);
 
-	as_metrics_snapshot* snap = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
-	assert_int_eq(snap->latency_unit, AS_METRICS_LATENCY_MICROSECONDS);
-	assert_int_eq(snap->latency_columns, 7);
-	assert_int_eq(snap->latency_shift, 1);
-	assert_true(metrics_test_namespace_ok(snap, 7));
-	assert_true(metrics_write_latency_total(snap) > 0);
-	as_metrics_snapshot_destroy(snap);
+	as_metrics_snapshot* metrics_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
+	assert_int_eq(metrics_snapshot->latency_unit, AS_METRICS_LATENCY_MICROSECONDS);
+	assert_int_eq(metrics_snapshot->latency_columns, 7);
+	assert_int_eq(metrics_snapshot->latency_shift, 1);
+	assert_true(metrics_test_namespace_ok(metrics_snapshot, 7));
+	assert_true(metrics_write_latency_total(metrics_snapshot) > 0);
+	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
@@ -741,13 +741,13 @@ TEST(metrics_labels, "static labels are copied onto the snapshot")
 	as_error err;
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
 
-	as_metrics_snapshot* snap = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
-	assert_int_eq(snap->label_count, 1);
-	assert_not_null(snap->labels);
-	assert_string_eq(snap->labels[0].name, "region");
-	assert_string_eq(snap->labels[0].value, "us-west");
-	as_metrics_snapshot_destroy(snap);
+	as_metrics_snapshot* metrics_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
+	assert_int_eq(metrics_snapshot->label_count, 1);
+	assert_not_null(metrics_snapshot->labels);
+	assert_string_eq(metrics_snapshot->labels[0].name, "region");
+	assert_string_eq(metrics_snapshot->labels[0].value, "us-west");
+	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
@@ -964,10 +964,10 @@ TEST(metrics_invalid_report_dir, "file exporter open failure leaves metrics disa
 	as_error err;
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_ERR_CLIENT);
 
-	as_metrics_snapshot* snap = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
-	assert_false(snap->metrics_enabled);
-	as_metrics_snapshot_destroy(snap);
+	as_metrics_snapshot* metrics_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
+	assert_false(metrics_snapshot->metrics_enabled);
+	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	as_metrics_policy_destroy(&policy);
 }
@@ -990,10 +990,10 @@ TEST(metrics_listeners_require_all_callbacks, "a partial metrics listener is rej
 		metrics_on_node_close, metrics_on_snapshot, NULL);
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_ERR_PARAM);
 
-	as_metrics_snapshot* snap = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
-	assert_false(snap->metrics_enabled);
-	as_metrics_snapshot_destroy(snap);
+	as_metrics_snapshot* metrics_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
+	assert_false(metrics_snapshot->metrics_enabled);
+	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	as_metrics_policy_destroy(&policy);
 }
@@ -1037,27 +1037,27 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while enabled and
 	as_error err;
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
 
-	as_metrics_snapshot* before = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &before), AEROSPIKE_OK);
-	uint64_t count = before->command_count;
-	as_metrics_snapshot_destroy(before);
+	as_metrics_snapshot* before_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &before_snapshot), AEROSPIKE_OK);
+	uint64_t count = before_snapshot->command_count;
+	as_metrics_snapshot_destroy(before_snapshot);
 
 	assert_int_eq(metrics_put(&err, "metrics-command-count"), AEROSPIKE_OK);
 
-	as_metrics_snapshot* after = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &after), AEROSPIKE_OK);
-	assert_true(after->command_count > count);
-	uint64_t enabled_count = after->command_count;
-	as_metrics_snapshot_destroy(after);
+	as_metrics_snapshot* after_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &after_snapshot), AEROSPIKE_OK);
+	assert_true(after_snapshot->command_count > count);
+	uint64_t enabled_count = after_snapshot->command_count;
+	as_metrics_snapshot_destroy(after_snapshot);
 
 	metrics_disable();
 	assert_int_eq(metrics_put(&err, "metrics-command-count-off"), AEROSPIKE_OK);
 
-	as_metrics_snapshot* frozen = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &frozen), AEROSPIKE_OK);
-	assert_false(frozen->metrics_enabled);
-	assert_true(frozen->command_count == enabled_count);
-	as_metrics_snapshot_destroy(frozen);
+	as_metrics_snapshot* frozen_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &frozen_snapshot), AEROSPIKE_OK);
+	assert_false(frozen_snapshot->metrics_enabled);
+	assert_true(frozen_snapshot->command_count == enabled_count);
+	as_metrics_snapshot_destroy(frozen_snapshot);
 
 	as_metrics_policy_destroy(&policy);
 }

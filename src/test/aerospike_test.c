@@ -515,6 +515,7 @@ PLAN(aerospike_test)
 	plan_after(after);
 
 	plan_add(config_basics);
+	plan_add(metrics_basics);
 
 	plan_add(key_basics);
 	plan_add(key_apply);

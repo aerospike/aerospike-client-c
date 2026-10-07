@@ -220,10 +220,10 @@ as_metrics_write_conn_snapshot(as_string_builder* sb, const as_metrics_conn_snap
 }
 
 static void
-as_metrics_write_latencies(as_string_builder* sb, const as_metrics_namespace_snapshot* metrics)
+as_metrics_write_latencies(as_string_builder* sb, const as_metrics_namespace_snapshot* namespace_snapshot)
 {
 	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
-		const as_metrics_latency_snapshot* latency = &metrics->latencies[i];
+		const as_metrics_latency_snapshot* latency = &namespace_snapshot->latencies[i];
 
 		if (i > 0) {
 			as_string_builder_append_char(sb, ',');
@@ -257,25 +257,25 @@ as_metrics_write_node_snapshot(as_string_builder* sb, const as_metrics_node_snap
 	as_string_builder_append(sb, ",[");
 
 	for (uint32_t i = 0; i < node_snapshot->namespace_count; i++) {
-		const as_metrics_namespace_snapshot* metrics = &node_snapshot->namespaces[i];
+		const as_metrics_namespace_snapshot* namespace_snapshot = &node_snapshot->namespaces[i];
 
 		if (i > 0) {
 			as_string_builder_append_char(sb, ',');
 		}
 
-		as_string_builder_append(sb, metrics->name ? metrics->name : "");
+		as_string_builder_append(sb, namespace_snapshot->name ? namespace_snapshot->name : "");
 		as_string_builder_append_char(sb, ',');
-		as_string_builder_append_uint64(sb, metrics->errors);
+		as_string_builder_append_uint64(sb, namespace_snapshot->errors);
 		as_string_builder_append_char(sb, ',');
-		as_string_builder_append_uint64(sb, metrics->timeouts);
+		as_string_builder_append_uint64(sb, namespace_snapshot->timeouts);
 		as_string_builder_append_char(sb, ',');
-		as_string_builder_append_uint64(sb, metrics->key_busy);
+		as_string_builder_append_uint64(sb, namespace_snapshot->key_busy);
 		as_string_builder_append_char(sb, ',');
-		as_string_builder_append_uint64(sb, metrics->bytes_in);
+		as_string_builder_append_uint64(sb, namespace_snapshot->bytes_in);
 		as_string_builder_append_char(sb, ',');
-		as_string_builder_append_uint64(sb, metrics->bytes_out);
+		as_string_builder_append_uint64(sb, namespace_snapshot->bytes_out);
 		as_string_builder_append(sb, ",[");
-		as_metrics_write_latencies(sb, metrics);
+		as_metrics_write_latencies(sb, namespace_snapshot);
 		as_string_builder_append_char(sb, ']');
 	}
 	as_string_builder_append(sb, "]]");

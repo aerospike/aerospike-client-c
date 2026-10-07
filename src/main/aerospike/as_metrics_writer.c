@@ -223,19 +223,19 @@ static void
 as_metrics_write_latencies(as_string_builder* sb, const as_metrics_namespace_snapshot* namespace_snapshot)
 {
 	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
-		const as_metrics_latency_snapshot* latency = &namespace_snapshot->latencies[i];
+		const as_metrics_latency_snapshot* latency_snapshot = &namespace_snapshot->latencies[i];
 
 		if (i > 0) {
 			as_string_builder_append_char(sb, ',');
 		}
-		as_string_builder_append(sb, as_latency_type_to_string(latency->type));
+		as_string_builder_append(sb, as_latency_type_to_string(latency_snapshot->type));
 		as_string_builder_append_char(sb, '[');
 
-		for (uint8_t j = 0; j < latency->bucket_count; j++) {
+		for (uint8_t j = 0; j < latency_snapshot->bucket_count; j++) {
 			if (j > 0) {
 				as_string_builder_append_char(sb, ',');
 			}
-			as_string_builder_append_uint64(sb, latency->buckets[j]);
+			as_string_builder_append_uint64(sb, latency_snapshot->buckets[j]);
 		}
 		as_string_builder_append_char(sb, ']');
 	}

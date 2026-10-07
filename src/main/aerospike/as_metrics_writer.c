@@ -204,19 +204,19 @@ as_metrics_ensure_open(as_metrics_file_exporter* mw, as_error* err)
 }
 
 static void
-as_metrics_write_conn_snapshot(as_string_builder* sb, const as_metrics_conn_snapshot* stats)
+as_metrics_write_conn_snapshot(as_string_builder* sb, const as_metrics_conn_snapshot* conn_snapshot)
 {
-	as_string_builder_append_uint(sb, stats->in_use);
+	as_string_builder_append_uint(sb, conn_snapshot->in_use);
 	as_string_builder_append_char(sb, ',');
-	as_string_builder_append_uint(sb, stats->in_pool);
+	as_string_builder_append_uint(sb, conn_snapshot->in_pool);
 	as_string_builder_append_char(sb, ',');
-	as_string_builder_append_uint(sb, stats->opened);
+	as_string_builder_append_uint(sb, conn_snapshot->opened);
 	as_string_builder_append_char(sb, ',');
-	as_string_builder_append_uint(sb, stats->closed);
+	as_string_builder_append_uint(sb, conn_snapshot->closed);
 	as_string_builder_append_char(sb, ',');
-	as_string_builder_append_uint(sb, stats->recovered);
+	as_string_builder_append_uint(sb, conn_snapshot->recovered);
 	as_string_builder_append_char(sb, ',');
-	as_string_builder_append_uint(sb, stats->aborted);
+	as_string_builder_append_uint(sb, conn_snapshot->aborted);
 }
 
 static void

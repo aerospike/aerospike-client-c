@@ -263,6 +263,22 @@ typedef struct as_metrics_exporter_s {
 typedef struct as_metrics_cpu_state_s as_metrics_cpu_state;
 
 /**
+ * Built-in file exporter selected by dynamic configuration metrics.exporter.
+ * Application-registered exporters are unchanged.
+ */
+typedef enum as_metrics_builtin_exporter_e {
+	/**
+	 * Install the learn-metrics file exporter when report_dir is non-empty.
+	 */
+	AS_METRICS_BUILTIN_EXPORTER_FILE = 0,
+
+	/**
+	 * Do not install the learn-metrics file exporter.
+	 */
+	AS_METRICS_BUILTIN_EXPORTER_NONE = 1
+} as_metrics_builtin_exporter;
+
+/**
  * Client periodic metrics configuration.
  */
 typedef struct as_metrics_policy_s {
@@ -285,9 +301,11 @@ typedef struct as_metrics_policy_s {
 	/**
 	 * Directory path for the built-in learn-metrics file exporter.
 	 *
-	 * When this is non-empty, no exporters have been added, and deprecated listeners
-	 * are not set, aerospike_enable_metrics() installs the file exporter.
-	 * An empty string installs nothing. Collection can still run with no exporter.
+	 * When this is non-empty, no exporters have been added, deprecated listeners
+	 * are not set, and metrics.exporter is not none, aerospike_enable_metrics()
+	 * installs the file exporter. An empty string installs nothing. Dynamic
+	 * configuration metrics.exporter none also installs nothing. Collection can
+	 * still run with no exporter.
 	 *
 	 * Default: . (current directory)
 	 */
@@ -310,9 +328,28 @@ typedef struct as_metrics_policy_s {
 	 * The thread sleeps interval * as_config.tender_interval milliseconds
 	 * (default 30 * 1000). Export does not run on the tend thread.
 	 *
+	 * Dynamic configuration metrics.export_interval is a duration. A bare number
+	 * is seconds. Suffixes ms, s, m, and h are accepted. The duration is rounded
+	 * up to a whole number of tend intervals.
+	 *
 	 * Default: 30
 	 */
 	uint32_t interval;
+
+	/**
+	 * @private
+	 * Parsed metrics.export_interval in milliseconds. 0 when that key is absent.
+	 * Converted to interval after the dynamic configuration file is read.
+	 */
+	uint64_t export_interval_ms;
+
+	/**
+	 * Dynamic configuration metrics.exporter. file installs the learn-metrics log
+	 * when report_dir is non-empty. none does not install it.
+	 *
+	 * Default: AS_METRICS_BUILTIN_EXPORTER_FILE
+	 */
+	as_metrics_builtin_exporter builtin_exporter;
 
 	/**
 	 * Number of elapsed time range buckets in latency histograms.
@@ -373,8 +410,9 @@ typedef struct as_metrics_policy_s {
 	 * Exporters that receive each metrics snapshot. Append with
 	 * as_metrics_policy_add_exporter(). The application owns these exporters.
 	 *
-	 * When this list is empty, listeners are not set, and report_dir is non-empty,
-	 * enable installs the built-in file exporter and destroys that instance on disable.
+	 * When this list is empty, listeners are not set, report_dir is non-empty, and
+	 * metrics.exporter is not none, enable installs the built-in file exporter
+	 * and destroys that instance on disable.
 	 *
 	 * Default: NULL
 	 */

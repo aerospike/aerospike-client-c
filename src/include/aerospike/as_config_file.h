@@ -96,6 +96,11 @@ extern "C" {
 #define AS_TXN_VERIFY 92
 #define AS_TXN_ROLL 106
 
+#define AS_METRICS_EXPORT_INTERVAL 120
+#define AS_METRICS_EXPORTER 121
+#define AS_METRICS_REPORT_DIR 122
+#define AS_METRICS_REPORT_SIZE_LIMIT 123
+
 #define AS_BATCH_CONNECT_TIMEOUT 0
 #define AS_BATCH_SOCKET_TIMEOUT 1
 #define AS_BATCH_TOTAL_TIMEOUT 2
@@ -111,8 +116,8 @@ extern "C" {
 #define AS_BATCH_ALLOW_INLINE_SSD 12
 #define AS_BATCH_RESPOND_ALL_KEYS 13
 
-// 120 total bits / 8 = 15 bytes
-#define AS_CONFIG_BITMAP_SIZE 15
+// 128 total bits / 8 = 16 bytes
+#define AS_CONFIG_BITMAP_SIZE 16
 
 //---------------------------------
 // Types

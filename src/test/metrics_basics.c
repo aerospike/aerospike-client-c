@@ -570,6 +570,7 @@ TEST(metrics_policy_defaults, "metrics policy defaults leave operational and usa
 	assert_false(policy.usage_enabled);
 	assert_false(policy.enable);
 	assert_int_eq(policy.interval, 30);
+	assert_int_eq(policy.builtin_exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
 	assert_int_eq(policy.latency_columns, 7);
 	assert_int_eq(policy.latency_shift, 1);
 	assert_int_eq(policy.latency_unit, AS_METRICS_LATENCY_MILLISECONDS);
@@ -1073,6 +1074,102 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while enabled and
 	as_metrics_policy_destroy(&policy);
 }
 
+static bool
+metrics_read_dynamic_config(const char* yaml_body, as_metrics_policy* policy)
+{
+	char dir[512];
+
+	if (!metrics_create_temp_dir_path(dir, sizeof(dir))) {
+		return false;
+	}
+
+	char path[700];
+	snprintf(path, sizeof(path), "%s/aerospike-metrics.yml", dir);
+
+	FILE* fp = fopen(path, "w");
+
+	if (!fp) {
+		metrics_remove_dir(dir);
+		return false;
+	}
+
+	fputs(yaml_body, fp);
+	fclose(fp);
+
+	as_config config;
+	as_config_init(&config);
+	as_config_provider_set_path(&config, path);
+
+	aerospike client;
+	aerospike_init(&client, &config);
+
+	*policy = client.config.policies.metrics;
+	policy->labels = NULL;
+	policy->exporters = NULL;
+
+	aerospike_destroy(&client);
+	metrics_remove_dir(dir);
+	return true;
+}
+
+TEST(metrics_dynamic_config_export, "dynamic config sets export interval, exporter, and report file")
+{
+	as_metrics_policy policy;
+	assert_true(metrics_read_dynamic_config(
+		"version: 1.1.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    export_interval: 45s\n"
+		"    exporter: none\n"
+		"    report_dir: \"\"\n"
+		"    report_size_limit: 2000000\n",
+		&policy));
+
+	// 45 seconds and the default 1000ms tend interval is 45 tend intervals.
+	assert_int_eq(policy.interval, 45);
+	assert_int_eq(policy.builtin_exporter, AS_METRICS_BUILTIN_EXPORTER_NONE);
+	assert_string_eq(policy.report_dir, "");
+	assert_int_eq((int64_t)policy.report_size_limit, 2000000);
+}
+
+TEST(metrics_dynamic_config_export_interval_rounds_up, "export_interval rounds up to a whole tend interval")
+{
+	as_metrics_policy policy;
+	assert_true(metrics_read_dynamic_config(
+		"version: 1.1.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    export_interval: 1500ms\n"
+		"    exporter: file\n"
+		"    report_dir: /tmp/metrics-export\n"
+		"    report_size_limit: 1000000\n",
+		&policy));
+
+	// 1500ms / 1000ms tend interval rounds up to 2.
+	assert_int_eq(policy.interval, 2);
+	assert_int_eq(policy.builtin_exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
+	assert_string_eq(policy.report_dir, "/tmp/metrics-export");
+	assert_int_eq((int64_t)policy.report_size_limit, 1000000);
+}
+
+TEST(metrics_dynamic_config_rejects_unknown_exporter, "metrics.exporter accepts only file and none")
+{
+	as_metrics_policy policy;
+	assert_true(metrics_read_dynamic_config(
+		"version: 1.1.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    export_interval: 45s\n"
+		"    exporter: prometheus\n",
+		&policy));
+
+	// A rejected file is restored, so the earlier export_interval does not apply.
+	assert_int_eq(policy.interval, 30);
+	assert_int_eq(policy.builtin_exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
+	assert_string_eq(policy.report_dir, ".");
+	assert_int_eq((int64_t)policy.report_size_limit, 0);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -1100,4 +1197,7 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_listeners_require_all_callbacks);
 	suite_add(metrics_deprecated_listeners);
 	suite_add(metrics_command_count_is_cumulative);
+	suite_add(metrics_dynamic_config_export);
+	suite_add(metrics_dynamic_config_export_interval_rounds_up);
+	suite_add(metrics_dynamic_config_rejects_unknown_exporter);
 }

@@ -18,9 +18,13 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_string.h>
 #include <aerospike/as_string_builder.h>
 #include <ctype.h>
+#include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <yaml.h>
 
 //---------------------------------
@@ -1166,6 +1170,137 @@ as_parse_labels(as_yaml* yaml, as_metrics_policy* policy, uint32_t field)
 }
 
 static bool
+as_parse_export_interval(as_yaml* yaml, const char* name, const char* value, as_metrics_policy* policy)
+{
+	char* end = NULL;
+	errno = 0;
+	unsigned long long magnitude = strtoull(value, &end, 10);
+
+	if (end == value || errno != 0) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid duration %s: %s", name, value);
+		return false;
+	}
+
+	uint64_t scale;
+
+	if (*end == '\0' || strcmp(end, "s") == 0) {
+		scale = 1000;
+	}
+	else if (strcmp(end, "ms") == 0) {
+		scale = 1;
+	}
+	else if (strcmp(end, "m") == 0) {
+		scale = 60000;
+	}
+	else if (strcmp(end, "h") == 0) {
+		scale = 3600000;
+	}
+	else {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid duration %s: %s", name, value);
+		return false;
+	}
+
+	if (magnitude == 0 || magnitude > UINT64_MAX / scale) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid duration %s: %s", name, value);
+		return false;
+	}
+
+	uint64_t ms = magnitude * scale;
+
+	if (policy->export_interval_ms != ms) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		policy->export_interval_ms = ms;
+	}
+
+	as_field_set(yaml->bitmap, AS_METRICS_EXPORT_INTERVAL);
+	return true;
+}
+
+static bool
+as_parse_builtin_exporter(as_yaml* yaml, const char* name, const char* value, as_metrics_policy* policy)
+{
+	as_metrics_builtin_exporter kind;
+
+	if (strcmp(value, "file") == 0) {
+		kind = AS_METRICS_BUILTIN_EXPORTER_FILE;
+	}
+	else if (strcmp(value, "none") == 0) {
+		kind = AS_METRICS_BUILTIN_EXPORTER_NONE;
+	}
+	else {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid metrics.exporter: %s. valid values: file, none", value);
+		return false;
+	}
+
+	if (policy->builtin_exporter != kind) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		policy->builtin_exporter = kind;
+	}
+
+	as_field_set(yaml->bitmap, AS_METRICS_EXPORTER);
+	return true;
+}
+
+static bool
+as_parse_report_dir(as_yaml* yaml, const char* name, const char* value, as_metrics_policy* policy)
+{
+	if (strcmp(policy->report_dir, value) != 0) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		as_strncpy(policy->report_dir, value, sizeof(policy->report_dir));
+	}
+
+	as_field_set(yaml->bitmap, AS_METRICS_REPORT_DIR);
+	return true;
+}
+
+static bool
+as_parse_report_size_limit(as_yaml* yaml, const char* name, const char* value, uint64_t* out)
+{
+	char* end = NULL;
+	errno = 0;
+	unsigned long long parsed = strtoull(value, &end, 10);
+
+	if (end == value || *end != '\0' || errno != 0) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid uint %s: %s", name, value);
+		return false;
+	}
+
+	if (*out != (uint64_t)parsed) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		*out = (uint64_t)parsed;
+	}
+
+	as_field_set(yaml->bitmap, AS_METRICS_REPORT_SIZE_LIMIT);
+	return true;
+}
+
+static bool
+as_metrics_apply_export_interval(as_config* config, as_error* err)
+{
+	uint64_t ms = config->policies.metrics.export_interval_ms;
+	uint32_t tend_ms = config->tender_interval;
+
+	if (tend_ms == 0) {
+		tend_ms = 1000;
+	}
+
+	uint64_t counts = ms / tend_ms;
+
+	if (ms % tend_ms != 0) {
+		counts++;
+	}
+
+	if (counts == 0 || counts > UINT32_MAX) {
+		as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics.export_interval");
+		return false;
+	}
+
+	config->policies.metrics.interval = (uint32_t)counts;
+	return true;
+}
+
+static bool
 as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	as_metrics_policy* policy = &base->metrics;
@@ -1173,6 +1308,22 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 
 	if (strcmp(name, "enable") == 0) {
 		return as_parse_bool(yaml, name, value, &policy->enable, AS_METRICS_ENABLE);
+	}
+
+	if (strcmp(name, "export_interval") == 0) {
+		return as_parse_export_interval(yaml, name, value, policy);
+	}
+
+	if (strcmp(name, "exporter") == 0) {
+		return as_parse_builtin_exporter(yaml, name, value, policy);
+	}
+
+	if (strcmp(name, "report_dir") == 0) {
+		return as_parse_report_dir(yaml, name, value, policy);
+	}
+
+	if (strcmp(name, "report_size_limit") == 0) {
+		return as_parse_report_size_limit(yaml, name, value, &policy->report_size_limit);
 	}
 
 	if (strcmp(name, "latency_columns") == 0) {
@@ -1637,6 +1788,12 @@ as_config_file_read(aerospike* as, as_config* config, uint8_t* bitmap, bool init
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to parse: %s\n%s",
 			path, yaml.err.message);
 	}
+
+	if (as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL) &&
+			!as_metrics_apply_export_interval(config, err)) {
+		return err->code;
+	}
+
 	return AEROSPIKE_OK;
 }
 
@@ -1955,6 +2112,11 @@ as_cluster_update_metrics(
 	pthread_mutex_lock(&cluster->metrics_lock);
 
 	bool enable_metrics = false;
+	uint32_t prev_interval = trg->interval;
+	uint64_t prev_report_size_limit = trg->report_size_limit;
+	as_metrics_builtin_exporter prev_exporter = trg->builtin_exporter;
+	char prev_report_dir[256];
+	as_strncpy(prev_report_dir, trg->report_dir, sizeof(prev_report_dir));
 
 	trg->enable = as_field_is_set(bitmap, AS_METRICS_ENABLE)?
 		src->enable : orig->enable;
@@ -1962,6 +2124,21 @@ as_cluster_update_metrics(
 		src->latency_columns : orig->latency_columns;
 	trg->latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
 		src->latency_shift : orig->latency_shift;
+	trg->interval = as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)?
+		src->interval : orig->interval;
+	trg->export_interval_ms = as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)?
+		src->export_interval_ms : orig->export_interval_ms;
+	trg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT)?
+		src->report_size_limit : orig->report_size_limit;
+	trg->builtin_exporter = as_field_is_set(bitmap, AS_METRICS_EXPORTER)?
+		src->builtin_exporter : orig->builtin_exporter;
+
+	if (as_field_is_set(bitmap, AS_METRICS_REPORT_DIR)) {
+		as_strncpy(trg->report_dir, src->report_dir, sizeof(trg->report_dir));
+	}
+	else {
+		as_strncpy(trg->report_dir, orig->report_dir, sizeof(trg->report_dir));
+	}
 
 	if (as_field_is_set(bitmap, AS_METRICS_LABELS)) {
 		if (!as_metrics_labels_equal(trg->labels, src->labels)) {
@@ -1983,8 +2160,15 @@ as_cluster_update_metrics(
 	as_status status = AEROSPIKE_OK;
 
 	if (trg->enable) {
-		if (!cluster->metrics_enabled || !(cluster->metrics_latency_columns == trg->latency_columns &&
-			  cluster->metrics_latency_shift == trg->latency_shift)) {
+		bool export_changed = trg->interval != prev_interval ||
+			trg->report_size_limit != prev_report_size_limit ||
+			trg->builtin_exporter != prev_exporter ||
+			strcmp(trg->report_dir, prev_report_dir) != 0;
+
+		if (!cluster->metrics_enabled || export_changed ||
+				cluster->metrics_interval != trg->interval ||
+				!(cluster->metrics_latency_columns == trg->latency_columns &&
+				  cluster->metrics_latency_shift == trg->latency_shift)) {
 			enable_metrics = true;
 		}
 
@@ -2134,7 +2318,7 @@ as_cluster_update(
 	}
 
 	as_cluster_update_policies(&orig->policies, &src->policies, &config->policies, bitmap);
-	memcpy(as->config_bitmap, bitmap, sizeof(AS_CONFIG_BITMAP_SIZE));
+	memcpy(as->config_bitmap, bitmap, AS_CONFIG_BITMAP_SIZE);
 
 	return as_cluster_update_metrics(cluster, err, &orig->policies.metrics,
 		&src->policies.metrics, &config->policies.metrics, bitmap);

@@ -81,9 +81,17 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 
 		mrg->metrics_listeners = src->metrics_listeners;
 		mrg->exporters = src->exporters;
-		as_strncpy(		mrg->report_dir, src->report_dir, sizeof(mrg->report_dir));
-		mrg->report_size_limit = src->report_size_limit;
-		mrg->interval = src->interval;
+		as_strncpy(mrg->report_dir,
+			as_field_is_set(bitmap, AS_METRICS_REPORT_DIR)? cfg->report_dir : src->report_dir,
+			sizeof(mrg->report_dir));
+		mrg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT)?
+			cfg->report_size_limit : src->report_size_limit;
+		mrg->interval = as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)?
+			cfg->interval : src->interval;
+		mrg->export_interval_ms = as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)?
+			cfg->export_interval_ms : src->export_interval_ms;
+		mrg->builtin_exporter = as_field_is_set(bitmap, AS_METRICS_EXPORTER)?
+			cfg->builtin_exporter : src->builtin_exporter;
 		mrg->latency_unit = src->latency_unit;
 		mrg->operational_enabled = src->operational_enabled;
 		mrg->usage_enabled = src->usage_enabled;
@@ -149,6 +157,8 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->report_size_limit = 0;
 	as_strncpy(policy->report_dir, ".", sizeof(policy->report_dir));
 	policy->interval = 30;
+	policy->export_interval_ms = 0;
+	policy->builtin_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
 	policy->latency_columns = 7;
 	policy->latency_shift = 1;
 	policy->latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
@@ -1089,7 +1099,9 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		}
 	}
 
-	if (rt->slots->size == 0 && !custom_listener && policy->report_dir[0] != '\0') {
+	if (rt->slots->size == 0 && !custom_listener &&
+			policy->builtin_exporter != AS_METRICS_BUILTIN_EXPORTER_NONE &&
+			policy->report_dir[0] != '\0') {
 		as_metrics_exporter* file_exporter = NULL;
 		as_status status = as_metrics_file_exporter_create(err, policy, &file_exporter);
 

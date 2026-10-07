@@ -213,6 +213,9 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->sync_conns_closed = 0;
 	node->sync_conns_recovered = 0;
 	node->sync_conns_aborted = 0;
+	node->conn_open_failures = 0;
+	node->conn_tls_handshake_failures = 0;
+	node->conn_auth_failures = 0;
 	node->conn_iter = 0;
 
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;

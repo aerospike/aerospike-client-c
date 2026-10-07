@@ -242,22 +242,22 @@ as_metrics_write_latencies(as_string_builder* sb, const as_metrics_namespace_sna
 }
 
 static void
-as_metrics_write_node(as_string_builder* sb, const as_metrics_node_snapshot* node)
+as_metrics_write_node(as_string_builder* sb, const as_metrics_node_snapshot* node_snapshot)
 {
 	as_string_builder_append_char(sb, '[');
-	as_string_builder_append(sb, node->name ? node->name : "");
+	as_string_builder_append(sb, node_snapshot->name ? node_snapshot->name : "");
 	as_string_builder_append_char(sb, ',');
-	as_string_builder_append(sb, node->address ? node->address : "");
+	as_string_builder_append(sb, node_snapshot->address ? node_snapshot->address : "");
 	as_string_builder_append_char(sb, ',');
-	as_string_builder_append_uint(sb, node->port);
+	as_string_builder_append_uint(sb, node_snapshot->port);
 	as_string_builder_append_char(sb, ',');
-	as_metrics_write_conn(sb, &node->sync);
+	as_metrics_write_conn(sb, &node_snapshot->sync);
 	as_string_builder_append_char(sb, ',');
-	as_metrics_write_conn(sb, &node->async);
+	as_metrics_write_conn(sb, &node_snapshot->async);
 	as_string_builder_append(sb, ",[");
 
-	for (uint32_t i = 0; i < node->namespace_count; i++) {
-		const as_metrics_namespace_snapshot* metrics = &node->namespaces[i];
+	for (uint32_t i = 0; i < node_snapshot->namespace_count; i++) {
+		const as_metrics_namespace_snapshot* metrics = &node_snapshot->namespaces[i];
 
 		if (i > 0) {
 			as_string_builder_append_char(sb, ',');

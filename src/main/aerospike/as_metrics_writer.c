@@ -311,7 +311,7 @@ as_metrics_write_cluster_line(as_error* err, as_metrics_file_exporter* mw, const
 	}
 
 	as_string_builder_append(&sb, "],");
-	as_string_builder_append_int(&sb, (int)snapshot->cpu);
+	as_string_builder_append_uint(&sb, snapshot->cpu);
 	as_string_builder_append_char(&sb, ',');
 	as_string_builder_append_uint64(&sb, snapshot->mem);
 	as_string_builder_append_char(&sb, ',');

@@ -386,6 +386,7 @@ metrics_identity_ok(const as_metrics_snapshot* snap)
 		return false;
 	}
 
+	// Local timestamp is "YYYY-MM-DD HH:MM:SS".
 	if (strlen(snap->timestamp) != 19 || snap->timestamp[4] != '-' || snap->timestamp[7] != '-' ||
 			snap->timestamp[10] != ' ' || snap->timestamp[13] != ':' || snap->timestamp[16] != ':') {
 		return false;

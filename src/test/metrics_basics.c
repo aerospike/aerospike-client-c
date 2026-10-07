@@ -906,12 +906,23 @@ TEST(metrics_exporter_suspend, "an exporter is suspended after consecutive failu
 	as_error err;
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
 
-	// interval 1 sleeps one tend interval (1s). Three failures suspend the exporter
-	// for three further cycles, while the healthy exporter keeps running.
+	// interval 1 sleeps one tend interval (1s). The first export is after that wait,
+	// then every 1s. Eight seconds covers the sequence below; timing can add more
+	// cycles, so the asserts are the minimum that shows a suspension.
 	as_sleep(8000);
 	metrics_disable();
 
 	// Disable joins the metrics thread, so these counts are stable.
+	//
+	// Three consecutive failures call the failing exporter, then skip it for the
+	// next three cycles. The healthy exporter runs on every cycle. The shortest
+	// periodic sequence that includes a skip is fail, fail, fail, skip:
+	// failing == 3 and healthy == 4.
+	//
+	// Disable force-exports both exporters once, including a suspended one, so it
+	// adds 1 to each count and leaves the gap unchanged. healthy > failing means
+	// at least one cycle was skipped. Later cycles may call both again; after a
+	// skip the healthy count stays ahead.
 	uint32_t failing_calls = as_load_uint32(&failing->calls);
 	uint32_t healthy_calls = as_load_uint32(&healthy->calls);
 	as_metrics_policy_destroy(&policy);

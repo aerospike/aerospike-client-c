@@ -403,7 +403,7 @@ metrics_nodes_ok(const as_metrics_snapshot* snap)
 		return false;
 	}
 
-	bool pools = false;
+	bool has_sync_conn = false;
 
 	for (uint32_t i = 0; i < snap->nodes_count; i++) {
 		as_metrics_node_snapshot* node = snap->nodes[i];
@@ -414,10 +414,10 @@ metrics_nodes_ok(const as_metrics_snapshot* snap)
 		}
 
 		if (node->sync.opened > 0 || node->sync.in_pool > 0 || node->sync.in_use > 0) {
-			pools = true;
+			has_sync_conn = true;
 		}
 	}
-	return pools;
+	return has_sync_conn;
 }
 
 static bool

@@ -198,17 +198,17 @@ metrics_create_temp_dir_path(char* out_path, size_t out_path_size)
 }
 
 static bool
-metrics_is_log(const char* name)
+metrics_is_log_filename(const char* filename)
 {
-	size_t n = strlen(name);
+	size_t n = strlen(filename);
 
 	// metrics-YYYYMMDDHHMMSS.log
-	if (n != 26 || strncmp(name, "metrics-", 8) != 0 || strcmp(name + 22, ".log") != 0) {
+	if (n != 26 || strncmp(filename, "metrics-", 8) != 0 || strcmp(filename + 22, ".log") != 0) {
 		return false;
 	}
 
 	for (int i = 8; i < 22; i++) {
-		if (name[i] < '0' || name[i] > '9') {
+		if (filename[i] < '0' || filename[i] > '9') {
 			return false;
 		}
 	}
@@ -232,7 +232,7 @@ metrics_count_logs(const char* dir)
 	}
 
 	do {
-		if (metrics_is_log(data.cFileName)) {
+		if (metrics_is_log_filename(data.cFileName)) {
 			count++;
 		}
 	} while (FindNextFileA(handle, &data));
@@ -248,7 +248,7 @@ metrics_count_logs(const char* dir)
 	struct dirent* entry;
 
 	while ((entry = readdir(directory)) != NULL) {
-		if (metrics_is_log(entry->d_name)) {
+		if (metrics_is_log_filename(entry->d_name)) {
 			count++;
 		}
 	}
@@ -276,7 +276,7 @@ metrics_read_header(const char* dir, char* header, size_t header_size)
 	bool found = false;
 
 	do {
-		if (!metrics_is_log(data.cFileName)) {
+		if (!metrics_is_log_filename(data.cFileName)) {
 			continue;
 		}
 
@@ -307,7 +307,7 @@ metrics_read_header(const char* dir, char* header, size_t header_size)
 	struct dirent* entry;
 
 	while ((entry = readdir(directory)) != NULL) {
-		if (!metrics_is_log(entry->d_name)) {
+		if (!metrics_is_log_filename(entry->d_name)) {
 			continue;
 		}
 

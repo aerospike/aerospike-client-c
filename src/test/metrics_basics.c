@@ -76,7 +76,7 @@ metrics_disable(void)
 }
 
 static void
-metrics_policy_init_off(as_metrics_policy* policy)
+metrics_policy_init_without_default_file_exporter(as_metrics_policy* policy)
 {
 	as_metrics_policy_init(policy);
 	// Empty report_dir installs no file exporter. The policy default is ".".
@@ -639,7 +639,7 @@ TEST(metrics_snapshot_before_enable, "on-demand snapshot works while periodic ex
 TEST(metrics_enable_leaves_operational_off, "metrics.enabled does not turn on operational or usage")
 {
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 
 	as_error err;
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
@@ -677,7 +677,7 @@ TEST(metrics_enable_leaves_operational_off, "metrics.enabled does not turn on op
 TEST(metrics_operational_namespace_latency, "operational metrics copy namespace histograms and process memory")
 {
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 	policy.operational_enabled = true;
 
 	as_error err;
@@ -711,7 +711,7 @@ TEST(metrics_operational_namespace_latency, "operational metrics copy namespace 
 TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on the snapshot")
 {
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 	policy.operational_enabled = true;
 	policy.latency_unit = AS_METRICS_LATENCY_MICROSECONDS;
 
@@ -735,7 +735,7 @@ TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on 
 TEST(metrics_labels, "static labels are copied onto the snapshot")
 {
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 	as_metrics_policy_add_label(&policy, "region", "us-west");
 
 	as_error err;
@@ -759,7 +759,7 @@ TEST(metrics_file_header, "report_dir installs a snake_case metrics log")
 	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
 
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 	as_metrics_policy_set_report_dir(&policy, dir);
 
 	as_error err;
@@ -785,7 +785,7 @@ TEST(metrics_file_header_microseconds, "file header records latency_unit microse
 	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
 
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 	policy.latency_unit = AS_METRICS_LATENCY_MICROSECONDS;
 	as_metrics_policy_set_report_dir(&policy, dir);
 
@@ -819,7 +819,7 @@ TEST(metrics_empty_report_dir, "empty report_dir does not install the file expor
 #endif
 
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 
 	as_error err;
 	as_status status = metrics_enable(&policy, &err);
@@ -847,7 +847,7 @@ TEST(metrics_exporter_suppresses_file, "a registered exporter receives the snaps
 	metrics_test_exporter* exporter = metrics_exporter_new(false);
 
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 	as_metrics_policy_set_report_dir(&policy, dir);
 	as_metrics_policy_add_exporter(&policy, &exporter->base);
 
@@ -875,7 +875,7 @@ TEST(metrics_exporter_isolation, "one exporter failure does not skip the others"
 	metrics_test_exporter* healthy = metrics_exporter_new(false);
 
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 	as_metrics_policy_add_exporter(&policy, &failing->base);
 	as_metrics_policy_add_exporter(&policy, &healthy->base);
 
@@ -898,7 +898,7 @@ TEST(metrics_exporter_suspend, "an exporter is suspended after consecutive failu
 	metrics_test_exporter* healthy = metrics_exporter_new(false);
 
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 	policy.interval = 1;
 	as_metrics_policy_add_exporter(&policy, &failing->base);
 	as_metrics_policy_add_exporter(&policy, &healthy->base);
@@ -928,7 +928,7 @@ TEST(metrics_periodic_export_stops_on_disable, "disable stops the export thread 
 	metrics_test_exporter* exporter = metrics_exporter_new(false);
 
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 	policy.interval = 1;
 	as_metrics_policy_add_exporter(&policy, &exporter->base);
 
@@ -954,7 +954,7 @@ TEST(metrics_periodic_export_stops_on_disable, "disable stops the export thread 
 TEST(metrics_invalid_report_dir, "file exporter open failure leaves metrics disabled")
 {
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 #if defined(_MSC_VER)
 	as_metrics_policy_set_report_dir(&policy, "C:\\no\\such\\aerospike-metrics-dir");
 #else
@@ -978,7 +978,7 @@ TEST(metrics_listeners_require_all_callbacks, "a partial metrics listener is rej
 	memset(&counts, 0, sizeof(counts));
 
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 	policy.metrics_listeners.enable_listener = metrics_on_enable;
 	policy.metrics_listeners.udata = &counts;
 
@@ -1007,7 +1007,7 @@ TEST(metrics_deprecated_listeners, "deprecated listeners still run on enable and
 	memset(&counts, 0, sizeof(counts));
 
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 	as_metrics_policy_set_report_dir(&policy, dir);
 	as_metrics_policy_set_listeners(&policy, metrics_on_enable, metrics_on_disable,
 		metrics_on_node_close, metrics_on_snapshot, &counts);
@@ -1032,7 +1032,7 @@ TEST(metrics_deprecated_listeners, "deprecated listeners still run on enable and
 TEST(metrics_command_count_is_cumulative, "command_count grows while enabled and stays after disable")
 {
 	as_metrics_policy policy;
-	metrics_policy_init_off(&policy);
+	metrics_policy_init_without_default_file_exporter(&policy);
 
 	as_error err;
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);

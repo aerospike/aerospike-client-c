@@ -568,7 +568,7 @@ as_metrics_localtime(const time_t* now, struct tm* out)
 #endif
 }
 
-static void
+void
 as_metrics_timestamp(char* str, size_t str_size)
 {
 	time_t now = time(NULL);

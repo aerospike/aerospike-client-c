@@ -529,6 +529,13 @@ as_metrics_node_snapshot_create(struct as_node_s* node, as_metrics_node_snapshot
 
 /**
  * @private
+ * Write the local time as "YYYY-MM-DD HH:MM:SS". On failure, writes "0000-00-00 00:00:00".
+ */
+AS_EXTERN void
+as_metrics_timestamp(char* str, size_t str_size);
+
+/**
+ * @private
  * Release a node snapshot.
  */
 AS_EXTERN void

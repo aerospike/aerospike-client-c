@@ -74,24 +74,6 @@ as_metrics_localtime(const time_t* now, struct tm* out)
 }
 
 static void
-timestamp_to_string(char* str, size_t str_size)
-{
-	time_t now = time(NULL);
-	struct tm storage;
-	struct tm* local = as_metrics_localtime(&now, &storage);
-
-	if (!local) {
-		snprintf(str, str_size, "0000-00-00 00:00:00");
-		return;
-	}
-
-	snprintf(str, str_size,
-		"%4d-%02d-%02d %02d:%02d:%02d",
-		1900 + local->tm_year, local->tm_mon + 1, local->tm_mday,
-		local->tm_hour, local->tm_min, local->tm_sec);
-}
-
-static void
 timestamp_to_string_filename(char* str, size_t str_size)
 {
 	time_t now = time(NULL);
@@ -168,7 +150,7 @@ as_metrics_open_writer(as_metrics_file_exporter* mw, as_error* err)
 
 	mw->size = 0;
 	char now_str[128];
-	timestamp_to_string(now_str, sizeof(now_str));
+	as_metrics_timestamp(now_str, sizeof(now_str));
 
 	const char* latency_unit = mw->latency_unit == AS_METRICS_LATENCY_MICROSECONDS ?
 		"microseconds" : "milliseconds";
@@ -523,7 +505,7 @@ as_metrics_writer_node_close(as_error* err, as_node* node, void* udata)
 	as_metrics_node_snapshot_create(node, &snapshot);
 
 	char now_str[128];
-	timestamp_to_string(now_str, sizeof(now_str));
+	as_metrics_timestamp(now_str, sizeof(now_str));
 
 	as_string_builder sb;
 	as_string_builder_inita(&sb, 16384, true);

@@ -169,7 +169,7 @@ metrics_on_node_close(as_error* err, struct as_node_s* node, void* udata)
 }
 
 static bool
-metrics_make_temp_dir(char* path, size_t path_size)
+metrics_create_temp_dir_path(char* out_path, size_t out_path_size)
 {
 #if defined(_MSC_VER)
 	char tmp[MAX_PATH];
@@ -185,15 +185,15 @@ metrics_make_temp_dir(char* path, size_t path_size)
 		return false;
 	}
 
-	snprintf(path, path_size, "%s", file);
+	snprintf(out_path, out_path_size, "%s", file);
 	return true;
 #else
-	if (path_size < sizeof("/tmp/as-metrics-XXXXXX")) {
+	if (out_path_size < sizeof("/tmp/as-metrics-XXXXXX")) {
 		return false;
 	}
 
-	snprintf(path, path_size, "/tmp/as-metrics-XXXXXX");
-	return mkdtemp(path) != NULL;
+	snprintf(out_path, out_path_size, "/tmp/as-metrics-XXXXXX");
+	return mkdtemp(out_path) != NULL;
 #endif
 }
 
@@ -755,7 +755,7 @@ TEST(metrics_labels, "static labels are copied onto the snapshot")
 TEST(metrics_file_header, "report_dir installs a snake_case metrics log")
 {
 	char dir[256];
-	assert_true(metrics_make_temp_dir(dir, sizeof(dir)));
+	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
 
 	as_metrics_policy policy;
 	metrics_policy_init_off(&policy);
@@ -781,7 +781,7 @@ TEST(metrics_file_header, "report_dir installs a snake_case metrics log")
 TEST(metrics_file_header_microseconds, "file header records latency_unit microseconds")
 {
 	char dir[256];
-	assert_true(metrics_make_temp_dir(dir, sizeof(dir)));
+	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
 
 	as_metrics_policy policy;
 	metrics_policy_init_off(&policy);
@@ -808,7 +808,7 @@ TEST(metrics_empty_report_dir, "empty report_dir does not install the file expor
 	char dir[256];
 	char previous[1024];
 
-	assert_true(metrics_make_temp_dir(dir, sizeof(dir)));
+	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
 #if defined(_MSC_VER)
 	assert_true(GetCurrentDirectoryA(sizeof(previous), previous) > 0);
 	assert_true(SetCurrentDirectoryA(dir));
@@ -841,7 +841,7 @@ TEST(metrics_empty_report_dir, "empty report_dir does not install the file expor
 TEST(metrics_exporter_suppresses_file, "a registered exporter receives the snapshot and skips report_dir")
 {
 	char dir[256];
-	assert_true(metrics_make_temp_dir(dir, sizeof(dir)));
+	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
 
 	metrics_test_exporter* exporter = metrics_exporter_new(false);
 
@@ -1000,7 +1000,7 @@ TEST(metrics_listeners_require_all_callbacks, "a partial metrics listener is rej
 TEST(metrics_deprecated_listeners, "deprecated listeners still run on enable and disable")
 {
 	char dir[256];
-	assert_true(metrics_make_temp_dir(dir, sizeof(dir)));
+	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
 
 	metrics_listener_counts counts;
 	memset(&counts, 0, sizeof(counts));

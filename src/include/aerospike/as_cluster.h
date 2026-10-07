@@ -421,6 +421,24 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Command-path operational metrics. Off unless the metrics policy enables them.
+	 */
+	bool metrics_operational_enabled;
+
+	/**
+	 * @private
+	 * Client-wide usage counters. Off unless the metrics policy sets usage_enabled.
+	 */
+	bool metrics_usage_enabled;
+
+	/**
+	 * @private
+	 * Histogram bucket unit. This is set using as_metrics_policy.
+	 */
+	as_metrics_latency_unit metrics_latency_unit;
+
+	/**
+	 * @private
 	 * Number of elapsed time range buckets in latency histograms. This is set using as_policy_metrics.
 	 */
 	uint8_t metrics_latency_columns;

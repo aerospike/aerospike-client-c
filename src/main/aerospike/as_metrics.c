@@ -81,9 +81,12 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 
 		mrg->metrics_listeners = src->metrics_listeners;
 		mrg->exporters = src->exporters;
-		as_strncpy(mrg->report_dir, src->report_dir, sizeof(mrg->report_dir));
+		as_strncpy(		mrg->report_dir, src->report_dir, sizeof(mrg->report_dir));
 		mrg->report_size_limit = src->report_size_limit;
 		mrg->interval = src->interval;
+		mrg->latency_unit = src->latency_unit;
+		mrg->operational_enabled = src->operational_enabled;
+		mrg->usage_enabled = src->usage_enabled;
 		return mrg;
 	}
 	else {
@@ -148,6 +151,9 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->interval = 30;
 	policy->latency_columns = 7;
 	policy->latency_shift = 1;
+	policy->latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
+	policy->operational_enabled = false;
+	policy->usage_enabled = false;
 	policy->metrics_listeners.enable_listener = NULL;
 	policy->metrics_listeners.snapshot_listener = NULL;
 	policy->metrics_listeners.node_close_listener = NULL;
@@ -646,7 +652,17 @@ as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapsh
 	}
 	as_metrics_conn_from_stats(&snap->async, &async_stats);
 
-	uint8_t ns_max = node->metrics_size;
+	if (node->cluster->metrics_operational_enabled) {
+		snap->conn_open_failures = as_load_uint32(&node->conn_open_failures);
+		snap->conn_tls_handshake_failures = as_load_uint32(&node->conn_tls_handshake_failures);
+		snap->conn_auth_failures = as_load_uint32(&node->conn_auth_failures);
+	}
+
+	uint8_t ns_max = 0;
+
+	if (node->cluster->metrics_enabled && node->cluster->metrics_operational_enabled) {
+		ns_max = node->metrics_size;
+	}
 
 	if (ns_max > 0) {
 		snap->namespaces = cf_calloc(ns_max, sizeof(as_metrics_namespace_snapshot));
@@ -740,19 +756,23 @@ as_metrics_snapshot_create(
 	)
 {
 	*snapshot = NULL;
+	bool operational = cluster->metrics_enabled && cluster->metrics_operational_enabled;
 	uint32_t cpu_usage = 0;
 	uint64_t mem = 0;
-	as_status status = as_metrics_read_cpu_mem(err, cpu, &cpu_usage, &mem);
 
-	if (status != AEROSPIKE_OK) {
-		return status;
+	if (operational) {
+		as_status status = as_metrics_read_cpu_mem(err, cpu, &cpu_usage, &mem);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
 	}
 
 	as_metrics_snapshot* snap = cf_calloc(1, sizeof(as_metrics_snapshot));
 	as_metrics_timestamp(snap->timestamp, sizeof(snap->timestamp));
-	snap->metrics_enabled = true;
-	snap->operational_metrics_enabled = true;
-	snap->usage_metrics_enabled = false;
+	snap->metrics_enabled = cluster->metrics_enabled;
+	snap->operational_metrics_enabled = operational;
+	snap->usage_metrics_enabled = cluster->metrics_enabled && cluster->metrics_usage_enabled;
 	snap->cluster_name = as_metrics_strdup_or_empty(cluster->cluster_name);
 	snap->client_type = as_metrics_strdup_or_empty(aerospike_client_language);
 	snap->client_version = as_metrics_strdup_or_empty(aerospike_client_version);
@@ -764,6 +784,7 @@ as_metrics_snapshot_create(
 	snap->delay_queue_timeout_count = as_cluster_get_delay_queue_timeout_count(cluster);
 	snap->command_count = as_cluster_get_command_count(cluster);
 	snap->retry_count = as_cluster_get_retry_count(cluster);
+	snap->latency_unit = cluster->metrics_latency_unit;
 	snap->latency_columns = cluster->metrics_latency_columns;
 	snap->latency_shift = cluster->metrics_latency_shift;
 
@@ -804,6 +825,36 @@ as_metrics_snapshot_create(
 	as_nodes_release(nodes);
 	*snapshot = snap;
 	return AEROSPIKE_OK;
+}
+
+as_status
+aerospike_get_metrics_snapshot(aerospike* as, as_error* err, as_metrics_snapshot** snapshot)
+{
+	as_error_reset(err);
+
+	if (!as || !as->cluster) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster not initialized");
+	}
+
+	as_cluster* cluster = as->cluster;
+	pthread_mutex_lock(&cluster->metrics_lock);
+
+	as_metrics_runtime* rt = cluster->metrics_runtime;
+	as_vector* labels = NULL;
+	as_metrics_cpu_state* cpu = NULL;
+
+	if (rt) {
+		labels = rt->labels;
+		cpu = rt->cpu;
+	}
+	else {
+		as_config* config = aerospike_load_config(as);
+		labels = config->policies.metrics.labels;
+	}
+
+	as_status status = as_metrics_snapshot_create(err, cluster, labels, cpu, snapshot);
+	pthread_mutex_unlock(&cluster->metrics_lock);
+	return status;
 }
 
 static void
@@ -1014,6 +1065,9 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	cluster->metrics_interval = policy->interval;
 	cluster->metrics_latency_columns = policy->latency_columns;
 	cluster->metrics_latency_shift = policy->latency_shift;
+	cluster->metrics_latency_unit = policy->latency_unit;
+	cluster->metrics_operational_enabled = policy->operational_enabled;
+	cluster->metrics_usage_enabled = policy->usage_enabled;
 	cluster->metrics_listeners = policy->metrics_listeners;
 
 	as_metrics_runtime* rt = cf_calloc(1, sizeof(as_metrics_runtime));

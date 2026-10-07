@@ -50,6 +50,7 @@ struct as_metrics_file_exporter_s {
 	as_metrics_cpu_state* cpu;
 	uint64_t max_size;
 	uint64_t size;
+	as_metrics_latency_unit latency_unit;
 	uint8_t latency_columns;
 	uint8_t latency_shift;
 	bool legacy_active;
@@ -169,9 +170,11 @@ as_metrics_open_writer(as_metrics_file_exporter* mw, as_error* err)
 	char now_str[128];
 	timestamp_to_string(now_str, sizeof(now_str));
 
-	char data[512];
-	int rv = snprintf(data, sizeof(data), "%s header(2) cluster[name,clientType,clientVersion,appId,label[],cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] label[name,value] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,namespace[]] conn[inUse,inPool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,keyBusy,bytesIn,bytesOut,latency[]] latency(%u,%u)[type[l1,l2,l3...]]\n",
-		now_str, mw->latency_columns, mw->latency_shift);
+	const char* latency_unit = mw->latency_unit == AS_METRICS_LATENCY_MICROSECONDS ?
+		"microseconds" : "milliseconds";
+	char data[1024];
+	int rv = snprintf(data, sizeof(data), "%s header(2) cluster[name,client_type,client_version,app_id,label[],cpu,mem,invalid_node_count,command_count,retry_count,delay_queue_timeout_count,eventloop[],node[]] label[name,value] eventloop[process_size,queue_size] node[name,address,port,sync_conn,async_conn,namespace[]] conn[in_use,in_pool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,key_busy,bytes_in,bytes_out,latency[]] latency(%s,%u,%u)[type[l1,l2,l3...]]\n",
+		now_str, latency_unit, mw->latency_columns, mw->latency_shift);
 
 	if (rv <= 0) {
 		fclose(mw->file);
@@ -418,6 +421,7 @@ as_metrics_file_exporter_create(
 	mw->base.export_fn = as_metrics_file_export;
 	as_strncpy(mw->report_dir, policy->report_dir, sizeof(mw->report_dir));
 	mw->max_size = policy->report_size_limit;
+	mw->latency_unit = policy->latency_unit;
 	mw->latency_columns = policy->latency_columns;
 	mw->latency_shift = policy->latency_shift;
 	*exporter = &mw->base;

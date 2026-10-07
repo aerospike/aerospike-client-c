@@ -570,6 +570,8 @@ as_uv_auth_write_complete(uv_write_t* req, int status)
 static void
 as_uv_connect_error(as_event_command* cmd, as_error* err)
 {
+	as_event_add_conn_failure(cmd);
+
 	// Timer will be stopped in as_event_command_release().
 	// Watcher has not been registered yet.
 
@@ -1225,6 +1227,9 @@ as_uv_tls_handshake_send_complete(uv_write_t* req, int status)
 static void
 as_uv_tls_connect_fatal_error(as_event_command* cmd, as_error* err)
 {
+	// TCP connected, but local TLS setup failed before the peer handshake.
+	as_node_add_conn_open_failure(cmd->node);
+
 	// libuv requires uv_close if socket released after uv_tcp_init succeeds.
 	// The socket is the first field in as_event_connection, so just use connection.
 	// The close callback will also free as_event_connection memory.
@@ -1335,6 +1340,7 @@ as_uv_auth_write_start(as_event_command* cmd, uv_stream_t* stream, as_session* s
 static void
 as_uv_fd_error(as_event_command* cmd, as_error* err)
 {
+	as_event_add_conn_failure(cmd);
 	cmd->event_loop->errors++;
 
 	// Only timer needs to be released on socket connection failure.

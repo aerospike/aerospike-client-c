@@ -1650,6 +1650,9 @@ as_cluster_create(aerospike* as, as_error* err)
 
 	// Initialize metrics fields
 	cluster->metrics_enabled = false;
+	cluster->metrics_operational_enabled = false;
+	cluster->metrics_usage_enabled = false;
+	cluster->metrics_latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
 	cluster->metrics_interval = 0;
 	cluster->metrics_latency_columns = 0;
 	cluster->metrics_latency_shift = 0;

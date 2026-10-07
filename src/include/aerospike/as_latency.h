@@ -45,6 +45,7 @@ typedef struct as_latency_s {
 	uint32_t ref_count;
 	uint8_t shift;
 	uint8_t size;
+	uint8_t unit;
 	uint64_t buckets[];
 } as_latency;
 

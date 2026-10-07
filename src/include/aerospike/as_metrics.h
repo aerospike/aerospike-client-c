@@ -80,6 +80,14 @@ typedef struct as_metrics_listeners_s {
 } as_metrics_listeners;
 
 /**
+ * Histogram bucket unit. Default is milliseconds, matching learn-metrics.
+ */
+typedef enum as_metrics_latency_unit_e {
+	AS_METRICS_LATENCY_MILLISECONDS = 0,
+	AS_METRICS_LATENCY_MICROSECONDS = 1
+} as_metrics_latency_unit;
+
+/**
  * Metrics label that is applied when exporting metrics.
  */
 typedef struct {
@@ -152,6 +160,14 @@ typedef struct as_metrics_node_snapshot_s {
 	 */
 	as_metrics_conn_snapshot async;
 
+	/**
+	 * Operational connection failures (CM-8). Not sampler-gated.
+	 * Zero unless operational metrics are enabled.
+	 */
+	uint32_t conn_open_failures;
+	uint32_t conn_tls_handshake_failures;
+	uint32_t conn_auth_failures;
+
 	as_metrics_namespace_snapshot* namespaces;
 	uint32_t namespace_count;
 } as_metrics_node_snapshot;
@@ -169,8 +185,9 @@ typedef struct as_metrics_event_loop_snapshot_s {
  * Valid only for the duration of the export call. Copy fields that must be retained.
  * Counters and histogram buckets are cumulative. Gauges are the values at build time.
  *
- * This established client records the existing extended profile (latency, errors, bytes)
- * whenever metrics are enabled. `usage_metrics_enabled` is false; there is no usage catalog.
+ * Enabling metrics does not turn on operational or usage metrics. Set
+ * `as_metrics_policy.operational_enabled` or `usage_enabled` for those blocks.
+ * The metrics file uses snake_case names.
  */
 typedef struct as_metrics_snapshot_s {
 	/**
@@ -226,6 +243,7 @@ typedef struct as_metrics_snapshot_s {
 	as_metrics_node_snapshot** nodes_departed;
 	uint32_t nodes_departed_count;
 
+	as_metrics_latency_unit latency_unit;
 	uint8_t latency_columns;
 	uint8_t latency_shift;
 } as_metrics_snapshot;
@@ -326,6 +344,30 @@ typedef struct as_metrics_policy_s {
 	 * Default: 1
 	 */
 	uint8_t latency_shift;
+
+	/**
+	 * Bucket unit for latency histograms.
+	 *
+	 * Default: AS_METRICS_LATENCY_MILLISECONDS
+	 */
+	as_metrics_latency_unit latency_unit;
+
+	/**
+	 * Record command-path operational metrics (latency, namespace errors and bytes,
+	 * cpu, memory). Enabling metrics does not turn this on.
+	 * Tier 0 pool gauges are collected whenever metrics are enabled.
+	 *
+	 * Default: false
+	 */
+	bool operational_enabled;
+
+	/**
+	 * Record client-wide feature usage counters. Off until explicitly enabled.
+	 * This client does not yet increment the feature.api catalog.
+	 *
+	 * Default: false
+	 */
+	bool usage_enabled;
 
 	/**
 	 * @private
@@ -525,10 +567,20 @@ AS_EXTERN as_status
 as_metrics_runtime_node_close(as_error* err, struct as_cluster_s* cluster, struct as_node_s* node);
 
 /**
- * Enable extended periodic cluster and node latency metrics.
+ * Enable periodic metrics collection and the export timer.
+ * Operational and usage metrics stay off unless the policy enables them.
  */
 AS_EXTERN as_status
 aerospike_enable_metrics(struct aerospike_s* as, as_error* err, const as_metrics_policy* policy);
+
+/**
+ * On-demand metrics snapshot. Independent of the export timer and available when
+ * periodic export is off. Gauges are current; counters stay at their last values.
+ * nodes_departed is empty; departed nodes are attached only on periodic export.
+ * The caller frees the snapshot with as_metrics_snapshot_destroy().
+ */
+AS_EXTERN as_status
+aerospike_get_metrics_snapshot(struct aerospike_s* as, as_error* err, as_metrics_snapshot** snapshot);
 
 /**
  * Disable extended periodic cluster and node latency metrics.

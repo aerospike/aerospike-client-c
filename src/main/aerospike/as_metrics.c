@@ -317,7 +317,6 @@ struct as_metrics_runtime_s {
 	pthread_mutex_t lock;
 	pthread_cond_t cond;
 	bool thread_running;
-	bool thread_started;
 };
 
 static as_status as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool force, as_error* err);
@@ -1204,10 +1203,10 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	cluster->metrics_enabled = true;
 
 	if (rt->slots->size > 0 || cluster->metrics_listeners.snapshot_listener) {
-		rt->thread_running = true;
+		pthread_mutex_lock(&rt->lock);
 
 		if (pthread_create(&rt->thread, NULL, as_metrics_thread, rt) != 0) {
-			rt->thread_running = false;
+			pthread_mutex_unlock(&rt->lock);
 			cluster->metrics_enabled = false;
 			as_status status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
 				"Failed to create metrics thread: %s", strerror(errno));
@@ -1222,7 +1221,10 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 			memset(&cluster->metrics_listeners, 0, sizeof(cluster->metrics_listeners));
 			return status;
 		}
-		rt->thread_started = true;
+
+		// Hold the lock until the flag is set so the new thread cannot observe it false and exit.
+		rt->thread_running = true;
+		pthread_mutex_unlock(&rt->lock);
 	}
 
 	return AEROSPIKE_OK;
@@ -1235,7 +1237,7 @@ as_metrics_runtime_disable(as_error* err, as_cluster* cluster)
 	bool was_enabled = cluster->metrics_enabled;
 	cluster->metrics_enabled = false;
 
-	if (rt && rt->thread_started) {
+	if (rt && rt->thread_running) {
 		pthread_mutex_lock(&rt->lock);
 		rt->thread_running = false;
 		pthread_cond_signal(&rt->cond);
@@ -1243,7 +1245,6 @@ as_metrics_runtime_disable(as_error* err, as_cluster* cluster)
 
 		pthread_mutex_unlock(&cluster->metrics_lock);
 		pthread_join(rt->thread, NULL);
-		rt->thread_started = false;
 		pthread_mutex_lock(&cluster->metrics_lock);
 	}
 

@@ -1009,22 +1009,39 @@ TEST(metrics_periodic_export_stops_on_disable, "disable stops the export thread 
 
 TEST(metrics_invalid_report_dir, "file exporter open failure leaves metrics disabled")
 {
-	as_metrics_policy policy;
-	metrics_policy_init_without_default_file_exporter(&policy);
+	char parent[256];
+	assert_true(metrics_create_temp_dir_path(parent, sizeof(parent)));
+
+	char blocking_file[512];
+	char dir[512];
 #if defined(_MSC_VER)
-	as_metrics_policy_set_report_dir(&policy, "C:\\no\\such\\aerospike-metrics-dir");
+	snprintf(blocking_file, sizeof(blocking_file), "%s\\not-a-directory", parent);
+	snprintf(dir, sizeof(dir), "%s\\not-a-directory\\metrics", parent);
 #else
-	as_metrics_policy_set_report_dir(&policy, "/no/such/aerospike-metrics-dir");
+	snprintf(blocking_file, sizeof(blocking_file), "%s/not-a-directory", parent);
+	snprintf(dir, sizeof(dir), "%s/not-a-directory/metrics", parent);
 #endif
 
+	FILE* file = fopen(blocking_file, "w");
+	assert_not_null(file);
+	fclose(file);
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	as_metrics_policy_set_report_dir(&policy, dir);
+
 	as_error err;
-	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_ERR_CLIENT);
+	as_status status = metrics_enable(&policy, &err);
 
 	as_metrics_snapshot* metrics_snapshot = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
-	assert_false(metrics_snapshot->metrics_enabled);
+	as_status snapshot_status = aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot);
+	bool metrics_off = metrics_snapshot && !metrics_snapshot->metrics_enabled;
 	as_metrics_snapshot_destroy(metrics_snapshot);
+	metrics_remove_dir(parent);
 
+	assert_int_eq(status, AEROSPIKE_ERR_CLIENT);
+	assert_int_eq(snapshot_status, AEROSPIKE_OK);
+	assert_true(metrics_off);
 	as_metrics_policy_destroy(&policy);
 }
 

@@ -122,45 +122,132 @@ typedef struct as_metrics_latency_snapshot_s {
 
 /**
  * Per-namespace counters and histograms copied into a metrics snapshot.
+ * Present only when operational metrics are enabled.
+ * `as_node_stats.error_count`, `timeout_count`, and `key_busy_count` are the
+ * sums of `errors`, `timeouts`, and `key_busy` across these entries.
  */
 typedef struct as_metrics_namespace_snapshot_s {
+	/**
+	 * Namespace name. Same string as `as_ns_metrics.ns`.
+	 */
 	char* name;
+
+	/**
+	 * Command errors for this namespace since the node was initialized.
+	 * A retryable error can be counted more than once for one command.
+	 * Same counter as `as_ns_metrics.error_count`. Contributes to
+	 * `as_node_stats.error_count`.
+	 */
 	uint64_t errors;
+
+	/**
+	 * Command timeouts for this namespace since the node was initialized.
+	 * A retryable timeout can be counted more than once for one command.
+	 * Same counter as `as_ns_metrics.timeout_count`. Contributes to
+	 * `as_node_stats.timeout_count`.
+	 */
 	uint64_t timeouts;
+
+	/**
+	 * Key busy errors for this namespace since the node was initialized.
+	 * Same counter as `as_ns_metrics.key_busy_count`. Contributes to
+	 * `as_node_stats.key_busy_count`.
+	 */
 	uint64_t key_busy;
+
+	/**
+	 * Bytes received from the server for this namespace.
+	 * Same counter as `as_ns_metrics.bytes_in`.
+	 */
 	uint64_t bytes_in;
+
+	/**
+	 * Bytes sent to the server for this namespace.
+	 * Same counter as `as_ns_metrics.bytes_out`.
+	 */
 	uint64_t bytes_out;
+
+	/**
+	 * Latency histograms for this namespace, one entry per `AS_LATENCY_TYPE_*`.
+	 * Same series as `as_ns_metrics.latency`. Bucket totals are cumulative
+	 * since metrics were enabled.
+	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];
 } as_metrics_namespace_snapshot;
 
 /**
  * Per-node metrics copied into a metrics snapshot.
  * Sync and async pools are both reported. This client keeps separate async pools.
+ *
+ * `as_node_stats` fields land here as follows:
+ *   node           -> name, address, port
+ *   sync           -> sync
+ *   async          -> async
+ *   error_count    -> sum of namespaces[].errors
+ *   timeout_count  -> sum of namespaces[].timeouts
+ *   key_busy_count -> sum of namespaces[].key_busy
+ * `as_node_stats.pipeline` has no snapshot field.
  */
 typedef struct as_metrics_node_snapshot_s {
+	/**
+	 * Node name. Replaces the live `as_node*` in `as_node_stats.node`.
+	 */
 	char* name;
+
+	/**
+	 * Short node address. Replaces the live `as_node*` in `as_node_stats.node`.
+	 */
 	char* address;
+
+	/**
+	 * Node service port. Replaces the live `as_node*` in `as_node_stats.node`.
+	 */
 	uint16_t port;
 
 	/**
-	 * Synchronous connection pool. This is the shared connection series.
+	 * Synchronous connection pool. Same series as `as_node_stats.sync`
+	 * and `as_conn_stats`: `in_use`, `in_pool`, `opened`, `closed`,
+	 * `recovered`, and `aborted`.
 	 */
 	as_metrics_conn_snapshot sync;
 
 	/**
-	 * Asynchronous connection pool. Legacy extension.
+	 * Asynchronous connection pool. Same series as `as_node_stats.async`.
+	 * Legacy extension. This client keeps async pools separate from sync.
 	 */
 	as_metrics_conn_snapshot async;
 
 	/**
-	 * Operational connection failures (CM-8). Not sampler-gated.
+	 * Failed attempts to open a connection. Cumulative and not sampler-gated.
+	 * Operational connection failure counter (CM-8).
 	 * Zero unless operational metrics are enabled.
 	 */
 	uint32_t conn_open_failures;
+
+	/**
+	 * Failed TLS handshakes. Cumulative and not sampler-gated.
+	 * Operational connection failure counter (CM-8).
+	 * Zero unless operational metrics are enabled.
+	 */
 	uint32_t conn_tls_handshake_failures;
+
+	/**
+	 * Failed authentications. Cumulative and not sampler-gated.
+	 * Operational connection failure counter (CM-8).
+	 * Zero unless operational metrics are enabled.
+	 */
 	uint32_t conn_auth_failures;
 
+	/**
+	 * Per-namespace counters and latency histograms.
+	 * Empty unless operational metrics are enabled.
+	 * See `as_metrics_namespace_snapshot`.
+	 */
 	as_metrics_namespace_snapshot* namespaces;
+
+	/**
+	 * Number of `namespaces` entries.
+	 */
 	uint32_t namespace_count;
 } as_metrics_node_snapshot;
 
@@ -180,6 +267,19 @@ typedef struct as_metrics_event_loop_snapshot_s {
  * Enabling metrics does not turn on operational or usage metrics. Set
  * `as_metrics_policy.operational_enabled` or `usage_enabled` for those blocks.
  * The metrics file uses snake_case names.
+ *
+ * `as_cluster_stats` fields land here as follows:
+ *   recover_queue_size -> recover_queue_size
+ *   retry_count        -> retry_count
+ *   nodes              -> nodes
+ *   nodes_size         -> nodes_count
+ *   event_loops        -> event_loops
+ *   event_loops_size   -> event_loop_count
+ * `as_cluster_stats.thread_pool_queued_tasks` has no snapshot field.
+ * On each node, `as_node_stats.sync` and `async` are `nodes[i].sync` and
+ * `nodes[i].async`. `as_node_stats.pipeline` has no snapshot field.
+ * `as_node_stats.error_count`, `timeout_count`, and `key_busy_count` are the
+ * sums of `nodes[i].namespaces[].errors`, `timeouts`, and `key_busy`.
  */
 typedef struct as_metrics_snapshot_s {
 	/**
@@ -187,56 +287,144 @@ typedef struct as_metrics_snapshot_s {
 	 */
 	char timestamp[128];
 
+	/**
+	 * True when periodic metrics were enabled while this snapshot was built.
+	 */
 	bool metrics_enabled;
 
 	/**
-	 * True when latency, error, and byte counters in this snapshot were collected.
+	 * True when latency, namespace error and byte counters, CPU, and memory
+	 * in this snapshot were collected.
 	 */
 	bool operational_metrics_enabled;
 
 	/**
-	 * Always false on this client. Usage counters are not part of the established-client scope.
+	 * True when the policy requested usage metrics. This client does not
+	 * increment a usage catalog, so those counters stay at zero.
 	 */
 	bool usage_metrics_enabled;
 
+	/**
+	 * Cluster name. Empty string when the cluster has no name.
+	 */
 	char* cluster_name;
+
+	/**
+	 * Client language name, such as "c" or "python".
+	 */
 	char* client_type;
+
+	/**
+	 * Client version string.
+	 */
 	char* client_version;
+
+	/**
+	 * Application identifier. Empty string when unset.
+	 */
 	char* app_id;
 
+	/**
+	 * Static name/value labels from the metrics policy.
+	 */
 	as_metrics_label* labels;
+
+	/**
+	 * Number of `labels` entries.
+	 */
 	uint32_t label_count;
 
+	/**
+	 * Sync sockets currently in timeout recovery.
+	 * Same counter as `as_cluster_stats.recover_queue_size`.
+	 */
 	uint32_t recover_queue_size;
+
+	/**
+	 * Add-node failures in the most recent cluster tend iteration.
+	 */
 	uint32_t invalid_node_count;
+
+	/**
+	 * Commands that timed out in the delay queue. Cumulative since the cluster started.
+	 */
 	uint64_t delay_queue_timeout_count;
+
+	/**
+	 * Commands issued. Cumulative since the cluster started.
+	 */
 	uint64_t command_count;
+
+	/**
+	 * Command retries since the cluster started. There can be multiple retries
+	 * for one command. Same counter as `as_cluster_stats.retry_count`.
+	 */
 	uint64_t retry_count;
 
 	/**
-	 * Process CPU percent and resident set size in bytes, written to the
-	 * learn-metrics log. RSS is the memory the process is using, not its
-	 * virtual address space. Stored as uint64_t because this client is
-	 * 64-bit only and RSS can exceed 4 GB.
+	 * Process CPU percent, written to the learn-metrics log.
+	 * Zero unless operational metrics are enabled.
 	 */
 	uint32_t cpu;
+
+	/**
+	 * Process resident set size in bytes, written to the learn-metrics log.
+	 * This is the memory the process is using. Stored as uint64_t because this
+	 * client is 64-bit only and RSS can exceed 4 GB.
+	 * Zero unless operational metrics are enabled.
+	 */
 	uint64_t mem;
 
+	/**
+	 * Async event-loop gauges. Same series as `as_cluster_stats.event_loops`:
+	 * `process_size` and `queue_size` from `as_event_loop_stats`.
+	 * Empty when async event loops are not in use.
+	 */
 	as_metrics_event_loop_snapshot* event_loops;
+
+	/**
+	 * Number of `event_loops` entries.
+	 * Same value as `as_cluster_stats.event_loops_size`.
+	 */
 	uint32_t event_loop_count;
 
+	/**
+	 * Nodes still in the cluster. Same membership as `as_cluster_stats.nodes`.
+	 * Each entry is an `as_metrics_node_snapshot` built from selected
+	 * `as_node_stats` fields. See that struct for which fields are included.
+	 */
 	as_metrics_node_snapshot** nodes;
+
+	/**
+	 * Number of `nodes` entries.
+	 * Same value as `as_cluster_stats.nodes_size`.
+	 */
 	uint32_t nodes_count;
 
 	/**
 	 * Final samples for nodes removed since the previous export. Often empty.
-	 * Replaces on_node_close for exporters.
+	 * Replaces on_node_close for exporters. Empty for aerospike_get_metrics_snapshot().
 	 */
 	as_metrics_node_snapshot** nodes_departed;
+
+	/**
+	 * Number of `nodes_departed` entries.
+	 */
 	uint32_t nodes_departed_count;
 
+	/**
+	 * Bucket unit for the latency histograms in this snapshot.
+	 */
 	as_metrics_latency_unit latency_unit;
+
+	/**
+	 * Number of elapsed time range buckets in each latency histogram.
+	 */
 	uint8_t latency_columns;
+
+	/**
+	 * Power of 2 multiple between latency histogram buckets, starting at bucket 3.
+	 */
 	uint8_t latency_shift;
 } as_metrics_snapshot;
 

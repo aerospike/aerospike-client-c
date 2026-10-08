@@ -390,11 +390,8 @@ typedef struct as_metrics_snapshot_s {
 
 	/**
 	 * Nodes still in the cluster. Same membership as `as_cluster_stats.nodes`.
-	 * Each `as_node_stats` node is copied into `as_metrics_node_snapshot`:
-	 * the node name, address, and port replace the live `as_node*`,
-	 * `sync` and `async` keep those connection series, and
-	 * `error_count`, `timeout_count`, and `key_busy_count` are split across
-	 * `namespaces` (see `as_metrics_namespace_snapshot`).
+	 * Each entry is an `as_metrics_node_snapshot` built from selected
+	 * `as_node_stats` fields. See that struct for which fields are included.
 	 */
 	as_metrics_node_snapshot** nodes;
 

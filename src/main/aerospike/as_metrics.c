@@ -334,7 +334,7 @@ as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cp
 	long long unsigned int starttime;
 	int64_t rss;
 	int matched = fscanf(proc_stat,
-		"%*d %*s %*s %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %llu %*lu %ld",
+		"%*d %*s %*s %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %llu %*u %ld",
 		&utime, &stime, &starttime, &rss);
 
 	fclose(proc_stat);

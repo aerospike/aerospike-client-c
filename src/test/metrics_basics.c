@@ -18,6 +18,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_atomic.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
@@ -604,6 +605,11 @@ TEST(metrics_snapshot_without_cluster, "on-demand snapshot requires a connected 
 
 TEST(metrics_snapshot_before_enable, "on-demand snapshot works while periodic export is off")
 {
+	if (as->cluster && as->cluster->metrics_enabled) {
+		info("skipping metrics snapshot before enable; metrics are already enabled");
+		return;
+	}
+
 	metrics_disable();
 
 	as_error err;

@@ -81,7 +81,7 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 
 		mrg->metrics_listeners = src->metrics_listeners;
 		mrg->exporters = src->exporters;
-		as_strncpy(		mrg->report_dir, src->report_dir, sizeof(mrg->report_dir));
+		as_strncpy(mrg->report_dir, src->report_dir, sizeof(mrg->report_dir));
 		mrg->report_size_limit = src->report_size_limit;
 		mrg->interval = src->interval;
 		mrg->latency_unit = src->latency_unit;

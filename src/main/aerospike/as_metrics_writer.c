@@ -21,10 +21,16 @@
 
 #include <citrusleaf/alloc.h>
 
+#include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
+
+#if defined(_MSC_VER)
+#include <direct.h>
+#endif
 
 //---------------------------------
 // Macros
@@ -91,6 +97,98 @@ timestamp_to_string_filename(char* str, size_t str_size)
 		local->tm_hour, local->tm_min, local->tm_sec);
 }
 
+static bool
+as_metrics_is_dir(const char* path)
+{
+#if defined(_MSC_VER)
+	struct _stat info;
+
+	if (_stat(path, &info) != 0) {
+		return false;
+	}
+	return (info.st_mode & _S_IFDIR) != 0;
+#else
+	struct stat info;
+
+	if (stat(path, &info) != 0) {
+		return false;
+	}
+	return S_ISDIR(info.st_mode);
+#endif
+}
+
+static as_status
+as_metrics_mkdir_one(const char* path, as_error* err)
+{
+	if (as_metrics_is_dir(path)) {
+		return AEROSPIKE_OK;
+	}
+
+#if defined(_MSC_VER)
+	int rv = _mkdir(path);
+#else
+	int rv = mkdir(path, 0755);
+#endif
+
+	if (rv == 0 || (errno == EEXIST && as_metrics_is_dir(path))) {
+		return AEROSPIKE_OK;
+	}
+	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to create metrics report_dir: %s", path);
+}
+
+static as_status
+as_metrics_create_report_dir(const char* report_dir, as_error* err)
+{
+	// Copy so the temporary NULs below do not change the exporter's report_dir.
+	// mkdir creates only the last component, so a/b/c needs a, then a/b, then a/b/c.
+	char path[256];
+	as_strncpy(path, report_dir, sizeof(path));
+
+	size_t len = strlen(path);
+
+	// Drop a trailing separator. Keep "/" and "C:\".
+	while (len > 1 && (path[len - 1] == '/' || path[len - 1] == '\\')) {
+		if (len == 3 && path[1] == ':') {
+			break;
+		}
+		path[--len] = '\0';
+	}
+
+	if (path[0] == '\0') {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Metrics report_dir is empty");
+	}
+
+	// Skip the root prefix. It is not a directory this function creates.
+	//   /tmp/logs  -> start after "/"
+	//   C:\logs    -> start after "C:\"
+	//   C:logs     -> start after "C:"
+	//   logs/today -> start at 0
+	size_t start = 0;
+
+	if (path[0] == '/' || path[0] == '\\') {
+		start = 1;
+	}
+	else if (path[1] == ':') {
+		start = (path[2] == '/' || path[2] == '\\') ? 3 : 2;
+	}
+
+	for (size_t i = start; path[i] != '\0'; i++) {
+		if (path[i] != '/' && path[i] != '\\') {
+			continue;
+		}
+
+		// End the string at this separator so mkdir sees only the parent prefix.
+		path[i] = '\0';
+		as_status status = as_metrics_mkdir_one(path, err);
+		path[i] = as_dir_sep;
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+	return as_metrics_mkdir_one(path, err);
+}
+
 static as_status
 as_metrics_open_writer(as_metrics_file_exporter* mw, as_error* err);
 
@@ -126,6 +224,12 @@ as_metrics_open_writer(as_metrics_file_exporter* mw, as_error* err)
 
 	if (mw->report_dir[0] == '\0') {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Metrics report_dir is empty");
+	}
+
+	as_status status = as_metrics_create_report_dir(mw->report_dir, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
 
 	char now_file_str[128];
@@ -165,7 +269,7 @@ as_metrics_open_writer(as_metrics_file_exporter* mw, as_error* err)
 			"Failed to write metrics header: %d,%s", rv, file_name.data);
 	}
 
-	as_status status = as_metrics_write_line(mw, data, err);
+	status = as_metrics_write_line(mw, data, err);
 
 	if (status != AEROSPIKE_OK) {
 		if (mw->file) {

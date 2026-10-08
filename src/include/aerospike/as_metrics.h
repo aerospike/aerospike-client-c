@@ -494,13 +494,26 @@ typedef struct as_metrics_policy_s {
 	uint64_t report_size_limit;
 
 	/**
+	 * @deprecated
 	 * How often the metrics thread exports, measured in cluster tend intervals.
-	 * The thread sleeps interval * as_config.tender_interval milliseconds
-	 * (default 30 * 1000). Export does not run on the tend thread.
+	 * The thread sleeps interval * as_config.tender_interval milliseconds.
+	 * Prefer export_interval. Used only when export_interval is empty.
 	 *
 	 * Default: 30
 	 */
 	uint32_t interval;
+
+	/**
+	 * How often the metrics thread exports, as a magnitude and unit in one string.
+	 * Examples: "30s", "1500ms", "30m", "1h". A bare number is seconds.
+	 * The metrics thread sleeps that duration. It does not run on the tend thread.
+	 *
+	 * An empty string uses the deprecated interval field. When set, this overrides
+	 * interval.
+	 *
+	 * Default: ""
+	 */
+	char export_interval[32];
 
 	/**
 	 * Number of elapsed time range buckets in latency histograms.

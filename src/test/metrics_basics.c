@@ -571,6 +571,7 @@ TEST(metrics_policy_defaults, "metrics policy defaults leave operational and usa
 	assert_false(policy.usage_enabled);
 	assert_false(policy.enable);
 	assert_int_eq(policy.interval, 30);
+	assert_string_eq(policy.export_interval, "");
 	assert_int_eq(policy.latency_columns, 7);
 	assert_int_eq(policy.latency_shift, 1);
 	assert_int_eq(policy.latency_unit, AS_METRICS_LATENCY_MILLISECONDS);
@@ -581,6 +582,49 @@ TEST(metrics_policy_defaults, "metrics policy defaults leave operational and usa
 	assert_null(policy.metrics_listeners.snapshot_listener);
 	assert_null(policy.metrics_listeners.node_close_listener);
 	assert_null(policy.metrics_listeners.disable_listener);
+
+	as_metrics_policy_destroy(&policy);
+}
+
+TEST(metrics_export_interval, "export_interval is a duration and overrides the tend-count interval")
+{
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.interval = 99;
+	strcpy(policy.export_interval, "1500ms");
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq((int64_t)as->cluster->metrics_interval, 1500);
+	metrics_disable();
+
+	strcpy(policy.export_interval, "2s");
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq((int64_t)as->cluster->metrics_interval, 2000);
+	metrics_disable();
+
+	strcpy(policy.export_interval, "30");
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq((int64_t)as->cluster->metrics_interval, 30000);
+	metrics_disable();
+
+	strcpy(policy.export_interval, "1m");
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq((int64_t)as->cluster->metrics_interval, 60000);
+	metrics_disable();
+
+	strcpy(policy.export_interval, "1h");
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq((int64_t)as->cluster->metrics_interval, 3600000);
+	metrics_disable();
+
+	policy.export_interval[0] = '\0';
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq((int64_t)as->cluster->metrics_interval, 99 * (int64_t)as->cluster->tend_interval);
+	metrics_disable();
+
+	strcpy(policy.export_interval, "30x");
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_ERR_PARAM);
 
 	as_metrics_policy_destroy(&policy);
 }
@@ -1091,6 +1135,7 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_after(metrics_suite_cleanup);
 
 	suite_add(metrics_policy_defaults);
+	suite_add(metrics_export_interval);
 	suite_add(metrics_snapshot_without_cluster);
 	suite_add(metrics_snapshot_before_enable);
 	suite_add(metrics_enable_leaves_operational_off);

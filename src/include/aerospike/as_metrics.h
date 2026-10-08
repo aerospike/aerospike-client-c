@@ -490,10 +490,10 @@ typedef struct as_metrics_policy_s {
 	 * Directory path for the built-in learn-metrics file exporter.
 	 *
 	 * When this is non-empty, no exporters have been added, deprecated listeners
-	 * are not set, and metrics.exporter is not none, aerospike_enable_metrics()
-	 * installs the file exporter. An empty string installs nothing. Dynamic
-	 * configuration metrics.exporter none also installs nothing. Collection can
-	 * still run with no exporter.
+	 * are not set, and dynamic configuration metrics.exporter is not none,
+	 * aerospike_enable_metrics() installs the file exporter. An empty string
+	 * installs nothing. Dynamic configuration metrics.exporter none also
+	 * installs nothing. Collection can still run with no exporter.
 	 *
 	 * Default: . (current directory)
 	 */
@@ -526,8 +526,9 @@ typedef struct as_metrics_policy_s {
 
 	/**
 	 * @private
-	 * Parsed metrics.export_interval in milliseconds. 0 when that key is absent.
-	 * Converted to interval after the dynamic configuration file is read.
+	 * Parsed dynamic configuration metrics.export_interval in milliseconds.
+	 * 0 when that key is absent. Converted to interval after the dynamic
+	 * configuration file is read.
 	 */
 	uint64_t export_interval_ms;
 
@@ -599,8 +600,8 @@ typedef struct as_metrics_policy_s {
 	 * as_metrics_policy_add_exporter(). The application owns these exporters.
 	 *
 	 * When this list is empty, listeners are not set, report_dir is non-empty, and
-	 * metrics.exporter is not none, enable installs the built-in file exporter
-	 * and destroys that instance on disable.
+	 * dynamic configuration metrics.exporter is not none, enable installs the
+	 * built-in file exporter and destroys that instance on disable.
 	 *
 	 * Default: NULL
 	 */

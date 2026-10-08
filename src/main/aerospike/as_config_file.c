@@ -1177,7 +1177,8 @@ as_parse_export_interval(as_yaml* yaml, const char* name, const char* value, as_
 	unsigned long long magnitude = strtoull(value, &end, 10);
 
 	if (end == value || errno != 0) {
-		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid duration %s: %s", name, value);
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid dynamic configuration metrics.export_interval: %s", value);
 		return false;
 	}
 
@@ -1196,12 +1197,14 @@ as_parse_export_interval(as_yaml* yaml, const char* name, const char* value, as_
 		scale = 3600000;
 	}
 	else {
-		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid duration %s: %s", name, value);
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid dynamic configuration metrics.export_interval: %s", value);
 		return false;
 	}
 
 	if (magnitude == 0 || magnitude > UINT64_MAX / scale) {
-		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid duration %s: %s", name, value);
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid dynamic configuration metrics.export_interval: %s", value);
 		return false;
 	}
 
@@ -1229,7 +1232,7 @@ as_parse_builtin_exporter(as_yaml* yaml, const char* name, const char* value, as
 	}
 	else {
 		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
-			"Invalid metrics.exporter: %s. valid values: file, none", value);
+			"Invalid dynamic configuration metrics.exporter: %s. valid values: file, none", value);
 		return false;
 	}
 
@@ -1262,7 +1265,8 @@ as_parse_report_size_limit(as_yaml* yaml, const char* name, const char* value, u
 	unsigned long long parsed = strtoull(value, &end, 10);
 
 	if (end == value || *end != '\0' || errno != 0) {
-		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid uint %s: %s", name, value);
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid dynamic configuration metrics.report_size_limit: %s", value);
 		return false;
 	}
 
@@ -1292,7 +1296,7 @@ as_metrics_apply_export_interval(as_config* config, as_error* err)
 	}
 
 	if (counts == 0 || counts > UINT32_MAX) {
-		as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics.export_interval");
+		as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid dynamic configuration metrics.export_interval");
 		return false;
 	}
 

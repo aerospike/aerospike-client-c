@@ -180,6 +180,19 @@ typedef struct as_metrics_event_loop_snapshot_s {
  * Enabling metrics does not turn on operational or usage metrics. Set
  * `as_metrics_policy.operational_enabled` or `usage_enabled` for those blocks.
  * The metrics file uses snake_case names.
+ *
+ * `as_cluster_stats` fields land here as follows:
+ *   recover_queue_size -> recover_queue_size
+ *   retry_count        -> retry_count
+ *   nodes              -> nodes
+ *   nodes_size         -> nodes_count
+ *   event_loops        -> event_loops
+ *   event_loops_size   -> event_loop_count
+ * `as_cluster_stats.thread_pool_queued_tasks` has no snapshot field.
+ * On each node, `as_node_stats.sync` and `async` are `nodes[i].sync` and
+ * `nodes[i].async`. `as_node_stats.pipeline` has no snapshot field.
+ * `as_node_stats.error_count`, `timeout_count`, and `key_busy_count` are the
+ * sums of `nodes[i].namespaces[].errors`, `timeouts`, and `key_busy`.
  */
 typedef struct as_metrics_snapshot_s {
 	/**
@@ -187,56 +200,147 @@ typedef struct as_metrics_snapshot_s {
 	 */
 	char timestamp[128];
 
+	/**
+	 * True when periodic metrics were enabled while this snapshot was built.
+	 */
 	bool metrics_enabled;
 
 	/**
-	 * True when latency, error, and byte counters in this snapshot were collected.
+	 * True when latency, namespace error and byte counters, CPU, and memory
+	 * in this snapshot were collected.
 	 */
 	bool operational_metrics_enabled;
 
 	/**
-	 * Always false on this client. Usage counters are not part of the established-client scope.
+	 * True when the policy requested usage metrics. This client does not
+	 * increment a usage catalog, so those counters stay at zero.
 	 */
 	bool usage_metrics_enabled;
 
+	/**
+	 * Cluster name. Empty string when the cluster has no name.
+	 */
 	char* cluster_name;
+
+	/**
+	 * Client language name, such as "c" or "python".
+	 */
 	char* client_type;
+
+	/**
+	 * Client version string.
+	 */
 	char* client_version;
+
+	/**
+	 * Application identifier. Empty string when unset.
+	 */
 	char* app_id;
 
+	/**
+	 * Static name/value labels from the metrics policy.
+	 */
 	as_metrics_label* labels;
+
+	/**
+	 * Number of `labels` entries.
+	 */
 	uint32_t label_count;
 
+	/**
+	 * Sync sockets currently in timeout recovery.
+	 * Same counter as `as_cluster_stats.recover_queue_size`.
+	 */
 	uint32_t recover_queue_size;
+
+	/**
+	 * Add-node failures in the most recent cluster tend iteration.
+	 */
 	uint32_t invalid_node_count;
+
+	/**
+	 * Commands that timed out in the delay queue. Cumulative since the cluster started.
+	 */
 	uint64_t delay_queue_timeout_count;
+
+	/**
+	 * Commands issued. Cumulative since the cluster started.
+	 */
 	uint64_t command_count;
+
+	/**
+	 * Command retries since the cluster started. There can be multiple retries
+	 * for one command. Same counter as `as_cluster_stats.retry_count`.
+	 */
 	uint64_t retry_count;
 
 	/**
-	 * Process CPU percent and resident set size in bytes, written to the
-	 * learn-metrics log. RSS is the memory the process is using, not its
-	 * virtual address space. Stored as uint64_t because this client is
-	 * 64-bit only and RSS can exceed 4 GB.
+	 * Process CPU percent, written to the learn-metrics log.
+	 * Zero unless operational metrics are enabled.
 	 */
 	uint32_t cpu;
+
+	/**
+	 * Process resident set size in bytes, written to the learn-metrics log.
+	 * This is the memory the process is using. Stored as uint64_t because this
+	 * client is 64-bit only and RSS can exceed 4 GB.
+	 * Zero unless operational metrics are enabled.
+	 */
 	uint64_t mem;
 
+	/**
+	 * Async event-loop gauges. Same series as `as_cluster_stats.event_loops`:
+	 * `process_size` and `queue_size` from `as_event_loop_stats`.
+	 * Empty when async event loops are not in use.
+	 */
 	as_metrics_event_loop_snapshot* event_loops;
+
+	/**
+	 * Number of `event_loops` entries.
+	 * Same value as `as_cluster_stats.event_loops_size`.
+	 */
 	uint32_t event_loop_count;
 
+	/**
+	 * Nodes still in the cluster. Same membership as `as_cluster_stats.nodes`.
+	 * Each `as_node_stats` node is copied into `as_metrics_node_snapshot`:
+	 * the node name, address, and port replace the live `as_node*`,
+	 * `sync` and `async` keep those connection series, and
+	 * `error_count`, `timeout_count`, and `key_busy_count` are split across
+	 * `namespaces` (see `as_metrics_namespace_snapshot`).
+	 */
 	as_metrics_node_snapshot** nodes;
+
+	/**
+	 * Number of `nodes` entries.
+	 * Same value as `as_cluster_stats.nodes_size`.
+	 */
 	uint32_t nodes_count;
 
 	/**
 	 * Final samples for nodes removed since the previous export. Often empty.
-	 * Replaces on_node_close for exporters.
+	 * Replaces on_node_close for exporters. Empty for aerospike_get_metrics_snapshot().
 	 */
 	as_metrics_node_snapshot** nodes_departed;
+
+	/**
+	 * Number of `nodes_departed` entries.
+	 */
 	uint32_t nodes_departed_count;
 
+	/**
+	 * Bucket unit for the latency histograms in this snapshot.
+	 */
 	as_metrics_latency_unit latency_unit;
+
+	/**
+	 * Number of elapsed time range buckets in each latency histogram.
+	 */
 	uint8_t latency_columns;
+
+	/**
+	 * Power of 2 multiple between latency histogram buckets, starting at bucket 3.
+	 */
 	uint8_t latency_shift;
 } as_metrics_snapshot;
 

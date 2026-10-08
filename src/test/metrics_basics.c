@@ -1135,9 +1135,9 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_after(metrics_suite_cleanup);
 
 	suite_add(metrics_policy_defaults);
-	suite_add(metrics_export_interval);
 	suite_add(metrics_snapshot_without_cluster);
 	suite_add(metrics_snapshot_before_enable);
+	suite_add(metrics_export_interval);
 	suite_add(metrics_enable_leaves_operational_off);
 	suite_add(metrics_operational_namespace_latency);
 	suite_add(metrics_latency_unit_microseconds);

@@ -122,45 +122,132 @@ typedef struct as_metrics_latency_snapshot_s {
 
 /**
  * Per-namespace counters and histograms copied into a metrics snapshot.
+ * Present only when operational metrics are enabled.
+ * `as_node_stats.error_count`, `timeout_count`, and `key_busy_count` are the
+ * sums of `errors`, `timeouts`, and `key_busy` across these entries.
  */
 typedef struct as_metrics_namespace_snapshot_s {
+	/**
+	 * Namespace name. Same string as `as_ns_metrics.ns`.
+	 */
 	char* name;
+
+	/**
+	 * Command errors for this namespace since the node was initialized.
+	 * A retryable error can be counted more than once for one command.
+	 * Same counter as `as_ns_metrics.error_count`. Contributes to
+	 * `as_node_stats.error_count`.
+	 */
 	uint64_t errors;
+
+	/**
+	 * Command timeouts for this namespace since the node was initialized.
+	 * A retryable timeout can be counted more than once for one command.
+	 * Same counter as `as_ns_metrics.timeout_count`. Contributes to
+	 * `as_node_stats.timeout_count`.
+	 */
 	uint64_t timeouts;
+
+	/**
+	 * Key busy errors for this namespace since the node was initialized.
+	 * Same counter as `as_ns_metrics.key_busy_count`. Contributes to
+	 * `as_node_stats.key_busy_count`.
+	 */
 	uint64_t key_busy;
+
+	/**
+	 * Bytes received from the server for this namespace.
+	 * Same counter as `as_ns_metrics.bytes_in`.
+	 */
 	uint64_t bytes_in;
+
+	/**
+	 * Bytes sent to the server for this namespace.
+	 * Same counter as `as_ns_metrics.bytes_out`.
+	 */
 	uint64_t bytes_out;
+
+	/**
+	 * Latency histograms for this namespace, one entry per `AS_LATENCY_TYPE_*`.
+	 * Same series as `as_ns_metrics.latency`. Bucket totals are cumulative
+	 * since metrics were enabled.
+	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];
 } as_metrics_namespace_snapshot;
 
 /**
  * Per-node metrics copied into a metrics snapshot.
  * Sync and async pools are both reported. This client keeps separate async pools.
+ *
+ * `as_node_stats` fields land here as follows:
+ *   node           -> name, address, port
+ *   sync           -> sync
+ *   async          -> async
+ *   error_count    -> sum of namespaces[].errors
+ *   timeout_count  -> sum of namespaces[].timeouts
+ *   key_busy_count -> sum of namespaces[].key_busy
+ * `as_node_stats.pipeline` has no snapshot field.
  */
 typedef struct as_metrics_node_snapshot_s {
+	/**
+	 * Node name. Replaces the live `as_node*` in `as_node_stats.node`.
+	 */
 	char* name;
+
+	/**
+	 * Short node address. Replaces the live `as_node*` in `as_node_stats.node`.
+	 */
 	char* address;
+
+	/**
+	 * Node service port. Replaces the live `as_node*` in `as_node_stats.node`.
+	 */
 	uint16_t port;
 
 	/**
-	 * Synchronous connection pool. This is the shared connection series.
+	 * Synchronous connection pool. Same series as `as_node_stats.sync`
+	 * and `as_conn_stats`: `in_use`, `in_pool`, `opened`, `closed`,
+	 * `recovered`, and `aborted`.
 	 */
 	as_metrics_conn_snapshot sync;
 
 	/**
-	 * Asynchronous connection pool. Legacy extension.
+	 * Asynchronous connection pool. Same series as `as_node_stats.async`.
+	 * Legacy extension. This client keeps async pools separate from sync.
 	 */
 	as_metrics_conn_snapshot async;
 
 	/**
-	 * Operational connection failures (CM-8). Not sampler-gated.
+	 * Failed attempts to open a connection. Cumulative and not sampler-gated.
+	 * Operational connection failure counter (CM-8).
 	 * Zero unless operational metrics are enabled.
 	 */
 	uint32_t conn_open_failures;
+
+	/**
+	 * Failed TLS handshakes. Cumulative and not sampler-gated.
+	 * Operational connection failure counter (CM-8).
+	 * Zero unless operational metrics are enabled.
+	 */
 	uint32_t conn_tls_handshake_failures;
+
+	/**
+	 * Failed authentications. Cumulative and not sampler-gated.
+	 * Operational connection failure counter (CM-8).
+	 * Zero unless operational metrics are enabled.
+	 */
 	uint32_t conn_auth_failures;
 
+	/**
+	 * Per-namespace counters and latency histograms.
+	 * Empty unless operational metrics are enabled.
+	 * See `as_metrics_namespace_snapshot`.
+	 */
 	as_metrics_namespace_snapshot* namespaces;
+
+	/**
+	 * Number of `namespaces` entries.
+	 */
 	uint32_t namespace_count;
 } as_metrics_node_snapshot;
 

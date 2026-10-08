@@ -605,11 +605,6 @@ TEST(metrics_snapshot_without_cluster, "on-demand snapshot requires a connected 
 
 TEST(metrics_snapshot_before_enable, "on-demand snapshot works while periodic export is off")
 {
-	if (as->cluster && as->cluster->metrics_enabled) {
-		info("skipping metrics snapshot before enable; metrics are already enabled");
-		return;
-	}
-
 	metrics_disable();
 
 	as_error err;
@@ -1085,6 +1080,13 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while enabled and
 
 SUITE(metrics_basics, "metrics snapshot and exporter tests")
 {
+	// Metrics tests can't run if metrics is already enabled because those tests
+	// enable and disable metrics frequently.
+	if (as->cluster->metrics_enabled) {
+		info("Skip metrics test because metrics has already been enabled (probably by dynamic config)\n");
+		return;
+	}
+
 	suite_before(metrics_suite_cleanup);
 	suite_after(metrics_suite_cleanup);
 

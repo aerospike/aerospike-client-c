@@ -1208,11 +1208,15 @@ as_parse_export_interval(as_yaml* yaml, const char* name, const char* value, as_
 		return false;
 	}
 
-	uint64_t ms = magnitude * scale;
+	if (strlen(value) >= sizeof(policy->export_interval)) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid dynamic configuration metrics.export_interval: %s", value);
+		return false;
+	}
 
-	if (policy->export_interval_ms != ms) {
+	if (strcmp(policy->export_interval, value) != 0) {
 		as_log_info("Set %s.%s = %s", yaml->name, name, value);
-		policy->export_interval_ms = ms;
+		as_strncpy(policy->export_interval, value, sizeof(policy->export_interval));
 	}
 
 	as_field_set(yaml->bitmap, AS_METRICS_EXPORT_INTERVAL);
@@ -1276,31 +1280,6 @@ as_parse_report_size_limit(as_yaml* yaml, const char* name, const char* value, u
 	}
 
 	as_field_set(yaml->bitmap, AS_METRICS_REPORT_SIZE_LIMIT);
-	return true;
-}
-
-static bool
-as_metrics_apply_export_interval(as_config* config, as_error* err)
-{
-	uint64_t ms = config->policies.metrics.export_interval_ms;
-	uint32_t tend_ms = config->tender_interval;
-
-	if (tend_ms == 0) {
-		tend_ms = 1000;
-	}
-
-	uint64_t counts = ms / tend_ms;
-
-	if (ms % tend_ms != 0) {
-		counts++;
-	}
-
-	if (counts == 0 || counts > UINT32_MAX) {
-		as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid dynamic configuration metrics.export_interval");
-		return false;
-	}
-
-	config->policies.metrics.interval = (uint32_t)counts;
 	return true;
 }
 
@@ -1793,11 +1772,6 @@ as_config_file_read(aerospike* as, as_config* config, uint8_t* bitmap, bool init
 			path, yaml.err.message);
 	}
 
-	if (as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL) &&
-			!as_metrics_apply_export_interval(config, err)) {
-		return err->code;
-	}
-
 	return AEROSPIKE_OK;
 }
 
@@ -2116,11 +2090,12 @@ as_cluster_update_metrics(
 	pthread_mutex_lock(&cluster->metrics_lock);
 
 	bool enable_metrics = false;
-	uint32_t prev_interval = trg->interval;
 	uint64_t prev_report_size_limit = trg->report_size_limit;
 	as_metrics_builtin_exporter prev_exporter = trg->builtin_exporter;
 	char prev_report_dir[256];
+	char prev_export_interval[32];
 	as_strncpy(prev_report_dir, trg->report_dir, sizeof(prev_report_dir));
+	as_strncpy(prev_export_interval, trg->export_interval, sizeof(prev_export_interval));
 
 	trg->enable = as_field_is_set(bitmap, AS_METRICS_ENABLE)?
 		src->enable : orig->enable;
@@ -2128,14 +2103,17 @@ as_cluster_update_metrics(
 		src->latency_columns : orig->latency_columns;
 	trg->latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
 		src->latency_shift : orig->latency_shift;
-	trg->interval = as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)?
-		src->interval : orig->interval;
-	trg->export_interval_ms = as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)?
-		src->export_interval_ms : orig->export_interval_ms;
 	trg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT)?
 		src->report_size_limit : orig->report_size_limit;
 	trg->builtin_exporter = as_field_is_set(bitmap, AS_METRICS_EXPORTER)?
 		src->builtin_exporter : orig->builtin_exporter;
+
+	if (as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)) {
+		as_strncpy(trg->export_interval, src->export_interval, sizeof(trg->export_interval));
+	}
+	else {
+		as_strncpy(trg->export_interval, orig->export_interval, sizeof(trg->export_interval));
+	}
 
 	if (as_field_is_set(bitmap, AS_METRICS_REPORT_DIR)) {
 		as_strncpy(trg->report_dir, src->report_dir, sizeof(trg->report_dir));
@@ -2164,13 +2142,12 @@ as_cluster_update_metrics(
 	as_status status = AEROSPIKE_OK;
 
 	if (trg->enable) {
-		bool export_changed = trg->interval != prev_interval ||
+		bool export_changed = strcmp(trg->export_interval, prev_export_interval) != 0 ||
 			trg->report_size_limit != prev_report_size_limit ||
 			trg->builtin_exporter != prev_exporter ||
 			strcmp(trg->report_dir, prev_report_dir) != 0;
 
 		if (!cluster->metrics_enabled || export_changed ||
-				cluster->metrics_interval != trg->interval ||
 				!(cluster->metrics_latency_columns == trg->latency_columns &&
 				  cluster->metrics_latency_shift == trg->latency_shift)) {
 			enable_metrics = true;

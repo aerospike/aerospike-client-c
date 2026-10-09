@@ -462,11 +462,10 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Number of cluster tend iterations between metrics notification events. One tend iteration
-	 * is defined as as_config.tender_interval (default 1 second) plus the time to tend all
-	 * nodes. This is set using as_policy_metrics.
+	 * Milliseconds between metrics exports. Set from as_metrics_policy.export_interval,
+	 * or from interval * as_config.tender_interval when export_interval is empty.
 	 */
-	uint32_t metrics_interval;
+	uint64_t metrics_interval;
 
 	/**
 	 * @private

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -32,6 +32,8 @@
 #include <citrusleaf/cf_clock.h>
 
 #include <errno.h>
+#include <limits.h>
+#include <stdint.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -86,10 +88,11 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 			sizeof(mrg->report_dir));
 		mrg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT)?
 			cfg->report_size_limit : src->report_size_limit;
-		mrg->interval = as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)?
-			cfg->interval : src->interval;
-		mrg->export_interval_ms = as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)?
-			cfg->export_interval_ms : src->export_interval_ms;
+		mrg->interval = src->interval;
+		as_strncpy(mrg->export_interval,
+			as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)?
+				cfg->export_interval : src->export_interval,
+			sizeof(mrg->export_interval));
 		mrg->builtin_exporter = as_field_is_set(bitmap, AS_METRICS_EXPORTER)?
 			cfg->builtin_exporter : src->builtin_exporter;
 		mrg->latency_unit = src->latency_unit;
@@ -157,7 +160,7 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->report_size_limit = 0;
 	as_strncpy(policy->report_dir, ".", sizeof(policy->report_dir));
 	policy->interval = 30;
-	policy->export_interval_ms = 0;
+	policy->export_interval[0] = '\0';
 	policy->builtin_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
 	policy->latency_columns = 7;
 	policy->latency_shift = 1;
@@ -323,7 +326,6 @@ struct as_metrics_runtime_s {
 	pthread_mutex_t lock;
 	pthread_cond_t cond;
 	bool thread_running;
-	bool thread_started;
 };
 
 static as_status as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool force, as_error* err);
@@ -344,7 +346,7 @@ as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cp
 	long long unsigned int starttime;
 	int64_t rss;
 	int matched = fscanf(proc_stat,
-		"%*d %*s %*s %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %llu %*lu %ld",
+		"%*d %*s %*s %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %llu %*u %ld",
 		&utime, &stime, &starttime, &rss);
 
 	fclose(proc_stat);
@@ -985,12 +987,14 @@ as_metrics_thread(void* udata)
 	pthread_mutex_lock(&rt->lock);
 
 	while (rt->thread_running) {
-		uint32_t interval = cluster->metrics_interval;
-		uint32_t tend_ms = cluster->tend_interval;
-		uint32_t interval_ms = interval * tend_ms;
+		uint64_t interval_ms = cluster->metrics_interval;
 
-		if (interval == 0 || tend_ms == 0) {
+		if (interval_ms == 0) {
 			interval_ms = 30000;
+		}
+
+		if (interval_ms > INT_MAX) {
+			interval_ms = INT_MAX;
 		}
 
 		struct timespec delta;
@@ -1054,6 +1058,48 @@ as_metrics_listeners_defined(const as_metrics_listeners* listeners)
 		listeners->node_close_listener && listeners->disable_listener && listeners->udata;
 }
 
+static as_status
+as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms, as_error* err)
+{
+	if (!interval || interval[0] == '\0') {
+		*ms = 0;
+		return AEROSPIKE_OK;
+	}
+
+	errno = 0;
+	char* end = NULL;
+	unsigned long long magnitude = strtoull(interval, &end, 10);
+
+	if (end == interval || errno != 0) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
+	}
+
+	uint64_t scale;
+
+	if (*end == '\0' || strcmp(end, "s") == 0) {
+		scale = 1000;
+	}
+	else if (strcmp(end, "ms") == 0) {
+		scale = 1;
+	}
+	else if (strcmp(end, "m") == 0) {
+		scale = 60000;
+	}
+	else if (strcmp(end, "h") == 0) {
+		scale = 3600000;
+	}
+	else {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
+	}
+
+	if (magnitude == 0 || magnitude > UINT64_MAX / scale) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
+	}
+
+	*ms = magnitude * scale;
+	return AEROSPIKE_OK;
+}
+
 as_status
 as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_policy* policy)
 {
@@ -1061,6 +1107,26 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 
 	if (custom_listener && !as_metrics_listeners_defined(&policy->metrics_listeners)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "All metrics listeners and udata must be defined");
+	}
+
+	uint64_t interval_ms = 0;
+	as_status interval_status = as_metrics_export_interval_to_ms(policy->export_interval, &interval_ms, err);
+
+	if (interval_status != AEROSPIKE_OK) {
+		return interval_status;
+	}
+
+	uint32_t tend_ms = cluster->tend_interval;
+
+	// An empty export_interval leaves interval_ms at 0. Fall back to the
+	// deprecated policy->interval, which counts tend intervals.
+	if (interval_ms == 0) {
+		if (policy->interval == 0 || tend_ms == 0) {
+			interval_ms = 30000;
+		}
+		else {
+			interval_ms = (uint64_t)policy->interval * tend_ms;
+		}
 	}
 
 	if (cluster->metrics_enabled || cluster->metrics_runtime) {
@@ -1072,7 +1138,7 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		}
 	}
 
-	cluster->metrics_interval = policy->interval;
+	cluster->metrics_interval = interval_ms;
 	cluster->metrics_latency_columns = policy->latency_columns;
 	cluster->metrics_latency_shift = policy->latency_shift;
 	cluster->metrics_latency_unit = policy->latency_unit;
@@ -1148,10 +1214,10 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	cluster->metrics_enabled = true;
 
 	if (rt->slots->size > 0 || cluster->metrics_listeners.snapshot_listener) {
-		rt->thread_running = true;
+		pthread_mutex_lock(&rt->lock);
 
 		if (pthread_create(&rt->thread, NULL, as_metrics_thread, rt) != 0) {
-			rt->thread_running = false;
+			pthread_mutex_unlock(&rt->lock);
 			cluster->metrics_enabled = false;
 			as_status status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
 				"Failed to create metrics thread: %s", strerror(errno));
@@ -1166,7 +1232,10 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 			memset(&cluster->metrics_listeners, 0, sizeof(cluster->metrics_listeners));
 			return status;
 		}
-		rt->thread_started = true;
+
+		// Hold the lock until the flag is set so the new thread cannot observe it false and exit.
+		rt->thread_running = true;
+		pthread_mutex_unlock(&rt->lock);
 	}
 
 	return AEROSPIKE_OK;
@@ -1179,7 +1248,7 @@ as_metrics_runtime_disable(as_error* err, as_cluster* cluster)
 	bool was_enabled = cluster->metrics_enabled;
 	cluster->metrics_enabled = false;
 
-	if (rt && rt->thread_started) {
+	if (rt && rt->thread_running) {
 		pthread_mutex_lock(&rt->lock);
 		rt->thread_running = false;
 		pthread_cond_signal(&rt->cond);
@@ -1187,7 +1256,6 @@ as_metrics_runtime_disable(as_error* err, as_cluster* cluster)
 
 		pthread_mutex_unlock(&cluster->metrics_lock);
 		pthread_join(rt->thread, NULL);
-		rt->thread_started = false;
 		pthread_mutex_lock(&cluster->metrics_lock);
 	}
 

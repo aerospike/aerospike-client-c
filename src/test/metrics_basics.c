@@ -18,6 +18,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_atomic.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
@@ -570,6 +571,7 @@ TEST(metrics_policy_defaults, "metrics policy defaults leave operational and usa
 	assert_false(policy.usage_enabled);
 	assert_false(policy.enable);
 	assert_int_eq(policy.interval, 30);
+	assert_string_eq(policy.export_interval, "");
 	assert_int_eq(policy.builtin_exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
 	assert_int_eq(policy.latency_columns, 7);
 	assert_int_eq(policy.latency_shift, 1);
@@ -581,6 +583,49 @@ TEST(metrics_policy_defaults, "metrics policy defaults leave operational and usa
 	assert_null(policy.metrics_listeners.snapshot_listener);
 	assert_null(policy.metrics_listeners.node_close_listener);
 	assert_null(policy.metrics_listeners.disable_listener);
+
+	as_metrics_policy_destroy(&policy);
+}
+
+TEST(metrics_export_interval, "export_interval is a duration and overrides the tend-count interval")
+{
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.interval = 99;
+	strcpy(policy.export_interval, "1500ms");
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq((int64_t)as->cluster->metrics_interval, 1500);
+	metrics_disable();
+
+	strcpy(policy.export_interval, "2s");
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq((int64_t)as->cluster->metrics_interval, 2000);
+	metrics_disable();
+
+	strcpy(policy.export_interval, "30");
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq((int64_t)as->cluster->metrics_interval, 30000);
+	metrics_disable();
+
+	strcpy(policy.export_interval, "1m");
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq((int64_t)as->cluster->metrics_interval, 60000);
+	metrics_disable();
+
+	strcpy(policy.export_interval, "1h");
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq((int64_t)as->cluster->metrics_interval, 3600000);
+	metrics_disable();
+
+	policy.export_interval[0] = '\0';
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq((int64_t)as->cluster->metrics_interval, 99 * (int64_t)as->cluster->tend_interval);
+	metrics_disable();
+
+	strcpy(policy.export_interval, "30x");
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_ERR_PARAM);
 
 	as_metrics_policy_destroy(&policy);
 }
@@ -965,22 +1010,39 @@ TEST(metrics_periodic_export_stops_on_disable, "disable stops the export thread 
 
 TEST(metrics_invalid_report_dir, "file exporter open failure leaves metrics disabled")
 {
-	as_metrics_policy policy;
-	metrics_policy_init_without_default_file_exporter(&policy);
+	char parent[256];
+	assert_true(metrics_create_temp_dir_path(parent, sizeof(parent)));
+
+	char blocking_file[512];
+	char dir[512];
 #if defined(_MSC_VER)
-	as_metrics_policy_set_report_dir(&policy, "C:\\no\\such\\aerospike-metrics-dir");
+	snprintf(blocking_file, sizeof(blocking_file), "%s\\not-a-directory", parent);
+	snprintf(dir, sizeof(dir), "%s\\not-a-directory\\metrics", parent);
 #else
-	as_metrics_policy_set_report_dir(&policy, "/no/such/aerospike-metrics-dir");
+	snprintf(blocking_file, sizeof(blocking_file), "%s/not-a-directory", parent);
+	snprintf(dir, sizeof(dir), "%s/not-a-directory/metrics", parent);
 #endif
 
+	FILE* file = fopen(blocking_file, "w");
+	assert_not_null(file);
+	fclose(file);
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	as_metrics_policy_set_report_dir(&policy, dir);
+
 	as_error err;
-	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_ERR_CLIENT);
+	as_status status = metrics_enable(&policy, &err);
 
 	as_metrics_snapshot* metrics_snapshot = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
-	assert_false(metrics_snapshot->metrics_enabled);
+	as_status snapshot_status = aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot);
+	bool metrics_off = metrics_snapshot && !metrics_snapshot->metrics_enabled;
 	as_metrics_snapshot_destroy(metrics_snapshot);
+	metrics_remove_dir(parent);
 
+	assert_int_eq(status, AEROSPIKE_ERR_CLIENT);
+	assert_int_eq(snapshot_status, AEROSPIKE_OK);
+	assert_true(metrics_off);
 	as_metrics_policy_destroy(&policy);
 }
 
@@ -1125,14 +1187,15 @@ TEST(metrics_dynamic_config_export, "dynamic config sets export interval, export
 		"    report_size_limit: 2000000\n",
 		&policy));
 
-	// 45 seconds and the default 1000ms tend interval is 45 tend intervals.
-	assert_int_eq(policy.interval, 45);
+	// The duration string is kept. Enable converts it to milliseconds.
+	assert_string_eq(policy.export_interval, "45s");
+	assert_int_eq(policy.interval, 30);
 	assert_int_eq(policy.builtin_exporter, AS_METRICS_BUILTIN_EXPORTER_NONE);
 	assert_string_eq(policy.report_dir, "");
 	assert_int_eq((int64_t)policy.report_size_limit, 2000000);
 }
 
-TEST(metrics_dynamic_config_export_interval_rounds_up, "export_interval rounds up to a whole tend interval")
+TEST(metrics_dynamic_config_keeps_export_interval, "dynamic config keeps the export_interval duration string")
 {
 	as_metrics_policy policy;
 	assert_true(metrics_read_dynamic_config(
@@ -1145,8 +1208,9 @@ TEST(metrics_dynamic_config_export_interval_rounds_up, "export_interval rounds u
 		"    report_size_limit: 1000000\n",
 		&policy));
 
-	// 1500ms / 1000ms tend interval rounds up to 2.
-	assert_int_eq(policy.interval, 2);
+	// Enable sleeps this duration directly. It is not rounded to a tend count.
+	assert_string_eq(policy.export_interval, "1500ms");
+	assert_int_eq(policy.interval, 30);
 	assert_int_eq(policy.builtin_exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
 	assert_string_eq(policy.report_dir, "/tmp/metrics-export");
 	assert_int_eq((int64_t)policy.report_size_limit, 1000000);
@@ -1165,6 +1229,7 @@ TEST(metrics_dynamic_config_rejects_unknown_exporter, "metrics.exporter accepts 
 
 	// A rejected file is restored, so the earlier export_interval does not apply.
 	assert_int_eq(policy.interval, 30);
+	assert_string_eq(policy.export_interval, "");
 	assert_int_eq(policy.builtin_exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
 	assert_string_eq(policy.report_dir, ".");
 	assert_int_eq((int64_t)policy.report_size_limit, 0);
@@ -1176,12 +1241,20 @@ TEST(metrics_dynamic_config_rejects_unknown_exporter, "metrics.exporter accepts 
 
 SUITE(metrics_basics, "metrics snapshot and exporter tests")
 {
+	// Metrics tests can't run if metrics is already enabled because those tests
+	// enable and disable metrics frequently.
+	if (as->cluster->metrics_enabled) {
+		info("Skip metrics test because metrics has already been enabled (probably by dynamic config)\n");
+		return;
+	}
+
 	suite_before(metrics_suite_cleanup);
 	suite_after(metrics_suite_cleanup);
 
 	suite_add(metrics_policy_defaults);
 	suite_add(metrics_snapshot_without_cluster);
 	suite_add(metrics_snapshot_before_enable);
+	suite_add(metrics_export_interval);
 	suite_add(metrics_enable_leaves_operational_off);
 	suite_add(metrics_operational_namespace_latency);
 	suite_add(metrics_latency_unit_microseconds);
@@ -1198,6 +1271,6 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_deprecated_listeners);
 	suite_add(metrics_command_count_is_cumulative);
 	suite_add(metrics_dynamic_config_export);
-	suite_add(metrics_dynamic_config_export_interval_rounds_up);
+	suite_add(metrics_dynamic_config_keeps_export_interval);
 	suite_add(metrics_dynamic_config_rejects_unknown_exporter);
 }

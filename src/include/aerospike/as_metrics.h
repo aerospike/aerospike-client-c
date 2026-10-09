@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -512,25 +512,26 @@ typedef struct as_metrics_policy_s {
 	uint64_t report_size_limit;
 
 	/**
+	 * @deprecated
 	 * How often the metrics thread exports, measured in cluster tend intervals.
-	 * The thread sleeps interval * as_config.tender_interval milliseconds
-	 * (default 30 * 1000). Export does not run on the tend thread.
-	 *
-	 * Dynamic configuration metrics.export_interval is a duration. A bare number
-	 * is seconds. Suffixes ms, s, m, and h are accepted. The duration is rounded
-	 * up to a whole number of tend intervals.
+	 * The thread sleeps interval * as_config.tender_interval milliseconds.
+	 * Prefer export_interval. Used only when export_interval is empty.
 	 *
 	 * Default: 30
 	 */
 	uint32_t interval;
 
 	/**
-	 * @private
-	 * Parsed dynamic configuration metrics.export_interval in milliseconds.
-	 * 0 when that key is absent. Converted to interval after the dynamic
-	 * configuration file is read.
+	 * How often the metrics thread exports, as a magnitude and unit in one string.
+	 * Examples: "30s", "1500ms", "30m", "1h". A bare number is seconds.
+	 * The metrics thread sleeps that duration. It does not run on the tend thread.
+	 *
+	 * An empty string uses the deprecated interval field. When set, this overrides
+	 * interval. Dynamic configuration metrics.export_interval is copied here.
+	 *
+	 * Default: ""
 	 */
-	uint64_t export_interval_ms;
+	char export_interval[32];
 
 	/**
 	 * Dynamic configuration metrics.exporter. file installs the learn-metrics log

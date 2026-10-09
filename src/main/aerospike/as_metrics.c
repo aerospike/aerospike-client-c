@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_metrics.h>
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_stats.h>
 #include <aerospike/as_address.h>

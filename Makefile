@@ -189,7 +189,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_clock.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_ll.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_queue.h
 
-EXCLUDE-HEADERS = 
+EXCLUDE-HEADERS = $(SOURCE_INCL)/aerospike/as_metrics_internal.h
 
 AEROSPIKE-HEADERS := $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/*.h))
 

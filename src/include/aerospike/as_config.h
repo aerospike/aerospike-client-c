@@ -865,7 +865,7 @@ typedef struct as_config_s {
 	 * Dynamic configuration metrics.exporter. Application code does not set this.
 	 * It is used only when the dynamic configuration bitmap marks that key as set.
 	 */
-	as_metrics_builtin_exporter metrics_exporter;
+	uint8_t metrics_exporter;
 } as_config;
 
 //---------------------------------

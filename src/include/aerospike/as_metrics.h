@@ -451,33 +451,6 @@ typedef struct as_metrics_exporter_s {
 typedef struct as_metrics_cpu_state_s as_metrics_cpu_state;
 
 /**
- * Dynamic configuration metrics.exporter. This is not an application policy field.
- * file uses the learn-metrics writer. none collects metrics and does not call
- * export. custom calls every exporter added with as_metrics_policy_add_exporter().
- * When the key is absent, added exporters are called, and the file writer is used
- * when report_dir is non-empty and no exporters or deprecated listeners are set.
- */
-typedef enum as_metrics_builtin_exporter_e {
-	/**
-	 * Use the learn-metrics file writer.
-	 * An empty dynamic configuration metrics.report_dir does not install the
-	 * writer, even when the application report_dir is set. When that key is
-	 * absent, an empty application report_dir uses ".".
-	 */
-	AS_METRICS_BUILTIN_EXPORTER_FILE = 0,
-
-	/**
-	 * Collect metrics and do not call export.
-	 */
-	AS_METRICS_BUILTIN_EXPORTER_NONE = 1,
-
-	/**
-	 * Call export on exporters added with as_metrics_policy_add_exporter().
-	 */
-	AS_METRICS_BUILTIN_EXPORTER_CUSTOM = 2
-} as_metrics_builtin_exporter;
-
-/**
  * Client periodic metrics configuration.
  */
 typedef struct as_metrics_policy_s {

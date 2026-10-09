@@ -25,6 +25,7 @@
 #include <aerospike/as_event.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_metrics.h>
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>

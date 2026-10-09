@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_config_file.h>
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/aerospike.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log_macros.h>

@@ -1267,13 +1267,22 @@ metrics_read_dynamic_client_config_policy(
 
 	// Copy the policy by value. report_dir and export_interval are arrays in the
 	// struct, so this does not leave policy pointing at client. Clear the
-	// pointer fields before aerospike_destroy() frees them.
+	// pointer fields before the client config is freed.
 	*policy = client.config.policies.metrics;
 	policy->labels = NULL;
 	policy->exporters = NULL;
 	*exporter = client.config.policies.metrics.metrics_exporter;
 
-	aerospike_destroy(&client);
+	// This client is never connected. With event loops running, aerospike_destroy()
+	// does not free it. So, free these allocations directly.
+	if (as_event_loop_size > 0 && !as_event_single_thread) {
+		as_config_destroy(&client.config);
+		cf_free(client.config_orig);
+		cf_free(client.config_bitmap);
+	}
+	else {
+		aerospike_destroy(&client);
+	}
 	metrics_remove_dir(dir);
 	return true;
 }

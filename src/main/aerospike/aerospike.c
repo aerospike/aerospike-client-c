@@ -207,7 +207,7 @@ aerospike_destroy_internal(aerospike* as)
 void
 aerospike_destroy(aerospike* as)
 {
-	if (as->cluster && as_event_loop_size > 0 && !as_event_single_thread) {
+	if (as_event_loop_size > 0 && !as_event_single_thread) {
 		// A connected client may still have pending async commands.
 		// Cluster close calls aerospike_destroy_internal() when they complete.
 		return;

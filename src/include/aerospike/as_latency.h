@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -38,6 +38,14 @@ typedef uint8_t as_latency_type;
 #define AS_LATENCY_TYPE_MAX 5
 
 /**
+ * Histogram bucket unit. Default is milliseconds, matching learn-metrics.
+ */
+typedef enum as_metrics_latency_unit_e {
+	AS_METRICS_LATENCY_MILLISECONDS = 0,
+	AS_METRICS_LATENCY_MICROSECONDS = 1
+} as_metrics_latency_unit;
+
+/**
  * Latency histogram for a command group.
  * Latency histogram counts are cumulative and not reset on each metrics snapshot interval
  */
@@ -45,6 +53,7 @@ typedef struct as_latency_s {
 	uint32_t ref_count;
 	uint8_t shift;
 	uint8_t size;
+	as_metrics_latency_unit unit;
 	uint64_t buckets[];
 } as_latency;
 

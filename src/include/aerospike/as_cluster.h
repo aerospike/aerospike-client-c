@@ -421,6 +421,24 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Command-path operational metrics. Off unless the metrics policy enables them.
+	 */
+	bool metrics_operational_enabled;
+
+	/**
+	 * @private
+	 * Client-wide usage counters. Off unless the metrics policy sets usage_enabled.
+	 */
+	bool metrics_usage_enabled;
+
+	/**
+	 * @private
+	 * Histogram bucket unit. This is set using as_metrics_policy.
+	 */
+	as_metrics_latency_unit metrics_latency_unit;
+
+	/**
+	 * @private
 	 * Number of elapsed time range buckets in latency histograms. This is set using as_policy_metrics.
 	 */
 	uint8_t metrics_latency_columns;
@@ -444,23 +462,23 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Number of cluster tend iterations between metrics notification events. One tend iteration
-	 * is defined as as_config.tender_interval (default 1 second) plus the time to tend all
-	 * nodes. This is set using as_policy_metrics.
+	 * Milliseconds between metrics exports. Set from as_metrics_policy.export_interval,
+	 * or from interval * as_config.tender_interval when export_interval is empty.
 	 */
-	uint32_t metrics_interval;
+	uint64_t metrics_interval;
 
 	/**
 	 * @private
-	 * Listeners that handles metrics notification events. The default listener implementation
-	 * writes the metrics snapshot to a file which will later be read and forwarded to
-	 * OpenTelemetry by a separate offline application.
-	 *
-	 * The listener could be overridden to send the metrics snapshot directly to OpenTelemetry.
-	 * 
+	 * Deprecated four-callback metrics listener. Exporters are preferred.
 	 * This is set using as_policy_metrics.
 	 */
 	as_metrics_listeners metrics_listeners;
+
+	/**
+	 * @private
+	 * Metrics export runtime (thread, exporters, departed nodes). NULL when metrics are off.
+	 */
+	struct as_metrics_runtime_s* metrics_runtime;
 
 	/**
 	 * @private

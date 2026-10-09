@@ -962,6 +962,8 @@ as_event_total_timeout(as_event_command* cmd)
 bool
 as_event_socket_retry(as_event_command* cmd)
 {
+	as_event_add_conn_failure(cmd);
+
 	if (cmd->metrics) {
 		as_node_add_bytes_out(cmd->metrics, cmd->bytes_out);
 		as_node_add_bytes_in(cmd->metrics, cmd->bytes_in);
@@ -1404,8 +1406,39 @@ as_event_notify_error(as_event_command* cmd, as_error* err)
 }
 
 void
+as_event_add_conn_failure(as_event_command* cmd)
+{
+	as_node* node = cmd->node;
+
+	if (!node) {
+		return;
+	}
+
+	switch (cmd->state) {
+	case AS_ASYNC_STATE_CONNECT:
+		as_node_add_conn_open_failure(node);
+		break;
+
+	case AS_ASYNC_STATE_TLS_CONNECT:
+		as_node_add_conn_tls_handshake_failure(node);
+		break;
+
+	case AS_ASYNC_STATE_AUTH_WRITE:
+	case AS_ASYNC_STATE_AUTH_READ_HEADER:
+	case AS_ASYNC_STATE_AUTH_READ_BODY:
+		as_node_add_conn_auth_failure(node);
+		break;
+
+	default:
+		break;
+	}
+}
+
+void
 as_event_parse_error(as_event_command* cmd, as_error* err)
 {
+	as_event_add_conn_failure(cmd);
+
 	if (cmd->pipe_listener) {
 		as_pipe_socket_error(cmd, err, false);
 		return;

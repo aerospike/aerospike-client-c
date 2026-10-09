@@ -372,6 +372,23 @@ typedef struct as_node_s {
 	uint32_t sync_conns_aborted;
 
 	/**
+	 * TCP connect failures. Operational metric connection.open.failure.
+	 * Not recorded unless operational metrics are enabled.
+	 */
+	uint32_t conn_open_failures;
+
+	/**
+	 * TLS handshake failures after TCP connect succeeded.
+	 * Operational metric connection.tls.handshake.failure.
+	 */
+	uint32_t conn_tls_handshake_failures;
+
+	/**
+	 * Authentication or login failures. Operational metric connection.auth.failure.
+	 */
+	uint32_t conn_auth_failures;
+
+	/**
 	 * Error count for this node's error_rate_window.
 	 */
 	uint32_t error_rate;
@@ -719,6 +736,27 @@ as_node_incr_sync_conns_aborted(as_node* node)
 {
 	as_incr_uint32(&node->sync_conns_aborted);
 }
+
+/**
+ * @private
+ * Record connection.open.failure when operational metrics are enabled.
+ */
+void
+as_node_add_conn_open_failure(as_node* node);
+
+/**
+ * @private
+ * Record connection.tls.handshake.failure when operational metrics are enabled.
+ */
+void
+as_node_add_conn_tls_handshake_failure(as_node* node);
+
+/**
+ * @private
+ * Record connection.auth.failure when operational metrics are enabled.
+ */
+void
+as_node_add_conn_auth_failure(as_node* node);
 
 /**
  * @private

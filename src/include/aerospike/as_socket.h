@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -116,6 +116,12 @@ typedef struct as_socket_s {
 	as_tls_context* tls;
 	const char* tls_name;
 	struct ssl_st* ssl;
+
+	/**
+	 * Set when as_socket_start_connect() fails in the TLS handshake
+	 * after the TCP connection succeeded.
+	 */
+	bool tls_handshake_failed;
 } as_socket;
 
 /**

@@ -164,6 +164,7 @@ as_socket_wrap(
 	sock->family = family;
 #endif
 	sock->last_used = 0;
+	sock->tls_handshake_failed = false;
 
 	if (tls) {
 		if (as_tls_wrap(tls, sock, tls_name) < 0) {
@@ -183,6 +184,7 @@ as_socket_wrap(
 bool
 as_socket_start_connect(as_socket* sock, struct sockaddr* addr, uint64_t deadline_ms)
 {
+	sock->tls_handshake_failed = false;
 	socklen_t size = as_address_size(addr);
 
 	if (!as_socket_connect_fd(sock->fd, addr, size)) {
@@ -191,6 +193,7 @@ as_socket_start_connect(as_socket* sock, struct sockaddr* addr, uint64_t deadlin
 
 	if (sock->tls) {
 		if (as_tls_connect(sock, deadline_ms)) {
+			sock->tls_handshake_failed = true;
 			return false;
 		}
 	}

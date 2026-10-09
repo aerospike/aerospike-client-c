@@ -863,12 +863,13 @@ as_event_watcher_init(as_event_command* cmd, as_socket* sock)
 }
 
 static int
-as_event_try_connections(as_socket_fd fd, as_address* addresses, socklen_t size, int i, int max)
+as_event_try_connections(as_node* node, as_socket_fd fd, as_address* addresses, socklen_t size, int i, int max)
 {
 	while (i < max) {
 		if (as_socket_connect_fd(fd, (struct sockaddr*)&addresses[i].addr, size)) {
 			return i;
 		}
+		as_node_add_conn_open_failure(node);
 		i++;
 	}
 	return -1;
@@ -882,16 +883,19 @@ as_event_try_family_connections(as_event_command* cmd, int family, int begin, in
 	int rv = as_socket_create_fd(family, &fd);
 
 	if (rv < 0) {
+		as_node_add_conn_open_failure(cmd->node);
 		return rv;
 	}
 
 	if (cmd->pipe_listener && ! as_pipe_modify_fd(fd)) {
+		as_node_add_conn_open_failure(cmd->node);
 		return -1000;
 	}
 
 	as_tls_context* ctx = as_socket_get_tls_context(cmd->cluster->tls_ctx);
 
 	if (! as_socket_wrap(sock, family, fd, ctx, cmd->node->tls_name)) {
+		as_node_add_conn_open_failure(cmd->node);
 		return -1001;
 	}
 
@@ -904,17 +908,18 @@ as_event_try_family_connections(as_event_command* cmd, int family, int begin, in
 		if (as_socket_connect_fd(fd, (struct sockaddr*)&primary->addr, size)) {
 			return index;
 		}
+		as_node_add_conn_open_failure(cmd->node);
 		
 		// Start from current index + 1 to end.
-		rv = as_event_try_connections(fd, addresses, size, index + 1, end);
+		rv = as_event_try_connections(cmd->node, fd, addresses, size, index + 1, end);
 		
 		if (rv < 0) {
 			// Start from begin to index.
-			rv = as_event_try_connections(fd, addresses, size, begin, index);
+			rv = as_event_try_connections(cmd->node, fd, addresses, size, begin, index);
 		}
 	}
 	else {
-		rv = as_event_try_connections(fd, addresses, size, begin, end);
+		rv = as_event_try_connections(cmd->node, fd, addresses, size, begin, end);
 	}
 	
 	if (rv < 0) {

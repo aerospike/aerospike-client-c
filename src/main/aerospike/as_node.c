@@ -43,6 +43,7 @@
 
 // Number of nanoseconds per millisecond
 #define NS_TO_MS 1000000
+#define NS_TO_US 1000
 
 //---------------------------------
 // Globals
@@ -212,6 +213,9 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->sync_conns_closed = 0;
 	node->sync_conns_recovered = 0;
 	node->sync_conns_aborted = 0;
+	node->conn_open_failures = 0;
+	node->conn_tls_handshake_failures = 0;
+	node->conn_auth_failures = 0;
 	node->conn_iter = 0;
 
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;
@@ -415,13 +419,49 @@ as_node_set_hostname(as_node* node, const char* hostname)
 	node->hostname = cf_strndup(hostname, AS_HOSTNAME_SIZE);
 }
 
+void
+as_node_add_conn_open_failure(as_node* node)
+{
+	if (node->cluster->metrics_operational_enabled) {
+		as_incr_uint32(&node->conn_open_failures);
+	}
+}
+
+void
+as_node_add_conn_tls_handshake_failure(as_node* node)
+{
+	if (node->cluster->metrics_operational_enabled) {
+		as_incr_uint32(&node->conn_tls_handshake_failures);
+	}
+}
+
+void
+as_node_add_conn_auth_failure(as_node* node)
+{
+	if (node->cluster->metrics_operational_enabled) {
+		as_incr_uint32(&node->conn_auth_failures);
+	}
+}
+
+static void
+as_node_record_connect_failure(as_node* node, as_socket* sock)
+{
+	if (sock->tls_handshake_failed) {
+		as_node_add_conn_tls_handshake_failure(node);
+	}
+	else {
+		as_node_add_conn_open_failure(node);
+	}
+}
+
 static int
-as_node_try_connections(as_socket* sock, as_address* addresses, int i, int max, uint64_t deadline_ms)
+as_node_try_connections(as_node* node, as_socket* sock, as_address* addresses, int i, int max, uint64_t deadline_ms)
 {
 	while (i < max) {
 		if (as_socket_start_connect(sock, (struct sockaddr*)&addresses[i].addr, deadline_ms)) {
 			return i;
 		}
+		as_node_record_connect_failure(node, sock);
 		i++;
 	}
 	return -1;
@@ -435,6 +475,7 @@ as_node_try_family_connections(as_node* node, int family, int begin, int end, in
 	int rv = as_socket_create(sock, family, ctx, node->tls_name);
 	
 	if (rv < 0) {
+		as_node_add_conn_open_failure(node);
 		return rv;
 	}
 	
@@ -446,17 +487,18 @@ as_node_try_family_connections(as_node* node, int family, int begin, int end, in
 		if (as_socket_start_connect(sock, (struct sockaddr*)&primary->addr, deadline_ms)) {
 			return index;
 		}
+		as_node_record_connect_failure(node, sock);
 		
 		// Start from current index + 1 to end.
-		rv = as_node_try_connections(sock, addresses, index + 1, end, deadline_ms);
+		rv = as_node_try_connections(node, sock, addresses, index + 1, end, deadline_ms);
 
 		if (rv < 0) {
 			// Start from begin to index.
-			rv = as_node_try_connections(sock, addresses, begin, index, deadline_ms);
+			rv = as_node_try_connections(node, sock, addresses, begin, index, deadline_ms);
 		}
 	}
 	else {
-		rv = as_node_try_connections(sock, addresses, begin, end, deadline_ms);
+		rv = as_node_try_connections(node, sock, addresses, begin, end, deadline_ms);
 	}
 	
 	if (rv < 0) {
@@ -547,6 +589,7 @@ as_node_create_connection(
 			as_session_release(session);
 
 			if (status) {
+				as_node_add_conn_auth_failure(node);
 				as_node_signal_login(node);
 
 				if (!(ctx && ctx->in_recovery)) {
@@ -801,6 +844,7 @@ as_node_login(as_error* err, as_node* node, as_socket* sock)
 	as_status status = as_cluster_login(cluster, err, sock, deadline_ms, &node_info);
 
 	if (status) {
+		as_node_add_conn_auth_failure(node);
 		as_store_uint8(&node->perform_login, 1);
 		as_error_append(err, as_node_get_address_string(node));
 		return status;
@@ -919,8 +963,8 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 				status = as_authenticate(cluster, err, &sock, node, node->session, 0, deadline_ms, NULL);
 
 				if (status != AEROSPIKE_OK) {
-					// Authentication failed.
-					// Must login again to get new session token.
+					// Authentication failed. Count it, then login again for a new session token.
+					as_node_add_conn_auth_failure(node);
 					status = as_node_login(err, node, &sock);
 
 					if (status != AEROSPIKE_OK) {
@@ -1492,7 +1536,8 @@ as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
 			as_latency* latency = metrics->latency[j];
 
-			if (policy->latency_columns == latency->size && policy->latency_shift == latency->shift) {
+			if (policy->latency_columns == latency->size && policy->latency_shift == latency->shift &&
+				policy->latency_unit == latency->unit) {
 				// Initialize existing latency histogram.
 				for (uint8_t k = 0; k < latency->size; k++) {
 					as_store_uint64(&latency->buckets[k], 0);
@@ -1505,6 +1550,7 @@ as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 				latency->ref_count = 1;
 				latency->shift = policy->latency_shift;
 				latency->size = policy->latency_columns;
+				latency->unit = policy->latency_unit;
 
 				as_store_ptr_rls((void**)&metrics->latency[j], latency);
 
@@ -1565,14 +1611,17 @@ as_node_append_metrics(as_node* node, const char* ns)
 
 		uint8_t latency_columns;
 		uint8_t latency_shift;
+		as_metrics_latency_unit latency_unit;
 
 		if (cluster->metrics_enabled) {
 			latency_columns = cluster->metrics_latency_columns;
 			latency_shift = cluster->metrics_latency_shift;
+			latency_unit = cluster->metrics_latency_unit;
 		}
 		else {
 			latency_columns = 1;
 			latency_shift = 1;
+			latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
 		}
 
 		for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
@@ -1580,6 +1629,7 @@ as_node_append_metrics(as_node* node, const char* ns)
 			latency->ref_count = 1;
 			latency->shift = latency_shift;
 			latency->size = latency_columns;
+			latency->unit = latency_unit;
 			metrics->latency[i] = latency;
 		}
 		node->metrics[node->metrics_size++] = metrics;
@@ -1626,15 +1676,15 @@ as_node_add_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64
 		return;
 	}
 
-	// Convert nanoseconds to milliseconds.
-	uint64_t elapsed = elapsed_nanos / NS_TO_MS;
+	as_latency* latency = as_latency_reserve(metrics->latency[latency_type]);
+	uint64_t scale = latency->unit == AS_METRICS_LATENCY_MICROSECONDS ? NS_TO_US : NS_TO_MS;
 
-	// Round up elapsed to nearest millisecond.
-	if ((elapsed_nanos - (elapsed * NS_TO_MS)) > 0) {
+	// Convert nanoseconds to the histogram unit and round up.
+	uint64_t elapsed = elapsed_nanos / scale;
+
+	if ((elapsed_nanos - (elapsed * scale)) > 0) {
 		elapsed++;
 	}
-
-	as_latency* latency = as_latency_reserve(metrics->latency[latency_type]);
 
 	uint8_t index = as_latency_get_index(latency, elapsed);
 	as_incr_uint64(&latency->buckets[index]);

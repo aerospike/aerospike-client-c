@@ -298,6 +298,35 @@ as_parse_uint8(as_yaml* yaml, const char* name, const char* value, uint8_t* out,
 }
 
 static inline void
+as_assign_uint64(
+	const char* section, const char* name, const char* value, uint64_t src, uint64_t* trg
+	)
+{
+	if (*trg != src) {
+		as_log_info("Set %s.%s = %s", section, name, value);
+		*trg = src;
+	}
+}
+
+static bool
+as_parse_uint64(as_yaml* yaml, const char* name, const char* value, uint64_t* out, uint32_t field)
+{
+	char* end = NULL;
+	errno = 0;
+	unsigned long long parsed = strtoull(value, &end, 10);
+
+	if (end == value || *end != '\0' || errno != 0) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid dynamic configuration %s.%s: %s", yaml->name, name, value);
+		return false;
+	}
+
+	as_assign_uint64(yaml->name, name, value, (uint64_t)parsed, out);
+	as_field_set(yaml->bitmap, field);
+	return true;
+}
+
+static inline void
 as_assign_bool(
 	const char* section, const char* name, const char* value, bool src, bool* trg
 	)
@@ -1238,28 +1267,6 @@ as_parse_report_dir(as_yaml* yaml, const char* name, const char* value, as_metri
 }
 
 static bool
-as_parse_report_size_limit(as_yaml* yaml, const char* name, const char* value, uint64_t* out)
-{
-	char* end = NULL;
-	errno = 0;
-	unsigned long long parsed = strtoull(value, &end, 10);
-
-	if (end == value || *end != '\0' || errno != 0) {
-		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
-			"Invalid dynamic configuration metrics.report_size_limit: %s", value);
-		return false;
-	}
-
-	if (*out != (uint64_t)parsed) {
-		as_log_info("Set %s.%s = %s", yaml->name, name, value);
-		*out = (uint64_t)parsed;
-	}
-
-	as_field_set(yaml->bitmap, AS_METRICS_REPORT_SIZE_LIMIT);
-	return true;
-}
-
-static bool
 as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	as_metrics_policy* policy = &base->metrics;
@@ -1282,7 +1289,7 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 	}
 
 	if (strcmp(name, "report_size_limit") == 0) {
-		return as_parse_report_size_limit(yaml, name, value, &policy->report_size_limit);
+		return as_parse_uint64(yaml, name, value, &policy->report_size_limit, AS_METRICS_REPORT_SIZE_LIMIT);
 	}
 
 	if (strcmp(name, "latency_columns") == 0) {

@@ -18,7 +18,7 @@
 
 /**
  * @private
- * Dynamic configuration metrics.exporter. Stored in as_config.metrics_exporter.
+ * Dynamic configuration metrics.exporter. Stored in as_metrics_policy.metrics_exporter.
  * Not part of the application policy.
  */
 typedef enum as_metrics_builtin_exporter_e {

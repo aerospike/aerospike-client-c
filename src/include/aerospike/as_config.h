@@ -859,13 +859,6 @@ typedef struct as_config_s {
 	 * Default: 30
 	 */
 	uint32_t shm_takeover_threshold_sec;
-
-	/**
-	 * @private
-	 * Dynamic configuration metrics.exporter. Application code does not set this.
-	 * It is used only when the dynamic configuration bitmap marks that key as set.
-	 */
-	uint8_t metrics_exporter;
 } as_config;
 
 //---------------------------------

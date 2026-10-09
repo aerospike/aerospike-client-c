@@ -15,7 +15,6 @@
  * the License.
  */
 #include <aerospike/as_config.h>
-#include <aerospike/as_metrics_internal.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_policy.h>
@@ -72,7 +71,6 @@ as_config_init(as_config* c)
 	c->shm_max_nodes = 16;
 	c->shm_max_namespaces = 8;
 	c->shm_takeover_threshold_sec = 30;
-	c->metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
 	return c;
 }
 

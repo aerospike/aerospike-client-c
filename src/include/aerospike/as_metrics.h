@@ -576,6 +576,13 @@ typedef struct as_metrics_policy_s {
 	bool enable;
 
 	/**
+	 * @private
+	 * Dynamic configuration metrics.exporter. Application code does not set this.
+	 * It is used only when the dynamic configuration bitmap marks that key as set.
+	 */
+	uint8_t metrics_exporter;
+
+	/**
 	 * Exporters appended with as_metrics_policy_add_exporter(). The application
 	 * owns these exporters.
 	 *

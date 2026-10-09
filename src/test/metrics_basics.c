@@ -929,9 +929,9 @@ TEST(metrics_exporter_none_skips_added_exporters, "none and file do not call add
 	as_field_set(bitmap, AS_METRICS_EXPORTER);
 
 	uint8_t* saved_bitmap = as->config_bitmap;
-	as_metrics_builtin_exporter saved_exporter = as->config.metrics_exporter;
+	as_metrics_builtin_exporter saved_exporter = as->config.policies.metrics.metrics_exporter;
 	as->config_bitmap = bitmap;
-	as->config.metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_NONE;
+	as->config.policies.metrics.metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_NONE;
 
 	as_error err;
 	as_status none_status = metrics_enable(&policy, &err);
@@ -959,7 +959,7 @@ TEST(metrics_exporter_none_skips_added_exporters, "none and file do not call add
 		as_metrics_policy_set_report_dir(&policy, dir);
 	}
 
-	as->config.metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
+	as->config.policies.metrics.metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
 	as_status file_status = metrics_enable(&policy, &err);
 	as_status file_disable = aerospike_disable_metrics(as, &err);
 	uint32_t file_calls = as_load_uint32(&exporter->calls);
@@ -970,7 +970,7 @@ TEST(metrics_exporter_none_skips_added_exporters, "none and file do not call add
 	}
 
 	as->config_bitmap = saved_bitmap;
-	as->config.metrics_exporter = saved_exporter;
+	as->config.policies.metrics.metrics_exporter = saved_exporter;
 	as_metrics_policy_destroy(&policy);
 	cf_free(exporter);
 
@@ -1250,7 +1250,7 @@ metrics_read_dynamic_config(
 	*policy = client.config.policies.metrics;
 	policy->labels = NULL;
 	policy->exporters = NULL;
-	*exporter = client.config.metrics_exporter;
+	*exporter = client.config.policies.metrics.metrics_exporter;
 
 	aerospike_destroy(&client);
 	metrics_remove_dir(dir);

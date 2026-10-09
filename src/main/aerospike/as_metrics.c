@@ -99,7 +99,7 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 		// only when metrics.report_dir is absent. An explicit "" stays empty.
 		if (as_field_is_set(bitmap, AS_METRICS_EXPORTER) &&
 				!as_field_is_set(bitmap, AS_METRICS_REPORT_DIR) &&
-				config->metrics_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+				cfg->metrics_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
 				mrg->report_dir[0] == '\0') {
 			as_strncpy(mrg->report_dir, ".", sizeof(mrg->report_dir));
 		}
@@ -181,6 +181,7 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->metrics_listeners.disable_listener = NULL;
 	policy->metrics_listeners.udata = NULL;
 	policy->enable = false;
+	policy->metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
 	policy->exporters = NULL;
 }
 
@@ -1170,7 +1171,7 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		as_field_is_set(owner->config_bitmap, AS_METRICS_EXPORTER);
 
 	if (dynamic_exporter) {
-		mode = owner->config.metrics_exporter;
+		mode = owner->config.policies.metrics.metrics_exporter;
 	}
 	else if (policy->exporters && policy->exporters->size > 0) {
 		mode = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;

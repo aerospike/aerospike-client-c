@@ -3433,6 +3433,15 @@ as_batch_keys_execute_seq(
 
 #define batch_results_free(_results, _n_keys) if (_n_keys > AS_BATCH_MAX_STACK_ITEMS) {cf_free(_results);}
 
+static bool
+as_batch_records_count_api(const as_batch_records* records)
+{
+	as_batch_base_record* rec = as_vector_get((as_vector*)&records->list, 0);
+
+	// Transaction verify and roll are internal commands issued by commit and abort.
+	return rec->type != AS_BATCH_TXN_VERIFY && rec->type != AS_BATCH_TXN_ROLL;
+}
+
 static as_status
 as_batch_keys_execute(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
@@ -3452,7 +3461,9 @@ as_batch_keys_execute(
 		}
 		return AEROSPIKE_OK;
 	}
-	
+
+	as_metrics_add_api_blocking(as);
+
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
 	as_nodes_release(nodes);
@@ -3964,6 +3975,15 @@ as_batch_records_execute(
 		return AEROSPIKE_OK;
 	}
 
+	if (as_batch_records_count_api(records)) {
+		if (async_executor) {
+			as_metrics_add_api_deferred(as);
+		}
+		else {
+			as_metrics_add_api_blocking(as);
+		}
+	}
+
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
 	as_nodes_release(nodes);
@@ -4078,7 +4098,7 @@ as_batch_records_execute_async(
 		listener(0, records, udata, event_loop);
 		return AEROSPIKE_OK;
 	}
-	
+
 	// Batch will be split up into a command for each node.
 	// Allocate batch data shared by each command.
 	as_async_batch_executor* be = cf_malloc(sizeof(as_async_batch_executor));

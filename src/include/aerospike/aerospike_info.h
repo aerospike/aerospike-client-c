@@ -25,6 +25,7 @@
  */
 
 #include <aerospike/aerospike.h>
+#include <aerospike/as_metrics.h>
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_info.h>
@@ -128,6 +129,7 @@ aerospike_info_node_async(
 	as_async_info_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
+	as_metrics_add_api_deferred(as);
 	return as_info_command_node_async(as, err, policy, node, req, listener, udata, event_loop);
 }
 

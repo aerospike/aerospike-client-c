@@ -229,6 +229,8 @@ as_verify_and_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status
 as_status
 aerospike_commit(aerospike* as, as_error* err, as_txn* txn, as_commit_status* commit_status)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_error_reset(err);
 
 	switch (txn->state) {
@@ -303,6 +305,8 @@ as_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abort_statu
 as_status
 aerospike_abort(aerospike* as, as_error* err, as_txn* txn, as_abort_status* abort_status)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_error_reset(err);
 
 	switch (txn->state) {
@@ -650,6 +654,8 @@ aerospike_commit_async(
 	as_event_loop* event_loop
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_error_reset(err);
 	event_loop = as_event_assign(event_loop);
 
@@ -779,6 +785,8 @@ aerospike_abort_async(
 	as_event_loop* event_loop
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_error_reset(err);
 	event_loop = as_event_assign(event_loop);
 

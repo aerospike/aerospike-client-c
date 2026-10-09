@@ -842,6 +842,8 @@ as_scan_generic(
 		return status;
 	}
 
+	as_metrics_add_api_background(cluster->as);
+
 	uint64_t cluster_key = 0;
 	uint64_t task_id = as_task_id_resolve(task_id_ptr);
 
@@ -949,6 +951,7 @@ as_scan_partitions(
 	as_partition_tracker* pt, aerospike_scan_foreach_callback callback, void* udata)
 {
 	as_cluster_add_command_count(cluster);
+	as_metrics_add_api_blocking(cluster->as);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -1265,6 +1268,7 @@ as_scan_partition_async(
 	)
 {
 	as_cluster_add_command_count(cluster);
+	as_metrics_add_api_deferred(cluster->as);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, scan->ns, err);
 
@@ -1428,6 +1432,8 @@ aerospike_scan_info(
 	aerospike* as, as_error* err, const as_policy_info* policy, uint64_t scan_id, as_scan_info* info
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_job_info job_info;
 	as_status status = aerospike_job_info(as, err, policy, "scan", scan_id, false, &job_info);
 	

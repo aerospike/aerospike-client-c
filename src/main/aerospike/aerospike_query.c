@@ -1392,6 +1392,14 @@ static as_status
 as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes)
 {
 	as_cluster_add_command_count(task->cluster);
+
+	if (task->query_type == QUERY_BACKGROUND) {
+		as_metrics_add_api_background(task->cluster->as);
+	}
+	else {
+		as_metrics_add_api_blocking(task->cluster->as);
+	}
+
 	as_status status = AEROSPIKE_OK;
 
 	if (task->query_policy && task->query_policy->fail_on_cluster_change) {
@@ -1562,6 +1570,7 @@ as_query_partitions(
 	as_partition_tracker* pt, aerospike_query_foreach_callback callback, void* udata)
 {
 	as_cluster_add_command_count(cluster);
+	as_metrics_add_api_blocking(cluster->as);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -1863,6 +1872,7 @@ as_query_partition_async(
 	)
 {
 	as_cluster_add_command_count(cluster);
+	as_metrics_add_api_deferred(cluster->as);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, query->ns, err);
 
@@ -2370,6 +2380,8 @@ aerospike_query_async(
 		as_command_buffer_free(cmd_buf, qb.size);
 		return status;
 	}
+
+	as_metrics_add_api_deferred(as);
 
 	// Query will be split up into a command for each node.
 	// Allocate query data shared by each command.

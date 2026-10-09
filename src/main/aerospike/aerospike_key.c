@@ -187,6 +187,18 @@ as_command_execute_read(
 	return as_command_execute(&cmd, err);
 }
 
+static inline as_status
+as_key_execute_read(
+	as_cluster* cluster, as_error* err, const as_policy_base* policy, as_policy_replica replica,
+	as_policy_read_mode_sc read_mode_sc, const as_key* key, uint8_t* buf, size_t size,
+	as_partition_info* pi, const as_parse_results_fn fn, void* udata
+	)
+{
+	as_metrics_add_api_blocking(cluster->as);
+	return as_command_execute_read(cluster, err, policy, replica, read_mode_sc, key, buf, size,
+		pi, fn, udata);
+}
+
 static inline void
 as_command_init_write(
 	as_command* cmd, as_cluster* cluster, const as_policy_base* policy, as_policy_replica replica,
@@ -315,6 +327,7 @@ as_txn_monitor_callback(as_error* err, as_record* rec, void* udata, as_event_loo
 	}
 
 	// Run original command.
+	as_metrics_add_api_deferred(cmd->cluster->as);
 	as_status status = as_event_command_execute(cmd, err);
 
 	if (status != AEROSPIKE_OK) {
@@ -356,6 +369,7 @@ as_async_command_execute(
 		return as_event_command_execute_txn(as, err, policy, key, cmd);
 	}
 	else {
+		as_metrics_add_api_deferred(as);
 		return as_event_command_execute(cmd, err);
 	}
 }
@@ -395,6 +409,7 @@ as_async_compress_command_execute(
 			*comp_length = comp_size;
 		}
 
+		as_metrics_add_api_deferred(as);
 		return as_event_command_execute(cmd, err);
 	}
 }
@@ -485,7 +500,7 @@ aerospike_key_get(
 	data.record = rec;
 	data.deserialize = policy->deserialize;
 
-	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
+	status = as_key_execute_read(cluster, err, &policy->base, policy->replica,
 				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_result, &data);
 
 	as_command_buffer_free(buf, size);
@@ -531,6 +546,7 @@ aerospike_key_get_async(
 	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
+	as_metrics_add_api_deferred(as);
 	return as_event_command_execute(cmd, err);
 }
 
@@ -588,7 +604,7 @@ aerospike_key_select(
 	data.record = rec;
 	data.deserialize = policy->deserialize;
 
-	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
+	status = as_key_execute_read(cluster, err, &policy->base, policy->replica,
 				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_result, &data);
 
 	as_command_buffer_free(buf, size);
@@ -647,6 +663,7 @@ aerospike_key_select_async(
 		p = as_command_write_bin_name(p, bins[i]);
 	}
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
+	as_metrics_add_api_deferred(as);
 	return as_event_command_execute(cmd, err);
 }
 
@@ -698,7 +715,7 @@ aerospike_key_select_bins(
 	data.record = rec;
 	data.deserialize = policy->deserialize;
 
-	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
+	status = as_key_execute_read(cluster, err, &policy->base, policy->replica,
 				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_result, &data);
 
 	as_command_buffer_free(buf, size);
@@ -756,6 +773,7 @@ aerospike_key_select_bins_async(
 		p = as_command_write_bin_name(p, bins[i]);
 	}
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
+	as_metrics_add_api_deferred(as);
 	return as_event_command_execute(cmd, err);
 }
 
@@ -793,7 +811,7 @@ aerospike_key_exists(
 	p = as_command_write_filter(&policy->base, filter_size, p);
 	size = as_command_write_end(buf, p);
 
-	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
+	status = as_key_execute_read(cluster, err, &policy->base, policy->replica,
 				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_header, rec);
 
 	as_command_buffer_free(buf, size);
@@ -842,6 +860,7 @@ aerospike_key_exists_async(
 	p = as_command_write_key(p, &policy->base, policy->key, key, &tdata);
 	p = as_command_write_filter(&policy->base, filter_size, p);
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
+	as_metrics_add_api_deferred(as);
 	return as_event_command_execute(cmd, err);
 }
 
@@ -1005,6 +1024,7 @@ aerospike_key_put(
 	as_command_init_write(&cmd, as->cluster, &policy->base, policy->replica, key, put.size, &pi,
 						  as_command_parse_header, NULL);
 
+	as_metrics_add_api_blocking(as);
 	status = as_command_send(&cmd, err, compression_threshold, as_put_write, &put);
 	return status;
 }
@@ -1179,6 +1199,7 @@ aerospike_key_remove(
 
 	cmd.buf = buf;
 	as_command_start_timer(&cmd);
+	as_metrics_add_api_blocking(as);
 	status = as_command_execute(&cmd, err);
 
 	as_command_buffer_free(buf, size);
@@ -1511,6 +1532,7 @@ aerospike_key_operate(
 
 	uint32_t compression_threshold = policy->base.compress ? AS_COMPRESS_THRESHOLD : 0;
 
+	as_metrics_add_api_blocking(as);
 	status = as_command_send(&cmd, err, compression_threshold, as_operate_write, &oper);
 
 	return status;
@@ -1632,6 +1654,7 @@ aerospike_key_operate_async(
 		}
 
 		// Call normal execute since readonly commands do not add keys to the transaction monitor.
+		as_metrics_add_api_deferred(as);
 		return as_event_command_execute(cmd, err);
 	}
 }
@@ -1775,6 +1798,7 @@ aerospike_key_apply(
 
 	uint32_t compression_threshold = policy->base.compress ? AS_COMPRESS_THRESHOLD : 0;
 
+	as_metrics_add_api_blocking(as);
 	status = as_command_send(&cmd, err, compression_threshold, as_apply_write, &ap);
 
 	as_buffer_destroy(&ap.args);

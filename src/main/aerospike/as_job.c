@@ -16,6 +16,7 @@
  */
 #include <aerospike/as_job.h>
 #include <aerospike/as_info.h>
+#include <aerospike/as_metrics.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_socket.h>
 #include <citrusleaf/alloc.h>
@@ -123,6 +124,8 @@ aerospike_job_wait(
    aerospike* as, as_error* err, const as_policy_info* policy, const char* module, uint64_t job_id,
    uint32_t interval_ms)
 {
+	as_metrics_add_api_blocking(as);
+
 	if (!interval_ms) {
 		interval_ms = 1000;
 	}

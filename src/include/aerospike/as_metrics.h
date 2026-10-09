@@ -541,7 +541,8 @@ typedef struct as_metrics_policy_s {
 	 * The metrics thread sleeps that duration. It does not run on the tend thread.
 	 *
 	 * An empty string uses the deprecated interval field. When set, this overrides
-	 * interval. Dynamic configuration metrics.export_interval is copied here.
+	 * interval. Dynamic configuration metrics.export_interval is copied here,
+	 * including an empty string.
 	 *
 	 * Default: ""
 	 */

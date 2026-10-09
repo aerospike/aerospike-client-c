@@ -1352,6 +1352,23 @@ TEST(metrics_dynamic_config_empty_report_dir_skips_file, "empty metrics.report_d
 	assert_string_eq(policy.report_dir, "");
 }
 
+TEST(metrics_dynamic_config_empty_export_interval, "empty metrics.export_interval uses the application interval")
+{
+	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
+	assert_true(metrics_read_dynamic_config(
+		"version: 1.1.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    export_interval: \"\"\n"
+		"    exporter: none\n",
+		&policy, false, NULL, &exporter));
+
+	assert_string_eq(policy.export_interval, "");
+	assert_int_eq(policy.interval, 30);
+	assert_int_eq(exporter, AS_METRICS_BUILTIN_EXPORTER_NONE);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -1393,4 +1410,5 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_dynamic_config_rejects_unknown_exporter);
 	suite_add(metrics_dynamic_config_file_overrides_empty_report_dir);
 	suite_add(metrics_dynamic_config_empty_report_dir_skips_file);
+	suite_add(metrics_dynamic_config_empty_export_interval);
 }

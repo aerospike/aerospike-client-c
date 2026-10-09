@@ -1174,9 +1174,8 @@ as_parse_export_interval(as_yaml* yaml, const char* name, const char* value, as_
 {
 	uint64_t ms = 0;
 
-	// An empty string is not a dynamic configuration value. Enable treats "" as
-	// "use the deprecated interval field".
-	if (!as_metrics_export_interval_to_ms(value, &ms) || ms == 0) {
+	// "" is valid and matches the policy field. Enable then uses interval.
+	if (!as_metrics_export_interval_to_ms(value, &ms)) {
 		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
 			"Invalid dynamic configuration metrics.export_interval: %s", value);
 		return false;

@@ -842,6 +842,8 @@ as_scan_generic(
 		return status;
 	}
 
+	as_metrics_add_api_background(cluster->as);
+
 	uint64_t cluster_key = 0;
 	uint64_t task_id = as_task_id_resolve(task_id_ptr);
 
@@ -949,6 +951,7 @@ as_scan_partitions(
 	as_partition_tracker* pt, aerospike_scan_foreach_callback callback, void* udata)
 {
 	as_cluster_add_command_count(cluster);
+	as_metrics_add_api_blocking(cluster->as);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -1265,6 +1268,7 @@ as_scan_partition_async(
 	)
 {
 	as_cluster_add_command_count(cluster);
+	as_metrics_add_api_deferred(cluster->as);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, scan->ns, err);
 
@@ -1408,8 +1412,6 @@ aerospike_scan_background(
 	uint64_t* scan_id
 	)
 {
-	as_metrics_add_api_background(as);
-
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1461,8 +1463,6 @@ aerospike_scan_foreach(
 	aerospike_scan_foreach_callback callback, void* udata
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1497,8 +1497,6 @@ aerospike_scan_node(
 	const char* node_name, aerospike_scan_foreach_callback callback, void* udata
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1543,8 +1541,6 @@ aerospike_scan_partitions(
 	as_partition_filter* pf, aerospike_scan_foreach_callback callback, void* udata
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_cluster* cluster = as->cluster;
 
 	as_policy_scan merged;
@@ -1584,8 +1580,6 @@ aerospike_scan_async(
 	uint64_t* scan_id, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
-	as_metrics_add_api_deferred(as);
-
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1621,8 +1615,6 @@ aerospike_scan_node_async(
 	as_event_loop* event_loop
 	)
 {
-	as_metrics_add_api_deferred(as);
-
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1664,8 +1656,6 @@ aerospike_scan_partitions_async(
 	as_partition_filter* pf, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
-	as_metrics_add_api_deferred(as);
-
 	as_cluster* cluster = as->cluster;
 
 	as_policy_scan merged;

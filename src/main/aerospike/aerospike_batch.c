@@ -3433,6 +3433,15 @@ as_batch_keys_execute_seq(
 
 #define batch_results_free(_results, _n_keys) if (_n_keys > AS_BATCH_MAX_STACK_ITEMS) {cf_free(_results);}
 
+static bool
+as_batch_records_count_api(const as_batch_records* records)
+{
+	as_batch_base_record* rec = as_vector_get((as_vector*)&records->list, 0);
+
+	// Transaction verify and roll are internal commands issued by commit and abort.
+	return rec->type != AS_BATCH_TXN_VERIFY && rec->type != AS_BATCH_TXN_ROLL;
+}
+
 static as_status
 as_batch_keys_execute(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
@@ -3452,7 +3461,9 @@ as_batch_keys_execute(
 		}
 		return AEROSPIKE_OK;
 	}
-	
+
+	as_metrics_add_api_blocking(as);
+
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
 	as_nodes_release(nodes);
@@ -3964,6 +3975,15 @@ as_batch_records_execute(
 		return AEROSPIKE_OK;
 	}
 
+	if (as_batch_records_count_api(records)) {
+		if (async_executor) {
+			as_metrics_add_api_deferred(as);
+		}
+		else {
+			as_metrics_add_api_blocking(as);
+		}
+	}
+
 	as_nodes* nodes = as_nodes_reserve(cluster);
 	uint32_t n_nodes = nodes->size;
 	as_nodes_release(nodes);
@@ -4078,7 +4098,7 @@ as_batch_records_execute_async(
 		listener(0, records, udata, event_loop);
 		return AEROSPIKE_OK;
 	}
-	
+
 	// Batch will be split up into a command for each node.
 	// Allocate batch data shared by each command.
 	as_async_batch_executor* be = cf_malloc(sizeof(as_async_batch_executor));
@@ -5183,8 +5203,6 @@ aerospike_batch_read(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	as_policy_batch merged;
@@ -5210,8 +5228,6 @@ aerospike_batch_read_async(
 	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
-	as_metrics_add_api_deferred(as);
-
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5237,8 +5253,6 @@ aerospike_batch_write(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	as_policy_batch merged;
@@ -5271,8 +5285,6 @@ aerospike_batch_write_async(
 	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
-	as_metrics_add_api_deferred(as);
-
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5330,8 +5342,6 @@ aerospike_batch_get(
 	as_batch_listener listener, void* udata
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5366,8 +5376,6 @@ aerospike_batch_get_bins(
 	const char** bins, uint32_t n_bins, as_batch_listener listener, void* udata
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5403,8 +5411,6 @@ aerospike_batch_get_ops(
 	as_operations* ops, as_batch_listener listener, void* udata
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5439,8 +5445,6 @@ aerospike_batch_exists(
 	as_batch_listener listener, void* udata
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5475,8 +5479,6 @@ aerospike_batch_operate(
 	as_operations* ops, as_batch_listener listener, void* udata
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	uint32_t n_operations = ops->binops.size;
@@ -5566,8 +5568,6 @@ aerospike_batch_apply(
 	as_batch_listener listener, void* udata
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5618,8 +5618,6 @@ aerospike_batch_remove(
 	as_batch_listener listener, void* udata
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	as_policy_batch merged;

@@ -503,7 +503,7 @@ metrics_test_namespace_ok(const as_metrics_snapshot* metrics_snapshot, uint8_t b
 static bool
 metrics_header_ok(const char* header, const char* latency_token)
 {
-	if (!strstr(header, " header(2) ")) {
+	if (!strstr(header, " header(3) ")) {
 		return false;
 	}
 

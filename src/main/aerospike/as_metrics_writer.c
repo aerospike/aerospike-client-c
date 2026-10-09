@@ -259,7 +259,7 @@ as_metrics_open_writer(as_metrics_file_exporter* mw, as_error* err)
 	const char* latency_unit = mw->latency_unit == AS_METRICS_LATENCY_MICROSECONDS ?
 		"microseconds" : "milliseconds";
 	char data[1024];
-	int rv = snprintf(data, sizeof(data), "%s header(2) cluster[name,client_type,client_version,app_id,label[],cpu,mem,invalid_node_count,command_count,retry_count,delay_queue_timeout_count,eventloop[],node[]] label[name,value] eventloop[process_size,queue_size] node[name,address,port,sync_conn,async_conn,namespace[]] conn[in_use,in_pool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,key_busy,bytes_in,bytes_out,latency[]] latency(%s,%u,%u)[type[l1,l2,l3...]]\n",
+	int rv = snprintf(data, sizeof(data), "%s header(3) cluster[name,client_type,client_version,app_id,label[],cpu,mem,invalid_node_count,command_count,retry_count,delay_queue_timeout_count,eventloop[],node[]] label[name,value] eventloop[process_size,queue_size] node[name,address,port,sync_conn,async_conn,namespace[]] conn[in_use,in_pool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,key_busy,bytes_in,bytes_out,latency[]] latency(%s,%u,%u)[type[l1,l2,l3...]]\n",
 		now_str, latency_unit, mw->latency_columns, mw->latency_shift);
 
 	if (rv <= 0) {

@@ -426,8 +426,6 @@ aerospike_truncate(
 as_status
 aerospike_reload_tls_config(aerospike* as, as_error* err)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	as_config* config = aerospike_load_config(as);
 	return as_tls_config_reload(&config->tls, as->cluster->tls_ctx, err);

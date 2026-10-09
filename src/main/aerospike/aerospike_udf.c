@@ -67,8 +67,6 @@ aerospike_udf_list(
 	aerospike* as, as_error* err, const as_policy_info* policy, as_udf_files* files
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	if (! policy) {
@@ -171,8 +169,6 @@ aerospike_udf_get(
 	const char* filename, as_udf_type type, as_udf_file * file
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	if (! policy) {
@@ -356,8 +352,6 @@ aerospike_udf_put_wait(
 	const char* filename, uint32_t interval_ms
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	if (! policy) {
 		as_config* config = aerospike_load_config(as);
 		policy = &config->policies.info;
@@ -442,8 +436,6 @@ aerospike_udf_remove_wait(
 	const char* filename, uint32_t interval_ms
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	if (! policy) {
 		as_config* config = aerospike_load_config(as);
 		policy = &config->policies.info;

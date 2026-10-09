@@ -270,8 +270,6 @@ aerospike_udf_put(
 	const char* filename, as_udf_type type, as_bytes* content
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	if (type != AS_UDF_TYPE_LUA) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid udf type: %d", type);
 	}
@@ -387,8 +385,6 @@ aerospike_udf_remove(
 	aerospike* as, as_error* err, const as_policy_info* policy, const char* filename
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	if (! policy) {

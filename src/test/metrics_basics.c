@@ -916,74 +916,92 @@ TEST(metrics_exporter_suppresses_file, "a registered exporter receives the snaps
 	assert_int_eq(logs, 0);
 }
 
-TEST(metrics_exporter_none_skips_added_exporters, "none and file do not call added exporters")
+TEST(metrics_exporter_none_or_file_skips_added_exporters, "setting the metrics.exporter bitmap bit makes none and file ignore added exporters")
 {
-	metrics_test_exporter* exporter = metrics_exporter_new(false);
+	// This does not read a dynamic configuration file. Each pass plants the
+	// bitmap bit and the mode a parsed metrics.exporter key would leave behind,
+	// then checks as_metrics_runtime_enable. The bit does not select a mode.
+	// Policy init stores file by default, so the loop writes none and file itself. With
+	// the bit set, the added exporter is ignored.
+	const as_metrics_builtin_exporter modes[] = {
+		AS_METRICS_BUILTIN_EXPORTER_NONE,
+		AS_METRICS_BUILTIN_EXPORTER_FILE
+	};
 
-	as_metrics_policy policy;
-	metrics_policy_init_without_default_file_exporter(&policy);
-	as_metrics_policy_add_exporter(&policy, &exporter->base);
+	for (uint32_t i = 0; i < 2; i++) {
+		as_metrics_builtin_exporter mode = modes[i];
+		bool file = mode == AS_METRICS_BUILTIN_EXPORTER_FILE;
+		metrics_test_exporter* exporter = metrics_exporter_new(false);
 
-	uint8_t bitmap[AS_CONFIG_BITMAP_SIZE];
-	memset(bitmap, 0, sizeof(bitmap));
-	as_field_set(bitmap, AS_METRICS_EXPORTER);
+		as_metrics_policy policy;
+		metrics_policy_init_without_default_file_exporter(&policy);
+		as_metrics_policy_add_exporter(&policy, &exporter->base);
 
-	uint8_t* saved_bitmap = as->config_bitmap;
-	as_metrics_builtin_exporter saved_exporter = as->config.policies.metrics.metrics_exporter;
-	as->config_bitmap = bitmap;
-	as->config.policies.metrics.metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_NONE;
+		char dir[256];
+		bool dir_ok = true;
 
-	as_error err;
-	as_status none_status = metrics_enable(&policy, &err);
+		if (file) {
+			dir_ok = metrics_create_temp_dir_path(dir, sizeof(dir));
 
-	as_metrics_snapshot* metrics_snapshot = NULL;
-	as_status snapshot_status = AEROSPIKE_ERR_CLIENT;
-	bool enabled = false;
+			if (dir_ok) {
+				as_metrics_policy_set_report_dir(&policy, dir);
+			}
+		}
 
-	if (none_status == AEROSPIKE_OK) {
-		snapshot_status = aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot);
+		uint8_t bitmap[AS_CONFIG_BITMAP_SIZE];
+		memset(bitmap, 0, sizeof(bitmap));
+		as_field_set(bitmap, AS_METRICS_EXPORTER);
 
-		if (snapshot_status == AEROSPIKE_OK) {
-			enabled = metrics_snapshot->metrics_enabled;
-			as_metrics_snapshot_destroy(metrics_snapshot);
+		// The suite shares one client. Restore before asserting so a failure
+		// does not leave this mode in place for later tests.
+		uint8_t* saved_bitmap = as->config_bitmap;
+		as_metrics_builtin_exporter saved_exporter = as->config.policies.metrics.metrics_exporter;
+		as->config_bitmap = bitmap;
+		as->config.policies.metrics.metrics_exporter = mode;
+
+		as_error err;
+		as_status status = metrics_enable(&policy, &err);
+
+		as_metrics_snapshot* metrics_snapshot = NULL;
+		as_status snapshot_status = AEROSPIKE_OK;
+		bool enabled = false;
+
+		// none still collects. file writes one log. Neither calls the exporter.
+		if (!file && status == AEROSPIKE_OK) {
+			snapshot_status = aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot);
+
+			if (snapshot_status == AEROSPIKE_OK) {
+				enabled = metrics_snapshot->metrics_enabled;
+				as_metrics_snapshot_destroy(metrics_snapshot);
+			}
+		}
+
+		as_status disable_status = aerospike_disable_metrics(as, &err);
+		uint32_t calls = as_load_uint32(&exporter->calls);
+		int logs = file && dir_ok ? metrics_count_logs(dir) : -1;
+
+		if (file && dir_ok) {
+			metrics_remove_dir(dir);
+		}
+
+		as->config_bitmap = saved_bitmap;
+		as->config.policies.metrics.metrics_exporter = saved_exporter;
+		as_metrics_policy_destroy(&policy);
+		cf_free(exporter);
+
+		assert_int_eq(status, AEROSPIKE_OK);
+		assert_int_eq(disable_status, AEROSPIKE_OK);
+		assert_int_eq(calls, 0);
+
+		if (file) {
+			assert_true(dir_ok);
+			assert_int_eq(logs, 1);
+		}
+		else {
+			assert_int_eq(snapshot_status, AEROSPIKE_OK);
+			assert_true(enabled);
 		}
 	}
-
-	as_status none_disable = aerospike_disable_metrics(as, &err);
-	uint32_t none_calls = as_load_uint32(&exporter->calls);
-
-	char dir[256];
-	bool dir_ok = metrics_create_temp_dir_path(dir, sizeof(dir));
-
-	if (dir_ok) {
-		as_metrics_policy_set_report_dir(&policy, dir);
-	}
-
-	as->config.policies.metrics.metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
-	as_status file_status = metrics_enable(&policy, &err);
-	as_status file_disable = aerospike_disable_metrics(as, &err);
-	uint32_t file_calls = as_load_uint32(&exporter->calls);
-	int logs = dir_ok ? metrics_count_logs(dir) : -1;
-
-	if (dir_ok) {
-		metrics_remove_dir(dir);
-	}
-
-	as->config_bitmap = saved_bitmap;
-	as->config.policies.metrics.metrics_exporter = saved_exporter;
-	as_metrics_policy_destroy(&policy);
-	cf_free(exporter);
-
-	assert_int_eq(none_status, AEROSPIKE_OK);
-	assert_int_eq(snapshot_status, AEROSPIKE_OK);
-	assert_true(enabled);
-	assert_int_eq(none_disable, AEROSPIKE_OK);
-	assert_int_eq(none_calls, 0);
-	assert_true(dir_ok);
-	assert_int_eq(file_status, AEROSPIKE_OK);
-	assert_int_eq(file_disable, AEROSPIKE_OK);
-	assert_int_eq(file_calls, 0);
-	assert_int_eq(logs, 1);
 }
 
 TEST(metrics_exporter_isolation, "one exporter failure does not skip the others")
@@ -1401,7 +1419,7 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_file_header_microseconds);
 	suite_add(metrics_empty_report_dir);
 	suite_add(metrics_exporter_suppresses_file);
-	suite_add(metrics_exporter_none_skips_added_exporters);
+	suite_add(metrics_exporter_none_or_file_skips_added_exporters);
 	suite_add(metrics_exporter_isolation);
 	suite_add(metrics_exporter_suspend);
 	suite_add(metrics_periodic_export_stops_on_disable);

@@ -208,9 +208,8 @@ void
 aerospike_destroy(aerospike* as)
 {
 	if (as_event_loop_size > 0 && !as_event_single_thread) {
-		// The client is waiting for pending async commands to complete.
-		// When complete, aerospike_destroy() is automatically called, so
-		// return here.
+		// A connected client may still have pending async commands.
+		// Cluster close calls aerospike_destroy_internal() when they complete.
 		return;
 	}
 

@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_metrics.h>
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_stats.h>
 #include <aerospike/as_address.h>
@@ -83,10 +84,26 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 
 		mrg->metrics_listeners = src->metrics_listeners;
 		mrg->exporters = src->exporters;
-		as_strncpy(mrg->report_dir, src->report_dir, sizeof(mrg->report_dir));
-		mrg->report_size_limit = src->report_size_limit;
+		as_strncpy(mrg->report_dir,
+			as_field_is_set(bitmap, AS_METRICS_REPORT_DIR) ? cfg->report_dir : src->report_dir,
+			sizeof(mrg->report_dir));
+		mrg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT) ?
+			cfg->report_size_limit : src->report_size_limit;
 		mrg->interval = src->interval;
-		as_strncpy(mrg->export_interval, src->export_interval, sizeof(mrg->export_interval));
+		as_strncpy(mrg->export_interval,
+			as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL) ?
+				cfg->export_interval : src->export_interval,
+			sizeof(mrg->export_interval));
+
+		// metrics.exporter file overrides an application report_dir that is empty
+		// only when metrics.report_dir is absent. An explicit "" stays empty.
+		if (as_field_is_set(bitmap, AS_METRICS_EXPORTER) &&
+				!as_field_is_set(bitmap, AS_METRICS_REPORT_DIR) &&
+				cfg->metrics_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+				mrg->report_dir[0] == '\0') {
+			as_strncpy(mrg->report_dir, ".", sizeof(mrg->report_dir));
+		}
+
 		mrg->latency_unit = src->latency_unit;
 		mrg->operational_enabled = src->operational_enabled;
 		mrg->usage_enabled = src->usage_enabled;
@@ -164,6 +181,7 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->metrics_listeners.disable_listener = NULL;
 	policy->metrics_listeners.udata = NULL;
 	policy->enable = false;
+	policy->metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
 	policy->exporters = NULL;
 }
 
@@ -1049,12 +1067,12 @@ as_metrics_listeners_defined(const as_metrics_listeners* listeners)
 		listeners->node_close_listener && listeners->disable_listener && listeners->udata;
 }
 
-static as_status
-as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms, as_error* err)
+bool
+as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms)
 {
 	if (!interval || interval[0] == '\0') {
 		*ms = 0;
-		return AEROSPIKE_OK;
+		return true;
 	}
 
 	errno = 0;
@@ -1062,7 +1080,7 @@ as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms, as_error* e
 	unsigned long long magnitude = strtoull(interval, &end, 10);
 
 	if (end == interval || errno != 0) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
+		return false;
 	}
 
 	uint64_t scale;
@@ -1080,15 +1098,15 @@ as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms, as_error* e
 		scale = 3600000;
 	}
 	else {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
+		return false;
 	}
 
 	if (magnitude == 0 || magnitude > UINT64_MAX / scale) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
+		return false;
 	}
 
 	*ms = magnitude * scale;
-	return AEROSPIKE_OK;
+	return true;
 }
 
 as_status
@@ -1101,10 +1119,9 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	}
 
 	uint64_t interval_ms = 0;
-	as_status interval_status = as_metrics_export_interval_to_ms(policy->export_interval, &interval_ms, err);
 
-	if (interval_status != AEROSPIKE_OK) {
-		return interval_status;
+	if (!as_metrics_export_interval_to_ms(policy->export_interval, &interval_ms)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
 	}
 
 	uint32_t tend_ms = cluster->tend_interval;
@@ -1146,7 +1163,21 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	pthread_mutex_init(&rt->lock, NULL);
 	pthread_cond_init(&rt->cond, NULL);
 
-	if (policy->exporters) {
+	// metrics.exporter is dynamic configuration only. Without that key, added
+	// exporters are called and the file writer is used when nothing else exports.
+	as_metrics_builtin_exporter mode = AS_METRICS_BUILTIN_EXPORTER_FILE;
+	aerospike* owner = cluster->as;
+	bool dynamic_exporter = owner && owner->config_bitmap &&
+		as_field_is_set(owner->config_bitmap, AS_METRICS_EXPORTER);
+
+	if (dynamic_exporter) {
+		mode = owner->config.policies.metrics.metrics_exporter;
+	}
+	else if (policy->exporters && policy->exporters->size > 0) {
+		mode = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;
+	}
+
+	if (mode == AS_METRICS_BUILTIN_EXPORTER_CUSTOM && policy->exporters) {
 		for (uint32_t i = 0; i < policy->exporters->size; i++) {
 			as_metrics_exporter_slot slot;
 			memset(&slot, 0, sizeof(slot));
@@ -1156,7 +1187,8 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		}
 	}
 
-	if (rt->slots->size == 0 && !custom_listener && policy->report_dir[0] != '\0') {
+	if (mode == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+			!custom_listener && policy->report_dir[0] != '\0') {
 		as_metrics_exporter* file_exporter = NULL;
 		as_status status = as_metrics_file_exporter_create(err, policy, &file_exporter);
 

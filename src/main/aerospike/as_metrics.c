@@ -95,6 +95,16 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 			sizeof(mrg->export_interval));
 		mrg->builtin_exporter = as_field_is_set(bitmap, AS_METRICS_EXPORTER)?
 			cfg->builtin_exporter : src->builtin_exporter;
+
+		// metrics.exporter file overrides an application report_dir that is empty.
+		// An explicit metrics.report_dir, including "", is left as configured.
+		if (as_field_is_set(bitmap, AS_METRICS_EXPORTER) &&
+				!as_field_is_set(bitmap, AS_METRICS_REPORT_DIR) &&
+				mrg->builtin_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+				mrg->report_dir[0] == '\0') {
+			as_strncpy(mrg->report_dir, ".", sizeof(mrg->report_dir));
+		}
+
 		mrg->latency_unit = src->latency_unit;
 		mrg->operational_enabled = src->operational_enabled;
 		mrg->usage_enabled = src->usage_enabled;
@@ -1155,7 +1165,7 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	pthread_mutex_init(&rt->lock, NULL);
 	pthread_cond_init(&rt->cond, NULL);
 
-	if (policy->exporters) {
+	if (policy->builtin_exporter == AS_METRICS_BUILTIN_EXPORTER_CUSTOM && policy->exporters) {
 		for (uint32_t i = 0; i < policy->exporters->size; i++) {
 			as_metrics_exporter_slot slot;
 			memset(&slot, 0, sizeof(slot));
@@ -1165,9 +1175,8 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		}
 	}
 
-	if (rt->slots->size == 0 && !custom_listener &&
-			policy->builtin_exporter != AS_METRICS_BUILTIN_EXPORTER_NONE &&
-			policy->report_dir[0] != '\0') {
+	if (policy->builtin_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+			!custom_listener && policy->report_dir[0] != '\0') {
 		as_metrics_exporter* file_exporter = NULL;
 		as_status status = as_metrics_file_exporter_create(err, policy, &file_exporter);
 

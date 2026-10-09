@@ -1234,9 +1234,12 @@ as_parse_builtin_exporter(as_yaml* yaml, const char* name, const char* value, as
 	else if (strcmp(value, "none") == 0) {
 		kind = AS_METRICS_BUILTIN_EXPORTER_NONE;
 	}
+	else if (strcmp(value, "custom") == 0) {
+		kind = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;
+	}
 	else {
 		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
-			"Invalid dynamic configuration metrics.exporter: %s. valid values: file, none", value);
+			"Invalid dynamic configuration metrics.exporter: %s. valid values: file, none, custom", value);
 		return false;
 	}
 
@@ -1772,6 +1775,17 @@ as_config_file_read(aerospike* as, as_config* config, uint8_t* bitmap, bool init
 			path, yaml.err.message);
 	}
 
+	// metrics.exporter file overrides an empty application report_dir.
+	// metrics.report_dir, including an empty value, stays as written in the file.
+	as_metrics_policy* metrics = &config->policies.metrics;
+
+	if (as_field_is_set(bitmap, AS_METRICS_EXPORTER) &&
+			!as_field_is_set(bitmap, AS_METRICS_REPORT_DIR) &&
+			metrics->builtin_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+			metrics->report_dir[0] == '\0') {
+		as_strncpy(metrics->report_dir, ".", sizeof(metrics->report_dir));
+	}
+
 	return AEROSPIKE_OK;
 }
 
@@ -2117,6 +2131,12 @@ as_cluster_update_metrics(
 
 	if (as_field_is_set(bitmap, AS_METRICS_REPORT_DIR)) {
 		as_strncpy(trg->report_dir, src->report_dir, sizeof(trg->report_dir));
+	}
+	else if (as_field_is_set(bitmap, AS_METRICS_EXPORTER) &&
+			trg->builtin_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+			orig->report_dir[0] == '\0') {
+		// The file selected the writer and did not set metrics.report_dir.
+		as_strncpy(trg->report_dir, ".", sizeof(trg->report_dir));
 	}
 	else {
 		as_strncpy(trg->report_dir, orig->report_dir, sizeof(trg->report_dir));

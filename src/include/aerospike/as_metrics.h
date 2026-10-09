@@ -299,8 +299,7 @@ typedef struct as_metrics_snapshot_s {
 	bool operational_metrics_enabled;
 
 	/**
-	 * True when the policy requested usage metrics. This client does not
-	 * increment a usage catalog, so those counters stay at zero.
+	 * True when feature.api usage counters in this snapshot were collected.
 	 */
 	bool usage_metrics_enabled;
 
@@ -360,6 +359,24 @@ typedef struct as_metrics_snapshot_s {
 	 * for one command. Same counter as `as_cluster_stats.retry_count`.
 	 */
 	uint64_t retry_count;
+
+	/**
+	 * feature.api.blocking. Public synchronous API calls. Cumulative.
+	 * Increments only while metrics and usage are enabled.
+	 */
+	uint64_t api_blocking;
+
+	/**
+	 * feature.api.deferred. Public asynchronous API calls. Cumulative.
+	 * Increments only while metrics and usage are enabled.
+	 */
+	uint64_t api_deferred;
+
+	/**
+	 * feature.api.background. Public scan and query background API calls.
+	 * Cumulative. Increments only while metrics and usage are enabled.
+	 */
+	uint64_t api_background;
 
 	/**
 	 * Process CPU percent, written to the learn-metrics log.
@@ -561,7 +578,8 @@ typedef struct as_metrics_policy_s {
 
 	/**
 	 * Record client-wide feature usage counters. Off until explicitly enabled.
-	 * This client does not yet increment the feature.api catalog.
+	 * When true, public API calls increment feature.api.blocking, deferred,
+	 * and background. Other feature.* names are not recorded.
 	 *
 	 * Default: false
 	 */
@@ -607,6 +625,27 @@ typedef struct as_metrics_policy_s {
  */
 AS_EXTERN bool
 as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms);
+
+/**
+ * @private
+ * Count one public synchronous API call toward feature.api.blocking.
+ */
+AS_EXTERN void
+as_metrics_add_api_blocking(struct aerospike_s* as);
+
+/**
+ * @private
+ * Count one public asynchronous API call toward feature.api.deferred.
+ */
+AS_EXTERN void
+as_metrics_add_api_deferred(struct aerospike_s* as);
+
+/**
+ * @private
+ * Count one public background scan or query toward feature.api.background.
+ */
+AS_EXTERN void
+as_metrics_add_api_background(struct aerospike_s* as);
 
 /**
  * Initalize metrics policy.

@@ -1408,6 +1408,8 @@ aerospike_scan_background(
 	uint64_t* scan_id
 	)
 {
+	as_metrics_add_api_background(as);
+
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1428,6 +1430,8 @@ aerospike_scan_info(
 	aerospike* as, as_error* err, const as_policy_info* policy, uint64_t scan_id, as_scan_info* info
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_job_info job_info;
 	as_status status = aerospike_job_info(as, err, policy, "scan", scan_id, false, &job_info);
 	
@@ -1457,6 +1461,8 @@ aerospike_scan_foreach(
 	aerospike_scan_foreach_callback callback, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1491,6 +1497,8 @@ aerospike_scan_node(
 	const char* node_name, aerospike_scan_foreach_callback callback, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1535,6 +1543,8 @@ aerospike_scan_partitions(
 	as_partition_filter* pf, aerospike_scan_foreach_callback callback, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_cluster* cluster = as->cluster;
 
 	as_policy_scan merged;
@@ -1574,6 +1584,8 @@ aerospike_scan_async(
 	uint64_t* scan_id, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1609,6 +1621,8 @@ aerospike_scan_node_async(
 	as_event_loop* event_loop
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1650,6 +1664,8 @@ aerospike_scan_partitions_async(
 	as_partition_filter* pf, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_cluster* cluster = as->cluster;
 
 	as_policy_scan merged;

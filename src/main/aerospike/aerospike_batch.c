@@ -5183,6 +5183,8 @@ aerospike_batch_read(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_error_reset(err);
 
 	as_policy_batch merged;
@@ -5208,6 +5210,8 @@ aerospike_batch_read_async(
 	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5233,6 +5237,8 @@ aerospike_batch_write(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_batch_records* records
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_error_reset(err);
 
 	as_policy_batch merged;
@@ -5265,6 +5271,8 @@ aerospike_batch_write_async(
 	as_async_batch_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5322,6 +5330,8 @@ aerospike_batch_get(
 	as_batch_listener listener, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5356,6 +5366,8 @@ aerospike_batch_get_bins(
 	const char** bins, uint32_t n_bins, as_batch_listener listener, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5391,6 +5403,8 @@ aerospike_batch_get_ops(
 	as_operations* ops, as_batch_listener listener, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5425,6 +5439,8 @@ aerospike_batch_exists(
 	as_batch_listener listener, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5459,6 +5475,8 @@ aerospike_batch_operate(
 	as_operations* ops, as_batch_listener listener, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_error_reset(err);
 	
 	uint32_t n_operations = ops->binops.size;
@@ -5548,6 +5566,8 @@ aerospike_batch_apply(
 	as_batch_listener listener, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5598,6 +5618,8 @@ aerospike_batch_remove(
 	as_batch_listener listener, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_error_reset(err);
 	
 	as_policy_batch merged;

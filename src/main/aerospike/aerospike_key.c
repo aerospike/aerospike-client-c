@@ -455,6 +455,8 @@ aerospike_key_get(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 
@@ -499,6 +501,8 @@ aerospike_key_get_async(
 	as_pipe_listener pipe_listener
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 
@@ -544,6 +548,8 @@ aerospike_key_select(
 	const char* bins[], as_record** rec
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 	
@@ -601,6 +607,8 @@ aerospike_key_select_async(
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 	
@@ -656,6 +664,8 @@ aerospike_key_select_bins(
 	const char* bins[], uint32_t n_bins, as_record** rec
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 	
@@ -712,6 +722,8 @@ aerospike_key_select_bins_async(
 	as_pipe_listener pipe_listener
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 	
@@ -768,6 +780,8 @@ aerospike_key_exists(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 
@@ -811,6 +825,8 @@ aerospike_key_exists_async(
 	as_pipe_listener pipe_listener
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 	
@@ -972,6 +988,8 @@ aerospike_key_put(
 	aerospike* as, as_error* err, const as_policy_write* policy, const as_key* key, as_record* rec
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_policy_write merged;
 	as_policy_key pkey;
 	policy = as_policy_write_merge(as, policy, &merged, &pkey);
@@ -1016,6 +1034,8 @@ aerospike_key_put_async_ex(
 	size_t* length, size_t* comp_length
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_policy_write merged;
 	as_policy_key pkey;
 	policy = as_policy_write_merge(as, policy, &merged, &pkey);
@@ -1148,6 +1168,8 @@ aerospike_key_remove(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_policy_remove merged;
 	as_policy_key pkey;
 	policy = as_policy_remove_merge(as, policy, &merged, &pkey);
@@ -1192,6 +1214,8 @@ aerospike_key_remove_async_ex(
 	as_pipe_listener pipe_listener, size_t* length
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_policy_remove merged;
 	as_policy_key pkey;
 	policy = as_policy_remove_merge(as, policy, &merged, &pkey);
@@ -1454,6 +1478,8 @@ aerospike_key_operate(
 	const as_operations* ops, as_record** rec
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	uint32_t n_operations = ops->binops.size;
 
 	if (n_operations == 0) {
@@ -1522,6 +1548,8 @@ aerospike_key_operate_async(
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	uint32_t n_operations = ops->binops.size;
 	
 	if (n_operations == 0) {
@@ -1755,6 +1783,8 @@ aerospike_key_apply(
 	const char* module, const char* function, as_list* arglist, as_val** result
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_policy_apply merged;
 	as_policy_key pkey;
 	policy = as_policy_apply_merge(as, policy, &merged, &pkey);
@@ -1790,6 +1820,8 @@ aerospike_key_apply_async(
 	as_pipe_listener pipe_listener
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_policy_apply merged;
 	as_policy_key pkey;
 	policy = as_policy_apply_merge(as, policy, &merged, &pkey);

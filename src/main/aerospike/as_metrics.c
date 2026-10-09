@@ -805,6 +805,9 @@ as_metrics_snapshot_create(
 	snap->delay_queue_timeout_count = as_cluster_get_delay_queue_timeout_count(cluster);
 	snap->command_count = as_cluster_get_command_count(cluster);
 	snap->retry_count = as_cluster_get_retry_count(cluster);
+	snap->api_blocking = as_load_uint64(&cluster->metrics_api_blocking);
+	snap->api_deferred = as_load_uint64(&cluster->metrics_api_deferred);
+	snap->api_background = as_load_uint64(&cluster->metrics_api_background);
 	snap->latency_unit = cluster->metrics_latency_unit;
 	snap->latency_columns = cluster->metrics_latency_columns;
 	snap->latency_shift = cluster->metrics_latency_shift;
@@ -1065,6 +1068,46 @@ as_metrics_listeners_defined(const as_metrics_listeners* listeners)
 {
 	return listeners->enable_listener && listeners->snapshot_listener &&
 		listeners->node_close_listener && listeners->disable_listener && listeners->udata;
+}
+
+static void
+as_metrics_add_api(aerospike* as, uint64_t* counter)
+{
+	as_cluster* cluster = as ? as->cluster : NULL;
+
+	if (cluster && cluster->metrics_enabled && cluster->metrics_usage_enabled) {
+		as_incr_uint64(counter);
+	}
+}
+
+void
+as_metrics_add_api_blocking(aerospike* as)
+{
+	as_cluster* cluster = as ? as->cluster : NULL;
+
+	if (cluster) {
+		as_metrics_add_api(as, &cluster->metrics_api_blocking);
+	}
+}
+
+void
+as_metrics_add_api_deferred(aerospike* as)
+{
+	as_cluster* cluster = as ? as->cluster : NULL;
+
+	if (cluster) {
+		as_metrics_add_api(as, &cluster->metrics_api_deferred);
+	}
+}
+
+void
+as_metrics_add_api_background(aerospike* as)
+{
+	as_cluster* cluster = as ? as->cluster : NULL;
+
+	if (cluster) {
+		as_metrics_add_api(as, &cluster->metrics_api_background);
+	}
 }
 
 bool

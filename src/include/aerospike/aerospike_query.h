@@ -81,6 +81,7 @@
  */
 
 #include <aerospike/aerospike.h>
+#include <aerospike/as_metrics.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_job.h>
@@ -454,6 +455,7 @@ aerospike_query_info(
 	const as_query* query, uint64_t query_id, as_job_info* info
 	)
 {
+	as_metrics_add_api_blocking(as);
 	const char* module = (query->where.size > 0)? "query" : "scan";
 	return aerospike_job_info(as, err, policy, module, query_id, false, info);
 }

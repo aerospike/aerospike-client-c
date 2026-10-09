@@ -2080,6 +2080,8 @@ aerospike_query_foreach(
 	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
 	aerospike_query_foreach_callback callback, void* udata)
 {
+	as_metrics_add_api_blocking(as);
+
 	if (query->ops) {
 		if (query->apply.function[0]) {
 			return as_error_update(err, AEROSPIKE_ERR_PARAM,
@@ -2236,6 +2238,8 @@ aerospike_query_partitions(
 	as_partition_filter* pf, aerospike_query_foreach_callback callback, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");
@@ -2286,6 +2290,8 @@ aerospike_query_async(
 	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
 	as_async_query_record_listener listener, void* udata, as_event_loop* event_loop)
 {
+	as_metrics_add_api_deferred(as);
+
 	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 			"Async aggregation or background queries are not supported");
@@ -2474,6 +2480,8 @@ aerospike_query_partitions_async(
 	as_event_loop* event_loop
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");
@@ -2528,6 +2536,8 @@ aerospike_query_background(
 	aerospike* as, as_error* err, const as_policy_write* policy,
 	const as_query* query, uint64_t* query_id)
 {
+	as_metrics_add_api_background(as);
+
 	as_error_reset(err);
 	
 	as_policy_write merged;

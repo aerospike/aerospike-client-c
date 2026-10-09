@@ -275,6 +275,7 @@ as_admin_execute_node(
 		return status;
 	}
 
+	as_metrics_add_api_blocking(as);
 	status = as_admin_send(err, &socket, node, buffer, end, 0, deadline_ms);
 	
 	if (status) {
@@ -400,6 +401,7 @@ as_admin_read_list(
 		return status;
 	}
 	
+	as_metrics_add_api_blocking(as);
 	status = as_admin_send(err, &socket, node, command, end, 0, deadline_ms);
 	
 	if (status) {
@@ -621,8 +623,6 @@ aerospike_create_user(
 	const char* password, const char** roles, int roles_size
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	int len = (int)strlen(user);
@@ -658,8 +658,6 @@ aerospike_create_pki_user(
 	const char** roles, int roles_size
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_node* node = as_node_get_random(as->cluster);
 	
 	if (! node) {
@@ -707,8 +705,6 @@ aerospike_create_pki_user(
 as_status
 aerospike_drop_user(aerospike* as, as_error* err, const as_policy_admin* policy, const char* user)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -725,8 +721,6 @@ aerospike_set_password(
 	const char* password
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	if (! user) {
@@ -773,8 +767,6 @@ aerospike_change_password(
 	const char* password
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	if (! user) {
@@ -824,8 +816,6 @@ aerospike_grant_roles(
 	const char** roles, int roles_size
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -843,8 +833,6 @@ aerospike_revoke_roles(
 	const char** roles, int roles_size
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -862,8 +850,6 @@ aerospike_create_role(
 	as_privilege** privileges, int privileges_size
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -885,8 +871,6 @@ aerospike_create_role_whitelist(
 	as_privilege** privileges, int privileges_size, const char** whitelist, int whitelist_size
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -929,8 +913,6 @@ aerospike_create_role_quotas(
 	int read_quota, int write_quota
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -985,8 +967,6 @@ aerospike_create_role_quotas(
 as_status
 aerospike_drop_role(aerospike* as, as_error* err, const as_policy_admin* policy, const char* role)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -1003,8 +983,6 @@ aerospike_grant_privileges(
 	as_privilege** privileges, int privileges_size
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -1026,8 +1004,6 @@ aerospike_revoke_privileges(
 	as_privilege** privileges, int privileges_size
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -1049,8 +1025,6 @@ aerospike_set_whitelist(
 	const char** whitelist, int whitelist_size
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -1076,8 +1050,6 @@ aerospike_set_quotas(
 	int read_quota, int write_quota
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -1248,8 +1220,6 @@ aerospike_query_user(
 	as_user** user
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	if (! user_name) {
@@ -1307,8 +1277,6 @@ aerospike_query_users(
 	aerospike* as, as_error* err, const as_policy_admin* policy, as_user*** users, int* users_size
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	uint8_t buffer[AS_STACK_BUF_SIZE];
@@ -1541,8 +1509,6 @@ aerospike_query_role(
 	as_role** role
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	
@@ -1586,8 +1552,6 @@ aerospike_query_roles(
 	aerospike* as, as_error* err, const as_policy_admin* policy, as_role*** roles, int* roles_size
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	uint8_t buffer[AS_STACK_BUF_SIZE];
 	uint8_t* p = buffer + 8;
 	

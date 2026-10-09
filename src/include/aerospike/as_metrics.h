@@ -473,14 +473,13 @@ typedef struct as_metrics_policy_s {
 	/**
 	 * Directory path for the built-in learn-metrics file exporter.
 	 *
-	 * When dynamic configuration metrics.exporter is file and deprecated listeners
-	 * are not set, aerospike_enable_metrics() installs the file exporter.
-	 * An empty metrics.report_dir overrides the application directory and installs
-	 * nothing. When metrics.report_dir is absent, an empty application report_dir
-	 * uses ".". Application code with an empty report_dir and no dynamic
-	 * configuration metrics.exporter also installs nothing. metrics.exporter none
-	 * and custom do not install the file exporter. Collection can still run with
-	 * no exporter.
+	 * Dynamic configuration keys metrics.exporter and metrics.report_dir override
+	 * this policy field. metrics.exporter file installs the file exporter when
+	 * deprecated listeners are not set. An empty metrics.report_dir overrides
+	 * report_dir and installs nothing. When metrics.report_dir is absent, an empty
+	 * report_dir uses ".". An empty report_dir with no metrics.exporter key also
+	 * installs nothing. metrics.exporter none and custom do not install the file
+	 * exporter. Collection can still run with no exporter.
 	 *
 	 * Default: . (current directory)
 	 */

@@ -93,14 +93,12 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 			as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)?
 				cfg->export_interval : src->export_interval,
 			sizeof(mrg->export_interval));
-		mrg->builtin_exporter = as_field_is_set(bitmap, AS_METRICS_EXPORTER)?
-			cfg->builtin_exporter : src->builtin_exporter;
 
-		// metrics.exporter file overrides an application report_dir that is empty.
-		// An explicit metrics.report_dir, including "", is left as configured.
+		// metrics.exporter file overrides an application report_dir that is empty
+		// only when metrics.report_dir is absent. An explicit "" stays empty.
 		if (as_field_is_set(bitmap, AS_METRICS_EXPORTER) &&
 				!as_field_is_set(bitmap, AS_METRICS_REPORT_DIR) &&
-				mrg->builtin_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+				config->metrics_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
 				mrg->report_dir[0] == '\0') {
 			as_strncpy(mrg->report_dir, ".", sizeof(mrg->report_dir));
 		}
@@ -171,7 +169,6 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	as_strncpy(policy->report_dir, ".", sizeof(policy->report_dir));
 	policy->interval = 30;
 	policy->export_interval[0] = '\0';
-	policy->builtin_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
 	policy->latency_columns = 7;
 	policy->latency_shift = 1;
 	policy->latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
@@ -1165,7 +1162,21 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	pthread_mutex_init(&rt->lock, NULL);
 	pthread_cond_init(&rt->cond, NULL);
 
-	if (policy->builtin_exporter == AS_METRICS_BUILTIN_EXPORTER_CUSTOM && policy->exporters) {
+	// metrics.exporter is dynamic configuration only. Without that key, added
+	// exporters are called and the file writer is used when nothing else exports.
+	as_metrics_builtin_exporter mode = AS_METRICS_BUILTIN_EXPORTER_FILE;
+	aerospike* owner = cluster->as;
+	bool dynamic_exporter = owner && owner->config_bitmap &&
+		as_field_is_set(owner->config_bitmap, AS_METRICS_EXPORTER);
+
+	if (dynamic_exporter) {
+		mode = owner->config.metrics_exporter;
+	}
+	else if (policy->exporters && policy->exporters->size > 0) {
+		mode = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;
+	}
+
+	if (mode == AS_METRICS_BUILTIN_EXPORTER_CUSTOM && policy->exporters) {
 		for (uint32_t i = 0; i < policy->exporters->size; i++) {
 			as_metrics_exporter_slot slot;
 			memset(&slot, 0, sizeof(slot));
@@ -1175,7 +1186,7 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		}
 	}
 
-	if (policy->builtin_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+	if (mode == AS_METRICS_BUILTIN_EXPORTER_FILE &&
 			!custom_listener && policy->report_dir[0] != '\0') {
 		as_metrics_exporter* file_exporter = NULL;
 		as_status status = as_metrics_file_exporter_create(err, policy, &file_exporter);

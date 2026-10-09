@@ -20,6 +20,7 @@
 #include <aerospike/as_atomic.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_config_file.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_key.h>
@@ -572,7 +573,6 @@ TEST(metrics_policy_defaults, "metrics policy defaults leave operational and usa
 	assert_false(policy.enable);
 	assert_int_eq(policy.interval, 30);
 	assert_string_eq(policy.export_interval, "");
-	assert_int_eq(policy.builtin_exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
 	assert_int_eq(policy.latency_columns, 7);
 	assert_int_eq(policy.latency_shift, 1);
 	assert_int_eq(policy.latency_unit, AS_METRICS_LATENCY_MILLISECONDS);
@@ -896,7 +896,6 @@ TEST(metrics_exporter_suppresses_file, "a registered exporter receives the snaps
 	metrics_policy_init_without_default_file_exporter(&policy);
 	as_metrics_policy_set_report_dir(&policy, dir);
 	as_metrics_policy_add_exporter(&policy, &exporter->base);
-	policy.builtin_exporter = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;
 
 	as_error err;
 	as_status status = metrics_enable(&policy, &err);
@@ -923,26 +922,67 @@ TEST(metrics_exporter_none_skips_added_exporters, "none and file do not call add
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
 	as_metrics_policy_add_exporter(&policy, &exporter->base);
-	policy.builtin_exporter = AS_METRICS_BUILTIN_EXPORTER_NONE;
+
+	uint8_t bitmap[AS_CONFIG_BITMAP_SIZE];
+	memset(bitmap, 0, sizeof(bitmap));
+	as_field_set(bitmap, AS_METRICS_EXPORTER);
+
+	uint8_t* saved_bitmap = as->config_bitmap;
+	as_metrics_builtin_exporter saved_exporter = as->config.metrics_exporter;
+	as->config_bitmap = bitmap;
+	as->config.metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_NONE;
 
 	as_error err;
-	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	as_status none_status = metrics_enable(&policy, &err);
 
 	as_metrics_snapshot* metrics_snapshot = NULL;
-	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
-	assert_true(metrics_snapshot->metrics_enabled);
-	as_metrics_snapshot_destroy(metrics_snapshot);
+	as_status snapshot_status = AEROSPIKE_ERR_CLIENT;
+	bool enabled = false;
 
-	assert_int_eq(aerospike_disable_metrics(as, &err), AEROSPIKE_OK);
-	assert_int_eq(as_load_uint32(&exporter->calls), 0);
+	if (none_status == AEROSPIKE_OK) {
+		snapshot_status = aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot);
 
-	policy.builtin_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
-	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
-	assert_int_eq(aerospike_disable_metrics(as, &err), AEROSPIKE_OK);
-	assert_int_eq(as_load_uint32(&exporter->calls), 0);
+		if (snapshot_status == AEROSPIKE_OK) {
+			enabled = metrics_snapshot->metrics_enabled;
+			as_metrics_snapshot_destroy(metrics_snapshot);
+		}
+	}
 
+	as_status none_disable = aerospike_disable_metrics(as, &err);
+	uint32_t none_calls = as_load_uint32(&exporter->calls);
+
+	char dir[256];
+	bool dir_ok = metrics_create_temp_dir_path(dir, sizeof(dir));
+
+	if (dir_ok) {
+		as_metrics_policy_set_report_dir(&policy, dir);
+	}
+
+	as->config.metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
+	as_status file_status = metrics_enable(&policy, &err);
+	as_status file_disable = aerospike_disable_metrics(as, &err);
+	uint32_t file_calls = as_load_uint32(&exporter->calls);
+	int logs = dir_ok? metrics_count_logs(dir) : -1;
+
+	if (dir_ok) {
+		metrics_remove_dir(dir);
+	}
+
+	as->config_bitmap = saved_bitmap;
+	as->config.metrics_exporter = saved_exporter;
 	as_metrics_policy_destroy(&policy);
 	cf_free(exporter);
+
+	assert_int_eq(none_status, AEROSPIKE_OK);
+	assert_int_eq(snapshot_status, AEROSPIKE_OK);
+	assert_true(enabled);
+	assert_int_eq(none_disable, AEROSPIKE_OK);
+	assert_int_eq(none_calls, 0);
+	assert_true(dir_ok);
+	assert_int_eq(file_status, AEROSPIKE_OK);
+	assert_int_eq(file_disable, AEROSPIKE_OK);
+	assert_int_eq(file_calls, 0);
+	assert_int_eq(logs, 1);
 }
 
 TEST(metrics_exporter_isolation, "one exporter failure does not skip the others")
@@ -952,7 +992,6 @@ TEST(metrics_exporter_isolation, "one exporter failure does not skip the others"
 
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
-	policy.builtin_exporter = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;
 	as_metrics_policy_add_exporter(&policy, &failing->base);
 	as_metrics_policy_add_exporter(&policy, &healthy->base);
 
@@ -977,7 +1016,6 @@ TEST(metrics_exporter_suspend, "an exporter is suspended after consecutive failu
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
 	policy.interval = 1;
-	policy.builtin_exporter = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;
 	as_metrics_policy_add_exporter(&policy, &failing->base);
 	as_metrics_policy_add_exporter(&policy, &healthy->base);
 
@@ -1019,7 +1057,6 @@ TEST(metrics_periodic_export_stops_on_disable, "disable stops the export thread 
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
 	policy.interval = 1;
-	policy.builtin_exporter = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;
 	as_metrics_policy_add_exporter(&policy, &exporter->base);
 
 	as_error err;
@@ -1170,7 +1207,9 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while enabled and
 }
 
 static bool
-metrics_read_dynamic_config(const char* yaml_body, as_metrics_policy* policy, bool app_report_dir_empty)
+metrics_read_dynamic_config(
+	const char* yaml_body, as_metrics_policy* policy, bool app_report_dir_empty,
+	const char* app_report_dir, as_metrics_builtin_exporter* exporter)
 {
 	char dir[512];
 
@@ -1197,6 +1236,10 @@ metrics_read_dynamic_config(const char* yaml_body, as_metrics_policy* policy, bo
 	if (app_report_dir_empty) {
 		config.policies.metrics.report_dir[0] = '\0';
 	}
+	else if (app_report_dir) {
+		as_strncpy(config.policies.metrics.report_dir, app_report_dir,
+			sizeof(config.policies.metrics.report_dir));
+	}
 
 	as_config_provider_set_path(&config, path);
 
@@ -1206,6 +1249,7 @@ metrics_read_dynamic_config(const char* yaml_body, as_metrics_policy* policy, bo
 	*policy = client.config.policies.metrics;
 	policy->labels = NULL;
 	policy->exporters = NULL;
+	*exporter = client.config.metrics_exporter;
 
 	aerospike_destroy(&client);
 	metrics_remove_dir(dir);
@@ -1215,6 +1259,7 @@ metrics_read_dynamic_config(const char* yaml_body, as_metrics_policy* policy, bo
 TEST(metrics_dynamic_config_export, "dynamic config sets export interval, exporter, and report file")
 {
 	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
 	assert_true(metrics_read_dynamic_config(
 		"version: 1.1.0\n"
 		"dynamic:\n"
@@ -1223,12 +1268,12 @@ TEST(metrics_dynamic_config_export, "dynamic config sets export interval, export
 		"    exporter: none\n"
 		"    report_dir: \"\"\n"
 		"    report_size_limit: 2000000\n",
-		&policy, false));
+		&policy, false, NULL, &exporter));
 
 	// The duration string is kept. Enable converts it to milliseconds.
 	assert_string_eq(policy.export_interval, "45s");
 	assert_int_eq(policy.interval, 30);
-	assert_int_eq(policy.builtin_exporter, AS_METRICS_BUILTIN_EXPORTER_NONE);
+	assert_int_eq(exporter, AS_METRICS_BUILTIN_EXPORTER_NONE);
 	assert_string_eq(policy.report_dir, "");
 	assert_int_eq((int64_t)policy.report_size_limit, 2000000);
 }
@@ -1236,6 +1281,7 @@ TEST(metrics_dynamic_config_export, "dynamic config sets export interval, export
 TEST(metrics_dynamic_config_keeps_export_interval, "dynamic config keeps the export_interval duration string")
 {
 	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
 	assert_true(metrics_read_dynamic_config(
 		"version: 1.1.0\n"
 		"dynamic:\n"
@@ -1244,12 +1290,12 @@ TEST(metrics_dynamic_config_keeps_export_interval, "dynamic config keeps the exp
 		"    exporter: file\n"
 		"    report_dir: /tmp/metrics-export\n"
 		"    report_size_limit: 1000000\n",
-		&policy, false));
+		&policy, false, NULL, &exporter));
 
 	// Enable sleeps this duration directly. It is not rounded to a tend count.
 	assert_string_eq(policy.export_interval, "1500ms");
 	assert_int_eq(policy.interval, 30);
-	assert_int_eq(policy.builtin_exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
+	assert_int_eq(exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
 	assert_string_eq(policy.report_dir, "/tmp/metrics-export");
 	assert_int_eq((int64_t)policy.report_size_limit, 1000000);
 }
@@ -1257,18 +1303,19 @@ TEST(metrics_dynamic_config_keeps_export_interval, "dynamic config keeps the exp
 TEST(metrics_dynamic_config_rejects_unknown_exporter, "metrics.exporter accepts only file, none, and custom")
 {
 	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
 	assert_true(metrics_read_dynamic_config(
 		"version: 1.1.0\n"
 		"dynamic:\n"
 		"  metrics:\n"
 		"    export_interval: 45s\n"
 		"    exporter: prometheus\n",
-		&policy, false));
+		&policy, false, NULL, &exporter));
 
 	// A rejected file is restored, so the earlier export_interval does not apply.
 	assert_int_eq(policy.interval, 30);
 	assert_string_eq(policy.export_interval, "");
-	assert_int_eq(policy.builtin_exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
+	assert_int_eq(exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
 	assert_string_eq(policy.report_dir, ".");
 	assert_int_eq((int64_t)policy.report_size_limit, 0);
 }
@@ -1276,15 +1323,33 @@ TEST(metrics_dynamic_config_rejects_unknown_exporter, "metrics.exporter accepts 
 TEST(metrics_dynamic_config_file_overrides_empty_report_dir, "metrics.exporter file installs the writer when the application report_dir is empty")
 {
 	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
 	assert_true(metrics_read_dynamic_config(
 		"version: 1.1.0\n"
 		"dynamic:\n"
 		"  metrics:\n"
 		"    exporter: file\n",
-		&policy, true));
+		&policy, true, NULL, &exporter));
 
-	assert_int_eq(policy.builtin_exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
+	assert_int_eq(exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
 	assert_string_eq(policy.report_dir, ".");
+}
+
+TEST(metrics_dynamic_config_empty_report_dir_skips_file, "empty metrics.report_dir overrides the application directory")
+{
+	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
+	assert_true(metrics_read_dynamic_config(
+		"version: 1.1.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    exporter: file\n"
+		"    report_dir: \"\"\n",
+		&policy, false, "/tmp/app-metrics", &exporter));
+
+	// file with an explicit empty directory does not install the writer.
+	assert_int_eq(exporter, AS_METRICS_BUILTIN_EXPORTER_FILE);
+	assert_string_eq(policy.report_dir, "");
 }
 
 /******************************************************************************
@@ -1327,4 +1392,5 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_dynamic_config_keeps_export_interval);
 	suite_add(metrics_dynamic_config_rejects_unknown_exporter);
 	suite_add(metrics_dynamic_config_file_overrides_empty_report_dir);
+	suite_add(metrics_dynamic_config_empty_report_dir_skips_file);
 }

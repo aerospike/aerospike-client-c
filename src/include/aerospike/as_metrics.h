@@ -451,16 +451,18 @@ typedef struct as_metrics_exporter_s {
 typedef struct as_metrics_cpu_state_s as_metrics_cpu_state;
 
 /**
- * Exporter selected by dynamic configuration metrics.exporter.
+ * Dynamic configuration metrics.exporter. This is not an application policy field.
  * file uses the learn-metrics writer. none collects metrics and does not call
  * export. custom calls every exporter added with as_metrics_policy_add_exporter().
+ * When the key is absent, added exporters are called, and the file writer is used
+ * when report_dir is non-empty and no exporters or deprecated listeners are set.
  */
 typedef enum as_metrics_builtin_exporter_e {
 	/**
 	 * Use the learn-metrics file writer.
-	 * Dynamic configuration metrics.exporter file installs the writer even when
-	 * the application report_dir is empty. The directory is metrics.report_dir
-	 * when that key is set, otherwise the application report_dir, otherwise ".".
+	 * An empty dynamic configuration metrics.report_dir does not install the
+	 * writer, even when the application report_dir is set. When that key is
+	 * absent, an empty application report_dir uses ".".
 	 */
 	AS_METRICS_BUILTIN_EXPORTER_FILE = 0,
 
@@ -499,10 +501,10 @@ typedef struct as_metrics_policy_s {
 	 * Directory path for the built-in learn-metrics file exporter.
 	 *
 	 * When dynamic configuration metrics.exporter is file and deprecated listeners
-	 * are not set, aerospike_enable_metrics() installs the file exporter. An empty
-	 * application report_dir does not suppress that. The writer uses "." unless
-	 * metrics.report_dir sets a directory. An empty metrics.report_dir installs
-	 * nothing. Application code with an empty report_dir and no dynamic
+	 * are not set, aerospike_enable_metrics() installs the file exporter.
+	 * An empty metrics.report_dir overrides the application directory and installs
+	 * nothing. When metrics.report_dir is absent, an empty application report_dir
+	 * uses ".". Application code with an empty report_dir and no dynamic
 	 * configuration metrics.exporter also installs nothing. metrics.exporter none
 	 * and custom do not install the file exporter. Collection can still run with
 	 * no exporter.
@@ -544,17 +546,6 @@ typedef struct as_metrics_policy_s {
 	 * Default: ""
 	 */
 	char export_interval[32];
-
-	/**
-	 * Dynamic configuration metrics.exporter.
-	 * file uses the learn-metrics writer. An empty application report_dir does
-	 * not suppress dynamic configuration metrics.exporter file.
-	 * none collects metrics and does not call export.
-	 * custom calls exporters added with as_metrics_policy_add_exporter().
-	 *
-	 * Default: AS_METRICS_BUILTIN_EXPORTER_FILE
-	 */
-	as_metrics_builtin_exporter builtin_exporter;
 
 	/**
 	 * Number of elapsed time range buckets in latency histograms.
@@ -612,9 +603,12 @@ typedef struct as_metrics_policy_s {
 	bool enable;
 
 	/**
-	 * Exporters called when dynamic configuration metrics.exporter is custom.
-	 * Append with as_metrics_policy_add_exporter(). The application owns these
-	 * exporters. file uses the built-in writer instead. none does not call them.
+	 * Exporters appended with as_metrics_policy_add_exporter(). The application
+	 * owns these exporters.
+	 *
+	 * They are called when dynamic configuration metrics.exporter is custom, and
+	 * when that key is not set. file uses the built-in writer instead. none does
+	 * not call them.
 	 *
 	 * Default: NULL
 	 */

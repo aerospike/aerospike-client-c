@@ -1224,7 +1224,7 @@ as_parse_export_interval(as_yaml* yaml, const char* name, const char* value, as_
 }
 
 static bool
-as_parse_builtin_exporter(as_yaml* yaml, const char* name, const char* value, as_metrics_policy* policy)
+as_parse_builtin_exporter(as_yaml* yaml, const char* name, const char* value)
 {
 	as_metrics_builtin_exporter kind;
 
@@ -1243,9 +1243,9 @@ as_parse_builtin_exporter(as_yaml* yaml, const char* name, const char* value, as
 		return false;
 	}
 
-	if (policy->builtin_exporter != kind) {
+	if (yaml->config->metrics_exporter != kind) {
 		as_log_info("Set %s.%s = %s", yaml->name, name, value);
-		policy->builtin_exporter = kind;
+		yaml->config->metrics_exporter = kind;
 	}
 
 	as_field_set(yaml->bitmap, AS_METRICS_EXPORTER);
@@ -1301,7 +1301,7 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 	}
 
 	if (strcmp(name, "exporter") == 0) {
-		return as_parse_builtin_exporter(yaml, name, value, policy);
+		return as_parse_builtin_exporter(yaml, name, value);
 	}
 
 	if (strcmp(name, "report_dir") == 0) {
@@ -1775,13 +1775,14 @@ as_config_file_read(aerospike* as, as_config* config, uint8_t* bitmap, bool init
 			path, yaml.err.message);
 	}
 
-	// metrics.exporter file overrides an empty application report_dir.
-	// metrics.report_dir, including an empty value, stays as written in the file.
+	// metrics.exporter file overrides an empty application report_dir only when
+	// metrics.report_dir is absent. An explicit empty metrics.report_dir stays
+	// empty and does not install the file writer.
 	as_metrics_policy* metrics = &config->policies.metrics;
 
 	if (as_field_is_set(bitmap, AS_METRICS_EXPORTER) &&
 			!as_field_is_set(bitmap, AS_METRICS_REPORT_DIR) &&
-			metrics->builtin_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+			config->metrics_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
 			metrics->report_dir[0] == '\0') {
 		as_strncpy(metrics->report_dir, ".", sizeof(metrics->report_dir));
 	}
@@ -2098,14 +2099,14 @@ as_cluster_update_policies(as_policies* orig, as_policies* src, as_policies* trg
 static as_status
 as_cluster_update_metrics(
 	as_cluster* cluster, as_error* err, as_metrics_policy* orig, as_metrics_policy* src,
-	as_metrics_policy* trg, uint8_t* bitmap
+	as_metrics_policy* trg, uint8_t* bitmap, as_metrics_builtin_exporter exporter,
+	bool exporter_changed
 	)
 {
 	pthread_mutex_lock(&cluster->metrics_lock);
 
 	bool enable_metrics = false;
 	uint64_t prev_report_size_limit = trg->report_size_limit;
-	as_metrics_builtin_exporter prev_exporter = trg->builtin_exporter;
 	char prev_report_dir[256];
 	char prev_export_interval[32];
 	as_strncpy(prev_report_dir, trg->report_dir, sizeof(prev_report_dir));
@@ -2119,8 +2120,6 @@ as_cluster_update_metrics(
 		src->latency_shift : orig->latency_shift;
 	trg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT)?
 		src->report_size_limit : orig->report_size_limit;
-	trg->builtin_exporter = as_field_is_set(bitmap, AS_METRICS_EXPORTER)?
-		src->builtin_exporter : orig->builtin_exporter;
 
 	if (as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)) {
 		as_strncpy(trg->export_interval, src->export_interval, sizeof(trg->export_interval));
@@ -2133,9 +2132,10 @@ as_cluster_update_metrics(
 		as_strncpy(trg->report_dir, src->report_dir, sizeof(trg->report_dir));
 	}
 	else if (as_field_is_set(bitmap, AS_METRICS_EXPORTER) &&
-			trg->builtin_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+			exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
 			orig->report_dir[0] == '\0') {
 		// The file selected the writer and did not set metrics.report_dir.
+		// An explicit empty metrics.report_dir is copied above and installs nothing.
 		as_strncpy(trg->report_dir, ".", sizeof(trg->report_dir));
 	}
 	else {
@@ -2164,7 +2164,7 @@ as_cluster_update_metrics(
 	if (trg->enable) {
 		bool export_changed = strcmp(trg->export_interval, prev_export_interval) != 0 ||
 			trg->report_size_limit != prev_report_size_limit ||
-			trg->builtin_exporter != prev_exporter ||
+			exporter_changed ||
 			strcmp(trg->report_dir, prev_report_dir) != 0;
 
 		if (!cluster->metrics_enabled || export_changed ||
@@ -2318,11 +2318,22 @@ as_cluster_update(
 		as_vector_append(cluster->gc, &item);
 	}
 
+	bool prev_dynamic = as->config_bitmap &&
+		as_field_is_set(as->config_bitmap, AS_METRICS_EXPORTER);
+	as_metrics_builtin_exporter prev_exporter = config->metrics_exporter;
+	bool next_dynamic = as_field_is_set(bitmap, AS_METRICS_EXPORTER);
+	as_metrics_builtin_exporter next_exporter = next_dynamic?
+		src->metrics_exporter : orig->metrics_exporter;
+	bool exporter_changed = prev_dynamic != next_dynamic ||
+		(next_dynamic && prev_exporter != next_exporter);
+	config->metrics_exporter = next_exporter;
+
 	as_cluster_update_policies(&orig->policies, &src->policies, &config->policies, bitmap);
 	memcpy(as->config_bitmap, bitmap, AS_CONFIG_BITMAP_SIZE);
 
 	return as_cluster_update_metrics(cluster, err, &orig->policies.metrics,
-		&src->policies.metrics, &config->policies.metrics, bitmap);
+		&src->policies.metrics, &config->policies.metrics, bitmap, next_exporter,
+		exporter_changed);
 }
 
 //---------------------------------

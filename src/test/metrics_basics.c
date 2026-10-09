@@ -1226,7 +1226,7 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while enabled and
 }
 
 static bool
-metrics_read_dynamic_config(
+metrics_read_dynamic_client_config_policy(
 	const char* yaml_body, as_metrics_policy* policy, bool app_report_dir_empty,
 	const char* app_report_dir, as_metrics_builtin_exporter* exporter)
 {
@@ -1282,7 +1282,7 @@ TEST(metrics_dynamic_config_export, "dynamic config sets export interval, export
 {
 	as_metrics_policy policy;
 	as_metrics_builtin_exporter exporter;
-	assert_true(metrics_read_dynamic_config(
+	assert_true(metrics_read_dynamic_client_config_policy(
 		"version: 1.1.0\n"
 		"dynamic:\n"
 		"  metrics:\n"
@@ -1304,7 +1304,7 @@ TEST(metrics_dynamic_config_keeps_export_interval, "dynamic config keeps the exp
 {
 	as_metrics_policy policy;
 	as_metrics_builtin_exporter exporter;
-	assert_true(metrics_read_dynamic_config(
+	assert_true(metrics_read_dynamic_client_config_policy(
 		"version: 1.1.0\n"
 		"dynamic:\n"
 		"  metrics:\n"
@@ -1326,7 +1326,7 @@ TEST(metrics_dynamic_config_rejects_unknown_exporter, "metrics.exporter accepts 
 {
 	as_metrics_policy policy;
 	as_metrics_builtin_exporter exporter;
-	assert_true(metrics_read_dynamic_config(
+	assert_true(metrics_read_dynamic_client_config_policy(
 		"version: 1.1.0\n"
 		"dynamic:\n"
 		"  metrics:\n"
@@ -1346,7 +1346,7 @@ TEST(metrics_dynamic_config_file_overrides_empty_report_dir, "metrics.exporter f
 {
 	as_metrics_policy policy;
 	as_metrics_builtin_exporter exporter;
-	assert_true(metrics_read_dynamic_config(
+	assert_true(metrics_read_dynamic_client_config_policy(
 		"version: 1.1.0\n"
 		"dynamic:\n"
 		"  metrics:\n"
@@ -1361,7 +1361,7 @@ TEST(metrics_dynamic_config_empty_report_dir_skips_file, "empty metrics.report_d
 {
 	as_metrics_policy policy;
 	as_metrics_builtin_exporter exporter;
-	assert_true(metrics_read_dynamic_config(
+	assert_true(metrics_read_dynamic_client_config_policy(
 		"version: 1.1.0\n"
 		"dynamic:\n"
 		"  metrics:\n"
@@ -1378,7 +1378,7 @@ TEST(metrics_dynamic_config_empty_export_interval, "empty metrics.export_interva
 {
 	as_metrics_policy policy;
 	as_metrics_builtin_exporter exporter;
-	assert_true(metrics_read_dynamic_config(
+	assert_true(metrics_read_dynamic_client_config_policy(
 		"version: 1.1.0\n"
 		"dynamic:\n"
 		"  metrics:\n"

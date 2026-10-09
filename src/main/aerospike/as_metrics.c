@@ -85,13 +85,13 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 		mrg->metrics_listeners = src->metrics_listeners;
 		mrg->exporters = src->exporters;
 		as_strncpy(mrg->report_dir,
-			as_field_is_set(bitmap, AS_METRICS_REPORT_DIR)? cfg->report_dir : src->report_dir,
+			as_field_is_set(bitmap, AS_METRICS_REPORT_DIR) ? cfg->report_dir : src->report_dir,
 			sizeof(mrg->report_dir));
-		mrg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT)?
+		mrg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT) ?
 			cfg->report_size_limit : src->report_size_limit;
 		mrg->interval = src->interval;
 		as_strncpy(mrg->export_interval,
-			as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)?
+			as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL) ?
 				cfg->export_interval : src->export_interval,
 			sizeof(mrg->export_interval));
 

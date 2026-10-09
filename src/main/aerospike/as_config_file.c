@@ -2099,7 +2099,7 @@ as_cluster_update_metrics(
 		as_field_is_set(cluster->as->config_bitmap, AS_METRICS_EXPORTER);
 	uint8_t prev_exporter = trg->metrics_exporter;
 	bool next_exporter_set = as_field_is_set(bitmap, AS_METRICS_EXPORTER);
-	trg->metrics_exporter = next_exporter_set? src->metrics_exporter : orig->metrics_exporter;
+	trg->metrics_exporter = next_exporter_set ? src->metrics_exporter : orig->metrics_exporter;
 	bool exporter_changed = prev_exporter_set != next_exporter_set ||
 		(next_exporter_set && prev_exporter != trg->metrics_exporter);
 
@@ -2109,7 +2109,7 @@ as_cluster_update_metrics(
 		src->latency_columns : orig->latency_columns;
 	trg->latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
 		src->latency_shift : orig->latency_shift;
-	trg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT)?
+	trg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT) ?
 		src->report_size_limit : orig->report_size_limit;
 
 	if (as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)) {

@@ -963,7 +963,7 @@ TEST(metrics_exporter_none_skips_added_exporters, "none and file do not call add
 	as_status file_status = metrics_enable(&policy, &err);
 	as_status file_disable = aerospike_disable_metrics(as, &err);
 	uint32_t file_calls = as_load_uint32(&exporter->calls);
-	int logs = dir_ok? metrics_count_logs(dir) : -1;
+	int logs = dir_ok ? metrics_count_logs(dir) : -1;
 
 	if (dir_ok) {
 		metrics_remove_dir(dir);

@@ -1172,37 +1172,11 @@ as_parse_labels(as_yaml* yaml, as_metrics_policy* policy, uint32_t field)
 static bool
 as_parse_export_interval(as_yaml* yaml, const char* name, const char* value, as_metrics_policy* policy)
 {
-	char* end = NULL;
-	errno = 0;
-	unsigned long long magnitude = strtoull(value, &end, 10);
+	uint64_t ms = 0;
 
-	if (end == value || errno != 0) {
-		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
-			"Invalid dynamic configuration metrics.export_interval: %s", value);
-		return false;
-	}
-
-	uint64_t scale;
-
-	if (*end == '\0' || strcmp(end, "s") == 0) {
-		scale = 1000;
-	}
-	else if (strcmp(end, "ms") == 0) {
-		scale = 1;
-	}
-	else if (strcmp(end, "m") == 0) {
-		scale = 60000;
-	}
-	else if (strcmp(end, "h") == 0) {
-		scale = 3600000;
-	}
-	else {
-		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
-			"Invalid dynamic configuration metrics.export_interval: %s", value);
-		return false;
-	}
-
-	if (magnitude == 0 || magnitude > UINT64_MAX / scale) {
+	// An empty string is not a dynamic configuration value. Enable treats "" as
+	// "use the deprecated interval field".
+	if (!as_metrics_export_interval_to_ms(value, &ms) || ms == 0) {
 		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
 			"Invalid dynamic configuration metrics.export_interval: %s", value);
 		return false;

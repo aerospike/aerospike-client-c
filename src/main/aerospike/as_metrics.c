@@ -1065,12 +1065,12 @@ as_metrics_listeners_defined(const as_metrics_listeners* listeners)
 		listeners->node_close_listener && listeners->disable_listener && listeners->udata;
 }
 
-static as_status
-as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms, as_error* err)
+bool
+as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms)
 {
 	if (!interval || interval[0] == '\0') {
 		*ms = 0;
-		return AEROSPIKE_OK;
+		return true;
 	}
 
 	errno = 0;
@@ -1078,7 +1078,7 @@ as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms, as_error* e
 	unsigned long long magnitude = strtoull(interval, &end, 10);
 
 	if (end == interval || errno != 0) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
+		return false;
 	}
 
 	uint64_t scale;
@@ -1096,15 +1096,15 @@ as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms, as_error* e
 		scale = 3600000;
 	}
 	else {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
+		return false;
 	}
 
 	if (magnitude == 0 || magnitude > UINT64_MAX / scale) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
+		return false;
 	}
 
 	*ms = magnitude * scale;
-	return AEROSPIKE_OK;
+	return true;
 }
 
 as_status
@@ -1117,10 +1117,9 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	}
 
 	uint64_t interval_ms = 0;
-	as_status interval_status = as_metrics_export_interval_to_ms(policy->export_interval, &interval_ms, err);
 
-	if (interval_status != AEROSPIKE_OK) {
-		return interval_status;
+	if (!as_metrics_export_interval_to_ms(policy->export_interval, &interval_ms)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
 	}
 
 	uint32_t tend_ms = cluster->tend_interval;

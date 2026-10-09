@@ -620,6 +620,15 @@ typedef struct as_metrics_policy_s {
 //---------------------------------
 
 /**
+ * @private
+ * Convert an export duration to milliseconds.
+ * NULL or "" sets *ms to 0 and returns true. A bare number is seconds.
+ * Suffixes are ms, s, m, and h. Zero, overflow, and unknown suffixes return false.
+ */
+AS_EXTERN bool
+as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms);
+
+/**
  * Initalize metrics policy.
  */
 AS_EXTERN void

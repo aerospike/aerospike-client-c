@@ -2088,6 +2088,9 @@ as_cluster_update_metrics(
 	pthread_mutex_lock(&cluster->metrics_lock);
 
 	bool enable_metrics = false;
+
+	// Save the export settings currently in effect. trg is overwritten below, and
+	// export_changed compares these copies with the values this reload installs.
 	uint64_t prev_report_size_limit = trg->report_size_limit;
 	char prev_report_dir[256];
 	char prev_export_interval[32];
@@ -2095,11 +2098,18 @@ as_cluster_update_metrics(
 	as_strncpy(prev_export_interval, trg->export_interval, sizeof(prev_export_interval));
 
 	// Read the bitmap already in effect before as_cluster_update replaces it.
+	// metrics_exporter is "file" when the key is absent and when the key is "file".
+	// An absent key calls added exporters, or the file writer when none were
+	// added. An explicit "file" does not call added exporters. Compare whether
+	// the key is set as well as the mode. Restart when the key appears or
+	// disappears, or when it stays set and the mode changes.
 	bool prev_exporter_set = cluster->as && cluster->as->config_bitmap &&
 		as_field_is_set(cluster->as->config_bitmap, AS_METRICS_EXPORTER);
+
 	uint8_t prev_exporter = trg->metrics_exporter;
 	bool next_exporter_set = as_field_is_set(bitmap, AS_METRICS_EXPORTER);
 	trg->metrics_exporter = next_exporter_set ? src->metrics_exporter : orig->metrics_exporter;
+
 	bool exporter_changed = prev_exporter_set != next_exporter_set ||
 		(next_exporter_set && prev_exporter != trg->metrics_exporter);
 
@@ -2153,14 +2163,16 @@ as_cluster_update_metrics(
 	as_status status = AEROSPIKE_OK;
 
 	if (trg->enable) {
+		// Restart the metrics thread when an export setting changed. Latency
+		// bucket layout is stored on the cluster, so compare that separately.
 		bool export_changed = strcmp(trg->export_interval, prev_export_interval) != 0 ||
 			trg->report_size_limit != prev_report_size_limit ||
 			exporter_changed ||
 			strcmp(trg->report_dir, prev_report_dir) != 0;
+		bool latency_changed = cluster->metrics_latency_columns != trg->latency_columns ||
+			cluster->metrics_latency_shift != trg->latency_shift;
 
-		if (!cluster->metrics_enabled || export_changed ||
-				!(cluster->metrics_latency_columns == trg->latency_columns &&
-				  cluster->metrics_latency_shift == trg->latency_shift)) {
+		if (!cluster->metrics_enabled || export_changed || latency_changed) {
 			enable_metrics = true;
 		}
 

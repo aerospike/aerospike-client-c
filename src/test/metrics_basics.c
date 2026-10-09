@@ -1247,6 +1247,9 @@ metrics_read_dynamic_config(
 	aerospike client;
 	aerospike_init(&client, &config);
 
+	// Copy the policy by value. report_dir and export_interval are arrays in the
+	// struct, so this does not leave policy pointing at client. Clear the
+	// pointer fields before aerospike_destroy() frees them.
 	*policy = client.config.policies.metrics;
 	policy->labels = NULL;
 	policy->exporters = NULL;

@@ -965,7 +965,9 @@ as_metrics_runtime_notify(as_cluster* cluster)
 
 	as_metrics_runtime* rt = cluster->metrics_runtime;
 
-	if (!cluster->metrics_enabled || !rt) {
+	// Disable clears thread_running before it joins this thread. Skip that interval
+	// so the final export is the one written while metrics are still enabled.
+	if (!cluster->metrics_enabled || !rt || !rt->thread_running) {
 		pthread_mutex_unlock(&cluster->metrics_lock);
 		return;
 	}
@@ -1313,7 +1315,6 @@ as_metrics_runtime_disable(as_error* err, as_cluster* cluster)
 {
 	as_metrics_runtime* rt = cluster->metrics_runtime;
 	bool was_enabled = cluster->metrics_enabled;
-	cluster->metrics_enabled = false;
 
 	if (rt && rt->thread_running) {
 		pthread_mutex_lock(&rt->lock);
@@ -1350,6 +1351,8 @@ as_metrics_runtime_disable(as_error* err, as_cluster* cluster)
 	if (status != AEROSPIKE_OK) {
 		*err = export_err;
 	}
+
+	cluster->metrics_enabled = false;
 
 	if (rt) {
 		as_metrics_runtime_free(rt);

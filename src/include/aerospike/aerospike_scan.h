@@ -584,7 +584,7 @@ aerospike_scan_partitions_async(
  * Scan without counting a user API call. A query with no filter uses this after
  * it has already counted the query.
  */
-AS_EXTERN as_status
+as_status
 as_scan_foreach(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	aerospike_scan_foreach_callback callback, void* udata
@@ -595,7 +595,7 @@ as_scan_foreach(
  * Async scan without counting a user API call. A query with no filter uses this
  * after it has already counted the query.
  */
-AS_EXTERN as_status
+as_status
 as_scan_async(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan, uint64_t* scan_id,
 	as_async_scan_listener listener, void* udata, as_event_loop* event_loop

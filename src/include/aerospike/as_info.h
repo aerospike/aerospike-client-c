@@ -43,11 +43,11 @@ typedef struct as_name_value_s {
 
 /**
  * @private
- * Send an info request to one node without counting a user API call.
+ * Send an info request to one node without incrementing usage metrics counters.
  * The response must be freed by the caller on success.
  */
 as_status
-as_info_node(
+as_info_node_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_info* policy, as_node* node,
 	const char* req, char** res
 	);

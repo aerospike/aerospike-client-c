@@ -581,22 +581,22 @@ aerospike_scan_partitions_async(
 
 /**
  * @private
- * Scan without counting a user API call. A query with no filter uses this after
- * it has already counted the query.
+ * Scan without incrementing usage metrics counters. A query with no filter uses
+ * this after it has already counted the query.
  */
 as_status
-as_scan_foreach(
+as_scan_foreach_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	aerospike_scan_foreach_callback callback, void* udata
 	);
 
 /**
  * @private
- * Async scan without counting a user API call. A query with no filter uses this
- * after it has already counted the query.
+ * Async scan without incrementing usage metrics counters. A query with no filter
+ * uses this after it has already counted the query.
  */
 as_status
-as_scan_async(
+as_scan_async_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan, uint64_t* scan_id,
 	as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	);

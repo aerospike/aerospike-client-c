@@ -33,7 +33,7 @@
 //---------------------------------
 
 as_status
-as_info_node(
+as_info_node_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_info* policy, as_node* node,
 	const char* req, char** res
 	)
@@ -56,7 +56,7 @@ aerospike_info_node(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return as_info_node(as, err, policy, node, req, res);
+	return as_info_node_no_v3_metrics(as, err, policy, node, req, res);
 }
 
 as_status

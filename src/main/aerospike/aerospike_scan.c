@@ -1456,7 +1456,7 @@ aerospike_scan_info(
 }
 
 as_status
-as_scan_foreach_no_v3_metrics(
+aerospike_scan_foreach_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	aerospike_scan_foreach_callback callback, void* udata
 	)
@@ -1496,7 +1496,7 @@ aerospike_scan_foreach(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return as_scan_foreach_no_v3_metrics(as, err, policy, scan, callback, udata);
+	return aerospike_scan_foreach_no_v3_metrics(as, err, policy, scan, callback, udata);
 }
 
 as_status
@@ -1587,7 +1587,7 @@ aerospike_scan_partitions(
 }
 
 as_status
-as_scan_async_no_v3_metrics(
+aerospike_scan_async_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	uint64_t* scan_id, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
@@ -1627,7 +1627,7 @@ aerospike_scan_async(
 	)
 {
 	as_metrics_add_api_deferred(as);
-	return as_scan_async_no_v3_metrics(as, err, policy, scan, scan_id, listener, udata, event_loop);
+	return aerospike_scan_async_no_v3_metrics(as, err, policy, scan, scan_id, listener, udata, event_loop);
 }
 
 as_status

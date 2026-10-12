@@ -262,7 +262,7 @@ as_txn_monitor_remove(
 	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
 	policy.durable_delete = true;
 
-	return as_key_remove_no_v3_metrics(as, err, &policy, key);
+	return aerospike_key_remove_no_v3_metrics(as, err, &policy, key);
 }
 
 //---------------------------------
@@ -354,6 +354,6 @@ as_txn_monitor_remove_async(
 	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
 	policy.durable_delete = true;
 
-	return as_key_remove_async_no_v3_metrics(as, err, &policy, key, listener, udata,
+	return aerospike_key_remove_async_no_v3_metrics(as, err, &policy, key, listener, udata,
 		event_loop, NULL);
 }

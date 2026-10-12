@@ -2763,22 +2763,22 @@ as_single_execute(
 			if (br->n_bin_names > 0) {
 				as_policy_read pr;
 				as_read_policy_copy(&pr, pb, br->policy);
-				status = as_key_select_bins_no_v3_metrics(as, err, &pr, key, (const char**)br->bin_names, br->n_bin_names, &record);
+				status = aerospike_key_select_bins_no_v3_metrics(as, err, &pr, key, (const char**)br->bin_names, br->n_bin_names, &record);
 			}
 			else if (br->ops) {
 				as_policy_operate po;
 				as_operate_policy_copy_read(&po, pb, br->policy);
-				status = as_key_operate_no_v3_metrics(as, err, &po, key, br->ops, &record);
+				status = aerospike_key_operate_no_v3_metrics(as, err, &po, key, br->ops, &record);
 			}
 			else {
 				as_policy_read pr;
 				as_read_policy_copy(&pr, pb, br->policy);
 
 				if (br->read_all_bins) {
-					status = as_key_get_no_v3_metrics(as, err, &pr, key, &record);
+					status = aerospike_key_get_no_v3_metrics(as, err, &pr, key, &record);
 				}
 				else {
-					status = as_key_exists_no_v3_metrics(as, err, &pr, key, &record);
+					status = aerospike_key_exists_no_v3_metrics(as, err, &pr, key, &record);
 				}
 			}
 			return status;
@@ -2790,7 +2790,7 @@ as_single_execute(
 			as_policy_operate po;
 			as_operate_policy_copy_write(as, pb, bw, &po);
 
-			return as_key_operate_no_v3_metrics(as, err, &po, key, bw->ops, &record);
+			return aerospike_key_operate_no_v3_metrics(as, err, &po, key, bw->ops, &record);
 		}
 
 		case AS_BATCH_APPLY: {
@@ -2800,7 +2800,7 @@ as_single_execute(
 			as_apply_policy_copy(as, pb, ba, &pa);
 
 			as_val* val = NULL;
-			as_status status = as_key_apply_no_v3_metrics(as, err, &pa, key, ba->module, ba->function, ba->arglist, &val);
+			as_status status = aerospike_key_apply_no_v3_metrics(as, err, &pa, key, ba->module, ba->function, ba->arglist, &val);
 
 			if (status == AEROSPIKE_OK) {
 				// Create SUCCESS bin from val.
@@ -2822,7 +2822,7 @@ as_single_execute(
 			as_policy_remove pr;
 			as_remove_policy_copy(as, pb, br, &pr);
 
-			return as_key_remove_no_v3_metrics(as, err, &pr, key);
+			return aerospike_key_remove_no_v3_metrics(as, err, &pr, key);
 		}
 
 		case AS_BATCH_TXN_VERIFY: {
@@ -3204,13 +3204,13 @@ as_single_execute_record_async(
 			if (br->n_bin_names > 0) {
 				as_policy_read pr;
 				as_read_policy_copy(&pr, pb, br->policy);
-				status = as_key_select_bins_async_no_v3_metrics(as, err, &pr, &rec->key, (const char**)br->bin_names,
+				status = aerospike_key_select_bins_async_no_v3_metrics(as, err, &pr, &rec->key, (const char**)br->bin_names,
 					br->n_bin_names, as_single_record_listener, data, exec->event_loop, NULL);
 			}
 			else if (br->ops) {
 				as_policy_operate po;
 				as_operate_policy_copy_read(&po, pb, br->policy);
-				status = as_key_operate_async_no_v3_metrics(as, err, &po, &rec->key, br->ops, as_single_record_listener,
+				status = aerospike_key_operate_async_no_v3_metrics(as, err, &po, &rec->key, br->ops, as_single_record_listener,
 					data, exec->event_loop, NULL);
 			}
 			else {
@@ -3218,11 +3218,11 @@ as_single_execute_record_async(
 				as_read_policy_copy(&pr, pb, br->policy);
 
 				if (br->read_all_bins) {
-					status = as_key_get_async_no_v3_metrics(as, err, &pr, &rec->key, as_single_record_listener, data,
+					status = aerospike_key_get_async_no_v3_metrics(as, err, &pr, &rec->key, as_single_record_listener, data,
 						exec->event_loop, NULL);
 				}
 				else {
-					status = as_key_exists_async_no_v3_metrics(as, err, &pr, &rec->key, as_single_record_listener, data,
+					status = aerospike_key_exists_async_no_v3_metrics(as, err, &pr, &rec->key, as_single_record_listener, data,
 						exec->event_loop, NULL);
 				}
 			}
@@ -3235,7 +3235,7 @@ as_single_execute_record_async(
 			as_policy_operate po;
 			as_operate_policy_copy_write(as, pb, bw, &po);
 
-			status = as_key_operate_async_no_v3_metrics(as, err, &po, &rec->key, bw->ops, as_single_record_listener,
+			status = aerospike_key_operate_async_no_v3_metrics(as, err, &po, &rec->key, bw->ops, as_single_record_listener,
 				data, exec->event_loop, NULL);
 			break;
 		}
@@ -3246,7 +3246,7 @@ as_single_execute_record_async(
 			as_policy_apply pa;
 			as_apply_policy_copy(as, pb, ba, &pa);
 
-			status = as_key_apply_async_no_v3_metrics(as, err, &pa, &rec->key, ba->module, ba->function,
+			status = aerospike_key_apply_async_no_v3_metrics(as, err, &pa, &rec->key, ba->module, ba->function,
 				ba->arglist, as_single_value_listener, data, exec->event_loop, NULL);
 			break;
 		}
@@ -3257,7 +3257,7 @@ as_single_execute_record_async(
 			as_policy_remove pr;
 			as_remove_policy_copy(as, pb, br, &pr);
 
-			status = as_key_remove_async_no_v3_metrics(as, err, &pr, &rec->key, as_single_write_listener, data,
+			status = aerospike_key_remove_async_no_v3_metrics(as, err, &pr, &rec->key, as_single_write_listener, data,
 				exec->event_loop, NULL);
 			break;
 		}

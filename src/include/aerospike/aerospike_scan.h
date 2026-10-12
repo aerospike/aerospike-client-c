@@ -585,7 +585,7 @@ aerospike_scan_partitions_async(
  * this after it has already counted the query.
  */
 as_status
-as_scan_foreach_no_v3_metrics(
+aerospike_scan_foreach_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	aerospike_scan_foreach_callback callback, void* udata
 	);
@@ -596,7 +596,7 @@ as_scan_foreach_no_v3_metrics(
  * uses this after it has already counted the query.
  */
 as_status
-as_scan_async_no_v3_metrics(
+aerospike_scan_async_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan, uint64_t* scan_id,
 	as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	);

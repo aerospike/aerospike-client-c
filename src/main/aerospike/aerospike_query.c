@@ -2134,7 +2134,7 @@ aerospike_query_foreach(
 		as_scan scan;
 		convert_query_to_scan(policy, query, &scan_policy, &scan);
 
-		return as_scan_foreach_no_v3_metrics(as, err, &scan_policy, &scan, callback, udata);
+		return aerospike_scan_foreach_no_v3_metrics(as, err, &scan_policy, &scan, callback, udata);
 	}
 
 	as_nodes* nodes;
@@ -2336,7 +2336,7 @@ aerospike_query_async(
 		as_scan scan;
 		convert_query_to_scan(policy, query, &scan_policy, &scan);
 
-		return as_scan_async_no_v3_metrics(as, err, &scan_policy, &scan, NULL, listener, udata, event_loop);
+		return aerospike_scan_async_no_v3_metrics(as, err, &scan_policy, &scan, NULL, listener, udata, event_loop);
 	}
 
 	uint64_t task_id = as_random_get_uint64();

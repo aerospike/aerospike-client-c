@@ -1499,6 +1499,24 @@ TEST(metrics_dynamic_config_enabled_and_operational, "metrics.enabled and extend
 	assert_int_eq(policy.latency_shift, 3);
 }
 
+TEST(metrics_dynamic_config_usage, "metrics.extended.usage.enabled overrides the application policy")
+{
+	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
+	assert_true(metrics_read_dynamic_client_config_policy(
+		"version: 1.2.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    extended:\n"
+		"      usage:\n"
+		"        enabled: true\n",
+		&policy, false, NULL, &exporter));
+
+	assert_false(policy.enable);
+	assert_false(policy.operational_enabled);
+	assert_true(policy.usage_enabled);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -1543,4 +1561,5 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_dynamic_config_empty_report_dir_skips_file);
 	suite_add(metrics_dynamic_config_empty_export_interval);
 	suite_add(metrics_dynamic_config_enabled_and_operational);
+	suite_add(metrics_dynamic_config_usage);
 }

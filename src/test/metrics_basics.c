@@ -1414,14 +1414,12 @@ TEST(metrics_dynamic_config_enabled_and_operational, "metrics.enabled and extend
 		"        enabled: true\n"
 		"        latency_unit: microseconds\n"
 		"        latency_columns: 5\n"
-		"        latency_shift: 3\n"
-		"      usage:\n"
-		"        enabled: true\n",
+		"        latency_shift: 3\n",
 		&policy, false, NULL, &exporter));
 
 	assert_true(policy.enable);
 	assert_true(policy.operational_enabled);
-	assert_true(policy.usage_enabled);
+	assert_false(policy.usage_enabled);
 	assert_int_eq(policy.latency_unit, AS_METRICS_LATENCY_MICROSECONDS);
 	assert_int_eq(policy.latency_columns, 5);
 	assert_int_eq(policy.latency_shift, 3);

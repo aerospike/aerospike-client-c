@@ -108,8 +108,7 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 			cfg->latency_unit : src->latency_unit;
 		mrg->operational_enabled = as_field_is_set(bitmap, AS_METRICS_OPERATIONAL) ?
 			cfg->operational_enabled : src->operational_enabled;
-		mrg->usage_enabled = as_field_is_set(bitmap, AS_METRICS_USAGE) ?
-			cfg->usage_enabled : src->usage_enabled;
+		mrg->usage_enabled = src->usage_enabled;
 		return mrg;
 	}
 	else {

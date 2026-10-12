@@ -15,12 +15,17 @@
  * the License.
  */
 #include <aerospike/as_config_file.h>
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/aerospike.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_string.h>
 #include <aerospike/as_string_builder.h>
 #include <ctype.h>
+#include <errno.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <yaml.h>
 
 //---------------------------------
@@ -289,6 +294,35 @@ as_parse_uint8(as_yaml* yaml, const char* name, const char* value, uint8_t* out,
 	}
 
 	as_assign_uint8(yaml->name, name, value, val, out);
+	as_field_set(yaml->bitmap, field);
+	return true;
+}
+
+static inline void
+as_assign_uint64(
+	const char* section, const char* name, const char* value, uint64_t src, uint64_t* trg
+	)
+{
+	if (*trg != src) {
+		as_log_info("Set %s.%s = %s", section, name, value);
+		*trg = src;
+	}
+}
+
+static bool
+as_parse_uint64(as_yaml* yaml, const char* name, const char* value, uint64_t* out, uint32_t field)
+{
+	char* end = NULL;
+	errno = 0;
+	unsigned long long parsed = strtoull(value, &end, 10);
+
+	if (end == value || *end != '\0' || errno != 0) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid dynamic configuration %s.%s: %s", yaml->name, name, value);
+		return false;
+	}
+
+	as_assign_uint64(yaml->name, name, value, (uint64_t)parsed, out);
 	as_field_set(yaml->bitmap, field);
 	return true;
 }
@@ -1166,13 +1200,245 @@ as_parse_labels(as_yaml* yaml, as_metrics_policy* policy, uint32_t field)
 }
 
 static bool
+as_parse_export_interval(as_yaml* yaml, const char* name, const char* value, as_metrics_policy* policy)
+{
+	uint64_t ms = 0;
+
+	// "" is valid and matches the policy field. Enable then uses interval.
+	if (!as_metrics_export_interval_to_ms(value, &ms)) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid dynamic configuration metrics.export_interval: %s", value);
+		return false;
+	}
+
+	if (strlen(value) >= sizeof(policy->export_interval)) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid dynamic configuration metrics.export_interval: %s", value);
+		return false;
+	}
+
+	if (strcmp(policy->export_interval, value) != 0) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		as_strncpy(policy->export_interval, value, sizeof(policy->export_interval));
+	}
+
+	as_field_set(yaml->bitmap, AS_METRICS_EXPORT_INTERVAL);
+	return true;
+}
+
+static bool
+as_parse_builtin_exporter(as_yaml* yaml, const char* name, const char* value)
+{
+	as_metrics_builtin_exporter kind;
+
+	if (strcmp(value, "file") == 0) {
+		kind = AS_METRICS_BUILTIN_EXPORTER_FILE;
+	}
+	else if (strcmp(value, "none") == 0) {
+		kind = AS_METRICS_BUILTIN_EXPORTER_NONE;
+	}
+	else if (strcmp(value, "custom") == 0) {
+		kind = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;
+	}
+	else {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid dynamic configuration metrics.exporter: %s. valid values: file, none, custom", value);
+		return false;
+	}
+
+	as_metrics_policy* policy = &yaml->config->policies.metrics;
+
+	if (policy->metrics_exporter != kind) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		policy->metrics_exporter = kind;
+	}
+
+	as_field_set(yaml->bitmap, AS_METRICS_EXPORTER);
+	return true;
+}
+
+static bool
+as_parse_report_dir(as_yaml* yaml, const char* name, const char* value, as_metrics_policy* policy)
+{
+	if (strcmp(policy->report_dir, value) != 0) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		as_strncpy(policy->report_dir, value, sizeof(policy->report_dir));
+	}
+
+	as_field_set(yaml->bitmap, AS_METRICS_REPORT_DIR);
+	return true;
+}
+
+static bool
+as_skip_open_mapping(as_yaml* yaml)
+{
+	while (as_parse_next(yaml)) {
+		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+			return true;
+		}
+
+		yaml_event_delete(&yaml->event);
+
+		if (!as_parse_next(yaml)) {
+			return false;
+		}
+
+		if (!as_skip_value(yaml)) {
+			return false;
+		}
+	}
+	return false;
+}
+
+static bool
+as_parse_latency_unit(as_yaml* yaml, const char* name, const char* value, as_metrics_policy* policy)
+{
+	as_metrics_latency_unit unit;
+
+	if (strcmp(value, "milliseconds") == 0) {
+		unit = AS_METRICS_LATENCY_MILLISECONDS;
+	}
+	else if (strcmp(value, "microseconds") == 0) {
+		unit = AS_METRICS_LATENCY_MICROSECONDS;
+	}
+	else {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid dynamic configuration metrics.extended.operational.latency_unit: %s", value);
+		return false;
+	}
+
+	if (policy->latency_unit != unit) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		policy->latency_unit = unit;
+	}
+
+	as_field_set(yaml->bitmap, AS_METRICS_LATENCY_UNIT);
+	return true;
+}
+
+static bool
+as_parse_operational_field(as_yaml* yaml, const char* name, as_metrics_policy* policy)
+{
+	if (yaml->event.type == YAML_MAPPING_START_EVENT) {
+		// sampler and other nested groups are not applied.
+		yaml_event_delete(&yaml->event);
+		as_log_info("Unexpected field: metrics.extended.operational.%s", name);
+		return as_skip_open_mapping(yaml);
+	}
+
+	if (yaml->event.type != YAML_SCALAR_EVENT) {
+		as_expected_error(yaml, YAML_SCALAR_EVENT);
+		yaml_event_delete(&yaml->event);
+		return false;
+	}
+
+	const char* value = (const char*)yaml->event.data.scalar.value;
+	const char* saved = yaml->name;
+	bool rv = true;
+
+	yaml->name = "metrics.extended.operational";
+
+	if (strcmp(name, "enabled") == 0) {
+		rv = as_parse_bool(yaml, name, value, &policy->operational_enabled, AS_METRICS_OPERATIONAL);
+	}
+	else if (strcmp(name, "latency_unit") == 0) {
+		rv = as_parse_latency_unit(yaml, name, value, policy);
+	}
+	else if (strcmp(name, "latency_columns") == 0) {
+		rv = as_parse_uint8(yaml, name, value, &policy->latency_columns, AS_METRICS_LATENCY_COLUMNS);
+	}
+	else if (strcmp(name, "latency_shift") == 0) {
+		rv = as_parse_uint8(yaml, name, value, &policy->latency_shift, AS_METRICS_LATENCY_SHIFT);
+	}
+	else {
+		as_log_info("Unexpected field: metrics.extended.operational.%s", name);
+	}
+
+	yaml->name = saved;
+	yaml_event_delete(&yaml->event);
+	return rv;
+}
+
+typedef bool (*as_parse_metrics_field_fn)(as_yaml* yaml, const char* name, as_metrics_policy* policy);
+
+static bool
+as_parse_open_mapping(as_yaml* yaml, as_parse_metrics_field_fn fn, as_metrics_policy* policy)
+{
+	while (as_parse_next(yaml)) {
+		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+			return true;
+		}
+
+		if (yaml->event.type != YAML_SCALAR_EVENT) {
+			as_expected_error(yaml, YAML_SCALAR_EVENT);
+			yaml_event_delete(&yaml->event);
+			return false;
+		}
+
+		char name[256];
+		as_strncpy(name, (const char*)yaml->event.data.scalar.value, sizeof(name));
+		yaml_event_delete(&yaml->event);
+
+		if (!as_parse_next(yaml)) {
+			return false;
+		}
+
+		if (!fn(yaml, name, policy)) {
+			return false;
+		}
+	}
+	return false;
+}
+
+static bool
+as_parse_extended_field(as_yaml* yaml, const char* name, as_metrics_policy* policy)
+{
+	if (yaml->event.type != YAML_MAPPING_START_EVENT) {
+		as_log_info("Unexpected field: metrics.extended.%s", name);
+		return as_skip_value(yaml);
+	}
+
+	yaml_event_delete(&yaml->event);
+
+	if (strcmp(name, "operational") == 0) {
+		return as_parse_open_mapping(yaml, as_parse_operational_field, policy);
+	}
+
+	as_log_info("Unexpected field: metrics.extended.%s", name);
+	return as_skip_open_mapping(yaml);
+}
+
+static bool
 as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	as_metrics_policy* policy = &base->metrics;
 	yaml->name = "metrics";
 
-	if (strcmp(name, "enable") == 0) {
+	// metrics.enable remains the legacy name. metrics.enabled is the tech spec key.
+	if (strcmp(name, "enable") == 0 || strcmp(name, "enabled") == 0) {
 		return as_parse_bool(yaml, name, value, &policy->enable, AS_METRICS_ENABLE);
+	}
+
+	if (strcmp(name, "extended") == 0) {
+		return as_parse_open_mapping(yaml, as_parse_extended_field, policy);
+	}
+
+	if (strcmp(name, "export_interval") == 0) {
+		return as_parse_export_interval(yaml, name, value, policy);
+	}
+
+	if (strcmp(name, "exporter") == 0) {
+		return as_parse_builtin_exporter(yaml, name, value);
+	}
+
+	if (strcmp(name, "report_dir") == 0) {
+		return as_parse_report_dir(yaml, name, value, policy);
+	}
+
+	if (strcmp(name, "report_size_limit") == 0) {
+		return as_parse_uint64(yaml, name, value, &policy->report_size_limit, AS_METRICS_REPORT_SIZE_LIMIT);
 	}
 
 	if (strcmp(name, "latency_columns") == 0) {
@@ -1489,9 +1755,10 @@ as_parse_version(as_yaml* yaml)
 		return false;
 	}
 
-	if (strcmp(version, "1.1.0") != 0) {
+	if (strcmp(version, "1.0.0") != 0 && strcmp(version, "1.1.0") != 0 &&
+			strcmp(version, "1.2.0") != 0) {
 		// Log warning and continue parsing on version mismatch.
-		as_log_warn("Unexpected dynamic config file version: %s expected: 1.0.0", version);
+		as_log_warn("Unexpected dynamic config file version: %s expected: 1.0.0, 1.1.0, or 1.2.0", version);
 	}
 	return true;
 }
@@ -1637,6 +1904,19 @@ as_config_file_read(aerospike* as, as_config* config, uint8_t* bitmap, bool init
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to parse: %s\n%s",
 			path, yaml.err.message);
 	}
+
+	// metrics.exporter file overrides an empty application report_dir only when
+	// metrics.report_dir is absent. An explicit empty metrics.report_dir stays
+	// empty and does not install the file writer.
+	as_metrics_policy* metrics = &config->policies.metrics;
+
+	if (as_field_is_set(bitmap, AS_METRICS_EXPORTER) &&
+			!as_field_is_set(bitmap, AS_METRICS_REPORT_DIR) &&
+			metrics->metrics_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+			metrics->report_dir[0] == '\0') {
+		as_strncpy(metrics->report_dir, ".", sizeof(metrics->report_dir));
+	}
+
 	return AEROSPIKE_OK;
 }
 
@@ -1956,12 +2236,63 @@ as_cluster_update_metrics(
 
 	bool enable_metrics = false;
 
+	// Save the export settings currently in effect. trg is overwritten below, and
+	// export_changed compares these copies with the values this reload installs.
+	uint64_t prev_report_size_limit = trg->report_size_limit;
+	char prev_report_dir[256];
+	char prev_export_interval[32];
+	as_strncpy(prev_report_dir, trg->report_dir, sizeof(prev_report_dir));
+	as_strncpy(prev_export_interval, trg->export_interval, sizeof(prev_export_interval));
+
+	// Read the bitmap already in effect before as_cluster_update replaces it.
+	// metrics_exporter is "file" when the key is absent and when the key is "file".
+	// An absent key calls added exporters, or the file writer when none were
+	// added. An explicit "file" does not call added exporters. Compare whether
+	// the key is set as well as the mode. Restart when the key appears or
+	// disappears, or when it stays set and the mode changes.
+	bool prev_exporter_set = cluster->as && cluster->as->config_bitmap &&
+		as_field_is_set(cluster->as->config_bitmap, AS_METRICS_EXPORTER);
+
+	uint8_t prev_exporter = trg->metrics_exporter;
+	bool next_exporter_set = as_field_is_set(bitmap, AS_METRICS_EXPORTER);
+	trg->metrics_exporter = next_exporter_set ? src->metrics_exporter : orig->metrics_exporter;
+
+	bool exporter_changed = prev_exporter_set != next_exporter_set ||
+		(next_exporter_set && prev_exporter != trg->metrics_exporter);
+
 	trg->enable = as_field_is_set(bitmap, AS_METRICS_ENABLE)?
 		src->enable : orig->enable;
 	trg->latency_columns = as_field_is_set(bitmap, AS_METRICS_LATENCY_COLUMNS)?
 		src->latency_columns : orig->latency_columns;
 	trg->latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
 		src->latency_shift : orig->latency_shift;
+	trg->latency_unit = as_field_is_set(bitmap, AS_METRICS_LATENCY_UNIT) ?
+		src->latency_unit : orig->latency_unit;
+	trg->operational_enabled = as_field_is_set(bitmap, AS_METRICS_OPERATIONAL) ?
+		src->operational_enabled : orig->operational_enabled;
+	trg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT) ?
+		src->report_size_limit : orig->report_size_limit;
+
+	if (as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL)) {
+		as_strncpy(trg->export_interval, src->export_interval, sizeof(trg->export_interval));
+	}
+	else {
+		as_strncpy(trg->export_interval, orig->export_interval, sizeof(trg->export_interval));
+	}
+
+	if (as_field_is_set(bitmap, AS_METRICS_REPORT_DIR)) {
+		as_strncpy(trg->report_dir, src->report_dir, sizeof(trg->report_dir));
+	}
+	else if (as_field_is_set(bitmap, AS_METRICS_EXPORTER) &&
+			trg->metrics_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+			orig->report_dir[0] == '\0') {
+		// The file selected the writer and did not set metrics.report_dir.
+		// An explicit empty metrics.report_dir is copied above and installs nothing.
+		as_strncpy(trg->report_dir, ".", sizeof(trg->report_dir));
+	}
+	else {
+		as_strncpy(trg->report_dir, orig->report_dir, sizeof(trg->report_dir));
+	}
 
 	if (as_field_is_set(bitmap, AS_METRICS_LABELS)) {
 		if (!as_metrics_labels_equal(trg->labels, src->labels)) {
@@ -1983,8 +2314,18 @@ as_cluster_update_metrics(
 	as_status status = AEROSPIKE_OK;
 
 	if (trg->enable) {
-		if (!cluster->metrics_enabled || !(cluster->metrics_latency_columns == trg->latency_columns &&
-			  cluster->metrics_latency_shift == trg->latency_shift)) {
+		// Restart the metrics thread when an export setting changed. Latency
+		// bucket layout is stored on the cluster, so compare that separately.
+		bool export_changed = strcmp(trg->export_interval, prev_export_interval) != 0 ||
+			trg->report_size_limit != prev_report_size_limit ||
+			exporter_changed ||
+			strcmp(trg->report_dir, prev_report_dir) != 0;
+		bool latency_changed = cluster->metrics_latency_columns != trg->latency_columns ||
+			cluster->metrics_latency_shift != trg->latency_shift ||
+			cluster->metrics_latency_unit != trg->latency_unit;
+		bool tier_changed = cluster->metrics_operational_enabled != trg->operational_enabled;
+
+		if (!cluster->metrics_enabled || export_changed || latency_changed || tier_changed) {
 			enable_metrics = true;
 		}
 
@@ -2134,10 +2475,12 @@ as_cluster_update(
 	}
 
 	as_cluster_update_policies(&orig->policies, &src->policies, &config->policies, bitmap);
-	memcpy(as->config_bitmap, bitmap, sizeof(AS_CONFIG_BITMAP_SIZE));
 
-	return as_cluster_update_metrics(cluster, err, &orig->policies.metrics,
+	// Update metrics before replacing the bitmap so the previous exporter key is visible.
+	as_status status = as_cluster_update_metrics(cluster, err, &orig->policies.metrics,
 		&src->policies.metrics, &config->policies.metrics, bitmap);
+	memcpy(as->config_bitmap, bitmap, AS_CONFIG_BITMAP_SIZE);
+	return status;
 }
 
 //---------------------------------

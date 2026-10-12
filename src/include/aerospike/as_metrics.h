@@ -473,9 +473,13 @@ typedef struct as_metrics_policy_s {
 	/**
 	 * Directory path for the built-in learn-metrics file exporter.
 	 *
-	 * When this is non-empty, no exporters have been added, and deprecated listeners
-	 * are not set, aerospike_enable_metrics() installs the file exporter.
-	 * An empty string installs nothing. Collection can still run with no exporter.
+	 * Dynamic configuration keys metrics.exporter and metrics.report_dir override
+	 * this policy field. metrics.exporter file installs the file exporter when
+	 * deprecated listeners are not set. An empty metrics.report_dir overrides
+	 * report_dir and installs nothing. When metrics.report_dir is absent, an empty
+	 * report_dir uses ".". An empty report_dir with no metrics.exporter key also
+	 * installs nothing. metrics.exporter none and custom do not install the file
+	 * exporter. Collection can still run with no exporter.
 	 *
 	 * Default: . (current directory)
 	 */
@@ -509,7 +513,8 @@ typedef struct as_metrics_policy_s {
 	 * The metrics thread sleeps that duration. It does not run on the tend thread.
 	 *
 	 * An empty string uses the deprecated interval field. When set, this overrides
-	 * interval.
+	 * interval. Dynamic configuration metrics.export_interval is copied here,
+	 * including an empty string.
 	 *
 	 * Default: ""
 	 */
@@ -571,11 +576,19 @@ typedef struct as_metrics_policy_s {
 	bool enable;
 
 	/**
-	 * Exporters that receive each metrics snapshot. Append with
-	 * as_metrics_policy_add_exporter(). The application owns these exporters.
+	 * @private
+	 * Dynamic configuration metrics.exporter. Application code does not set this.
+	 * It is used only when the dynamic configuration bitmap marks that key as set.
+	 */
+	uint8_t metrics_exporter;
+
+	/**
+	 * Exporters appended with as_metrics_policy_add_exporter(). The application
+	 * owns these exporters.
 	 *
-	 * When this list is empty, listeners are not set, and report_dir is non-empty,
-	 * enable installs the built-in file exporter and destroys that instance on disable.
+	 * They are called when dynamic configuration metrics.exporter is custom, and
+	 * when that key is not set. file uses the built-in writer instead. none does
+	 * not call them.
 	 *
 	 * Default: NULL
 	 */
@@ -585,6 +598,15 @@ typedef struct as_metrics_policy_s {
 //---------------------------------
 // Functions
 //---------------------------------
+
+/**
+ * @private
+ * Convert an export duration to milliseconds.
+ * NULL or "" sets *ms to 0 and returns true. A bare number is seconds.
+ * Suffixes are ms, s, m, and h. Zero, overflow, and unknown suffixes return false.
+ */
+AS_EXTERN bool
+as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms);
 
 /**
  * Initalize metrics policy.

@@ -16,6 +16,7 @@
  */
 #include <aerospike/aerospike_index.h>
 #include <aerospike/aerospike_info.h>
+#include <aerospike/as_info.h>
 #include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_exp.h>
@@ -208,7 +209,7 @@ aerospike_index_create_private(
 	}
 
 	char* response = NULL;
-	as_status status = aerospike_info_node(as, err, policy, node, sb.data, &response);
+	as_status status = as_info_node(as, err, policy, node, sb.data, &response);
 	as_node_release(node);
 
 	if (status != AEROSPIKE_OK) {
@@ -257,7 +258,7 @@ aerospike_index_get_status(as_index_task* task, as_error* err, as_policy_info* p
 		aerospike_index_stat_command(node, task, command, sizeof(command));
 
 		char* response = NULL;
-		as_status status = aerospike_info_node(task->as, err, policy, node, command, &response);
+		as_status status = as_info_node(task->as, err, policy, node, command, &response);
 
 		if (status != AEROSPIKE_OK) {
 			as_nodes_release(nodes);
@@ -387,7 +388,7 @@ aerospike_index_remove(
 	}
 	
 	char* response = NULL;
-	as_status status = aerospike_info_node(as, err, policy, node, command, &response);
+	as_status status = as_info_node(as, err, policy, node, command, &response);
 	as_node_release(node);
 
 	if (status != AEROSPIKE_OK) {

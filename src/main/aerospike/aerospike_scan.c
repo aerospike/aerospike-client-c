@@ -1456,13 +1456,11 @@ aerospike_scan_info(
 }
 
 as_status
-aerospike_scan_foreach(
+as_scan_foreach(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	aerospike_scan_foreach_callback callback, void* udata
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1489,6 +1487,16 @@ aerospike_scan_foreach(
 	}
 	as_partition_tracker_destroy(&pt);
 	return status;
+}
+
+as_status
+aerospike_scan_foreach(
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
+	aerospike_scan_foreach_callback callback, void* udata
+	)
+{
+	as_metrics_add_api_blocking(as);
+	return as_scan_foreach(as, err, policy, scan, callback, udata);
 }
 
 as_status
@@ -1579,13 +1587,11 @@ aerospike_scan_partitions(
 }
 
 as_status
-aerospike_scan_async(
+as_scan_async(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	uint64_t* scan_id, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
-	as_metrics_add_api_deferred(as);
-
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1612,6 +1618,16 @@ aerospike_scan_async(
 	}
 
 	return as_scan_partition_async(cluster, err, policy, scan, pt, listener, udata, event_loop);
+}
+
+as_status
+aerospike_scan_async(
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
+	uint64_t* scan_id, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	as_metrics_add_api_deferred(as);
+	return as_scan_async(as, err, policy, scan, scan_id, listener, udata, event_loop);
 }
 
 as_status

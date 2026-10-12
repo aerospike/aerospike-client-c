@@ -451,12 +451,10 @@ as_policy_read_merge(aerospike* as, const as_policy_read* src, as_policy_read* m
 }
 
 as_status
-aerospike_key_get(
+as_key_get(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 
@@ -495,14 +493,21 @@ aerospike_key_get(
 }
 
 as_status
-aerospike_key_get_async(
+aerospike_key_get(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
+	)
+{
+	as_metrics_add_api_blocking(as);
+	return as_key_get(as, err, policy, key, rec);
+}
+
+as_status
+as_key_get_async(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener
 	)
 {
-	as_metrics_add_api_deferred(as);
-
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 
@@ -536,6 +541,17 @@ aerospike_key_get_async(
 	p = as_command_write_filter(&policy->base, filter_size, p);
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
 	return as_event_command_execute(cmd, err);
+}
+
+as_status
+aerospike_key_get_async(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	)
+{
+	as_metrics_add_api_deferred(as);
+	return as_key_get_async(as, err, policy, key, listener, udata, event_loop, pipe_listener);
 }
 
 //---------------------------------
@@ -659,13 +675,11 @@ aerospike_key_select_async(
 }
 
 as_status
-aerospike_key_select_bins(
+as_key_select_bins(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	const char* bins[], uint32_t n_bins, as_record** rec
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 	
@@ -716,14 +730,22 @@ aerospike_key_select_bins(
 }
 
 as_status
-aerospike_key_select_bins_async(
+aerospike_key_select_bins(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	const char* bins[], uint32_t n_bins, as_record** rec
+	)
+{
+	as_metrics_add_api_blocking(as);
+	return as_key_select_bins(as, err, policy, key, bins, n_bins, rec);
+}
+
+as_status
+as_key_select_bins_async(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
 	uint32_t n_bins, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener
 	)
 {
-	as_metrics_add_api_deferred(as);
-
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 	
@@ -771,17 +793,27 @@ aerospike_key_select_bins_async(
 	return as_event_command_execute(cmd, err);
 }
 
+as_status
+aerospike_key_select_bins_async(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
+	uint32_t n_bins, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	)
+{
+	as_metrics_add_api_deferred(as);
+	return as_key_select_bins_async(as, err, policy, key, bins, n_bins, listener, udata, event_loop,
+		pipe_listener);
+}
+
 //---------------------------------
 // Exists
 //---------------------------------
 
 as_status
-aerospike_key_exists(
+as_key_exists(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 
@@ -819,14 +851,21 @@ aerospike_key_exists(
 }
 
 as_status
-aerospike_key_exists_async(
+aerospike_key_exists(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
+	)
+{
+	as_metrics_add_api_blocking(as);
+	return as_key_exists(as, err, policy, key, rec);
+}
+
+as_status
+as_key_exists_async(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener
 	)
 {
-	as_metrics_add_api_deferred(as);
-
 	as_policy_read merged;
 	policy = as_policy_read_merge(as, policy, &merged);
 	
@@ -859,6 +898,17 @@ aerospike_key_exists_async(
 	p = as_command_write_filter(&policy->base, filter_size, p);
 	cmd->write_len = (uint32_t)as_command_write_end(cmd->buf, p);
 	return as_event_command_execute(cmd, err);
+}
+
+as_status
+aerospike_key_exists_async(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	)
+{
+	as_metrics_add_api_deferred(as);
+	return as_key_exists_async(as, err, policy, key, listener, udata, event_loop, pipe_listener);
 }
 
 //---------------------------------
@@ -1164,12 +1214,10 @@ as_policy_remove_merge(
 }
 
 as_status
-aerospike_key_remove(
+as_key_remove(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_policy_remove merged;
 	as_policy_key pkey;
 	policy = as_policy_remove_merge(as, policy, &merged, &pkey);
@@ -1208,14 +1256,21 @@ aerospike_key_remove(
 }
 
 as_status
-aerospike_key_remove_async_ex(
+aerospike_key_remove(
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
+	)
+{
+	as_metrics_add_api_blocking(as);
+	return as_key_remove(as, err, policy, key);
+}
+
+as_status
+as_key_remove_async_ex(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
 	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t* length
 	)
 {
-	as_metrics_add_api_deferred(as);
-
 	as_policy_remove merged;
 	as_policy_key pkey;
 	policy = as_policy_remove_merge(as, policy, &merged, &pkey);
@@ -1249,6 +1304,27 @@ aerospike_key_remove_async_ex(
 	}
 
 	return as_async_command_execute(as, err, &policy->base, key, cmd, &tdata);
+}
+
+as_status
+aerospike_key_remove_async_ex(
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener, size_t* length
+	)
+{
+	as_metrics_add_api_deferred(as);
+	return as_key_remove_async_ex(as, err, policy, key, listener, udata, event_loop, pipe_listener, length);
+}
+
+as_status
+as_key_remove_async(
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	)
+{
+	return as_key_remove_async_ex(as, err, policy, key, listener, udata, event_loop, pipe_listener, NULL);
 }
 
 as_status
@@ -1473,13 +1549,11 @@ as_operate_write(void* udata, uint8_t* buf)
 }
 
 as_status
-aerospike_key_operate(
+as_key_operate(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key,
 	const as_operations* ops, as_record** rec
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	uint32_t n_operations = ops->binops.size;
 
 	if (n_operations == 0) {
@@ -1543,13 +1617,21 @@ aerospike_key_operate(
 }
 
 as_status
-aerospike_key_operate_async(
+aerospike_key_operate(
+	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key,
+	const as_operations* ops, as_record** rec
+	)
+{
+	as_metrics_add_api_blocking(as);
+	return as_key_operate(as, err, policy, key, ops, rec);
+}
+
+as_status
+as_key_operate_async(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
 	)
 {
-	as_metrics_add_api_deferred(as);
-
 	uint32_t n_operations = ops->binops.size;
 	
 	if (n_operations == 0) {
@@ -1662,6 +1744,16 @@ aerospike_key_operate_async(
 		// Call normal execute since readonly commands do not add keys to the transaction monitor.
 		return as_event_command_execute(cmd, err);
 	}
+}
+
+as_status
+aerospike_key_operate_async(
+	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
+	)
+{
+	as_metrics_add_api_deferred(as);
+	return as_key_operate_async(as, err, policy, key, ops, listener, udata, event_loop, pipe_listener);
 }
 
 //---------------------------------
@@ -1778,13 +1870,11 @@ as_apply_write(void* udata, uint8_t* buf)
 }
 
 as_status
-aerospike_key_apply(
+as_key_apply(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
 	const char* module, const char* function, as_list* arglist, as_val** result
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_policy_apply merged;
 	as_policy_key pkey;
 	policy = as_policy_apply_merge(as, policy, &merged, &pkey);
@@ -1813,15 +1903,23 @@ aerospike_key_apply(
 }
 
 as_status
-aerospike_key_apply_async(
+aerospike_key_apply(
+	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
+	const char* module, const char* function, as_list* arglist, as_val** result
+	)
+{
+	as_metrics_add_api_blocking(as);
+	return as_key_apply(as, err, policy, key, module, function, arglist, result);
+}
+
+as_status
+as_key_apply_async(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
 	const char* module, const char* function, as_list* arglist,
 	as_async_value_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener
 	)
 {
-	as_metrics_add_api_deferred(as);
-
 	as_policy_apply merged;
 	as_policy_key pkey;
 	policy = as_policy_apply_merge(as, policy, &merged, &pkey);
@@ -1869,6 +1967,19 @@ aerospike_key_apply_async(
 		return as_async_compress_command_execute(as, err, &policy->base, key, cmd, &ap.tdata,
 			ubuf, size, comp_size, NULL, NULL);
 	}
+}
+
+as_status
+aerospike_key_apply_async(
+	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
+	const char* module, const char* function, as_list* arglist,
+	as_async_value_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	)
+{
+	as_metrics_add_api_deferred(as);
+	return as_key_apply_async(as, err, policy, key, module, function, arglist, listener, udata,
+		event_loop, pipe_listener);
 }
 
 //---------------------------------

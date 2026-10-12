@@ -740,6 +740,85 @@ aerospike_key_remove_async_ex(
 	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t* length
 	);
+
+/*
+ * Command bodies without a usage-counter increment. Batch uses these when one
+ * node has a single key, because the batch call already counted the user API.
+ */
+AS_EXTERN as_status
+as_key_get(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
+	);
+
+AS_EXTERN as_status
+as_key_get_async(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	);
+
+AS_EXTERN as_status
+as_key_select_bins(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	const char* bins[], uint32_t n_bins, as_record** rec
+	);
+
+AS_EXTERN as_status
+as_key_select_bins_async(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
+	uint32_t n_bins, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	);
+
+AS_EXTERN as_status
+as_key_exists(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
+	);
+
+AS_EXTERN as_status
+as_key_exists_async(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	);
+
+AS_EXTERN as_status
+as_key_operate(
+	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key,
+	const as_operations* ops, as_record** rec
+	);
+
+AS_EXTERN as_status
+as_key_operate_async(
+	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
+	);
+
+AS_EXTERN as_status
+as_key_apply(
+	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
+	const char* module, const char* function, as_list* arglist, as_val** result
+	);
+
+AS_EXTERN as_status
+as_key_apply_async(
+	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
+	const char* module, const char* function, as_list* arglist,
+	as_async_value_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	);
+
+AS_EXTERN as_status
+as_key_remove(
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
+	);
+
+AS_EXTERN as_status
+as_key_remove_async(
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	);
 /**
  * @endcond
  */

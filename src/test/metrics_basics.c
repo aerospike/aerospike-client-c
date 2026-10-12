@@ -1269,7 +1269,7 @@ TEST(metrics_usage_api_counters, "usage counters record blocking, deferred, and 
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
 	assert_int_eq(metrics_put(&err, "metrics-usage-on"), AEROSPIKE_OK);
 
-	// Aggregation is rejected before a command is sent, so it is not counted.
+	// Aggregation is rejected before an event loop is used. The call still counts.
 	as_query query;
 	as_query_init(&query, "test", "metrics");
 	query.apply.function[0] = 'f';
@@ -1294,9 +1294,9 @@ TEST(metrics_usage_api_counters, "usage counters record blocking, deferred, and 
 
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
 	assert_true(snap->usage_metrics_enabled);
-	// put is blocking. The rejected query_async sends no command. scan_background is background.
+	// put is blocking. query_async is deferred. scan_background is background.
 	assert_true(snap->api_blocking == blocking + blocking_calls);
-	assert_true(snap->api_deferred == deferred);
+	assert_true(snap->api_deferred == deferred + 1);
 	assert_true(snap->api_background == background + 1);
 	as_metrics_snapshot_destroy(snap);
 
@@ -1306,7 +1306,7 @@ TEST(metrics_usage_api_counters, "usage counters record blocking, deferred, and 
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
 	assert_false(snap->usage_metrics_enabled);
 	assert_true(snap->api_blocking == blocking + blocking_calls);
-	assert_true(snap->api_deferred == deferred);
+	assert_true(snap->api_deferred == deferred + 1);
 	assert_true(snap->api_background == background + 1);
 	as_metrics_snapshot_destroy(snap);
 

@@ -59,7 +59,12 @@ typedef struct metrics_test_exporter_s {
 	uint32_t calls;
 	uint32_t enabled_calls;
 	bool fail;
+	bool last_operational;
+	uint64_t last_mem;
+	uint64_t last_write_latency;
 } metrics_test_exporter;
+
+static uint64_t metrics_write_latency_total(const as_metrics_snapshot* metrics_snapshot);
 
 static as_status metrics_test_export(
 	as_metrics_exporter* exporter, as_error* err, const as_metrics_snapshot* metrics_snapshot);
@@ -128,6 +133,12 @@ metrics_test_export(
 
 	if (metrics_snapshot && metrics_snapshot->metrics_enabled) {
 		as_incr_uint32(&self->enabled_calls);
+	}
+
+	if (metrics_snapshot) {
+		self->last_operational = metrics_snapshot->operational_metrics_enabled;
+		self->last_mem = metrics_snapshot->mem;
+		self->last_write_latency = metrics_write_latency_total(metrics_snapshot);
 	}
 
 	if (self->fail) {
@@ -753,6 +764,42 @@ TEST(metrics_operational_namespace_latency, "operational metrics copy namespace 
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
+}
+
+TEST(metrics_disable_exports_operational_latencies, "disable exports the final namespace latencies")
+{
+	metrics_test_exporter* exporter = metrics_exporter_new(false);
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = true;
+	// Keep the interval thread from exporting before disable.
+	policy.interval = 3600;
+	as_metrics_policy_add_exporter(&policy, &exporter->base);
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq(metrics_put(&err, "metrics-disable-latency"), AEROSPIKE_OK);
+	assert_int_eq(aerospike_disable_metrics(as, &err), AEROSPIKE_OK);
+
+	bool operational = exporter->last_operational;
+	uint64_t mem = exporter->last_mem;
+	uint64_t write_latency = exporter->last_write_latency;
+	uint32_t calls = as_load_uint32(&exporter->calls);
+
+	as_metrics_snapshot* metrics_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
+	bool metrics_off = metrics_snapshot && !metrics_snapshot->metrics_enabled;
+	as_metrics_snapshot_destroy(metrics_snapshot);
+
+	as_metrics_policy_destroy(&policy);
+	cf_free(exporter);
+
+	assert_int_eq(calls, 1);
+	assert_true(operational);
+	assert_true(mem > 0);
+	assert_true(write_latency > 0);
+	assert_true(metrics_off);
 }
 
 TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on the snapshot")
@@ -1447,6 +1494,7 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_export_interval);
 	suite_add(metrics_enable_leaves_operational_off);
 	suite_add(metrics_operational_namespace_latency);
+	suite_add(metrics_disable_exports_operational_latencies);
 	suite_add(metrics_latency_unit_microseconds);
 	suite_add(metrics_labels);
 	suite_add(metrics_file_header);

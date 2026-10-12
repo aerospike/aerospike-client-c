@@ -104,9 +104,12 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 			as_strncpy(mrg->report_dir, ".", sizeof(mrg->report_dir));
 		}
 
-		mrg->latency_unit = src->latency_unit;
-		mrg->operational_enabled = src->operational_enabled;
-		mrg->usage_enabled = src->usage_enabled;
+		mrg->latency_unit = as_field_is_set(bitmap, AS_METRICS_LATENCY_UNIT) ?
+			cfg->latency_unit : src->latency_unit;
+		mrg->operational_enabled = as_field_is_set(bitmap, AS_METRICS_OPERATIONAL) ?
+			cfg->operational_enabled : src->operational_enabled;
+		mrg->usage_enabled = as_field_is_set(bitmap, AS_METRICS_USAGE) ?
+			cfg->usage_enabled : src->usage_enabled;
 		return mrg;
 	}
 	else {

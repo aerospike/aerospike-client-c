@@ -1270,13 +1270,196 @@ as_parse_report_dir(as_yaml* yaml, const char* name, const char* value, as_metri
 }
 
 static bool
+as_skip_open_mapping(as_yaml* yaml)
+{
+	while (as_parse_next(yaml)) {
+		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+			return true;
+		}
+
+		yaml_event_delete(&yaml->event);
+
+		if (!as_parse_next(yaml)) {
+			return false;
+		}
+
+		if (!as_skip_value(yaml)) {
+			return false;
+		}
+	}
+	return false;
+}
+
+static bool
+as_parse_latency_unit(as_yaml* yaml, const char* name, const char* value, as_metrics_policy* policy)
+{
+	as_metrics_latency_unit unit;
+
+	if (strcmp(value, "milliseconds") == 0) {
+		unit = AS_METRICS_LATENCY_MILLISECONDS;
+	}
+	else if (strcmp(value, "microseconds") == 0) {
+		unit = AS_METRICS_LATENCY_MICROSECONDS;
+	}
+	else {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid dynamic configuration metrics.extended.operational.latency_unit: %s", value);
+		return false;
+	}
+
+	if (policy->latency_unit != unit) {
+		as_log_info("Set %s.%s = %s", yaml->name, name, value);
+		policy->latency_unit = unit;
+	}
+
+	as_field_set(yaml->bitmap, AS_METRICS_LATENCY_UNIT);
+	return true;
+}
+
+static bool
+as_parse_operational_field(as_yaml* yaml, const char* name, as_metrics_policy* policy)
+{
+	if (yaml->event.type == YAML_MAPPING_START_EVENT) {
+		// sampler and other nested groups are not applied.
+		yaml_event_delete(&yaml->event);
+		as_log_info("Unexpected field: metrics.extended.operational.%s", name);
+		return as_skip_open_mapping(yaml);
+	}
+
+	if (yaml->event.type != YAML_SCALAR_EVENT) {
+		as_expected_error(yaml, YAML_SCALAR_EVENT);
+		yaml_event_delete(&yaml->event);
+		return false;
+	}
+
+	const char* value = (const char*)yaml->event.data.scalar.value;
+	const char* saved = yaml->name;
+	bool rv = true;
+
+	yaml->name = "metrics.extended.operational";
+
+	if (strcmp(name, "enabled") == 0) {
+		rv = as_parse_bool(yaml, name, value, &policy->operational_enabled, AS_METRICS_OPERATIONAL);
+	}
+	else if (strcmp(name, "latency_unit") == 0) {
+		rv = as_parse_latency_unit(yaml, name, value, policy);
+	}
+	else if (strcmp(name, "latency_columns") == 0) {
+		rv = as_parse_uint8(yaml, name, value, &policy->latency_columns, AS_METRICS_LATENCY_COLUMNS);
+	}
+	else if (strcmp(name, "latency_shift") == 0) {
+		rv = as_parse_uint8(yaml, name, value, &policy->latency_shift, AS_METRICS_LATENCY_SHIFT);
+	}
+	else {
+		as_log_info("Unexpected field: metrics.extended.operational.%s", name);
+	}
+
+	yaml->name = saved;
+	yaml_event_delete(&yaml->event);
+	return rv;
+}
+
+static bool
+as_parse_usage_field(as_yaml* yaml, const char* name, as_metrics_policy* policy)
+{
+	if (yaml->event.type == YAML_MAPPING_START_EVENT) {
+		yaml_event_delete(&yaml->event);
+		as_log_info("Unexpected field: metrics.extended.usage.%s", name);
+		return as_skip_open_mapping(yaml);
+	}
+
+	if (yaml->event.type != YAML_SCALAR_EVENT) {
+		as_expected_error(yaml, YAML_SCALAR_EVENT);
+		yaml_event_delete(&yaml->event);
+		return false;
+	}
+
+	const char* value = (const char*)yaml->event.data.scalar.value;
+	const char* saved = yaml->name;
+	bool rv = true;
+
+	yaml->name = "metrics.extended.usage";
+
+	if (strcmp(name, "enabled") == 0) {
+		rv = as_parse_bool(yaml, name, value, &policy->usage_enabled, AS_METRICS_USAGE);
+	}
+	else {
+		as_log_info("Unexpected field: metrics.extended.usage.%s", name);
+	}
+
+	yaml->name = saved;
+	yaml_event_delete(&yaml->event);
+	return rv;
+}
+
+typedef bool (*as_parse_metrics_field_fn)(as_yaml* yaml, const char* name, as_metrics_policy* policy);
+
+static bool
+as_parse_open_mapping(as_yaml* yaml, as_parse_metrics_field_fn fn, as_metrics_policy* policy)
+{
+	while (as_parse_next(yaml)) {
+		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+			return true;
+		}
+
+		if (yaml->event.type != YAML_SCALAR_EVENT) {
+			as_expected_error(yaml, YAML_SCALAR_EVENT);
+			yaml_event_delete(&yaml->event);
+			return false;
+		}
+
+		char name[256];
+		as_strncpy(name, (const char*)yaml->event.data.scalar.value, sizeof(name));
+		yaml_event_delete(&yaml->event);
+
+		if (!as_parse_next(yaml)) {
+			return false;
+		}
+
+		if (!fn(yaml, name, policy)) {
+			return false;
+		}
+	}
+	return false;
+}
+
+static bool
+as_parse_extended_field(as_yaml* yaml, const char* name, as_metrics_policy* policy)
+{
+	if (yaml->event.type != YAML_MAPPING_START_EVENT) {
+		as_log_info("Unexpected field: metrics.extended.%s", name);
+		return as_skip_value(yaml);
+	}
+
+	yaml_event_delete(&yaml->event);
+
+	if (strcmp(name, "operational") == 0) {
+		return as_parse_open_mapping(yaml, as_parse_operational_field, policy);
+	}
+
+	if (strcmp(name, "usage") == 0) {
+		return as_parse_open_mapping(yaml, as_parse_usage_field, policy);
+	}
+
+	as_log_info("Unexpected field: metrics.extended.%s", name);
+	return as_skip_open_mapping(yaml);
+}
+
+static bool
 as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies* base)
 {
 	as_metrics_policy* policy = &base->metrics;
 	yaml->name = "metrics";
 
-	if (strcmp(name, "enable") == 0) {
+	// metrics.enable remains the legacy name. metrics.enabled is the tech spec key.
+	if (strcmp(name, "enable") == 0 || strcmp(name, "enabled") == 0) {
 		return as_parse_bool(yaml, name, value, &policy->enable, AS_METRICS_ENABLE);
+	}
+
+	if (strcmp(name, "extended") == 0) {
+		return as_parse_open_mapping(yaml, as_parse_extended_field, policy);
 	}
 
 	if (strcmp(name, "export_interval") == 0) {
@@ -1609,9 +1792,10 @@ as_parse_version(as_yaml* yaml)
 		return false;
 	}
 
-	if (strcmp(version, "1.1.0") != 0) {
+	if (strcmp(version, "1.0.0") != 0 && strcmp(version, "1.1.0") != 0 &&
+			strcmp(version, "1.2.0") != 0) {
 		// Log warning and continue parsing on version mismatch.
-		as_log_warn("Unexpected dynamic config file version: %s expected: 1.0.0", version);
+		as_log_warn("Unexpected dynamic config file version: %s expected: 1.0.0, 1.1.0, or 1.2.0", version);
 	}
 	return true;
 }
@@ -2119,6 +2303,12 @@ as_cluster_update_metrics(
 		src->latency_columns : orig->latency_columns;
 	trg->latency_shift = as_field_is_set(bitmap, AS_METRICS_LATENCY_SHIFT)?
 		src->latency_shift : orig->latency_shift;
+	trg->latency_unit = as_field_is_set(bitmap, AS_METRICS_LATENCY_UNIT) ?
+		src->latency_unit : orig->latency_unit;
+	trg->operational_enabled = as_field_is_set(bitmap, AS_METRICS_OPERATIONAL) ?
+		src->operational_enabled : orig->operational_enabled;
+	trg->usage_enabled = as_field_is_set(bitmap, AS_METRICS_USAGE) ?
+		src->usage_enabled : orig->usage_enabled;
 	trg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT) ?
 		src->report_size_limit : orig->report_size_limit;
 
@@ -2170,9 +2360,12 @@ as_cluster_update_metrics(
 			exporter_changed ||
 			strcmp(trg->report_dir, prev_report_dir) != 0;
 		bool latency_changed = cluster->metrics_latency_columns != trg->latency_columns ||
-			cluster->metrics_latency_shift != trg->latency_shift;
+			cluster->metrics_latency_shift != trg->latency_shift ||
+			cluster->metrics_latency_unit != trg->latency_unit;
+		bool tier_changed = cluster->metrics_operational_enabled != trg->operational_enabled ||
+			cluster->metrics_usage_enabled != trg->usage_enabled;
 
-		if (!cluster->metrics_enabled || export_changed || latency_changed) {
+		if (!cluster->metrics_enabled || export_changed || latency_changed || tier_changed) {
 			enable_metrics = true;
 		}
 

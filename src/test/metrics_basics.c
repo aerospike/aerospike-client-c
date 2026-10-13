@@ -345,157 +345,6 @@ metrics_read_header(const char* dir, char* header, size_t header_size)
 #endif
 }
 
-static bool
-metrics_read_cluster_line(const char* dir, char* line, size_t line_size)
-{
-	line[0] = '\0';
-
-#if defined(_MSC_VER)
-	char pattern[MAX_PATH];
-	WIN32_FIND_DATAA data;
-
-	snprintf(pattern, sizeof(pattern), "%s\\metrics-*.log", dir);
-	HANDLE handle = FindFirstFileA(pattern, &data);
-
-	if (handle == INVALID_HANDLE_VALUE) {
-		return false;
-	}
-
-	bool found = false;
-
-	do {
-		if (!metrics_is_log_filename(data.cFileName)) {
-			continue;
-		}
-
-		char path[MAX_PATH];
-		snprintf(path, sizeof(path), "%s\\%s", dir, data.cFileName);
-		FILE* file = fopen(path, "r");
-
-		if (file) {
-			while (fgets(line, (int)line_size, file)) {
-				if (strstr(line, " cluster[") && !strstr(line, "header(")) {
-					found = true;
-					break;
-				}
-			}
-			fclose(file);
-		}
-		break;
-	} while (FindNextFileA(handle, &data));
-
-	FindClose(handle);
-	return found;
-#else
-	DIR* directory = opendir(dir);
-
-	if (!directory) {
-		return false;
-	}
-
-	bool found = false;
-	struct dirent* entry;
-
-	while ((entry = readdir(directory)) != NULL) {
-		if (!metrics_is_log_filename(entry->d_name)) {
-			continue;
-		}
-
-		char path[1024];
-		snprintf(path, sizeof(path), "%s/%s", dir, entry->d_name);
-		FILE* file = fopen(path, "r");
-
-		if (file) {
-			while (fgets(line, (int)line_size, file)) {
-				if (strstr(line, " cluster[") && !strstr(line, "header(")) {
-					found = true;
-					break;
-				}
-			}
-			fclose(file);
-		}
-		break;
-	}
-	closedir(directory);
-	return found;
-#endif
-}
-
-static bool
-metrics_file_line_has_write_latency(const char* line)
-{
-	const char* write = strstr(line, "write[");
-
-	if (!write) {
-		return false;
-	}
-
-	write += 6;
-
-	for (; *write && *write != ']'; write++) {
-		if (*write >= '1' && *write <= '9') {
-			return true;
-		}
-	}
-	return false;
-}
-
-static bool
-metrics_file_line_has_memory(const char* line)
-{
-	const char* cluster = strstr(line, " cluster[");
-
-	if (!cluster) {
-		return false;
-	}
-
-	const char* open = strchr(cluster, '[');
-
-	if (!open) {
-		return false;
-	}
-
-	// The next bracket is the label list. Cpu and memory follow it.
-	open = strchr(open + 1, '[');
-
-	if (!open) {
-		return false;
-	}
-
-	int depth = 0;
-	const char* p = open;
-
-	for (; *p; p++) {
-		if (*p == '[') {
-			depth++;
-		}
-		else if (*p == ']') {
-			depth--;
-
-			if (depth == 0) {
-				break;
-			}
-		}
-	}
-
-	if (*p != ']' || p[1] != ',') {
-		return false;
-	}
-
-	p += 2;
-
-	while (*p >= '0' && *p <= '9') {
-		p++;
-	}
-
-	if (*p != ',') {
-		return false;
-	}
-
-	p++;
-	return *p >= '1' && *p <= '9';
-}
-
 static void
 metrics_remove_dir(const char* dir)
 {
@@ -672,22 +521,22 @@ metrics_header_ok(const char* header, const char* latency_token)
 	}
 
 	const char* required[] = {
-		"clientType",
-		"clientVersion",
-		"appId",
-		"invalidNodeCount",
-		"commandCount",
-		"retryCount",
-		"delayQueueTimeoutCount",
+		"client_type",
+		"client_version",
+		"app_id",
+		"invalid_node_count",
+		"command_count",
+		"retry_count",
+		"delay_queue_timeout_count",
 		"eventloop",
-		"processSize",
-		"queueSize",
-		"syncConn",
-		"inUse",
-		"inPool",
-		"keyBusy",
-		"bytesIn",
-		"bytesOut",
+		"process_size",
+		"queue_size",
+		"sync_conn",
+		"in_use",
+		"in_pool",
+		"key_busy",
+		"bytes_in",
+		"bytes_out",
 		latency_token,
 		NULL
 	};
@@ -698,12 +547,12 @@ metrics_header_ok(const char* header, const char* latency_token)
 		}
 	}
 
-	// Field names stay camelCase. eventloop stays a single lowercase word.
+	// Field names in the file are snake_case. eventloop stays a single lowercase word.
 	const char* rejected[] = {
-		"client_type",
-		"key_busy",
-		"bytes_in",
-		"bytes_out",
+		"clientType",
+		"keyBusy",
+		"bytesIn",
+		"bytesOut",
 		"eventLoop",
 		NULL
 	};
@@ -1000,7 +849,7 @@ TEST(metrics_labels, "static labels are copied onto the snapshot")
 	as_metrics_policy_destroy(&policy);
 }
 
-TEST(metrics_file_header, "report_dir installs a camelCase metrics log")
+TEST(metrics_file_header, "report_dir installs a snake_case metrics log")
 {
 	char dir[256];
 	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
@@ -1048,53 +897,6 @@ TEST(metrics_file_header_microseconds, "file header records latency_unit microse
 
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_true(header_ok);
-	as_metrics_policy_destroy(&policy);
-}
-
-TEST(metrics_file_operational_off, "file exporter writes latencies when operational metrics are off")
-{
-	char dir[256];
-	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
-
-	as_metrics_policy policy;
-	metrics_policy_init_without_default_file_exporter(&policy);
-	policy.operational_enabled = false;
-	// Keep the interval thread from exporting before disable.
-	policy.interval = 3600;
-	as_metrics_policy_set_report_dir(&policy, dir);
-
-	as_error err;
-	as_status status = metrics_enable(&policy, &err);
-	as_status put_status = AEROSPIKE_ERR_CLIENT;
-
-	if (status == AEROSPIKE_OK) {
-		put_status = metrics_put(&err, "metrics-file-operational-off");
-	}
-
-	as_metrics_snapshot* metrics_snapshot = NULL;
-	bool snapshot_hides_operational = false;
-
-	if (status == AEROSPIKE_OK && put_status == AEROSPIKE_OK &&
-			aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot) == AEROSPIKE_OK) {
-		snapshot_hides_operational = metrics_snapshot->metrics_enabled &&
-			!metrics_snapshot->operational_metrics_enabled &&
-			metrics_snapshot->cpu == 0 && metrics_snapshot->mem == 0 &&
-			metrics_namespaces_empty(metrics_snapshot);
-	}
-	as_metrics_snapshot_destroy(metrics_snapshot);
-
-	as_status disable_status = aerospike_disable_metrics(as, &err);
-	char line[65536];
-	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
-		strstr(line, "test,") && metrics_file_line_has_write_latency(line) &&
-		metrics_file_line_has_memory(line);
-	metrics_remove_dir(dir);
-
-	assert_int_eq(status, AEROSPIKE_OK);
-	assert_int_eq(put_status, AEROSPIKE_OK);
-	assert_true(snapshot_hides_operational);
-	assert_int_eq(disable_status, AEROSPIKE_OK);
-	assert_true(line_ok);
 	as_metrics_policy_destroy(&policy);
 }
 
@@ -1789,7 +1591,6 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_labels);
 	suite_add(metrics_file_header);
 	suite_add(metrics_file_header_microseconds);
-	suite_add(metrics_file_operational_off);
 	suite_add(metrics_empty_report_dir);
 	suite_add(metrics_exporter_suppresses_file);
 	suite_add(metrics_exporter_none_or_file_skips_added_exporters);

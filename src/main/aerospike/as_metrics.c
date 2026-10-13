@@ -634,8 +634,8 @@ as_metrics_node_snapshot_destroy(as_metrics_node_snapshot* snapshot)
 	cf_free(snapshot);
 }
 
-static void
-as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics_node_snapshot** snapshot)
+void
+as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapshot)
 {
 	as_metrics_node_snapshot* snap = cf_calloc(1, sizeof(as_metrics_node_snapshot));
 	snap->name = as_metrics_strdup_or_empty(node->name);
@@ -683,12 +683,8 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 	}
 
 	uint8_t ns_max = 0;
-	// The file log has always carried namespace histograms. Keep writing them when
-	// operational metrics are off so existing readers are not broken.
-	bool command_path = node->cluster->metrics_enabled &&
-		(node->cluster->metrics_operational_enabled || file_fields);
 
-	if (command_path) {
+	if (node->cluster->metrics_enabled && node->cluster->metrics_operational_enabled) {
 		ns_max = node->metrics_size;
 	}
 
@@ -740,18 +736,6 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 }
 
 void
-as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapshot)
-{
-	as_metrics_node_snapshot_create_impl(node, false, snapshot);
-}
-
-void
-as_metrics_node_snapshot_create_file(as_node* node, as_metrics_node_snapshot** snapshot)
-{
-	as_metrics_node_snapshot_create_impl(node, true, snapshot);
-}
-
-void
 as_metrics_snapshot_destroy(as_metrics_snapshot* snapshot)
 {
 	if (!snapshot) {
@@ -789,20 +773,18 @@ as_metrics_snapshot_destroy(as_metrics_snapshot* snapshot)
 	cf_free(snapshot);
 }
 
-static as_status
-as_metrics_snapshot_create_impl(
+as_status
+as_metrics_snapshot_create(
 	as_error* err, as_cluster* cluster, as_vector* labels, as_metrics_cpu_state* cpu,
-	bool file_fields, as_metrics_snapshot** snapshot
+	as_metrics_snapshot** snapshot
 	)
 {
 	*snapshot = NULL;
 	bool operational = cluster->metrics_enabled && cluster->metrics_operational_enabled;
-	bool command_path = cluster->metrics_enabled &&
-		(cluster->metrics_operational_enabled || file_fields);
 	uint32_t cpu_usage = 0;
 	uint64_t mem = 0;
 
-	if (command_path) {
+	if (operational) {
 		as_status status = as_metrics_read_cpu_mem(err, cpu, &cpu_usage, &mem);
 
 		if (status != AEROSPIKE_OK) {
@@ -864,30 +846,12 @@ as_metrics_snapshot_create_impl(
 
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_metrics_node_snapshot* node_snap = NULL;
-		as_metrics_node_snapshot_create_impl(nodes->array[i], file_fields, &node_snap);
+		as_metrics_node_snapshot_create(nodes->array[i], &node_snap);
 		snap->nodes[i] = node_snap;
 	}
 	as_nodes_release(nodes);
 	*snapshot = snap;
 	return AEROSPIKE_OK;
-}
-
-as_status
-as_metrics_snapshot_create(
-	as_error* err, as_cluster* cluster, as_vector* labels, as_metrics_cpu_state* cpu,
-	as_metrics_snapshot** snapshot
-	)
-{
-	return as_metrics_snapshot_create_impl(err, cluster, labels, cpu, false, snapshot);
-}
-
-as_status
-as_metrics_snapshot_create_file(
-	as_error* err, as_cluster* cluster, as_vector* labels, as_metrics_cpu_state* cpu,
-	as_metrics_snapshot** snapshot
-	)
-{
-	return as_metrics_snapshot_create_impl(err, cluster, labels, cpu, true, snapshot);
 }
 
 as_status
@@ -978,32 +942,11 @@ as_metrics_export_slots(as_metrics_runtime* rt, const as_metrics_snapshot* snap,
 	}
 }
 
-static bool
-as_metrics_runtime_has_file_exporter(as_metrics_runtime* rt)
-{
-	if (!rt->slots) {
-		return false;
-	}
-
-	for (uint32_t i = 0; i < rt->slots->size; i++) {
-		as_metrics_exporter_slot* slot = as_vector_get(rt->slots, i);
-
-		if (as_metrics_exporter_is_file(slot->exporter)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 static as_status
 as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool force, as_error* err)
 {
 	as_metrics_snapshot* snap = NULL;
-	// One snapshot is shared by every exporter. When the file exporter is present,
-	// include the learn-metrics fields even if operational metrics are off.
-	as_status status = as_metrics_runtime_has_file_exporter(rt) ?
-		as_metrics_snapshot_create_file(err, cluster, rt->labels, rt->cpu, &snap) :
-		as_metrics_snapshot_create(err, cluster, rt->labels, rt->cpu, &snap);
+	as_status status = as_metrics_snapshot_create(err, cluster, rt->labels, rt->cpu, &snap);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1426,13 +1369,7 @@ as_metrics_runtime_node_close(as_error* err, as_cluster* cluster, as_node* node)
 
 	if (rt && rt->slots && rt->slots->size > 0) {
 		as_metrics_node_snapshot* snap = NULL;
-
-		if (as_metrics_runtime_has_file_exporter(rt)) {
-			as_metrics_node_snapshot_create_file(node, &snap);
-		}
-		else {
-			as_metrics_node_snapshot_create(node, &snap);
-		}
+		as_metrics_node_snapshot_create(node, &snap);
 		as_vector_append(rt->departed, &snap);
 	}
 

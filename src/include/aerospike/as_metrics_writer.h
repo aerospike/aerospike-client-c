@@ -31,9 +31,7 @@ extern "C" {
 
 /**
  * Built-in learn-metrics file exporter. Embeds as_metrics_exporter as its first field.
- * The log line format is unchanged (legacy camelCase segment names). Cpu, memory,
- * and namespace histograms are written whenever metrics are enabled, including
- * when operational_enabled is false.
+ * The log line format is unchanged (legacy camelCase segment names).
  */
 typedef struct as_metrics_file_exporter_s as_metrics_file_exporter;
 
@@ -117,13 +115,6 @@ as_metrics_writer_node_close(as_error* err, struct as_node_s* node, void* udata)
  */
 AS_EXTERN as_status
 as_metrics_writer_disable(as_error* err, struct as_cluster_s* cluster, void* udata);
-
-/**
- * @private
- * True when exporter is the built-in learn-metrics file exporter.
- */
-bool
-as_metrics_exporter_is_file(const as_metrics_exporter* exporter);
 
 #ifdef __cplusplus
 } // end extern "C"

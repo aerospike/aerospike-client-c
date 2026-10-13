@@ -259,7 +259,7 @@ as_metrics_open_writer(as_metrics_file_exporter* mw, as_error* err)
 	const char* latency_unit = mw->latency_unit == AS_METRICS_LATENCY_MICROSECONDS ?
 		"microseconds" : "milliseconds";
 	char data[1024];
-	int rv = snprintf(data, sizeof(data), "%s header(3) cluster[name,clientType,clientVersion,appId,label[],cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] label[name,value] eventloop[processSize,queueSize] node[name,address,port,syncConn[],asyncConn[],namespace[]] conn[inUse,inPool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,keyBusy,bytesIn,bytesOut,latency[]] latency(%s,%u,%u)[type[l1,l2,l3...]]\n",
+	int rv = snprintf(data, sizeof(data), "%s header(3) cluster[name,client_type,client_version,app_id,label[],cpu,mem,invalid_node_count,command_count,retry_count,delay_queue_timeout_count,eventloop[],node[]] label[name,value] eventloop[process_size,queue_size] node[name,address,port,sync_conn[],async_conn[],namespace[]] conn[in_use,in_pool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,key_busy,bytes_in,bytes_out,latency[]] latency(%s,%u,%u)[type[l1,l2,l3...]]\n",
 		now_str, latency_unit, mw->latency_columns, mw->latency_shift);
 
 	if (rv <= 0) {
@@ -490,12 +490,6 @@ as_metrics_file_export(as_metrics_exporter* exporter, as_error* err, const as_me
 	return AEROSPIKE_OK;
 }
 
-bool
-as_metrics_exporter_is_file(const as_metrics_exporter* exporter)
-{
-	return exporter && exporter->export_fn == as_metrics_file_export;
-}
-
 //---------------------------------
 // Public Functions
 //---------------------------------
@@ -592,7 +586,7 @@ as_metrics_writer_snapshot(as_error* err, as_cluster* cluster, void* udata)
 	}
 
 	as_metrics_snapshot* snapshot = NULL;
-	as_status status = as_metrics_snapshot_create_file(err, cluster, mw->labels, mw->cpu, &snapshot);
+	as_status status = as_metrics_snapshot_create(err, cluster, mw->labels, mw->cpu, &snapshot);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -614,7 +608,7 @@ as_metrics_writer_node_close(as_error* err, as_node* node, void* udata)
 	}
 
 	as_metrics_node_snapshot* snapshot = NULL;
-	as_metrics_node_snapshot_create_file(node, &snapshot);
+	as_metrics_node_snapshot_create(node, &snapshot);
 
 	char now_str[128];
 	as_metrics_timestamp(now_str, sizeof(now_str));
@@ -645,7 +639,7 @@ as_metrics_writer_disable(as_error* err, as_cluster* cluster, void* udata)
 
 	if (mw->legacy_active && mw->file) {
 		as_metrics_snapshot* snapshot = NULL;
-		status = as_metrics_snapshot_create_file(err, cluster, mw->labels, mw->cpu, &snapshot);
+		status = as_metrics_snapshot_create(err, cluster, mw->labels, mw->cpu, &snapshot);
 
 		if (status == AEROSPIKE_OK) {
 			status = as_metrics_file_export(&mw->base, err, snapshot);

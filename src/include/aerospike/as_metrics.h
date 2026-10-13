@@ -240,21 +240,24 @@ typedef struct as_metrics_node_snapshot_s {
 	as_metrics_conn_snapshot async;
 
 	/**
-	 * Failed attempts to open a connection. Cumulative and not sampler-gated.
+	 * Failed attempts to open a connection, including TLS and auth failures.
+	 * Cumulative and not sampler-gated.
 	 * Operational connection failure counter (CM-8).
 	 * Zero unless operational metrics are enabled.
 	 */
 	uint32_t conn_open_failures;
 
 	/**
-	 * Failed TLS handshakes. Cumulative and not sampler-gated.
+	 * Failed TLS handshakes. Also included in conn_open_failures.
+	 * Cumulative and not sampler-gated.
 	 * Operational connection failure counter (CM-8).
 	 * Zero unless operational metrics are enabled.
 	 */
 	uint32_t conn_tls_handshake_failures;
 
 	/**
-	 * Failed authentications. Cumulative and not sampler-gated.
+	 * Failed authentications. Also included in conn_open_failures.
+	 * Cumulative and not sampler-gated.
 	 * Operational connection failure counter (CM-8).
 	 * Zero unless operational metrics are enabled.
 	 */
@@ -367,6 +370,24 @@ typedef struct as_metrics_snapshot_s {
 	 * Add-node failures in the most recent cluster tend iteration.
 	 */
 	uint32_t invalid_node_count;
+
+	/**
+	 * Pre-node connect failures, including TLS and auth. Cumulative.
+	 * cluster.validation.open.failure. Zero unless operational metrics are enabled.
+	 */
+	uint32_t validation_open_failures;
+
+	/**
+	 * Pre-node TLS handshake failures. Also included in validation_open_failures.
+	 * cluster.validation.tls.handshake.failure.
+	 */
+	uint32_t validation_tls_handshake_failures;
+
+	/**
+	 * Pre-node authentication failures. Also included in validation_open_failures.
+	 * cluster.validation.auth.failure.
+	 */
+	uint32_t validation_auth_failures;
 
 	/**
 	 * Commands that timed out in the delay queue. Cumulative since the cluster started.

@@ -825,6 +825,13 @@ as_metrics_snapshot_create_impl(
 	snap->cpu = cpu_usage;
 	snap->mem = mem;
 	snap->invalid_node_count = cluster->invalid_node_count;
+
+	if (operational) {
+		snap->validation_open_failures = as_load_uint32(&cluster->metrics_validation_open_failures);
+		snap->validation_tls_handshake_failures =
+			as_load_uint32(&cluster->metrics_validation_tls_handshake_failures);
+		snap->validation_auth_failures = as_load_uint32(&cluster->metrics_validation_auth_failures);
+	}
 	snap->recover_queue_size = as_cluster_recover_queue_size(cluster);
 	snap->delay_queue_timeout_count = as_cluster_get_delay_queue_timeout_count(cluster);
 	snap->command_count = as_cluster_get_command_count(cluster);

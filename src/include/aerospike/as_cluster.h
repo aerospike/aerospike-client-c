@@ -519,6 +519,25 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * cluster.validation.open.failure. Pre-node connect failures, including TLS and auth.
+	 * Recorded only when operational metrics are enabled.
+	 */
+	uint32_t metrics_validation_open_failures;
+
+	/**
+	 * @private
+	 * cluster.validation.tls.handshake.failure. Also included in metrics_validation_open_failures.
+	 */
+	uint32_t metrics_validation_tls_handshake_failures;
+
+	/**
+	 * @private
+	 * cluster.validation.auth.failure. Also included in metrics_validation_open_failures.
+	 */
+	uint32_t metrics_validation_auth_failures;
+
+	/**
+	 * @private
 	 * Aerospike back pointer.
 	 */
 	struct aerospike_s* as;
@@ -761,6 +780,44 @@ static inline void
 as_cluster_add_delay_queue_timeout(as_cluster* cluster)
 {
 	as_incr_uint64(&cluster->delay_queue_timeout_count);
+}
+
+/**
+ * @private
+ * Record cluster.validation.open.failure when operational metrics are enabled.
+ */
+static inline void
+as_cluster_add_validation_open_failure(as_cluster* cluster)
+{
+	if (cluster->metrics_operational_enabled) {
+		as_incr_uint32(&cluster->metrics_validation_open_failures);
+	}
+}
+
+/**
+ * @private
+ * Record cluster.validation.tls.handshake.failure. Also counts as open.failure.
+ */
+static inline void
+as_cluster_add_validation_tls_handshake_failure(as_cluster* cluster)
+{
+	if (cluster->metrics_operational_enabled) {
+		as_incr_uint32(&cluster->metrics_validation_tls_handshake_failures);
+		as_incr_uint32(&cluster->metrics_validation_open_failures);
+	}
+}
+
+/**
+ * @private
+ * Record cluster.validation.auth.failure. Also counts as open.failure.
+ */
+static inline void
+as_cluster_add_validation_auth_failure(as_cluster* cluster)
+{
+	if (cluster->metrics_operational_enabled) {
+		as_incr_uint32(&cluster->metrics_validation_auth_failures);
+		as_incr_uint32(&cluster->metrics_validation_open_failures);
+	}
 }
 
 /**

@@ -588,6 +588,14 @@ metrics_nodes_ok(const as_metrics_snapshot* metrics_snapshot)
 }
 
 static bool
+metrics_validation_failures_zero(const as_metrics_snapshot* metrics_snapshot)
+{
+	return metrics_snapshot->validation_open_failures == 0 &&
+		metrics_snapshot->validation_tls_handshake_failures == 0 &&
+		metrics_snapshot->validation_auth_failures == 0;
+}
+
+static bool
 metrics_conn_failures_zero(const as_metrics_snapshot* metrics_snapshot)
 {
 	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
@@ -841,6 +849,7 @@ TEST(metrics_snapshot_before_enable, "on-demand snapshot works while periodic ex
 	assert_true(metrics_identity_ok(metrics_snapshot));
 	assert_true(metrics_nodes_ok(metrics_snapshot));
 	assert_true(metrics_conn_failures_zero(metrics_snapshot));
+	assert_true(metrics_validation_failures_zero(metrics_snapshot));
 	assert_true(metrics_namespaces_empty(metrics_snapshot));
 
 	if (as_event_loop_size > 0) {
@@ -875,6 +884,7 @@ TEST(metrics_enable_leaves_operational_off, "metrics.enabled does not turn on op
 	assert_int_eq((int64_t)metrics_snapshot->mem, 0);
 	assert_true(metrics_namespaces_empty(metrics_snapshot));
 	assert_true(metrics_conn_failures_zero(metrics_snapshot));
+	assert_true(metrics_validation_failures_zero(metrics_snapshot));
 	assert_true(metrics_nodes_ok(metrics_snapshot));
 	as_metrics_snapshot_destroy(metrics_snapshot);
 
@@ -909,6 +919,7 @@ TEST(metrics_operational_namespace_latency, "operational metrics copy namespace 
 	assert_true(first_snapshot->mem > 0);
 	assert_true(metrics_test_namespace_ok(first_snapshot, 7));
 	assert_true(metrics_conn_failures_zero(first_snapshot));
+	assert_true(metrics_validation_failures_zero(first_snapshot));
 
 	uint64_t before = metrics_write_latency_total(first_snapshot);
 	assert_true(before > 0);

@@ -32,6 +32,17 @@ as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname);
 // Static Functions
 //---------------------------------
 
+static void
+as_lookup_record_connect_failure(as_cluster* cluster, as_socket* sock)
+{
+	if (sock->tls_handshake_failed) {
+		as_cluster_add_validation_tls_handshake_failure(cluster);
+	}
+	else {
+		as_cluster_add_validation_open_failure(cluster);
+	}
+}
+
 static as_status
 as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node_info, uint64_t deadline)
 {
@@ -78,24 +89,31 @@ as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node
 		while (as_lookup_next(&iter, &addr)) {
 			status = as_socket_create_and_connect(&node_info->socket, &error_local, addr, NULL, NULL, deadline);
 
-			if (status == AEROSPIKE_OK) {
-				if (node_info->session) {
-					status = as_authenticate(cluster, &error_local, &node_info->socket, NULL,
-											 node_info->session, 0, deadline, NULL);
-				}
-
-				if (status == AEROSPIKE_OK) {
-					node_info->host.name = (char*)hostname;
-					node_info->host.tls_name = NULL;
-					node_info->host.port = host->port;
-					as_address_copy_storage(addr, &node_info->addr);
-					as_lookup_end(&iter);
-					goto SWITCH_SUCCESS;
-				}
-
-				// Close and try next address.
-				as_socket_close(&node_info->socket);
+			if (status != AEROSPIKE_OK) {
+				as_lookup_record_connect_failure(cluster, &node_info->socket);
+				continue;
 			}
+
+			if (node_info->session) {
+				status = as_authenticate(cluster, &error_local, &node_info->socket, NULL,
+										 node_info->session, 0, deadline, NULL);
+
+				if (status != AEROSPIKE_OK) {
+					as_cluster_add_validation_auth_failure(cluster);
+				}
+			}
+
+			if (status == AEROSPIKE_OK) {
+				node_info->host.name = (char*)hostname;
+				node_info->host.tls_name = NULL;
+				node_info->host.port = host->port;
+				as_address_copy_storage(addr, &node_info->addr);
+				as_lookup_end(&iter);
+				goto SWITCH_SUCCESS;
+			}
+
+			// Close and try next address.
+			as_socket_close(&node_info->socket);
 		}
 		as_lookup_end(&iter);
 	}
@@ -167,45 +185,53 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 			status = as_socket_create_and_connect(&sock, err, addr, cluster->tls_ctx,
 												  tls_name, deadline);
 
-			if (status == AEROSPIKE_OK) {
-				if (node_info->session) {
-					status = as_authenticate(cluster, &error_local, &sock, NULL,
-											 node_info->session, 0, deadline, NULL);
+			if (status != AEROSPIKE_OK) {
+				as_lookup_record_connect_failure(cluster, &sock);
+				continue;
+			}
+
+			if (node_info->session) {
+				status = as_authenticate(cluster, &error_local, &sock, NULL,
+										 node_info->session, 0, deadline, NULL);
+
+				if (status != AEROSPIKE_OK) {
+					as_cluster_add_validation_auth_failure(cluster);
 				}
+			}
+
+			if (status == AEROSPIKE_OK) {
+				// Socket is non-blocking, so must use socket to really tell if connect succeeded.
+				char* response2 = 0;
+				status = as_info_command(err, &sock, NULL, "node", true, deadline, 0, &response2);
 
 				if (status == AEROSPIKE_OK) {
-					// Socket is non-blocking, so must use socket to really tell if connect succeeded.
-					char* response2 = 0;
-					status = as_info_command(err, &sock, NULL, "node", true, deadline, 0, &response2);
+					// Verify node name.
+					char* node_name = 0;
+					status = as_info_parse_single_response(response2, &node_name);
 
-					if (status == AEROSPIKE_OK) {
-						// Verify node name.
-						char* node_name = 0;
-						status = as_info_parse_single_response(response2, &node_name);
+					if (status == AEROSPIKE_OK && strcmp(node_name, node_info->name) == 0) {
+						// Switch address.
+						char new_addr_name[AS_IP_ADDRESS_SIZE];
+						as_address_short_name(addr, new_addr_name, sizeof(new_addr_name));
+						as_log_info("Switch node address from %s to node's access-address %s", addr_name, new_addr_name);
 
-						if (status == AEROSPIKE_OK && strcmp(node_name, node_info->name) == 0) {
-							// Switch address.
-							char new_addr_name[AS_IP_ADDRESS_SIZE];
-							as_address_short_name(addr, new_addr_name, sizeof(new_addr_name));
-							as_log_info("Switch node address from %s to node's access-address %s", addr_name, new_addr_name);
-
-							as_socket_close(&node_info->socket);
-							memcpy(&node_info->socket, &sock, sizeof(as_socket));
-							node_info->host.name = (char*)hostname;
-							node_info->host.tls_name = tls_name;
-							node_info->host.port = host->port;
-							as_address_copy_storage(addr, &node_info->addr);
-							as_lookup_end(&iter);
-							as_vector_destroy(&hosts);
-							cf_free(response2);
-							return AEROSPIKE_OK;
-						}
+						as_socket_close(&node_info->socket);
+						memcpy(&node_info->socket, &sock, sizeof(as_socket));
+						node_info->host.name = (char*)hostname;
+						node_info->host.tls_name = tls_name;
+						node_info->host.port = host->port;
+						as_address_copy_storage(addr, &node_info->addr);
+						as_lookup_end(&iter);
+						as_vector_destroy(&hosts);
 						cf_free(response2);
+						return AEROSPIKE_OK;
 					}
+					cf_free(response2);
 				}
-				// Close and try next address.
-				as_socket_close(&sock);
 			}
+
+			// Close and try next address.
+			as_socket_close(&sock);
 		}
 		as_lookup_end(&iter);
 	}
@@ -275,6 +301,7 @@ as_lookup_node(
 													host->tls_name, deadline);
 
 	if (status) {
+		as_lookup_record_connect_failure(cluster, &node_info->socket);
 		return status;
 	}
 
@@ -287,6 +314,7 @@ as_lookup_node(
 		status = as_cluster_login(cluster, err, &node_info->socket, deadline, node_info);
 
 		if (status) {
+			as_cluster_add_validation_auth_failure(cluster);
 			char str[512];
 			snprintf(str, sizeof(str), " from %s:%d", host->name, host->port);
 			as_error_append(err, str);

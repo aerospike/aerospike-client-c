@@ -432,6 +432,7 @@ as_node_add_conn_tls_handshake_failure(as_node* node)
 {
 	if (node->cluster->metrics_operational_enabled) {
 		as_incr_uint32(&node->conn_tls_handshake_failures);
+		as_incr_uint32(&node->conn_open_failures);
 	}
 }
 
@@ -440,6 +441,7 @@ as_node_add_conn_auth_failure(as_node* node)
 {
 	if (node->cluster->metrics_operational_enabled) {
 		as_incr_uint32(&node->conn_auth_failures);
+		as_incr_uint32(&node->conn_open_failures);
 	}
 }
 

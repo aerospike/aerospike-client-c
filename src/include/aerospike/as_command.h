@@ -221,7 +221,11 @@ typedef struct as_command_s {
 	uint8_t replica_index_sc; // Used in batch only.
 	as_latency_type latency_type;
 	uint64_t metrics_begin;
+	// Operational sampler decision. Gates command.count and retries.
 	bool metrics_sampled;
+	// Namespace histograms and bytes. Also true when metrics are on and
+	// operational metrics are off, so the learn-metrics file stays populated.
+	bool metrics_record;
 	// True for a user call that is this command. False for a node sub-command
 	// whose user call already counted command.count.
 	bool metrics_count;

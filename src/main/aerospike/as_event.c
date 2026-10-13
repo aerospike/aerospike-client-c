@@ -650,7 +650,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_node_reserve(cmd->node);
 	}
 
-	if (cmd->metrics_sampled) {
+	if (cmd->metrics_record) {
 		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
 
 		// Keep the clock from the first attempt so success latency includes retries.

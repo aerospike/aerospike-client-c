@@ -1015,7 +1015,8 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 		return 0;
 	}
 	
-	as_ns_metrics* metrics = as_cluster_sample_operational(node->cluster) ?
+	bool sample = as_cluster_sample_operational(node->cluster);
+	as_ns_metrics* metrics = as_cluster_record_command_metrics(node->cluster, sample) ?
 		as_node_prepare_metrics(node, NULL) : NULL;
 
 	if (metrics) {

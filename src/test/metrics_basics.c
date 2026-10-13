@@ -1063,7 +1063,7 @@ TEST(metrics_file_operational_off, "file exporter writes latencies when operatio
 	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
 
 	as_metrics_policy policy;
-	metrics_policy_init_without_default_file_exporter(&policy);
+	as_metrics_policy_init(&policy);
 	policy.operational_enabled = false;
 	// Keep the interval thread from exporting before disable.
 	policy.interval = 3600;

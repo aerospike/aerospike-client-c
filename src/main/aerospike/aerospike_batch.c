@@ -2141,7 +2141,7 @@ as_batch_command_init(
 	cmd->partition_id = 0; // Not referenced when node set.
 	cmd->replica = task->replica;
 	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
-	cmd->metrics_count = false;
+	cmd->metrics_node_sub_command = true;
 
 	// Note: Do not set flags to AS_COMMAND_FLAGS_LINEARIZE because AP and SC replicas
 	// are tracked separately for batch (cmd->master and cmd->master_sc).

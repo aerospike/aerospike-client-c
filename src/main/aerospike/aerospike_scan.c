@@ -750,7 +750,7 @@ as_scan_command_execute(as_scan_task* task)
 	cmd.replica_size = 1;
 	cmd.replica_index = 0;
 	cmd.latency_type = AS_LATENCY_TYPE_QUERY;
-	cmd.metrics_count = false;
+	cmd.metrics_node_sub_command = true;
 
 	as_command_start_timer(&cmd);
 

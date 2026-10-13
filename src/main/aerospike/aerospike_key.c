@@ -142,7 +142,7 @@ as_command_init_read(
 	cmd->buf_size = size;
 	cmd->partition_id = pi->partition_id;
 	cmd->latency_type = AS_LATENCY_TYPE_READ;
-	cmd->metrics_count = true;
+	cmd->metrics_node_sub_command = false;
 
 	if (pi->sc_mode) {
 		switch (read_mode_sc) {
@@ -208,7 +208,7 @@ as_command_init_write(
 	cmd->replica_size = pi->replica_size;
 	cmd->replica_index = as_replica_index_init_write(cluster, cmd->replica);
 	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
-	cmd->metrics_count = true;
+	cmd->metrics_node_sub_command = false;
 }
 
 static inline void

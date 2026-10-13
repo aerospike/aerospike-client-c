@@ -229,9 +229,9 @@ typedef struct as_command_s {
 	// counts. Also true when metrics are on and operational metrics are off, so
 	// the learn-metrics file stays populated.
 	bool metrics_namespace;
-	// True for a user call that is this command. False for a node sub-command
-	// whose user call already incremented the cluster command_count.
-	bool metrics_count;
+	// True for a node command under a user call that already incremented the
+	// cluster command_count. A single-key command leaves this false.
+	bool metrics_node_sub_command;
 } as_command;
 
 /**

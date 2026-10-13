@@ -701,7 +701,7 @@ as_command_execute(as_command* cmd, as_error* err)
 	cmd->metrics_namespace = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sampled);
 	cmd->metrics_begin = 0;
 
-	if (cmd->metrics_sampled && cmd->metrics_count) {
+	if (cmd->metrics_sampled && !cmd->metrics_node_sub_command) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 

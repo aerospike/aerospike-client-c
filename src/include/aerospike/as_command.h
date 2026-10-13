@@ -223,13 +223,13 @@ typedef struct as_command_s {
 	// Monotonic nanoseconds from cf_getns() when timing started. 0 if not timed.
 	// Elapsed latency is cf_getns() minus this value and includes retries.
 	uint64_t metrics_begin;
-	// Operational sampler decision. Gates command.count and retries.
+	// Operational sampler decision. Gates the cluster command_count and retries.
 	bool metrics_sampled;
 	// Namespace histograms and bytes. Also true when metrics are on and
 	// operational metrics are off, so the learn-metrics file stays populated.
 	bool metrics_record;
 	// True for a user call that is this command. False for a node sub-command
-	// whose user call already counted command.count.
+	// whose user call already incremented the cluster command_count.
 	bool metrics_count;
 } as_command;
 

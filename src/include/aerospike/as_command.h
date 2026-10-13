@@ -225,9 +225,10 @@ typedef struct as_command_s {
 	uint64_t metrics_begin;
 	// Operational sampler decision. Gates the cluster command_count and retries.
 	bool metrics_sampled;
-	// Namespace histograms and bytes. Also true when metrics are on and
-	// operational metrics are off, so the learn-metrics file stays populated.
-	bool metrics_record;
+	// True when this command updates per-namespace histograms, bytes, and error
+	// counts. Also true when metrics are on and operational metrics are off, so
+	// the learn-metrics file stays populated.
+	bool metrics_namespace;
 	// True for a user call that is this command. False for a node sub-command
 	// whose user call already incremented the cluster command_count.
 	bool metrics_count;

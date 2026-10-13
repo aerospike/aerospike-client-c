@@ -734,12 +734,12 @@ as_cluster_sample_operational(as_cluster* cluster)
 
 /**
  * @private
- * True when this command should update namespace histograms and bytes.
- * Operational metrics use operational_sample. When operational metrics are off,
- * the learn-metrics file still records every command.
+ * True when this command should update per-namespace histograms, bytes, and
+ * error counts. Operational metrics use operational_sample. When operational
+ * metrics are off, the learn-metrics file still records every command.
  */
 static inline bool
-as_cluster_record_command_metrics(const as_cluster* cluster, bool operational_sample)
+as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_sample)
 {
 	if (!cluster->metrics_enabled) {
 		return false;

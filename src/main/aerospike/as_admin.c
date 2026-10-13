@@ -276,7 +276,7 @@ as_admin_execute_node(
 	}
 
 	as_metrics_add_api_blocking(as);
-	bool sample = as_cluster_record_command_metrics(node->cluster,
+	bool sample = as_cluster_record_namespace_metrics(node->cluster,
 		as_cluster_sample_operational(node->cluster));
 	status = as_admin_send(err, &socket, node, buffer, end, 0, deadline_ms, sample);
 	
@@ -404,7 +404,7 @@ as_admin_read_list(
 	}
 	
 	as_metrics_add_api_blocking(as);
-	bool sample = as_cluster_record_command_metrics(node->cluster,
+	bool sample = as_cluster_record_namespace_metrics(node->cluster,
 		as_cluster_sample_operational(node->cluster));
 	status = as_admin_send(err, &socket, node, command, end, 0, deadline_ms, sample);
 	
@@ -597,7 +597,7 @@ as_authenticate(
 
 	p = as_admin_write_field_bytes(p, SESSION_TOKEN, session->token, session->token_length);
 
-	bool sample = node && as_cluster_record_command_metrics(node->cluster,
+	bool sample = node && as_cluster_record_namespace_metrics(node->cluster,
 		as_cluster_sample_operational(node->cluster));
 	as_status status = as_admin_send(err, sock, node, buffer, p, socket_timeout, deadline_ms, sample);
 	

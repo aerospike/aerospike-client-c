@@ -698,14 +698,14 @@ as_command_execute(as_command* cmd, as_error* err)
 	// One sampler decision for this command, before retries. Re-sends of this
 	// command reuse it. A new sub-batch is a new command and draws again.
 	cmd->metrics_sampled = as_cluster_sample_operational(cmd->cluster);
-	cmd->metrics_record = as_cluster_record_command_metrics(cmd->cluster, cmd->metrics_sampled);
+	cmd->metrics_namespace = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sampled);
 	cmd->metrics_begin = 0;
 
 	if (cmd->metrics_sampled && cmd->metrics_count) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 
-	if (cmd->metrics_record && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+	if (cmd->metrics_namespace && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 		cmd->metrics_begin = cf_getns();
 	}
 
@@ -740,7 +740,7 @@ as_command_execute(as_command* cmd, as_error* err)
 
 		as_ns_metrics* metrics = NULL;
 
-		if (cmd->metrics_record) {
+		if (cmd->metrics_namespace) {
 			metrics = as_node_prepare_metrics(node, cmd->ns);
 		}
 

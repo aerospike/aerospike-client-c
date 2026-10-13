@@ -167,11 +167,12 @@ typedef struct as_event_command {
 	uint32_t bytes_in;
 	uint32_t bytes_out;
 	as_latency_type latency_type;
-	// Operational sampler decision. Gates command.count and retries.
+	// Operational sampler decision. Gates the cluster command_count and retries.
 	bool metrics_sampled;
-	// Namespace histograms and bytes, including the learn-metrics file when
-	// operational metrics are off.
-	bool metrics_record;
+	// True when this command updates per-namespace histograms, bytes, and error
+	// counts. Also true when metrics are on and operational metrics are off, so
+	// the learn-metrics file stays populated.
+	bool metrics_namespace;
 } as_event_command;
 
 typedef struct {
@@ -208,7 +209,7 @@ as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
 	cmd->begin = 0;
 	cmd->metrics_sampled = as_cluster_sample_operational(cmd->cluster);
-	cmd->metrics_record = as_cluster_record_command_metrics(cmd->cluster, cmd->metrics_sampled);
+	cmd->metrics_namespace = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sampled);
 
 	if (cmd->metrics_sampled && count_command) {
 		as_incr_uint64(&cmd->cluster->command_count);

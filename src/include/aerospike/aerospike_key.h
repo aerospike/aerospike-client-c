@@ -745,7 +745,7 @@ aerospike_key_remove_async_ex(
  * @private
  * Read a record without incrementing usage metrics counters.
  */
-as_status
+AS_EXTERN as_status
 aerospike_key_get_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
 	);
@@ -754,7 +754,7 @@ aerospike_key_get_no_v3_metrics(
  * @private
  * Read a record asynchronously without incrementing usage metrics counters.
  */
-as_status
+AS_EXTERN as_status
 aerospike_key_get_async_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
@@ -765,7 +765,7 @@ aerospike_key_get_async_no_v3_metrics(
  * @private
  * Read selected bins without incrementing usage metrics counters.
  */
-as_status
+AS_EXTERN as_status
 aerospike_key_select_bins_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	const char* bins[], uint32_t n_bins, as_record** rec
@@ -775,7 +775,7 @@ aerospike_key_select_bins_no_v3_metrics(
  * @private
  * Read selected bins asynchronously without incrementing usage metrics counters.
  */
-as_status
+AS_EXTERN as_status
 aerospike_key_select_bins_async_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
 	uint32_t n_bins, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
@@ -786,7 +786,7 @@ aerospike_key_select_bins_async_no_v3_metrics(
  * @private
  * Test whether a record exists without incrementing usage metrics counters.
  */
-as_status
+AS_EXTERN as_status
 aerospike_key_exists_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
 	);
@@ -795,7 +795,7 @@ aerospike_key_exists_no_v3_metrics(
  * @private
  * Test whether a record exists asynchronously without incrementing usage metrics counters.
  */
-as_status
+AS_EXTERN as_status
 aerospike_key_exists_async_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
@@ -806,7 +806,7 @@ aerospike_key_exists_async_no_v3_metrics(
  * @private
  * Apply operations without incrementing usage metrics counters.
  */
-as_status
+AS_EXTERN as_status
 aerospike_key_operate_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key,
 	const as_operations* ops, as_record** rec
@@ -816,7 +816,7 @@ aerospike_key_operate_no_v3_metrics(
  * @private
  * Apply operations asynchronously without incrementing usage metrics counters.
  */
-as_status
+AS_EXTERN as_status
 aerospike_key_operate_async_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
@@ -826,7 +826,7 @@ aerospike_key_operate_async_no_v3_metrics(
  * @private
  * Apply a UDF without incrementing usage metrics counters.
  */
-as_status
+AS_EXTERN as_status
 aerospike_key_apply_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
 	const char* module, const char* function, as_list* arglist, as_val** result
@@ -836,7 +836,7 @@ aerospike_key_apply_no_v3_metrics(
  * @private
  * Apply a UDF asynchronously without incrementing usage metrics counters.
  */
-as_status
+AS_EXTERN as_status
 aerospike_key_apply_async_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
 	const char* module, const char* function, as_list* arglist,
@@ -848,7 +848,7 @@ aerospike_key_apply_async_no_v3_metrics(
  * @private
  * Remove a record without incrementing usage metrics counters.
  */
-as_status
+AS_EXTERN as_status
 aerospike_key_remove_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
 	);
@@ -857,7 +857,7 @@ aerospike_key_remove_no_v3_metrics(
  * @private
  * Remove a record asynchronously without incrementing usage metrics counters.
  */
-as_status
+AS_EXTERN as_status
 aerospike_key_remove_async_no_v3_metrics(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
 	as_async_write_listener listener, void* udata, as_event_loop* event_loop,

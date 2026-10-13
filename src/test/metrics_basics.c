@@ -667,7 +667,7 @@ metrics_test_namespace_ok(const as_metrics_snapshot* metrics_snapshot, uint8_t b
 static bool
 metrics_header_ok(const char* header, const char* latency_token)
 {
-	if (!strstr(header, " header(3) ")) {
+	if (!strstr(header, " header(2) ")) {
 		return false;
 	}
 
@@ -698,13 +698,19 @@ metrics_header_ok(const char* header, const char* latency_token)
 		}
 	}
 
-	// Field names stay camelCase. eventloop stays a single lowercase word.
+	// Field names stay camelCase. The header stays header(2) until the next major:
+	// syncConn/asyncConn are not arrays, and latency has no unit.
 	const char* rejected[] = {
 		"client_type",
 		"key_busy",
 		"bytes_in",
 		"bytes_out",
 		"eventLoop",
+		"header(3)",
+		"syncConn[]",
+		"asyncConn[]",
+		"milliseconds",
+		"microseconds",
 		NULL
 	};
 
@@ -1017,7 +1023,7 @@ TEST(metrics_file_header, "report_dir installs a camelCase metrics log")
 
 	char header[2048];
 	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
-		metrics_header_ok(header, "latency(milliseconds,7,1)");
+		metrics_header_ok(header, "latency(7,1)");
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -1026,7 +1032,7 @@ TEST(metrics_file_header, "report_dir installs a camelCase metrics log")
 	as_metrics_policy_destroy(&policy);
 }
 
-TEST(metrics_file_header_microseconds, "file header records latency_unit microseconds")
+TEST(metrics_file_header_microseconds, "file header stays latency(columns,shift) when latency_unit is microseconds")
 {
 	char dir[256];
 	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
@@ -1043,7 +1049,7 @@ TEST(metrics_file_header_microseconds, "file header records latency_unit microse
 
 	char header[2048];
 	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
-		metrics_header_ok(header, "latency(microseconds,7,1)");
+		metrics_header_ok(header, "latency(7,1)");
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);

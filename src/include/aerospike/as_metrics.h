@@ -266,7 +266,7 @@ typedef struct as_metrics_event_loop_snapshot_s {
  *
  * Enabling metrics does not turn on operational or usage metrics. Set
  * `as_metrics_policy.operational_enabled` or `usage_enabled` for those blocks.
- * The metrics file uses snake_case names.
+ * The metrics file header uses the original camelCase field names.
  *
  * `as_cluster_stats` fields land here as follows:
  *   recover_queue_size -> recover_queue_size

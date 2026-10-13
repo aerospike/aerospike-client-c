@@ -56,7 +56,6 @@ struct as_metrics_file_exporter_s {
 	as_metrics_cpu_state* cpu;
 	uint64_t max_size;
 	uint64_t size;
-	as_metrics_latency_unit latency_unit;
 	uint8_t latency_columns;
 	uint8_t latency_shift;
 	bool legacy_active;
@@ -256,11 +255,11 @@ as_metrics_open_writer(as_metrics_file_exporter* mw, as_error* err)
 	char now_str[128];
 	as_metrics_timestamp(now_str, sizeof(now_str));
 
-	const char* latency_unit = mw->latency_unit == AS_METRICS_LATENCY_MICROSECONDS ?
-		"microseconds" : "milliseconds";
+	// Keep header(2) until the next major release. Existing shippers expect
+	// syncConn/asyncConn and latency(columns,shift), without a latency unit.
 	char data[1024];
-	int rv = snprintf(data, sizeof(data), "%s header(3) cluster[name,clientType,clientVersion,appId,label[],cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] label[name,value] eventloop[processSize,queueSize] node[name,address,port,syncConn[],asyncConn[],namespace[]] conn[inUse,inPool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,keyBusy,bytesIn,bytesOut,latency[]] latency(%s,%u,%u)[type[l1,l2,l3...]]\n",
-		now_str, latency_unit, mw->latency_columns, mw->latency_shift);
+	int rv = snprintf(data, sizeof(data), "%s header(2) cluster[name,clientType,clientVersion,appId,label[],cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] label[name,value] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,namespace[]] conn[inUse,inPool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,keyBusy,bytesIn,bytesOut,latency[]] latency(%u,%u)[type[l1,l2,l3...]]\n",
+		now_str, mw->latency_columns, mw->latency_shift);
 
 	if (rv <= 0) {
 		fclose(mw->file);
@@ -292,7 +291,6 @@ as_metrics_ensure_open(as_metrics_file_exporter* mw, as_error* err)
 static void
 as_metrics_write_conn_snapshot(as_string_builder* sb, const as_metrics_conn_snapshot* conn_snapshot)
 {
-	as_string_builder_append_char(sb, '[');
 	as_string_builder_append_uint(sb, conn_snapshot->in_use);
 	as_string_builder_append_char(sb, ',');
 	as_string_builder_append_uint(sb, conn_snapshot->in_pool);
@@ -304,7 +302,6 @@ as_metrics_write_conn_snapshot(as_string_builder* sb, const as_metrics_conn_snap
 	as_string_builder_append_uint(sb, conn_snapshot->recovered);
 	as_string_builder_append_char(sb, ',');
 	as_string_builder_append_uint(sb, conn_snapshot->aborted);
-	as_string_builder_append_char(sb, ']');
 }
 
 static void
@@ -515,7 +512,6 @@ as_metrics_file_exporter_create(
 	mw->base.export_fn = as_metrics_file_export;
 	as_strncpy(mw->report_dir, policy->report_dir, sizeof(mw->report_dir));
 	mw->max_size = policy->report_size_limit;
-	mw->latency_unit = policy->latency_unit;
 	mw->latency_columns = policy->latency_columns;
 	mw->latency_shift = policy->latency_shift;
 	*exporter = &mw->base;

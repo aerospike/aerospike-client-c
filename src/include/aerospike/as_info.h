@@ -46,8 +46,8 @@ typedef struct as_name_value_s {
  * Send an info request to one node without incrementing usage metrics counters.
  * The response must be freed by the caller on success.
  */
-as_status
-aerospike_info_node_no_v3_metrics(
+AS_EXTERN as_status
+aerospike_info_node_no_api_count(
 	aerospike* as, as_error* err, const as_policy_info* policy, as_node* node,
 	const char* req, char** res
 	);

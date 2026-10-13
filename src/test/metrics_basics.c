@@ -667,7 +667,7 @@ metrics_test_namespace_ok(const as_metrics_snapshot* metrics_snapshot, uint8_t b
 static bool
 metrics_header_ok(const char* header, const char* latency_token)
 {
-	if (!strstr(header, " header(3) ")) {
+	if (!strstr(header, " header(2) ")) {
 		return false;
 	}
 
@@ -698,13 +698,19 @@ metrics_header_ok(const char* header, const char* latency_token)
 		}
 	}
 
-	// Field names stay camelCase. eventloop stays a single lowercase word.
+	// Field names stay camelCase. The header stays header(2) until the next major:
+	// syncConn/asyncConn are not arrays, and latency has no unit.
 	const char* rejected[] = {
 		"client_type",
 		"key_busy",
 		"bytes_in",
 		"bytes_out",
 		"eventLoop",
+		"header(3)",
+		"syncConn[]",
+		"asyncConn[]",
+		"milliseconds",
+		"microseconds",
 		NULL
 	};
 
@@ -1028,7 +1034,7 @@ TEST(metrics_file_header, "report_dir installs a camelCase metrics log")
 
 	char header[2048];
 	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
-		metrics_header_ok(header, "latency(milliseconds,7,1)");
+		metrics_header_ok(header, "latency(7,1)");
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -1037,7 +1043,7 @@ TEST(metrics_file_header, "report_dir installs a camelCase metrics log")
 	as_metrics_policy_destroy(&policy);
 }
 
-TEST(metrics_file_header_microseconds, "file header records latency_unit microseconds")
+TEST(metrics_file_header_microseconds, "file header stays latency(columns,shift) when latency_unit is microseconds")
 {
 	char dir[256];
 	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
@@ -1054,7 +1060,7 @@ TEST(metrics_file_header_microseconds, "file header records latency_unit microse
 
 	char header[2048];
 	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
-		metrics_header_ok(header, "latency(microseconds,7,1)");
+		metrics_header_ok(header, "latency(7,1)");
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -1492,19 +1498,14 @@ TEST(metrics_usage_api_counters, "usage counters record blocking, deferred, and 
 	as_status scan_status = aerospike_scan_background(as, &err, NULL, &scan, &scan_id);
 	as_scan_destroy(&scan);
 
-	// A background scan without a UDF is rejected on current servers. The call still counts.
-	// scan_wait is a separate blocking call, and only runs when a job was started.
-	uint64_t blocking_calls = 1;
-
-	if (scan_status == AEROSPIKE_OK) {
-		assert_int_eq(aerospike_scan_wait(as, &err, NULL, scan_id, 100), AEROSPIKE_OK);
-		blocking_calls = 2;
-	}
+	// Without a UDF or operations this is a basic query with no partition ids.
+	// Supported servers reject that. The call still counts as background.
+	assert_true(scan_status != AEROSPIKE_OK);
 
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
 	assert_true(snap->usage_metrics_enabled);
 	// put is blocking. query_async is deferred. scan_background is background.
-	assert_true(snap->api_blocking == blocking + blocking_calls);
+	assert_true(snap->api_blocking == blocking + 1);
 	assert_true(snap->api_deferred == deferred + 1);
 	assert_true(snap->api_background == background + 1);
 	as_metrics_snapshot_destroy(snap);
@@ -1514,7 +1515,7 @@ TEST(metrics_usage_api_counters, "usage counters record blocking, deferred, and 
 
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
 	assert_false(snap->usage_metrics_enabled);
-	assert_true(snap->api_blocking == blocking + blocking_calls);
+	assert_true(snap->api_blocking == blocking + 1);
 	assert_true(snap->api_deferred == deferred + 1);
 	assert_true(snap->api_background == background + 1);
 	as_metrics_snapshot_destroy(snap);

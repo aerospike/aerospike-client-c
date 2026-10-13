@@ -45,8 +45,6 @@ aerospike_index_create_private(
 	as_index_datatype dtype, as_cdt_ctx* ctx, as_exp* exp
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	if (! policy) {
@@ -309,6 +307,7 @@ aerospike_index_create_ctx(
 	as_index_datatype dtype, as_cdt_ctx* ctx
 	)
 {
+	as_metrics_add_api_blocking(as);
 	return aerospike_index_create_private(as, err, task, policy, ns, set, bin_name, index_name, itype,
 		dtype, ctx, NULL);
 }
@@ -319,6 +318,7 @@ aerospike_index_create_exp(
 	const char* set, const char* index_name, as_index_type itype, as_index_datatype dtype, as_exp* exp
 	)
 {
+	as_metrics_add_api_blocking(as);
 	return aerospike_index_create_private(as, err, task, policy, ns, set, NULL, index_name, itype,
 		dtype, NULL, exp);
 }

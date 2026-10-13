@@ -521,22 +521,22 @@ metrics_header_ok(const char* header, const char* latency_token)
 	}
 
 	const char* required[] = {
-		"client_type",
-		"client_version",
-		"app_id",
-		"invalid_node_count",
-		"command_count",
-		"retry_count",
-		"delay_queue_timeout_count",
+		"clientType",
+		"clientVersion",
+		"appId",
+		"invalidNodeCount",
+		"commandCount",
+		"retryCount",
+		"delayQueueTimeoutCount",
 		"eventloop",
-		"process_size",
-		"queue_size",
-		"sync_conn",
-		"in_use",
-		"in_pool",
-		"key_busy",
-		"bytes_in",
-		"bytes_out",
+		"processSize",
+		"queueSize",
+		"syncConn",
+		"inUse",
+		"inPool",
+		"keyBusy",
+		"bytesIn",
+		"bytesOut",
 		latency_token,
 		NULL
 	};
@@ -547,12 +547,12 @@ metrics_header_ok(const char* header, const char* latency_token)
 		}
 	}
 
-	// Field names in the file are snake_case. eventloop stays a single lowercase word.
+	// Field names stay camelCase. eventloop stays a single lowercase word.
 	const char* rejected[] = {
-		"clientType",
-		"keyBusy",
-		"bytesIn",
-		"bytesOut",
+		"client_type",
+		"key_busy",
+		"bytes_in",
+		"bytes_out",
 		"eventLoop",
 		NULL
 	};
@@ -849,7 +849,7 @@ TEST(metrics_labels, "static labels are copied onto the snapshot")
 	as_metrics_policy_destroy(&policy);
 }
 
-TEST(metrics_file_header, "report_dir installs a snake_case metrics log")
+TEST(metrics_file_header, "report_dir installs a camelCase metrics log")
 {
 	char dir[256];
 	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));

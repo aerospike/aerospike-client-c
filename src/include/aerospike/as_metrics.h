@@ -569,8 +569,9 @@ typedef struct as_metrics_policy_s {
 
 	/**
 	 * Record command-path operational metrics (latency, namespace errors and bytes,
-	 * cpu, memory). Enabling metrics does not turn this on.
-	 * Tier 0 pool gauges are collected whenever metrics are enabled.
+	 * cpu, memory) on the metrics snapshot. Enabling metrics does not turn this on.
+	 * The learn-metrics file exporter still writes those fields so existing log
+	 * readers keep working. Tier 0 pool gauges are collected whenever metrics are enabled.
 	 *
 	 * Default: false
 	 */
@@ -767,10 +768,23 @@ as_metrics_cpu_state_destroy(as_metrics_cpu_state* state);
  * @private
  * Copy current cluster metrics into a snapshot. Does not include nodes_departed;
  * the caller attaches those. `labels` may be NULL. `cpu` may be NULL except on
- * Windows, where it holds the previous sample. CPU and memory are still read.
+ * Windows, where it holds the previous sample. CPU, memory, and namespace
+ * histograms are copied only when operational metrics are enabled.
  */
 AS_EXTERN as_status
 as_metrics_snapshot_create(
+	as_error* err, struct as_cluster_s* cluster, as_vector* labels, as_metrics_cpu_state* cpu,
+	as_metrics_snapshot** snapshot
+	);
+
+/**
+ * @private
+ * Learn-metrics file snapshot. Same fields as as_metrics_snapshot_create(), except
+ * cpu, memory, and namespace histograms are copied whenever metrics are enabled.
+ * operational_metrics_enabled still follows the policy.
+ */
+as_status
+as_metrics_snapshot_create_file(
 	as_error* err, struct as_cluster_s* cluster, as_vector* labels, as_metrics_cpu_state* cpu,
 	as_metrics_snapshot** snapshot
 	);
@@ -785,9 +799,18 @@ as_metrics_snapshot_destroy(as_metrics_snapshot* snapshot);
 /**
  * @private
  * Copy one node's metrics. Used for nodes_departed and by the deprecated file listener.
+ * Namespace histograms are copied only when operational metrics are enabled.
  */
 AS_EXTERN void
 as_metrics_node_snapshot_create(struct as_node_s* node, as_metrics_node_snapshot** snapshot);
+
+/**
+ * @private
+ * Node snapshot for the learn-metrics file. Namespace histograms are copied
+ * whenever metrics are enabled.
+ */
+void
+as_metrics_node_snapshot_create_file(struct as_node_s* node, as_metrics_node_snapshot** snapshot);
 
 /**
  * @private

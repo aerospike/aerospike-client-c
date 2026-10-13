@@ -269,9 +269,15 @@ as_info_command(
 		names = "";
 	}
 
-	bool sample = node && as_cluster_sample_operational(node->cluster);
-	as_ns_metrics* metrics = (node && as_cluster_record_namespace_metrics(node->cluster, sample)) ?
-		as_node_prepare_metrics(node, NULL) : NULL;
+	as_ns_metrics* metrics = NULL;
+
+	if (node) {
+		bool operational_sample = as_cluster_sample_operational(node->cluster);
+
+		if (as_cluster_record_namespace_metrics(node->cluster, operational_sample)) {
+			metrics = as_node_prepare_metrics(node, NULL);
+		}
+	}
 
 	uint8_t* cmd = as_command_buffer_init(size);
 	

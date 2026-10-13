@@ -1091,6 +1091,7 @@ TEST(metrics_file_operational_off, "file exporter writes latencies when operatio
 
 	as_status disable_status = aerospike_disable_metrics(as, &err);
 	char line[65536];
+	// "test," is the namespace from metrics_put(), then the comma before errors.
 	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
 		strstr(line, "test,") && metrics_file_line_has_write_latency(line) &&
 		metrics_file_line_has_memory(line);

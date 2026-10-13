@@ -352,7 +352,9 @@ as_metrics_write_node_snapshot(as_string_builder* sb, const as_metrics_node_snap
 		as_string_builder_append_char(sb, ',');
 		as_string_builder_append_uint64(sb, namespace_snapshot->errors);
 		as_string_builder_append_char(sb, ',');
-		as_string_builder_append_uint64(sb, namespace_snapshot->timeouts);
+		// header(2) has one timeouts column. It is client plus server timeouts.
+		as_string_builder_append_uint64(sb,
+			namespace_snapshot->client_timeouts + namespace_snapshot->server_timeouts);
 		as_string_builder_append_char(sb, ',');
 		as_string_builder_append_uint64(sb, namespace_snapshot->key_busy);
 		as_string_builder_append_char(sb, ',');

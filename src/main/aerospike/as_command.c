@@ -741,7 +741,7 @@ as_command_execute(as_command* cmd, as_error* err)
 
 		if (status != AEROSPIKE_OK) {
 			if (status == AEROSPIKE_ERR_TIMEOUT) {
-				as_node_add_timeout(node, cmd->ns, metrics);
+				as_node_add_client_timeout(node, cmd->ns, metrics);
 			}
 			else if (status > 0) {
 				// Do not retry on server error response such as invalid user/password.
@@ -801,8 +801,12 @@ as_command_execute(as_command* cmd, as_error* err)
 			// Close socket on errors that can leave unread data in socket.
 			switch (status) {
 				case AEROSPIKE_ERR_CLUSTER:
-				case AEROSPIKE_ERR_DEVICE_OVERLOAD:
 					as_node_add_error(node, cmd->ns, metrics);
+					as_node_put_conn_error(node, &socket);
+					goto Retry;
+
+				case AEROSPIKE_ERR_DEVICE_OVERLOAD:
+					as_node_add_device_overload(node, cmd->ns, metrics);
 					as_node_put_conn_error(node, &socket);
 					goto Retry;
 
@@ -812,13 +816,16 @@ as_command_execute(as_command* cmd, as_error* err)
 					goto Retry;
 
 				case AEROSPIKE_ERR_TIMEOUT:
-					as_node_add_timeout(node, cmd->ns, metrics);
-					
 					if (is_server_timeout(err)) {
+						as_node_add_server_timeout(node, cmd->ns, metrics);
 						as_node_put_conn_error(node, &socket);
 					}
-					else if (! ctx.in_recovery) {
-						as_node_close_conn_error(node, &socket, socket.pool);
+					else {
+						as_node_add_client_timeout(node, cmd->ns, metrics);
+
+						if (! ctx.in_recovery) {
+							as_node_close_conn_error(node, &socket, socket.pool);
+						}
 					}
 					goto Retry;
 
@@ -848,6 +855,11 @@ as_command_execute(as_command* cmd, as_error* err)
 
 				case AEROSPIKE_ERR_RECORD_BUSY:
 					as_node_add_key_busy(node, cmd->ns, metrics);
+					as_command_prepare_error(cmd, err);
+					break;
+
+				case AEROSPIKE_ERR_RECORD_TOO_BIG:
+					as_node_add_record_too_big(node, cmd->ns, metrics);
 					as_command_prepare_error(cmd, err);
 					break;
 

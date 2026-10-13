@@ -1606,8 +1606,11 @@ as_node_append_metrics(as_node* node, const char* ns)
 		metrics->bytes_in = 0;
 		metrics->bytes_out = 0;
 		metrics->error_count = 0;
-		metrics->timeout_count = 0;
+		metrics->client_timeout_count = 0;
+		metrics->server_timeout_count = 0;
 		metrics->key_busy_count = 0;
+		metrics->record_too_big_count = 0;
+		metrics->device_overload_count = 0;
 
 		uint8_t latency_columns;
 		uint8_t latency_shift;
@@ -1706,18 +1709,35 @@ as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics)
 	as_incr_uint64(&metrics->error_count);
 }
 
-void
-as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
+static as_ns_metrics*
+as_node_metrics_for_count(as_node* node, const char* ns, as_ns_metrics* metrics)
 {
-	// Timeout counts are always on. If metrics not enabled, still increment count.
 	if (!metrics) {
 		metrics = as_node_prepare_metrics(node, ns);
-
-		if (!metrics) {
-			return;
-		}
 	}
-	as_incr_uint64(&metrics->timeout_count);
+	return metrics;
+}
+
+void
+as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	metrics = as_node_metrics_for_count(node, ns, metrics);
+
+	if (!metrics) {
+		return;
+	}
+	as_incr_uint64(&metrics->client_timeout_count);
+}
+
+void
+as_node_add_server_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	metrics = as_node_metrics_for_count(node, ns, metrics);
+
+	if (!metrics) {
+		return;
+	}
+	as_incr_uint64(&metrics->server_timeout_count);
 }
 
 void
@@ -1732,6 +1752,28 @@ as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics)
 		}
 	}
 	as_incr_uint64(&metrics->key_busy_count);
+}
+
+void
+as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	metrics = as_node_metrics_for_count(node, ns, metrics);
+
+	if (!metrics) {
+		return;
+	}
+	as_incr_uint64(&metrics->record_too_big_count);
+}
+
+void
+as_node_add_device_overload(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	metrics = as_node_metrics_for_count(node, ns, metrics);
+
+	if (!metrics) {
+		return;
+	}
+	as_incr_uint64(&metrics->device_overload_count);
 }
 
 static as_status

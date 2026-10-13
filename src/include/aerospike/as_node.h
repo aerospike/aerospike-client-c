@@ -222,20 +222,39 @@ typedef struct {
 
 	/**
 	 * Command error count since node was initialized. If the error is retryable, multiple errors per
-	 * command may occur.
+	 * command may occur. Timeouts, key busy, record too big, and device overload are counted
+	 * separately and are not included here.
 	 */
 	uint64_t error_count;
 
 	/**
-	 * Command timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
-	 * multiple timeouts per command may occur.
+	 * Client timeouts (connect, socket, or total) since node was initialized.
+	 * A retryable timeout can be counted more than once for one command.
+	 * Not included in error_count. A timeout is either client or server, not both.
 	 */
-	uint64_t timeout_count;
+	uint64_t client_timeout_count;
+
+	/**
+	 * Server timeouts since node was initialized.
+	 * A retryable timeout can be counted more than once for one command.
+	 * Not included in error_count or client_timeout_count.
+	 */
+	uint64_t server_timeout_count;
 
 	/**
 	 * Command key busy error count since node was initialized.
 	 */
 	uint64_t key_busy_count;
+
+	/**
+	 * Record too big errors since node was initialized.
+	 */
+	uint64_t record_too_big_count;
+
+	/**
+	 * Device overload errors since node was initialized.
+	 */
+	uint64_t device_overload_count;
 
 	/**
 	 * Latency histograms.
@@ -900,20 +919,44 @@ void
 as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
- * Return command timeout count. The value is cumulative and not reset per metrics interval.
+ * Return client timeout count. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_node_get_client_timeout_count(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&metrics->client_timeout_count);
+}
+
+/**
+ * Increment client timeout count. Does not increment server timeouts or errors.
+ */
+void
+as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
+
+/**
+ * Return server timeout count. The value is cumulative and not reset per metrics interval.
+ */
+static inline uint64_t
+as_node_get_server_timeout_count(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&metrics->server_timeout_count);
+}
+
+/**
+ * Increment server timeout count. Does not increment client timeouts or errors.
+ */
+void
+as_node_add_server_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
+
+/**
+ * Return client timeouts plus server timeouts for as_node_stats.timeout_count.
+ * Not a separately incremented counter.
  */
 static inline uint64_t
 as_node_get_timeout_count(as_ns_metrics* metrics)
 {
-	return as_load_uint64(&metrics->timeout_count);
+	return as_node_get_client_timeout_count(metrics) + as_node_get_server_timeout_count(metrics);
 }
-
-/**
- * Increment command timeout count. If the timeout is retryable (ie socketTimeout),
- * multiple timeouts per command may occur.
- */
-void
-as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * Return command key busy error count. The value is cumulative and not reset per metrics interval.
@@ -929,6 +972,36 @@ as_node_get_key_busy_count(as_ns_metrics* metrics)
  */
 void
 as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics);
+
+/**
+ * Return record too big error count.
+ */
+static inline uint64_t
+as_node_get_record_too_big_count(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&metrics->record_too_big_count);
+}
+
+/**
+ * Increment record too big error count. Not included in the command error count.
+ */
+void
+as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics);
+
+/**
+ * Return device overload error count.
+ */
+static inline uint64_t
+as_node_get_device_overload_count(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&metrics->device_overload_count);
+}
+
+/**
+ * Increment device overload error count. Not included in the command error count.
+ */
+void
+as_node_add_device_overload(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * @private

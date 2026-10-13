@@ -124,7 +124,9 @@ typedef struct as_metrics_latency_snapshot_s {
  * Per-namespace counters and histograms copied into a metrics snapshot.
  * Present only when operational metrics are enabled.
  * `as_node_stats.error_count`, `timeout_count`, and `key_busy_count` are the
- * sums of `errors`, `timeouts`, and `key_busy` across these entries.
+ * sums of `errors`, `client_timeouts` plus `server_timeouts`, and `key_busy`
+ * across these entries. `record_too_big` and `device_overload` are not included
+ * in `errors`.
  */
 typedef struct as_metrics_namespace_snapshot_s {
 	/**
@@ -135,18 +137,26 @@ typedef struct as_metrics_namespace_snapshot_s {
 	/**
 	 * Command errors for this namespace since the node was initialized.
 	 * A retryable error can be counted more than once for one command.
+	 * Remainder after the split counters below. Timeouts, key busy, record too big,
+	 * and device overload are not included.
 	 * Same counter as `as_ns_metrics.error_count`. Contributes to
 	 * `as_node_stats.error_count`.
 	 */
 	uint64_t errors;
 
 	/**
-	 * Command timeouts for this namespace since the node was initialized.
+	 * Client timeouts (connect, socket, or total) since the node was initialized.
 	 * A retryable timeout can be counted more than once for one command.
-	 * Same counter as `as_ns_metrics.timeout_count`. Contributes to
-	 * `as_node_stats.timeout_count`.
+	 * Not included in errors or server_timeouts.
 	 */
-	uint64_t timeouts;
+	uint64_t client_timeouts;
+
+	/**
+	 * Server timeouts since the node was initialized.
+	 * A retryable timeout can be counted more than once for one command.
+	 * Not included in errors or client_timeouts.
+	 */
+	uint64_t server_timeouts;
 
 	/**
 	 * Key busy errors for this namespace since the node was initialized.
@@ -154,6 +164,18 @@ typedef struct as_metrics_namespace_snapshot_s {
 	 * `as_node_stats.key_busy_count`.
 	 */
 	uint64_t key_busy;
+
+	/**
+	 * Record too big errors since the node was initialized.
+	 * Not included in errors.
+	 */
+	uint64_t record_too_big;
+
+	/**
+	 * Device overload errors since the node was initialized.
+	 * Not included in errors.
+	 */
+	uint64_t device_overload;
 
 	/**
 	 * Bytes received from the server for this namespace.
@@ -184,7 +206,7 @@ typedef struct as_metrics_namespace_snapshot_s {
  *   sync           -> sync
  *   async          -> async
  *   error_count    -> sum of namespaces[].errors
- *   timeout_count  -> sum of namespaces[].timeouts
+ *   timeout_count  -> sum of namespaces[].client_timeouts and server_timeouts
  *   key_busy_count -> sum of namespaces[].key_busy
  * `as_node_stats.pipeline` has no snapshot field.
  */
@@ -279,7 +301,9 @@ typedef struct as_metrics_event_loop_snapshot_s {
  * On each node, `as_node_stats.sync` and `async` are `nodes[i].sync` and
  * `nodes[i].async`. `as_node_stats.pipeline` has no snapshot field.
  * `as_node_stats.error_count`, `timeout_count`, and `key_busy_count` are the
- * sums of `nodes[i].namespaces[].errors`, `timeouts`, and `key_busy`.
+ * sums of `nodes[i].namespaces[].errors`, `client_timeouts` plus `server_timeouts`,
+ * and `key_busy`. `record_too_big` and `device_overload` are not included in
+ * `errors`.
  */
 typedef struct as_metrics_snapshot_s {
 	/**

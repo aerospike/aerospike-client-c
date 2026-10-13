@@ -220,6 +220,8 @@ typedef struct as_command_s {
 	uint8_t replica_index;
 	uint8_t replica_index_sc; // Used in batch only.
 	as_latency_type latency_type;
+	// Monotonic nanoseconds from cf_getns() when timing started. 0 if not timed.
+	// Elapsed latency is cf_getns() minus this value and includes retries.
 	uint64_t metrics_begin;
 	// Operational sampler decision. Gates command.count and retries.
 	bool metrics_sampled;

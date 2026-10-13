@@ -1481,19 +1481,14 @@ TEST(metrics_usage_api_counters, "usage counters record blocking, deferred, and 
 	as_status scan_status = aerospike_scan_background(as, &err, NULL, &scan, &scan_id);
 	as_scan_destroy(&scan);
 
-	// A background scan without a UDF is rejected on current servers. The call still counts.
-	// scan_wait is a separate blocking call, and only runs when a job was started.
-	uint64_t blocking_calls = 1;
-
-	if (scan_status == AEROSPIKE_OK) {
-		assert_int_eq(aerospike_scan_wait(as, &err, NULL, scan_id, 100), AEROSPIKE_OK);
-		blocking_calls = 2;
-	}
+	// Without a UDF or operations this is a basic query with no partition ids.
+	// Supported servers reject that. The call still counts as background.
+	assert_true(scan_status != AEROSPIKE_OK);
 
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
 	assert_true(snap->usage_metrics_enabled);
 	// put is blocking. query_async is deferred. scan_background is background.
-	assert_true(snap->api_blocking == blocking + blocking_calls);
+	assert_true(snap->api_blocking == blocking + 1);
 	assert_true(snap->api_deferred == deferred + 1);
 	assert_true(snap->api_background == background + 1);
 	as_metrics_snapshot_destroy(snap);
@@ -1503,7 +1498,7 @@ TEST(metrics_usage_api_counters, "usage counters record blocking, deferred, and 
 
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
 	assert_false(snap->usage_metrics_enabled);
-	assert_true(snap->api_blocking == blocking + blocking_calls);
+	assert_true(snap->api_blocking == blocking + 1);
 	assert_true(snap->api_deferred == deferred + 1);
 	assert_true(snap->api_background == background + 1);
 	as_metrics_snapshot_destroy(snap);

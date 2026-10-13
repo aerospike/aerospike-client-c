@@ -1133,11 +1133,9 @@ as_metrics_listeners_defined(const as_metrics_listeners* listeners)
 }
 
 static void
-as_metrics_add_api(aerospike* as, uint64_t* counter)
+as_metrics_add_api(as_cluster* cluster, uint64_t* counter)
 {
-	as_cluster* cluster = as ? as->cluster : NULL;
-
-	if (cluster && cluster->metrics_enabled && cluster->metrics_usage_enabled) {
+	if (cluster->metrics_enabled && cluster->metrics_usage_enabled) {
 		as_incr_uint64(counter);
 	}
 }
@@ -1148,7 +1146,7 @@ as_metrics_add_api_blocking(aerospike* as)
 	as_cluster* cluster = as ? as->cluster : NULL;
 
 	if (cluster) {
-		as_metrics_add_api(as, &cluster->metrics_api_blocking);
+		as_metrics_add_api(cluster, &cluster->metrics_api_blocking);
 	}
 }
 
@@ -1158,7 +1156,7 @@ as_metrics_add_api_deferred(aerospike* as)
 	as_cluster* cluster = as ? as->cluster : NULL;
 
 	if (cluster) {
-		as_metrics_add_api(as, &cluster->metrics_api_deferred);
+		as_metrics_add_api(cluster, &cluster->metrics_api_deferred);
 	}
 }
 
@@ -1168,7 +1166,7 @@ as_metrics_add_api_background(aerospike* as)
 	as_cluster* cluster = as ? as->cluster : NULL;
 
 	if (cluster) {
-		as_metrics_add_api(as, &cluster->metrics_api_background);
+		as_metrics_add_api(cluster, &cluster->metrics_api_background);
 	}
 }
 

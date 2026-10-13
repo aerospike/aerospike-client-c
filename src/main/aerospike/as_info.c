@@ -269,7 +269,8 @@ as_info_command(
 		names = "";
 	}
 
-	as_ns_metrics* metrics = (node && node->cluster->metrics_enabled)? as_node_prepare_metrics(node, NULL) : NULL;
+	as_ns_metrics* metrics = (node && as_cluster_sample_operational(node->cluster)) ?
+		as_node_prepare_metrics(node, NULL) : NULL;
 
 	uint8_t* cmd = as_command_buffer_init(size);
 	

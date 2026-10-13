@@ -110,6 +110,10 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 			cfg->operational_enabled : src->operational_enabled;
 		mrg->usage_enabled = as_field_is_set(bitmap, AS_METRICS_USAGE) ?
 			cfg->usage_enabled : src->usage_enabled;
+		mrg->sampler_range = as_field_is_set(bitmap, AS_METRICS_SAMPLER_RANGE) ?
+			cfg->sampler_range : src->sampler_range;
+		mrg->sampler_threshold = as_field_is_set(bitmap, AS_METRICS_SAMPLER_THRESHOLD) ?
+			cfg->sampler_threshold : src->sampler_threshold;
 		return mrg;
 	}
 	else {
@@ -166,6 +170,20 @@ aerospike_disable_metrics(aerospike* as, as_error* err)
 }
 
 void
+as_metrics_policy_set_sampler_probability(as_metrics_policy* policy, double probability)
+{
+	if (probability < 0.0) {
+		probability = 0.0;
+	}
+	else if (probability > 1.0) {
+		probability = 1.0;
+	}
+
+	policy->sampler_range = 1000000;
+	policy->sampler_threshold = (uint32_t)(probability * 1000000.0 + 0.5);
+}
+
+void
 as_metrics_policy_init(as_metrics_policy* policy)
 {
 	policy->labels = NULL;
@@ -178,6 +196,8 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
 	policy->operational_enabled = false;
 	policy->usage_enabled = false;
+	policy->sampler_range = 1;
+	policy->sampler_threshold = 1;
 	policy->metrics_listeners.enable_listener = NULL;
 	policy->metrics_listeners.snapshot_listener = NULL;
 	policy->metrics_listeners.node_close_listener = NULL;
@@ -1229,6 +1249,11 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
 	}
 
+	if (policy->sampler_range < 1 || policy->sampler_threshold > policy->sampler_range) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid metrics sampler: range must be >= 1 and threshold must be <= range");
+	}
+
 	uint32_t tend_ms = cluster->tend_interval;
 
 	// An empty export_interval leaves interval_ms at 0. Fall back to the
@@ -1257,6 +1282,8 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	cluster->metrics_latency_unit = policy->latency_unit;
 	cluster->metrics_operational_enabled = policy->operational_enabled;
 	cluster->metrics_usage_enabled = policy->usage_enabled;
+	as_store_uint32(&cluster->metrics_sampler_range, policy->sampler_range);
+	as_store_uint32(&cluster->metrics_sampler_threshold, policy->sampler_threshold);
 	cluster->metrics_listeners = policy->metrics_listeners;
 
 	as_metrics_runtime* rt = cf_calloc(1, sizeof(as_metrics_runtime));

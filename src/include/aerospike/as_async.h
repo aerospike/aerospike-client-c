@@ -119,7 +119,7 @@ as_async_write_command_create(
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
 	wcmd->listener = listener;
-	as_cluster_add_command_count(cluster);
+	as_event_command_select_sample(cmd, true);
 	return cmd;
 }
 	
@@ -175,7 +175,7 @@ as_async_record_command_create(
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = latency_type;
 	rcmd->listener = listener;
-	as_cluster_add_command_count(cluster);
+	as_event_command_select_sample(cmd, true);
 	return cmd;
 }
 
@@ -221,7 +221,7 @@ as_async_value_command_create(
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
 	vcmd->listener = listener;
-	as_cluster_add_command_count(cluster);
+	as_event_command_select_sample(cmd, true);
 	return cmd;
 }
 
@@ -264,7 +264,7 @@ as_async_info_command_create(
 	cmd->ubuf_size = 0;
 	cmd->latency_type = AS_LATENCY_TYPE_NONE;
 	icmd->listener = listener;
-	as_cluster_add_command_count(node->cluster);
+	as_event_command_select_sample(cmd, true);
 	return cmd;
 }
 

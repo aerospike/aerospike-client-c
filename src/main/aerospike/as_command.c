@@ -695,6 +695,21 @@ as_command_execute(as_command* cmd, as_error* err)
 	as_node* node = NULL;
 	as_status status;
 
+	// One sampler decision for this command, before retries. Re-sends of this
+	// command reuse it. A new sub-batch is a new command and draws again.
+	cmd->metrics_sampled = as_cluster_sample_operational(cmd->cluster);
+	cmd->metrics_begin = 0;
+
+	if (cmd->metrics_sampled) {
+		if (cmd->metrics_count) {
+			as_incr_uint64(&cmd->cluster->command_count);
+		}
+
+		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			cmd->metrics_begin = cf_getns();
+		}
+	}
+
 	// Execute command until successful, timed out or maximum iterations have been reached.
 	while (true) {
 		if (cmd->node) {
@@ -725,14 +740,9 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		as_ns_metrics* metrics = NULL;
-		uint64_t begin = 0;
 
-		if (cmd->cluster->metrics_enabled) {
+		if (cmd->metrics_sampled) {
 			metrics = as_node_prepare_metrics(node, cmd->ns);
-
-			if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-				begin = cf_getns();
-			}
 		}
 
 		as_socket socket;
@@ -785,9 +795,8 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		if (status == AEROSPIKE_OK) {
-			if (metrics && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-				uint64_t elapsed = cf_getns() - begin;
-				as_node_add_latency(metrics, cmd->latency_type, elapsed);
+			if (metrics && cmd->metrics_begin != 0) {
+				as_node_add_latency(metrics, cmd->latency_type, cf_getns() - cmd->metrics_begin);
 			}
 
 			// Reset error code if retry had occurred.
@@ -839,9 +848,8 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 					// Do not increment error count on record not found.
 					// Add latency metrics instead.
-					if (metrics && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-						uint64_t elapsed = cf_getns() - begin;
-						as_node_add_latency(metrics, cmd->latency_type, elapsed);
+					if (metrics && cmd->metrics_begin != 0) {
+						as_node_add_latency(metrics, cmd->latency_type, cf_getns() - cmd->metrics_begin);
 					}
 					as_command_prepare_error(cmd, err);
 					break;
@@ -928,7 +936,9 @@ Retry:
 			}
 		}
 
-		as_cluster_add_retry(cmd->cluster);
+		if (cmd->metrics_sampled) {
+			as_cluster_add_retry(cmd->cluster);
+		}
 	}
 
 	// Retries have been exhausted.

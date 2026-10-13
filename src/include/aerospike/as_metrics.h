@@ -587,6 +587,24 @@ typedef struct as_metrics_policy_s {
 	bool usage_enabled;
 
 	/**
+	 * Operational command-path sampler modulus. A command is recorded when
+	 * operational metrics are enabled, threshold > 0, and (draw % range) < threshold.
+	 * Must be >= 1.
+	 *
+	 * Default: 1
+	 */
+	uint32_t sampler_range;
+
+	/**
+	 * Operational command-path sampler threshold, from 0 through sampler_range.
+	 * 0 records nothing. range 1 and threshold 1 record every command.
+	 * range 10 and threshold 1 record about 10 percent.
+	 *
+	 * Default: 1
+	 */
+	uint32_t sampler_threshold;
+
+	/**
 	 * @private
 	 * Should metrics be started as part of dynamic configuration. If aerospike_enable_metrics()
 	 * is called, metrics will automaticallly be enabled and this field is ignored.
@@ -647,6 +665,14 @@ as_metrics_add_api_deferred(struct aerospike_s* as);
  */
 AS_EXTERN void
 as_metrics_add_api_background(struct aerospike_s* as);
+
+/**
+ * Set the operational sampler to approximately probability.
+ * range becomes 1000000 and threshold becomes round(probability * 1000000).
+ * probability is clamped to 0 through 1.
+ */
+AS_EXTERN void
+as_metrics_policy_set_sampler_probability(as_metrics_policy* policy, double probability);
 
 /**
  * Initalize metrics policy.

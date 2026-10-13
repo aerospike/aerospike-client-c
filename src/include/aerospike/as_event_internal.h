@@ -167,6 +167,8 @@ typedef struct as_event_command {
 	uint32_t bytes_in;
 	uint32_t bytes_out;
 	as_latency_type latency_type;
+	// One sampler decision for this command, including its retries.
+	bool metrics_sampled;
 } as_event_command;
 
 typedef struct {
@@ -189,7 +191,25 @@ typedef struct as_event_executor {
 	uint32_t queued;
 	bool notify;
 	bool valid;
+	// User-call sampler decision. Partition retries reuse it.
+	bool metrics_sampled;
 } as_event_executor;
+
+/**
+ * @private
+ * Draw the operational sampler once for this command. count_command increments
+ * cluster.command.count for a user call. Node sub-commands pass false.
+ */
+static inline void
+as_event_command_select_sample(as_event_command* cmd, bool count_command)
+{
+	cmd->begin = 0;
+	cmd->metrics_sampled = as_cluster_sample_operational(cmd->cluster);
+
+	if (cmd->metrics_sampled && count_command) {
+		as_incr_uint64(&cmd->cluster->command_count);
+	}
+}
 
 //---------------------------------
 // Common Functions

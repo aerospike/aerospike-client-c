@@ -18,6 +18,7 @@
 
 #include <aerospike/as_atomic.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_random.h>
 #include <aerospike/as_file.h>
 #include <aerospike/as_metrics.h>
 #include <aerospike/as_node.h>
@@ -462,6 +463,19 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Operational sampler modulus. >= 1. Read with as_load_uint32().
+	 */
+	uint32_t metrics_sampler_range;
+
+	/**
+	 * @private
+	 * Operational sampler threshold, 0 through range. 0 records no command-path
+	 * operational metrics. Read with as_load_uint32().
+	 */
+	uint32_t metrics_sampler_threshold;
+
+	/**
+	 * @private
 	 * Milliseconds between metrics exports. Set from as_metrics_policy.export_interval,
 	 * or from interval * as_config.tender_interval when export_interval is empty.
 	 */
@@ -692,14 +706,47 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster);
 
 /**
  * @private
- * Increment command count when metrics are enabled.
+ * True when this draw should record command-path operational metrics.
+ * One call is one decision. Draw before the retry loop and reuse the result.
  */
-static inline void
+static inline bool
+as_cluster_sample_operational(as_cluster* cluster)
+{
+	if (!cluster->metrics_enabled || !cluster->metrics_operational_enabled) {
+		return false;
+	}
+
+	uint32_t threshold = as_load_uint32(&cluster->metrics_sampler_threshold);
+
+	if (threshold == 0) {
+		return false;
+	}
+
+	uint32_t range = as_load_uint32(&cluster->metrics_sampler_range);
+
+	// range 1 and threshold 1, the default, records every command.
+	if (range <= 1 || threshold >= range) {
+		return true;
+	}
+
+	return (as_random_get_uint32() % range) < threshold;
+}
+
+/**
+ * @private
+ * Increment command count when this user call is sampled.
+ * Returns whether the call was sampled, so later retries of that same call
+ * can reuse the decision.
+ */
+static inline bool
 as_cluster_add_command_count(as_cluster* cluster)
 {
-	if (cluster->metrics_enabled) {
-		as_incr_uint64(&cluster->command_count);
+	if (!as_cluster_sample_operational(cluster)) {
+		return false;
 	}
+
+	as_incr_uint64(&cluster->command_count);
+	return true;
 }
 
 /**

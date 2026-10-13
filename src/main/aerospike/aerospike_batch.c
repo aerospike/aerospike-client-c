@@ -2141,6 +2141,7 @@ as_batch_command_init(
 	cmd->partition_id = 0; // Not referenced when node set.
 	cmd->replica = task->replica;
 	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
+	cmd->metrics_count = false;
 
 	// Note: Do not set flags to AS_COMMAND_FLAGS_LINEARIZE because AP and SC replicas
 	// are tracked separately for batch (cmd->master and cmd->master_sc).
@@ -3813,6 +3814,8 @@ as_batch_command_create(
 	cmd->ubuf = ubuf;
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
+	// A new node sub-batch draws again. The user batch already counted command.count.
+	as_event_command_select_sample(cmd, false);
 	return bc;
 }
 
@@ -4197,7 +4200,9 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 		}
 	}
 	
-	as_cluster_add_retries(cluster, batch_nodes.size);
+	if (parent->metrics_sampled) {
+		as_cluster_add_retries(cluster, batch_nodes.size);
+	}
 	parent->flags |= AS_COMMAND_FLAGS_SPLIT_RETRY;
 
 	return as_batch_execute_sync(task->as, err, task->policy, btr->base.txn, btr->base.versions,
@@ -4285,7 +4290,9 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 		}
 	}
 	
-	as_cluster_add_retries(cluster, batch_nodes.size);
+	if (parent->metrics_sampled) {
+		as_cluster_add_retries(cluster, batch_nodes.size);
+	}
 	parent->flags |= AS_COMMAND_FLAGS_SPLIT_RETRY;
 
 	// Run batch retries sequentially in same thread.
@@ -4363,6 +4370,8 @@ as_batch_retry_command_create(
 	cmd->ubuf = ubuf;
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
+	// Remaining keys are a new sub-batch, so they draw again.
+	as_event_command_select_sample(cmd, false);
 	return bc;
 }
 
@@ -4667,7 +4676,9 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		}
 	}
 
-	as_cluster_add_retries(cluster, bnodes.size);
+	if (parent->metrics_sampled) {
+		as_cluster_add_retries(cluster, bnodes.size);
+	}
 
 	as_event_executor* e = &be->executor;
 	pthread_mutex_lock(&e->lock);

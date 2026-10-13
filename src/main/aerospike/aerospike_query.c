@@ -1218,6 +1218,7 @@ as_query_command_execute_old(as_query_task* task)
 	cmd.replica_size = 1;
 	cmd.replica_index = 0;
 	cmd.latency_type = AS_LATENCY_TYPE_QUERY;
+	cmd.metrics_count = false;
 
 	as_command_start_timer(&cmd);
 
@@ -1323,6 +1324,7 @@ as_query_command_execute_new(as_query_task* task)
 	cmd.replica_size = 1;
 	cmd.replica_index = 0;
 	cmd.latency_type = AS_LATENCY_TYPE_QUERY;
+	cmd.metrics_count = false;
 
 	as_command_start_timer(&cmd);
 
@@ -1561,7 +1563,7 @@ as_query_partitions(
 	as_cluster* cluster, as_error* err, const as_policy_query* policy, const as_query* query,
 	as_partition_tracker* pt, aerospike_query_foreach_callback callback, void* udata)
 {
-	as_cluster_add_command_count(cluster);
+	bool sampled = as_cluster_add_command_count(cluster);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -1576,7 +1578,7 @@ as_query_partitions(
 
 		uint32_t n_nodes = pt->node_parts.size;
 
-		if (pt->iteration > 1) {
+		if (pt->iteration > 1 && sampled) {
 			as_cluster_add_retries(cluster, n_nodes);
 		}
 
@@ -1824,6 +1826,7 @@ as_query_partition_execute_async(
 		cmd->ubuf = NULL;
 		cmd->ubuf_size = 0;
 		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
+		as_event_command_select_sample(cmd, false);
 		ee->commands[i] = cmd;
 	}
 
@@ -1862,7 +1865,7 @@ as_query_partition_async(
 	as_event_loop* event_loop
 	)
 {
-	as_cluster_add_command_count(cluster);
+	bool sampled = as_cluster_add_command_count(cluster);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, query->ns, err);
 
@@ -1936,6 +1939,7 @@ as_query_partition_async(
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
+	ee->metrics_sampled = sampled;
 
 	return as_query_partition_execute_async(qe, pt, err);
 }
@@ -1982,7 +1986,11 @@ as_query_partition_retry_async(as_async_query_executor* qe_old, as_error* err)
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
-	as_cluster_add_retry(qe->cluster);
+	ee->metrics_sampled = ee_old->metrics_sampled;
+
+	if (ee->metrics_sampled) {
+		as_cluster_add_retry(qe->cluster);
+	}
 
 	return as_query_partition_execute_async(qe, qe->pt, err);
 }
@@ -2440,6 +2448,7 @@ aerospike_query_async(
 		cmd->ubuf = NULL;
 		cmd->ubuf_size = 0;
 		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
+		as_event_command_select_sample(cmd, false);
 		memcpy(cmd->buf, cmd_buf, size);
 		exec->commands[i] = cmd;
 	}

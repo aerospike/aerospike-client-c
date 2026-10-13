@@ -650,10 +650,11 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_node_reserve(cmd->node);
 	}
 
-	if (cmd->cluster->metrics_enabled) {
+	if (cmd->metrics_sampled) {
 		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
 
-		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+		// Keep the clock from the first attempt so success latency includes retries.
+		if (cmd->latency_type != AS_LATENCY_TYPE_NONE && cmd->begin == 0) {
 			cmd->begin = cf_getns();
 		}
 	}
@@ -1060,8 +1061,10 @@ as_event_execute_retry(as_event_command* cmd)
 		as_event_timer_repeat(cmd, cmd->socket_timeout);
 	}
 
-	// Retry command.
-	as_cluster_add_retry(cmd->cluster);
+	// Retry command. Reuse the sampler decision from the first attempt.
+	if (cmd->metrics_sampled) {
+		as_cluster_add_retry(cmd->cluster);
+	}
 	as_event_command_begin(cmd->event_loop, cmd);
 }
 

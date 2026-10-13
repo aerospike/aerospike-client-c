@@ -705,12 +705,12 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 
 		as_metrics_namespace_snapshot* ns = &snap->namespaces[snap->namespace_count];
 		ns->name = as_metrics_strdup_or_empty(metrics->ns);
-		ns->errors = as_node_get_error_count(metrics);
+		ns->record_too_big = as_node_get_record_too_big_count(metrics);
+		ns->device_overload = as_node_get_device_overload_count(metrics);
+		ns->errors = as_node_get_error_count(metrics) - ns->record_too_big - ns->device_overload;
 		ns->client_timeouts = as_node_get_client_timeout_count(metrics);
 		ns->server_timeouts = as_node_get_server_timeout_count(metrics);
 		ns->key_busy = as_node_get_key_busy_count(metrics);
-		ns->record_too_big = as_node_get_record_too_big_count(metrics);
-		ns->device_overload = as_node_get_device_overload_count(metrics);
 		ns->bytes_in = as_node_get_bytes_in(metrics);
 		ns->bytes_out = as_node_get_bytes_out(metrics);
 

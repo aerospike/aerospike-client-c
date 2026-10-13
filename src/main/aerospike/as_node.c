@@ -1566,6 +1566,23 @@ as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 	}
 }
 
+/**
+ * v3 snapshot counters kept off as_ns_metrics. Allocated as one block with as_ns_metrics first.
+ */
+typedef struct as_ns_metrics_detail_s {
+	as_ns_metrics base;
+	uint64_t client_timeout_count;
+	uint64_t server_timeout_count;
+	uint64_t record_too_big_count;
+	uint64_t device_overload_count;
+} as_ns_metrics_detail;
+
+static as_ns_metrics_detail*
+as_ns_metrics_detail_of(as_ns_metrics* metrics)
+{
+	return (as_ns_metrics_detail*)metrics;
+}
+
 static inline as_ns_metrics*
 as_node_find_namespace(as_node* node, const char* ns)
 {
@@ -1603,16 +1620,9 @@ as_node_append_metrics(as_node* node, const char* ns)
 	as_ns_metrics* metrics = as_node_find_namespace(node, ns);
 
 	if (!metrics) {
-		metrics = cf_malloc(sizeof(as_ns_metrics));
+		as_ns_metrics_detail* detail = cf_calloc(1, sizeof(as_ns_metrics_detail));
+		metrics = &detail->base;
 		metrics->ns = ns;
-		metrics->bytes_in = 0;
-		metrics->bytes_out = 0;
-		metrics->error_count = 0;
-		metrics->client_timeout_count = 0;
-		metrics->server_timeout_count = 0;
-		metrics->key_busy_count = 0;
-		metrics->record_too_big_count = 0;
-		metrics->device_overload_count = 0;
 
 		uint8_t latency_columns;
 		uint8_t latency_shift;
@@ -1711,6 +1721,20 @@ as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics)
 	as_incr_uint64(&metrics->error_count);
 }
 
+void
+as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	// Timeout counts are always on. If metrics not enabled, still increment count.
+	if (!metrics) {
+		metrics = as_node_prepare_metrics(node, ns);
+
+		if (!metrics) {
+			return;
+		}
+	}
+	as_incr_uint64(&metrics->timeout_count);
+}
+
 static as_ns_metrics*
 as_node_metrics_for_count(as_node* node, const char* ns, as_ns_metrics* metrics)
 {
@@ -1718,6 +1742,12 @@ as_node_metrics_for_count(as_node* node, const char* ns, as_ns_metrics* metrics)
 		metrics = as_node_prepare_metrics(node, ns);
 	}
 	return metrics;
+}
+
+uint64_t
+as_node_get_client_timeout_count(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&as_ns_metrics_detail_of(metrics)->client_timeout_count);
 }
 
 void
@@ -1728,7 +1758,14 @@ as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics
 	if (!metrics) {
 		return;
 	}
-	as_incr_uint64(&metrics->client_timeout_count);
+	as_incr_uint64(&metrics->timeout_count);
+	as_incr_uint64(&as_ns_metrics_detail_of(metrics)->client_timeout_count);
+}
+
+uint64_t
+as_node_get_server_timeout_count(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&as_ns_metrics_detail_of(metrics)->server_timeout_count);
 }
 
 void
@@ -1739,7 +1776,8 @@ as_node_add_server_timeout(as_node* node, const char* ns, as_ns_metrics* metrics
 	if (!metrics) {
 		return;
 	}
-	as_incr_uint64(&metrics->server_timeout_count);
+	as_incr_uint64(&metrics->timeout_count);
+	as_incr_uint64(&as_ns_metrics_detail_of(metrics)->server_timeout_count);
 }
 
 void
@@ -1756,6 +1794,12 @@ as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics)
 	as_incr_uint64(&metrics->key_busy_count);
 }
 
+uint64_t
+as_node_get_record_too_big_count(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&as_ns_metrics_detail_of(metrics)->record_too_big_count);
+}
+
 void
 as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics)
 {
@@ -1764,7 +1808,14 @@ as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics
 	if (!metrics) {
 		return;
 	}
-	as_incr_uint64(&metrics->record_too_big_count);
+	as_incr_uint64(&metrics->error_count);
+	as_incr_uint64(&as_ns_metrics_detail_of(metrics)->record_too_big_count);
+}
+
+uint64_t
+as_node_get_device_overload_count(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&as_ns_metrics_detail_of(metrics)->device_overload_count);
 }
 
 void
@@ -1775,7 +1826,8 @@ as_node_add_device_overload(as_node* node, const char* ns, as_ns_metrics* metric
 	if (!metrics) {
 		return;
 	}
-	as_incr_uint64(&metrics->device_overload_count);
+	as_incr_uint64(&metrics->error_count);
+	as_incr_uint64(&as_ns_metrics_detail_of(metrics)->device_overload_count);
 }
 
 static as_status

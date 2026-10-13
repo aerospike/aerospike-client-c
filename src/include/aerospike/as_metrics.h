@@ -123,10 +123,10 @@ typedef struct as_metrics_latency_snapshot_s {
 /**
  * Per-namespace counters and histograms copied into a metrics snapshot.
  * Present only when operational metrics are enabled.
- * `as_node_stats.error_count`, `timeout_count`, and `key_busy_count` are the
- * sums of `errors`, `client_timeouts` plus `server_timeouts`, and `key_busy`
- * across these entries. `record_too_big` and `device_overload` are not included
- * in `errors`.
+ * `as_node_stats.timeout_count` and `key_busy_count` are the sums of
+ * `client_timeouts` plus `server_timeouts`, and `key_busy`.
+ * `as_node_stats.error_count` is the sum of `errors`, `record_too_big`, and
+ * `device_overload`. `errors` is the remainder.
  */
 typedef struct as_metrics_namespace_snapshot_s {
 	/**
@@ -139,8 +139,7 @@ typedef struct as_metrics_namespace_snapshot_s {
 	 * A retryable error can be counted more than once for one command.
 	 * Remainder after the split counters below. Timeouts, key busy, record too big,
 	 * and device overload are not included.
-	 * Same counter as `as_ns_metrics.error_count`. Contributes to
-	 * `as_node_stats.error_count`.
+	 * `as_ns_metrics.error_count` still includes record too big and device overload.
 	 */
 	uint64_t errors;
 
@@ -205,7 +204,7 @@ typedef struct as_metrics_namespace_snapshot_s {
  *   node           -> name, address, port
  *   sync           -> sync
  *   async          -> async
- *   error_count    -> sum of namespaces[].errors
+ *   error_count    -> sum of namespaces[].errors, record_too_big, and device_overload
  *   timeout_count  -> sum of namespaces[].client_timeouts and server_timeouts
  *   key_busy_count -> sum of namespaces[].key_busy
  * `as_node_stats.pipeline` has no snapshot field.
@@ -303,10 +302,10 @@ typedef struct as_metrics_event_loop_snapshot_s {
  * `as_cluster_stats.thread_pool_queued_tasks` has no snapshot field.
  * On each node, `as_node_stats.sync` and `async` are `nodes[i].sync` and
  * `nodes[i].async`. `as_node_stats.pipeline` has no snapshot field.
- * `as_node_stats.error_count`, `timeout_count`, and `key_busy_count` are the
- * sums of `nodes[i].namespaces[].errors`, `client_timeouts` plus `server_timeouts`,
- * and `key_busy`. `record_too_big` and `device_overload` are not included in
- * `errors`.
+ * `as_node_stats.timeout_count` and `key_busy_count` are the sums of
+ * `nodes[i].namespaces[].client_timeouts` plus `server_timeouts`, and `key_busy`.
+ * `as_node_stats.error_count` also includes `record_too_big` and `device_overload`.
+ * `errors` is the remainder.
  */
 typedef struct as_metrics_snapshot_s {
 	/**

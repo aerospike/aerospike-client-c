@@ -14,7 +14,6 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
-#include <aerospike/as_metrics_internal.h>
 #include <aerospike/aerospike_query.h>
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/as_aerospike.h>
@@ -26,6 +25,7 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/as_module.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>

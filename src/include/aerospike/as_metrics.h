@@ -683,36 +683,6 @@ typedef struct as_metrics_policy_s {
 //---------------------------------
 
 /**
- * @private
- * Convert an export duration to milliseconds.
- * NULL or "" sets *ms to 0 and returns true. A bare number is seconds.
- * Suffixes are ms, s, m, and h. Zero, overflow, and unknown suffixes return false.
- */
-AS_EXTERN bool
-as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms);
-
-/**
- * @private
- * Count one public synchronous API call toward feature.api.blocking.
- */
-AS_EXTERN void
-as_metrics_add_api_blocking(struct aerospike_s* as);
-
-/**
- * @private
- * Count one public asynchronous API call toward feature.api.deferred.
- */
-AS_EXTERN void
-as_metrics_add_api_deferred(struct aerospike_s* as);
-
-/**
- * @private
- * Count one public background scan or query toward feature.api.background.
- */
-AS_EXTERN void
-as_metrics_add_api_background(struct aerospike_s* as);
-
-/**
  * Set the operational sampler to approximately probability.
  * range becomes 1000000 and threshold becomes round(probability * 1000000).
  * probability is clamped to 0 through 1.

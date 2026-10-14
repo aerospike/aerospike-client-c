@@ -206,6 +206,9 @@ as_socket_create_and_connect(
 	uint64_t deadline_ms
 	)
 {
+	// Defined before create so a failed return still has a readable handshake flag.
+	sock->tls_handshake_failed = false;
+
 	// Create the socket.
 	int rv = as_socket_create(sock, addr->sa_family, tls, tls_name);
 	

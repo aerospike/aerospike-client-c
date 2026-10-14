@@ -32,6 +32,17 @@ as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname);
 // Static Functions
 //---------------------------------
 
+static void
+as_lookup_record_connect_failure(as_cluster* cluster, as_socket* sock)
+{
+	if (sock->tls_handshake_failed) {
+		as_cluster_add_validation_tls_handshake_failure(cluster);
+	}
+	else {
+		as_cluster_add_validation_open_failure(cluster);
+	}
+}
+
 static as_status
 as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node_info, uint64_t deadline)
 {
@@ -82,6 +93,10 @@ as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node
 				if (node_info->session) {
 					status = as_authenticate(cluster, &error_local, &node_info->socket, NULL,
 											 node_info->session, 0, deadline, NULL);
+
+					if (status != AEROSPIKE_OK) {
+						as_cluster_add_validation_auth_failure(cluster);
+					}
 				}
 
 				if (status == AEROSPIKE_OK) {
@@ -95,6 +110,9 @@ as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node
 
 				// Close and try next address.
 				as_socket_close(&node_info->socket);
+			}
+			else {
+				as_lookup_record_connect_failure(cluster, &node_info->socket);
 			}
 		}
 		as_lookup_end(&iter);
@@ -171,6 +189,10 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 				if (node_info->session) {
 					status = as_authenticate(cluster, &error_local, &sock, NULL,
 											 node_info->session, 0, deadline, NULL);
+
+					if (status != AEROSPIKE_OK) {
+						as_cluster_add_validation_auth_failure(cluster);
+					}
 				}
 
 				if (status == AEROSPIKE_OK) {
@@ -205,6 +227,9 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 				}
 				// Close and try next address.
 				as_socket_close(&sock);
+			}
+			else {
+				as_lookup_record_connect_failure(cluster, &sock);
 			}
 		}
 		as_lookup_end(&iter);
@@ -275,6 +300,7 @@ as_lookup_node(
 													host->tls_name, deadline);
 
 	if (status) {
+		as_lookup_record_connect_failure(cluster, &node_info->socket);
 		return status;
 	}
 
@@ -287,6 +313,7 @@ as_lookup_node(
 		status = as_cluster_login(cluster, err, &node_info->socket, deadline, node_info);
 
 		if (status) {
+			as_cluster_add_validation_auth_failure(cluster);
 			char str[512];
 			snprintf(str, sizeof(str), " from %s:%d", host->name, host->port);
 			as_error_append(err, str);

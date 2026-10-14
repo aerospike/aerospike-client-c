@@ -27,6 +27,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_log.h>
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_partition.h>

@@ -23,6 +23,7 @@
 #include <aerospike/as_job.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_partition_tracker.h>

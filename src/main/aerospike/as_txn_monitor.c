@@ -36,6 +36,22 @@
 #define BIN_NAME_DIGESTS "keyds"
 
 //---------------------------------
+// Declarations
+//---------------------------------
+
+as_status
+aerospike_key_remove_internal(
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
+	);
+
+as_status
+aerospike_key_remove_async_internal(
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	);
+
+//---------------------------------
 // Common Functions
 //---------------------------------
 
@@ -262,7 +278,7 @@ as_txn_monitor_remove(
 	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
 	policy.durable_delete = true;
 
-	return aerospike_key_remove_no_api_count(as, err, &policy, key);
+	return aerospike_key_remove_internal(as, err, &policy, key);
 }
 
 //---------------------------------
@@ -354,6 +370,6 @@ as_txn_monitor_remove_async(
 	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
 	policy.durable_delete = true;
 
-	return aerospike_key_remove_async_no_api_count(as, err, &policy, key, listener, udata,
+	return aerospike_key_remove_async_internal(as, err, &policy, key, listener, udata,
 		event_loop, NULL);
 }

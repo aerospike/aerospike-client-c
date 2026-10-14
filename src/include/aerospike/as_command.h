@@ -224,7 +224,7 @@ typedef struct as_command_s {
 	// 0 when the v3 command latency sample is not taken.
 	// Elapsed time is cf_getns() minus this value and includes retries.
 	// Existing histograms time each attempt separately.
-	uint64_t metrics_begin;
+	uint64_t command_begin;
 	// True when this command updates the cluster command_count and retry counter.
 	// False when operational metrics are off, or when the sampler skips this call.
 	// Reused for retries of this command.

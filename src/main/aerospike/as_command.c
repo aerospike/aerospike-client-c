@@ -699,8 +699,8 @@ as_command_add_latencies(as_command* cmd, as_ns_metrics* metrics, uint64_t attem
 	}
 
 	// v3 command latency: elapsed time from the first attempt, including retries.
-	if (cmd->metrics_begin != 0) {
-		as_node_add_command_latency(metrics, cmd->latency_type, now - cmd->metrics_begin);
+	if (cmd->command_begin != 0) {
+		as_node_add_command_latency(metrics, cmd->latency_type, now - cmd->command_begin);
 	}
 }
 
@@ -723,14 +723,14 @@ as_command_execute(as_command* cmd, as_error* err)
 	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->record_cluster_metrics);
 	// v3 command latency starts once and includes retries.
 	// Existing histograms time each attempt inside the loop.
-	cmd->metrics_begin = 0;
+	cmd->command_begin = 0;
 
 	if (cmd->record_cluster_metrics && !cmd->metrics_node_sub_command) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 
 	if (cmd->record_cluster_metrics && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-		cmd->metrics_begin = cf_getns();
+		cmd->command_begin = cf_getns();
 	}
 
 	// Execute command until successful, timed out or maximum iterations have been reached.
@@ -769,7 +769,7 @@ as_command_execute(as_command* cmd, as_error* err)
 			metrics = as_node_prepare_metrics(node, cmd->ns);
 
 			// Each attempt is for the learn-metrics file and metrics listeners.
-			// Operational command latency uses metrics_begin.
+			// Operational command latency uses command_begin.
 			if (as_cluster_record_attempt_latency(cmd->cluster) &&
 					cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 				attempt_begin = cf_getns();

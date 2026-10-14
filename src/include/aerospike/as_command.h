@@ -220,8 +220,10 @@ typedef struct as_command_s {
 	uint8_t replica_index;
 	uint8_t replica_index_sc; // Used in batch only.
 	as_latency_type latency_type;
-	// Monotonic nanoseconds from cf_getns() when timing started. 0 if not timed.
-	// Elapsed latency is cf_getns() minus this value and includes retries.
+	// Monotonic nanoseconds from cf_getns() at the start of this command.
+	// 0 when the v3 command latency sample is not taken.
+	// Elapsed time is cf_getns() minus this value and includes retries.
+	// Existing histograms time each attempt separately.
 	uint64_t metrics_begin;
 	// True when this command updates the cluster command_count and retry counter.
 	// False when operational metrics are off, or when the sampler skips this call.

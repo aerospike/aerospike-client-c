@@ -647,11 +647,36 @@ as_metrics_node_snapshot_destroy(as_metrics_node_snapshot* snapshot)
 
 			for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
 				cf_free(ns->latencies[j].buckets);
+				cf_free(ns->command_latencies[j].buckets);
 			}
 		}
 		cf_free(snapshot->namespaces);
 	}
 	cf_free(snapshot);
+}
+
+static void
+as_metrics_copy_latency(as_metrics_latency_snapshot* dst, as_latency* latency, uint8_t type)
+{
+	dst->type = type;
+
+	if (!latency) {
+		return;
+	}
+
+	latency = as_latency_reserve(latency);
+	uint8_t size = latency->size;
+
+	if (size > 0) {
+		uint64_t* buckets = cf_malloc(sizeof(uint64_t) * size);
+
+		for (uint8_t k = 0; k < size; k++) {
+			buckets[k] = as_latency_get_bucket(latency, k);
+		}
+		dst->buckets = buckets;
+		dst->bucket_count = size;
+	}
+	as_latency_release(latency);
 }
 
 static void
@@ -735,26 +760,13 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 		ns->bytes_out = as_node_get_bytes_out(metrics);
 
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			ns->latencies[j].type = j;
-			as_latency* latency = metrics->latency[j];
+			as_metrics_copy_latency(&ns->latencies[j], metrics->latency[j], j);
 
-			if (!latency) {
-				continue;
+			// File readers keep the per-attempt series. v3 command latency is
+			// only on the operational snapshot.
+			if (node->cluster->metrics_operational_enabled && !file_fields) {
+				as_metrics_copy_latency(&ns->command_latencies[j], metrics->command_latency[j], j);
 			}
-
-			latency = as_latency_reserve(latency);
-			uint8_t size = latency->size;
-
-			if (size > 0) {
-				uint64_t* buckets = cf_malloc(sizeof(uint64_t) * size);
-
-				for (uint8_t k = 0; k < size; k++) {
-					buckets[k] = as_latency_get_bucket(latency, k);
-				}
-				ns->latencies[j].buckets = buckets;
-				ns->latencies[j].bucket_count = size;
-			}
-			as_latency_release(latency);
 		}
 		snap->namespace_count++;
 	}

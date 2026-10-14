@@ -143,7 +143,13 @@ typedef struct as_event_command {
 	cf_ll_element pipe_link;
 	
 	uint8_t* buf;
-	uint64_t begin; // Used for metrics
+	// Monotonic nanoseconds from cf_getns() at the start of the current attempt.
+	// Existing latency histograms use this clock. 0 if this attempt is not timed.
+	uint64_t begin;
+	// Monotonic nanoseconds from cf_getns() at the start of this command.
+	// v3 command latency is cf_getns() minus this value and includes retries.
+	// 0 when that sample is not taken.
+	uint64_t command_begin;
 	uint32_t iteration;
 	uint32_t command_sent_counter;
 	uint32_t write_offset;
@@ -210,6 +216,7 @@ static inline void
 as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
 	cmd->begin = 0;
+	cmd->command_begin = 0;
 	// While operational metrics are on, record_cluster_metrics false also skips
 	// namespace histograms, bytes, and error counts.
 	cmd->record_cluster_metrics = as_cluster_sample_operational(cmd->cluster);

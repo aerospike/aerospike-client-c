@@ -238,9 +238,17 @@ typedef struct {
 	uint64_t key_busy_count;
 
 	/**
-	 * Latency histograms.
+	 * Latency histograms. One sample per successful attempt.
+	 * The learn-metrics file and snapshot `latencies` use this series.
 	 */
 	as_latency* latency[AS_LATENCY_TYPE_MAX];
+
+	/**
+	 * @private
+	 * v3 command latency. One sample per command for total elapsed time
+	 * including retries. Allocated only while operational metrics are enabled.
+	 */
+	as_latency* command_latency[AS_LATENCY_TYPE_MAX];
 
 	/**
 	 * @private
@@ -868,6 +876,14 @@ as_node_prepare_metrics(as_node* node, const char* ns);
  */
 void
 as_node_add_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos);
+
+/**
+ * @private
+ * Record one v3 command latency sample. elapsed_nanos includes retries.
+ * No-op when operational command histograms are not allocated.
+ */
+void
+as_node_add_command_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos);
 
 struct as_metrics_policy_s;
 

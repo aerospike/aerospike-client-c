@@ -191,10 +191,19 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * Latency histograms for this namespace, one entry per `AS_LATENCY_TYPE_*`.
-	 * Same series as `as_ns_metrics.latency`. Bucket totals are cumulative
+	 * Same series as `as_ns_metrics.latency`. One sample per successful attempt.
+	 * The learn-metrics file writes this series. Bucket totals are cumulative
 	 * since metrics were enabled.
 	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];
+
+	/**
+	 * v3 command latency, one entry per `AS_LATENCY_TYPE_*`.
+	 * Same series as `as_ns_metrics.command_latency`. One sample per command
+	 * for total elapsed time including retries. Empty unless operational
+	 * metrics are enabled. The learn-metrics file does not write this series.
+	 */
+	as_metrics_latency_snapshot command_latencies[AS_LATENCY_TYPE_MAX];
 } as_metrics_namespace_snapshot;
 
 /**

@@ -430,6 +430,7 @@ as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cm
 {
 	// Initialize read buffer (buf) to be located after write buffer.
 	cmd->begin = 0;
+	cmd->command_begin = 0;
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
 	cmd->conn = NULL;
@@ -587,6 +588,26 @@ as_event_add_latency(as_event_command* cmd, as_latency_type type)
 	as_node_add_latency(cmd->metrics, type, elapsed);
 }
 
+static inline void
+as_event_add_success_latency(as_event_command* cmd)
+{
+	if (!cmd->metrics || cmd->latency_type == AS_LATENCY_TYPE_NONE) {
+		return;
+	}
+
+	uint64_t now = cf_getns();
+
+	// Existing histograms: this attempt only.
+	if (cmd->begin != 0) {
+		as_node_add_latency(cmd->metrics, cmd->latency_type, now - cmd->begin);
+	}
+
+	// v3 command latency: elapsed time from the first attempt, including retries.
+	if (cmd->command_begin != 0) {
+		as_node_add_command_latency(cmd->metrics, cmd->latency_type, now - cmd->command_begin);
+	}
+}
+
 bool
 as_event_connection_complete(as_event_command* cmd)
 {
@@ -653,10 +674,15 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 	if (cmd->record_namespace_metrics) {
 		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
 
-		// Keep the clock from the first attempt so success latency includes retries.
-		if (cmd->latency_type != AS_LATENCY_TYPE_NONE && cmd->begin == 0) {
+		// Existing histograms time this attempt. Restart the clock on every retry.
+		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 			cmd->begin = cf_getns();
 		}
+	}
+
+	// v3 command latency starts on the first attempt and includes retries.
+	if (cmd->record_cluster_metrics && cmd->command_begin == 0 && cmd->begin != 0) {
+		cmd->command_begin = cmd->begin;
 	}
 
 	if (! as_node_valid_error_rate(cmd->node)) {
@@ -1086,9 +1112,7 @@ as_event_response_complete(as_event_command* cmd)
 		as_node_add_bytes_out(cmd->metrics, cmd->bytes_out);
 		as_node_add_bytes_in(cmd->metrics, cmd->bytes_in);
 
-		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-			as_event_add_latency(cmd, cmd->latency_type);
-		}
+		as_event_add_success_latency(cmd);
 	}
 
 	if (cmd->pipe_listener != NULL) {
@@ -1525,9 +1549,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 			// Do not increment error count on record not found.
 			// Add latency metrics instead.
-			if (cmd->metrics && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-				as_event_add_latency(cmd, cmd->latency_type);
-			}
+			as_event_add_success_latency(cmd);
 			as_event_put_connection(cmd, pool);
 			break;
 
@@ -2447,6 +2469,9 @@ as_event_recover_connection(as_event_command* cmd)
 	}
 
 	recover->type = AS_ASYNC_TYPE_CONN_RECOVER;
+	// Draining the socket is not a successful command. Keep the per-attempt
+	// clock and do not record a v3 command latency sample.
+	recover->command_begin = 0;
 	recover->flags = cmd->flags & AS_ASYNC_FLAGS_READ;
 	recover->txn = NULL;
 	recover->ubuf = NULL;

@@ -1011,9 +1011,14 @@ as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool forc
 	as_metrics_snapshot* snap = NULL;
 	// One snapshot is shared by every exporter. When the file exporter is present,
 	// include the learn-metrics fields even if operational metrics are off.
-	as_status status = as_metrics_runtime_has_file_exporter(rt) ?
-		as_metrics_snapshot_create_file(err, cluster, rt->labels, rt->cpu, &snap) :
-		as_metrics_snapshot_create(err, cluster, rt->labels, rt->cpu, &snap);
+	as_status status;
+
+	if (as_metrics_runtime_has_file_exporter(rt)) {
+		status = as_metrics_snapshot_create_file(err, cluster, rt->labels, rt->cpu, &snap);
+	}
+	else {
+		status = as_metrics_snapshot_create(err, cluster, rt->labels, rt->cpu, &snap);
+	}
 
 	if (status != AEROSPIKE_OK) {
 		return status;

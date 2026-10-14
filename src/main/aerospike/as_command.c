@@ -684,8 +684,9 @@ as_command_prepare_error(as_command* cmd, as_error* err)
 	}
 }
 
+// attempt_begin is cf_getns() at the start of this attempt. 0 skips that sample.
 static void
-as_command_add_latencies(as_command* cmd, as_ns_metrics* metrics, uint64_t begin)
+as_command_add_latencies(as_command* cmd, as_ns_metrics* metrics, uint64_t attempt_begin)
 {
 	if (!metrics || cmd->latency_type == AS_LATENCY_TYPE_NONE) {
 		return;
@@ -693,9 +694,8 @@ as_command_add_latencies(as_command* cmd, as_ns_metrics* metrics, uint64_t begin
 
 	uint64_t now = cf_getns();
 
-	// Existing histograms: this attempt only.
-	if (begin != 0) {
-		as_node_add_latency(metrics, cmd->latency_type, now - begin);
+	if (attempt_begin != 0) {
+		as_node_add_latency(metrics, cmd->latency_type, now - attempt_begin);
 	}
 
 	// v3 command latency: elapsed time from the first attempt, including retries.
@@ -763,13 +763,13 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		as_ns_metrics* metrics = NULL;
-		uint64_t begin = 0;
+		uint64_t attempt_begin = 0;
 
 		if (cmd->record_namespace_metrics) {
 			metrics = as_node_prepare_metrics(node, cmd->ns);
 
 			if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-				begin = cf_getns();
+				attempt_begin = cf_getns();
 			}
 		}
 
@@ -823,7 +823,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		if (status == AEROSPIKE_OK) {
-			as_command_add_latencies(cmd, metrics, begin);
+			as_command_add_latencies(cmd, metrics, attempt_begin);
 
 			// Reset error code if retry had occurred.
 			if (cmd->iteration > 0) {
@@ -881,7 +881,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 					// Do not increment error count on record not found.
 					// Add latency metrics instead.
-					as_command_add_latencies(cmd, metrics, begin);
+					as_command_add_latencies(cmd, metrics, attempt_begin);
 					as_command_prepare_error(cmd, err);
 					break;
 

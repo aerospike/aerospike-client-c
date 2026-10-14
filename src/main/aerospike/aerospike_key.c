@@ -1265,7 +1265,7 @@ aerospike_key_remove(
 }
 
 as_status
-aerospike_key_remove_async_ex_no_api_count(
+aerospike_key_remove_async_ex_internal(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
 	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t* length
@@ -1314,7 +1314,7 @@ aerospike_key_remove_async_ex(
 	)
 {
 	as_metrics_add_api_deferred(as);
-	return aerospike_key_remove_async_ex_no_api_count(as, err, policy, key, listener, udata, event_loop, pipe_listener, length);
+	return aerospike_key_remove_async_ex_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener, length);
 }
 
 as_status
@@ -1324,7 +1324,7 @@ aerospike_key_remove_async_internal(
 	as_pipe_listener pipe_listener
 	)
 {
-	return aerospike_key_remove_async_ex_no_api_count(as, err, policy, key, listener, udata, event_loop, pipe_listener, NULL);
+	return aerospike_key_remove_async_ex_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener, NULL);
 }
 
 as_status

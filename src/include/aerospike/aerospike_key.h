@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -740,6 +740,7 @@ aerospike_key_remove_async_ex(
 	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t* length
 	);
+
 /**
  * @endcond
  */

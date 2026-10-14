@@ -15,7 +15,6 @@
  * the License.
  */
 #include <aerospike/as_metrics.h>
-#include <aerospike/as_metrics_internal.h>
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_stats.h>
 #include <aerospike/as_address.h>
@@ -23,6 +22,7 @@
 #include <aerospike/as_config_file.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/as_metrics_writer.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_string_builder.h>
@@ -108,7 +108,8 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 			cfg->latency_unit : src->latency_unit;
 		mrg->operational_enabled = as_field_is_set(bitmap, AS_METRICS_OPERATIONAL) ?
 			cfg->operational_enabled : src->operational_enabled;
-		mrg->usage_enabled = src->usage_enabled;
+		mrg->usage_enabled = as_field_is_set(bitmap, AS_METRICS_USAGE) ?
+			cfg->usage_enabled : src->usage_enabled;
 		return mrg;
 	}
 	else {
@@ -807,6 +808,9 @@ as_metrics_snapshot_create(
 	snap->delay_queue_timeout_count = as_cluster_get_delay_queue_timeout_count(cluster);
 	snap->command_count = as_cluster_get_command_count(cluster);
 	snap->retry_count = as_cluster_get_retry_count(cluster);
+	snap->api_blocking = as_load_uint64(&cluster->metrics_api_blocking);
+	snap->api_deferred = as_load_uint64(&cluster->metrics_api_deferred);
+	snap->api_background = as_load_uint64(&cluster->metrics_api_background);
 	snap->latency_unit = cluster->metrics_latency_unit;
 	snap->latency_columns = cluster->metrics_latency_columns;
 	snap->latency_shift = cluster->metrics_latency_shift;
@@ -1069,6 +1073,44 @@ as_metrics_listeners_defined(const as_metrics_listeners* listeners)
 {
 	return listeners->enable_listener && listeners->snapshot_listener &&
 		listeners->node_close_listener && listeners->disable_listener && listeners->udata;
+}
+
+static void
+as_metrics_add_api(as_cluster* cluster, uint64_t* counter)
+{
+	if (cluster->metrics_enabled && cluster->metrics_usage_enabled) {
+		as_incr_uint64(counter);
+	}
+}
+
+void
+as_metrics_add_api_blocking(aerospike* as)
+{
+	as_cluster* cluster = as ? as->cluster : NULL;
+
+	if (cluster) {
+		as_metrics_add_api(cluster, &cluster->metrics_api_blocking);
+	}
+}
+
+void
+as_metrics_add_api_deferred(aerospike* as)
+{
+	as_cluster* cluster = as ? as->cluster : NULL;
+
+	if (cluster) {
+		as_metrics_add_api(cluster, &cluster->metrics_api_deferred);
+	}
+}
+
+void
+as_metrics_add_api_background(aerospike* as)
+{
+	as_cluster* cluster = as ? as->cluster : NULL;
+
+	if (cluster) {
+		as_metrics_add_api(cluster, &cluster->metrics_api_background);
+	}
 }
 
 bool

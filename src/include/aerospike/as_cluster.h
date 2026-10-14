@@ -495,6 +495,24 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * feature.api.blocking. Cumulative public synchronous API calls.
+	 */
+	uint64_t metrics_api_blocking;
+
+	/**
+	 * @private
+	 * feature.api.deferred. Cumulative public asynchronous API calls.
+	 */
+	uint64_t metrics_api_deferred;
+
+	/**
+	 * @private
+	 * feature.api.background. Cumulative public background scan and query calls.
+	 */
+	uint64_t metrics_api_background;
+
+	/**
+	 * @private
 	 * Delay queue timeout count. The value is cumulative and not reset per metrics interval.
 	 */
 	uint64_t delay_queue_timeout_count;

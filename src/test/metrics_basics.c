@@ -17,6 +17,8 @@
 
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_query.h>
+#include <aerospike/aerospike_scan.h>
 #include <aerospike/as_atomic.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_config.h>
@@ -1239,6 +1241,73 @@ TEST(metrics_deprecated_listeners, "deprecated listeners still run on enable and
 	assert_int_eq(logs, 0);
 }
 
+TEST(metrics_usage_api_counters, "usage counters record blocking, deferred, and background API calls")
+{
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+
+	as_metrics_snapshot* snap = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
+	uint64_t blocking = snap->api_blocking;
+	uint64_t deferred = snap->api_deferred;
+	uint64_t background = snap->api_background;
+	assert_false(snap->usage_metrics_enabled);
+	as_metrics_snapshot_destroy(snap);
+
+	assert_int_eq(metrics_put(&err, "metrics-usage-off"), AEROSPIKE_OK);
+
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
+	assert_true(snap->api_blocking == blocking);
+	assert_true(snap->api_deferred == deferred);
+	assert_true(snap->api_background == background);
+	as_metrics_snapshot_destroy(snap);
+
+	policy.usage_enabled = true;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq(metrics_put(&err, "metrics-usage-on"), AEROSPIKE_OK);
+
+	// Aggregation is rejected before an event loop is used. The call still counts.
+	as_query query;
+	as_query_init(&query, "test", "metrics");
+	query.apply.function[0] = 'f';
+	as_status async_status = aerospike_query_async(as, &err, NULL, &query, NULL, NULL, NULL);
+	as_query_destroy(&query);
+	assert_true(async_status != AEROSPIKE_OK);
+
+	as_scan scan;
+	as_scan_init(&scan, "test", "metrics");
+	uint64_t scan_id = 0;
+	as_status scan_status = aerospike_scan_background(as, &err, NULL, &scan, &scan_id);
+	as_scan_destroy(&scan);
+
+	// Without a UDF or operations this is a basic query with no partition ids.
+	// Supported servers reject that. The call still counts as background.
+	assert_true(scan_status != AEROSPIKE_OK);
+
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
+	assert_true(snap->usage_metrics_enabled);
+	// put is blocking. query_async is deferred. scan_background is background.
+	assert_true(snap->api_blocking == blocking + 1);
+	assert_true(snap->api_deferred == deferred + 1);
+	assert_true(snap->api_background == background + 1);
+	as_metrics_snapshot_destroy(snap);
+
+	metrics_disable();
+	assert_int_eq(metrics_put(&err, "metrics-usage-disabled"), AEROSPIKE_OK);
+
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &snap), AEROSPIKE_OK);
+	assert_false(snap->usage_metrics_enabled);
+	assert_true(snap->api_blocking == blocking + 1);
+	assert_true(snap->api_deferred == deferred + 1);
+	assert_true(snap->api_background == background + 1);
+	as_metrics_snapshot_destroy(snap);
+
+	as_metrics_policy_destroy(&policy);
+}
+
 TEST(metrics_command_count_is_cumulative, "command_count grows while enabled and stays after disable")
 {
 	as_metrics_policy policy;
@@ -1472,6 +1541,24 @@ TEST(metrics_dynamic_config_enabled_and_operational, "metrics.enabled and extend
 	assert_int_eq(policy.latency_shift, 3);
 }
 
+TEST(metrics_dynamic_config_usage, "metrics.extended.usage.enabled overrides the application policy")
+{
+	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
+	assert_true(metrics_read_dynamic_client_config_policy(
+		"version: 1.2.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    extended:\n"
+		"      usage:\n"
+		"        enabled: true\n",
+		&policy, false, NULL, &exporter));
+
+	assert_false(policy.enable);
+	assert_false(policy.operational_enabled);
+	assert_true(policy.usage_enabled);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -1508,6 +1595,7 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_invalid_report_dir);
 	suite_add(metrics_listeners_require_all_callbacks);
 	suite_add(metrics_deprecated_listeners);
+	suite_add(metrics_usage_api_counters);
 	suite_add(metrics_command_count_is_cumulative);
 	suite_add(metrics_dynamic_config_export);
 	suite_add(metrics_dynamic_config_keeps_export_interval);
@@ -1516,4 +1604,5 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_dynamic_config_empty_report_dir_skips_file);
 	suite_add(metrics_dynamic_config_empty_export_interval);
 	suite_add(metrics_dynamic_config_enabled_and_operational);
+	suite_add(metrics_dynamic_config_usage);
 }

@@ -25,6 +25,7 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/as_module.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
@@ -47,6 +48,20 @@
 //---------------------------------
 
 extern bool as_op_is_write[];
+
+// Skip feature.api. aerospike_query_foreach() and aerospike_query_async() already
+// incremented it, then convert the caller's as_query into an as_scan and call these.
+as_status
+aerospike_scan_foreach_internal(
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
+	aerospike_scan_foreach_callback callback, void* udata
+	);
+
+as_status
+aerospike_scan_async_internal(
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan, uint64_t* scan_id,
+	as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	);
 
 //---------------------------------
 // Types
@@ -2080,6 +2095,17 @@ aerospike_query_foreach(
 	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
 	aerospike_query_foreach_callback callback, void* udata)
 {
+	as_metrics_add_api_blocking(as);
+	return aerospike_query_foreach_internal(as, err, policy, query, callback, udata);
+}
+
+// Skips feature.api.blocking. The public function increments it. The Node.js client
+// calls this and then increments deferred. See as_metrics_internal.h.
+as_status
+aerospike_query_foreach_internal(
+	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
+	aerospike_query_foreach_callback callback, void* udata)
+{
 	if (query->ops) {
 		if (query->apply.function[0]) {
 			return as_error_update(err, AEROSPIKE_ERR_PARAM,
@@ -2132,7 +2158,7 @@ aerospike_query_foreach(
 		as_scan scan;
 		convert_query_to_scan(policy, query, &scan_policy, &scan);
 
-		return aerospike_scan_foreach(as, err, &scan_policy, &scan, callback, udata);
+		return aerospike_scan_foreach_internal(as, err, &scan_policy, &scan, callback, udata);
 	}
 
 	as_nodes* nodes;
@@ -2236,6 +2262,8 @@ aerospike_query_partitions(
 	as_partition_filter* pf, aerospike_query_foreach_callback callback, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");
@@ -2286,6 +2314,8 @@ aerospike_query_async(
 	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
 	as_async_query_record_listener listener, void* udata, as_event_loop* event_loop)
 {
+	as_metrics_add_api_deferred(as);
+
 	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 			"Async aggregation or background queries are not supported");
@@ -2330,7 +2360,7 @@ aerospike_query_async(
 		as_scan scan;
 		convert_query_to_scan(policy, query, &scan_policy, &scan);
 
-		return aerospike_scan_async(as, err, &scan_policy, &scan, NULL, listener, udata, event_loop);
+		return aerospike_scan_async_internal(as, err, &scan_policy, &scan, NULL, listener, udata, event_loop);
 	}
 
 	uint64_t task_id = as_random_get_uint64();
@@ -2474,6 +2504,8 @@ aerospike_query_partitions_async(
 	as_event_loop* event_loop
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");
@@ -2528,6 +2560,8 @@ aerospike_query_background(
 	aerospike* as, as_error* err, const as_policy_write* policy,
 	const as_query* query, uint64_t* query_id)
 {
+	as_metrics_add_api_background(as);
+
 	as_error_reset(err);
 	
 	as_policy_write merged;
@@ -2589,6 +2623,16 @@ aerospike_query_background(
 
 	as_cluster_release_all_nodes(nodes);
 	return status;
+}
+
+as_status
+aerospike_query_info(
+	aerospike* as, as_error* err, const as_policy_info* policy,
+	const as_query* query, uint64_t query_id, as_job_info* info
+	)
+{
+	const char* module = (query->where.size > 0)? "query" : "scan";
+	return aerospike_job_info(as, err, policy, module, query_id, false, info);
 }
 
 uint32_t

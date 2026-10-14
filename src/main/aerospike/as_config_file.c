@@ -15,10 +15,10 @@
  * the License.
  */
 #include <aerospike/as_config_file.h>
-#include <aerospike/as_metrics_internal.h>
 #include <aerospike/aerospike.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_string_builder.h>
 #include <ctype.h>
@@ -1393,6 +1393,39 @@ as_parse_open_mapping(as_yaml* yaml, as_parse_metrics_field_fn fn, as_metrics_po
 }
 
 static bool
+as_parse_usage_field(as_yaml* yaml, const char* name, as_metrics_policy* policy)
+{
+	if (yaml->event.type == YAML_MAPPING_START_EVENT) {
+		yaml_event_delete(&yaml->event);
+		as_log_info("Unexpected field: metrics.extended.usage.%s", name);
+		return as_skip_open_mapping(yaml);
+	}
+
+	if (yaml->event.type != YAML_SCALAR_EVENT) {
+		as_expected_error(yaml, YAML_SCALAR_EVENT);
+		yaml_event_delete(&yaml->event);
+		return false;
+	}
+
+	const char* value = (const char*)yaml->event.data.scalar.value;
+	const char* saved = yaml->name;
+	bool rv = true;
+
+	yaml->name = "metrics.extended.usage";
+
+	if (strcmp(name, "enabled") == 0) {
+		rv = as_parse_bool(yaml, name, value, &policy->usage_enabled, AS_METRICS_USAGE);
+	}
+	else {
+		as_log_info("Unexpected field: metrics.extended.usage.%s", name);
+	}
+
+	yaml->name = saved;
+	yaml_event_delete(&yaml->event);
+	return rv;
+}
+
+static bool
 as_parse_extended_field(as_yaml* yaml, const char* name, as_metrics_policy* policy)
 {
 	if (yaml->event.type != YAML_MAPPING_START_EVENT) {
@@ -1404,6 +1437,10 @@ as_parse_extended_field(as_yaml* yaml, const char* name, as_metrics_policy* poli
 
 	if (strcmp(name, "operational") == 0) {
 		return as_parse_open_mapping(yaml, as_parse_operational_field, policy);
+	}
+
+	if (strcmp(name, "usage") == 0) {
+		return as_parse_open_mapping(yaml, as_parse_usage_field, policy);
 	}
 
 	as_log_info("Unexpected field: metrics.extended.%s", name);
@@ -2270,6 +2307,8 @@ as_cluster_update_metrics(
 		src->latency_unit : orig->latency_unit;
 	trg->operational_enabled = as_field_is_set(bitmap, AS_METRICS_OPERATIONAL) ?
 		src->operational_enabled : orig->operational_enabled;
+	trg->usage_enabled = as_field_is_set(bitmap, AS_METRICS_USAGE) ?
+		src->usage_enabled : orig->usage_enabled;
 	trg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT) ?
 		src->report_size_limit : orig->report_size_limit;
 
@@ -2323,7 +2362,8 @@ as_cluster_update_metrics(
 		bool latency_changed = cluster->metrics_latency_columns != trg->latency_columns ||
 			cluster->metrics_latency_shift != trg->latency_shift ||
 			cluster->metrics_latency_unit != trg->latency_unit;
-		bool tier_changed = cluster->metrics_operational_enabled != trg->operational_enabled;
+		bool tier_changed = cluster->metrics_operational_enabled != trg->operational_enabled ||
+			cluster->metrics_usage_enabled != trg->usage_enabled;
 
 		if (!cluster->metrics_enabled || export_changed || latency_changed || tier_changed) {
 			enable_metrics = true;

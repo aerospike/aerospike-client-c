@@ -23,6 +23,7 @@
 #include <aerospike/as_job.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_partition_tracker.h>
@@ -1408,6 +1409,8 @@ aerospike_scan_background(
 	uint64_t* scan_id
 	)
 {
+	as_metrics_add_api_background(as);
+
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1451,8 +1454,12 @@ aerospike_scan_info(
 	return status;
 }
 
+// *_internal and *_async_internal do not increment feature.api. The public
+// functions do: blocking for sync, deferred for async. aerospike_query_foreach()
+// and aerospike_query_async() call these after converting the caller's as_query
+// into an as_scan. That public query call already incremented feature.api.
 as_status
-aerospike_scan_foreach(
+aerospike_scan_foreach_internal(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	aerospike_scan_foreach_callback callback, void* udata
 	)
@@ -1486,11 +1493,23 @@ aerospike_scan_foreach(
 }
 
 as_status
+aerospike_scan_foreach(
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
+	aerospike_scan_foreach_callback callback, void* udata
+	)
+{
+	as_metrics_add_api_blocking(as);
+	return aerospike_scan_foreach_internal(as, err, policy, scan, callback, udata);
+}
+
+as_status
 aerospike_scan_node(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	const char* node_name, aerospike_scan_foreach_callback callback, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1535,6 +1554,8 @@ aerospike_scan_partitions(
 	as_partition_filter* pf, aerospike_scan_foreach_callback callback, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	as_cluster* cluster = as->cluster;
 
 	as_policy_scan merged;
@@ -1568,8 +1589,9 @@ aerospike_scan_partitions(
 	return status;
 }
 
+// Skips feature.api. See aerospike_scan_foreach_internal().
 as_status
-aerospike_scan_async(
+aerospike_scan_async_internal(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	uint64_t* scan_id, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
@@ -1603,12 +1625,24 @@ aerospike_scan_async(
 }
 
 as_status
+aerospike_scan_async(
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
+	uint64_t* scan_id, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	as_metrics_add_api_deferred(as);
+	return aerospike_scan_async_internal(as, err, policy, scan, scan_id, listener, udata, event_loop);
+}
+
+as_status
 aerospike_scan_node_async(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	uint64_t* scan_id, const char* node_name, as_async_scan_listener listener, void* udata,
 	as_event_loop* event_loop
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_policy_scan merged;
 	policy = as_policy_scan_merge(as, policy, &merged);
 
@@ -1650,6 +1684,8 @@ aerospike_scan_partitions_async(
 	as_partition_filter* pf, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	as_cluster* cluster = as->cluster;
 
 	as_policy_scan merged;

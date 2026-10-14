@@ -1657,6 +1657,9 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->metrics_latency_columns = 0;
 	cluster->metrics_latency_shift = 0;
 	cluster->command_count = 0;
+	cluster->metrics_api_blocking = 0;
+	cluster->metrics_api_deferred = 0;
+	cluster->metrics_api_background = 0;
 	cluster->retry_count = 0;
 	cluster->delay_queue_timeout_count = 0;
 

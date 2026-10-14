@@ -231,7 +231,8 @@ typedef struct as_command_s {
 	bool record_cluster_metrics;
 	// True when this command updates per-namespace histograms, bytes, and error
 	// counts. While operational metrics are on, a sampler "no" sets this false.
-	// While they are off, set only if a learn-metrics file writer is installed.
+	// While they are off, set only if a learn-metrics file writer or a metrics
+	// listener is installed.
 	bool record_namespace_metrics;
 	// True for a node command under a user call that already incremented the
 	// cluster command_count. A single-key command leaves this false.

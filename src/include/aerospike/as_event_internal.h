@@ -146,9 +146,7 @@ typedef struct as_event_command {
 	// Monotonic nanoseconds from cf_getns() at the start of the current attempt.
 	// Learn-metrics histograms use this clock. 0 skips that sample.
 	uint64_t attempt_begin;
-	// Monotonic nanoseconds from cf_getns() at the start of this command.
-	// v3 command latency is cf_getns() minus this value and includes retries.
-	// 0 when that sample is not taken.
+	// See as_command.command_begin.
 	uint64_t command_begin;
 	uint32_t iteration;
 	uint32_t command_sent_counter;
@@ -173,13 +171,9 @@ typedef struct as_event_command {
 	uint32_t bytes_in;
 	uint32_t bytes_out;
 	as_latency_type latency_type;
-	// True when this command updates the cluster command_count and retry counter.
-	// False when operational metrics are off, or when the sampler skips this call.
-	// Reused for retries of this command.
+	// See as_command.record_cluster_metrics.
 	bool record_cluster_metrics;
-	// True when this command updates per-namespace histograms, bytes, and error
-	// counts. While operational metrics are on, a sampler "no" sets this false.
-	// While they are off, set only if a learn-metrics file writer is installed.
+	// See as_command.record_namespace_metrics.
 	bool record_namespace_metrics;
 } as_event_command;
 

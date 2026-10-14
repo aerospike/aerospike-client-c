@@ -434,6 +434,13 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * A learn-metrics file writer is installed. Namespace histograms, bytes, and
+	 * error counts are recorded for that writer when operational metrics are off.
+	 */
+	bool metrics_file_writer;
+
+	/**
+	 * @private
 	 * Histogram bucket unit. This is set using as_metrics_policy.
 	 */
 	as_metrics_latency_unit metrics_latency_unit;
@@ -756,8 +763,8 @@ as_cluster_sample_operational(as_cluster* cluster)
 /**
  * @private
  * True when this command should update per-namespace histograms, bytes, and
- * error counts. Operational metrics use operational_sample. When operational
- * metrics are off, the learn-metrics file still records every command.
+ * error counts. When operational metrics are on, operational_sample decides.
+ * When they are off, record only if a learn-metrics file writer is installed.
  */
 static inline bool
 as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_sample)
@@ -766,11 +773,13 @@ as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_
 		return false;
 	}
 
-	if (!cluster->metrics_operational_enabled) {
-		return true;
+	if (cluster->metrics_operational_enabled) {
+		return operational_sample;
 	}
 
-	return operational_sample;
+	// The on-demand snapshot omits these fields while operational metrics are
+	// off. The file writer still publishes them, so keep recording only then.
+	return cluster->metrics_file_writer;
 }
 
 /**

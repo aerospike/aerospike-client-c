@@ -1377,6 +1377,8 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		}
 	}
 
+	cluster->metrics_file_writer = as_metrics_runtime_has_file_exporter(rt) ||
+		cluster->metrics_listeners.snapshot_listener == as_metrics_writer_snapshot;
 	cluster->metrics_enabled = true;
 
 	if (rt->slots->size > 0 || cluster->metrics_listeners.snapshot_listener) {
@@ -1385,6 +1387,7 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		if (pthread_create(&rt->thread, NULL, as_metrics_thread, rt) != 0) {
 			pthread_mutex_unlock(&rt->lock);
 			cluster->metrics_enabled = false;
+			cluster->metrics_file_writer = false;
 			as_status status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
 				"Failed to create metrics thread: %s", strerror(errno));
 
@@ -1450,6 +1453,7 @@ as_metrics_runtime_disable(as_error* err, as_cluster* cluster)
 	}
 
 	cluster->metrics_enabled = false;
+	cluster->metrics_file_writer = false;
 
 	if (rt) {
 		as_metrics_runtime_free(rt);

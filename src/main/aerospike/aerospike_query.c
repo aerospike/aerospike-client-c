@@ -49,7 +49,8 @@
 
 extern bool as_op_is_write[];
 
-// Sync and async scan helpers skip feature.api. This query already counted the user API.
+// Skip feature.api. aerospike_query_foreach() and aerospike_query_async() already
+// incremented it, then convert the caller's as_query into an as_scan and call these.
 as_status
 aerospike_scan_foreach_internal(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,

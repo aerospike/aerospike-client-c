@@ -1454,8 +1454,9 @@ aerospike_scan_info(
 }
 
 // *_internal and *_async_internal do not increment feature.api. The public
-// functions do: blocking for sync, deferred for async. A query that runs as a
-// scan calls these helpers, and that query already counted the user API.
+// functions do: blocking for sync, deferred for async. aerospike_query_foreach()
+// and aerospike_query_async() call these after converting the caller's as_query
+// into an as_scan. That public query call already incremented feature.api.
 as_status
 aerospike_scan_foreach_internal(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,

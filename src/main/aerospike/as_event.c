@@ -429,7 +429,7 @@ void
 as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd)
 {
 	// Initialize read buffer (buf) to be located after write buffer.
-	cmd->begin = 0;
+	cmd->attempt_begin = 0;
 	cmd->command_begin = 0;
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
@@ -584,12 +584,12 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 static inline void
 as_event_add_latency(as_event_command* cmd, as_latency_type type)
 {
-	// begin is 0 when this attempt is not timed for the learn-metrics series.
-	if (cmd->begin == 0) {
+	// attempt_begin is 0 when this attempt is not timed for the learn-metrics series.
+	if (cmd->attempt_begin == 0) {
 		return;
 	}
 
-	uint64_t elapsed = cf_getns() - cmd->begin;
+	uint64_t elapsed = cf_getns() - cmd->attempt_begin;
 	as_node_add_latency(cmd->metrics, type, elapsed);
 }
 
@@ -603,8 +603,8 @@ as_event_add_success_latency(as_event_command* cmd)
 	uint64_t now = cf_getns();
 
 	// Existing histograms: this attempt only.
-	if (cmd->begin != 0) {
-		as_node_add_latency(cmd->metrics, cmd->latency_type, now - cmd->begin);
+	if (cmd->attempt_begin != 0) {
+		as_node_add_latency(cmd->metrics, cmd->latency_type, now - cmd->attempt_begin);
 	}
 
 	// v3 command latency: elapsed time from the first attempt, including retries.
@@ -683,15 +683,15 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		// Restart that clock on retry.
 		if (as_cluster_record_attempt_latency(cmd->cluster) &&
 				cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-			cmd->begin = cf_getns();
+			cmd->attempt_begin = cf_getns();
 		}
 	}
 
 	// v3 command latency starts on the first attempt and includes retries.
 	if (cmd->record_cluster_metrics && cmd->command_begin == 0 &&
 			cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-		if (cmd->begin != 0) {
-			cmd->command_begin = cmd->begin;
+		if (cmd->attempt_begin != 0) {
+			cmd->command_begin = cmd->attempt_begin;
 		}
 		else {
 			cmd->command_begin = cf_getns();

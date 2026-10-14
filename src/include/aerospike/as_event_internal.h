@@ -144,8 +144,8 @@ typedef struct as_event_command {
 	
 	uint8_t* buf;
 	// Monotonic nanoseconds from cf_getns() at the start of the current attempt.
-	// Existing latency histograms use this clock. 0 if this attempt is not timed.
-	uint64_t begin;
+	// Learn-metrics histograms use this clock. 0 skips that sample.
+	uint64_t attempt_begin;
 	// Monotonic nanoseconds from cf_getns() at the start of this command.
 	// v3 command latency is cf_getns() minus this value and includes retries.
 	// 0 when that sample is not taken.
@@ -215,7 +215,7 @@ typedef struct as_event_executor {
 static inline void
 as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
-	cmd->begin = 0;
+	cmd->attempt_begin = 0;
 	cmd->command_begin = 0;
 	// While operational metrics are on, record_cluster_metrics false also skips
 	// namespace histograms, bytes, and error counts.

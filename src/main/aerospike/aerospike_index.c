@@ -16,7 +16,6 @@
  */
 #include <aerospike/aerospike_index.h>
 #include <aerospike/aerospike_info.h>
-#include <aerospike/as_info.h>
 #include <aerospike/as_cdt_internal.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_exp.h>

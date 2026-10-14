@@ -2601,6 +2601,17 @@ aerospike_query_background(
 	return status;
 }
 
+as_status
+aerospike_query_info(
+	aerospike* as, as_error* err, const as_policy_info* policy,
+	const as_query* query, uint64_t query_id, as_job_info* info
+	)
+{
+	as_metrics_add_api_blocking(as);
+	const char* module = (query->where.size > 0)? "query" : "scan";
+	return aerospike_job_info(as, err, policy, module, query_id, false, info);
+}
+
 uint32_t
 as_query_get_info_timeout(as_event_executor* executor)
 {

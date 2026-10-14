@@ -60,6 +60,16 @@ aerospike_info_node(
 }
 
 as_status
+aerospike_info_node_async(
+	aerospike* as, as_error* err, as_policy_info* policy, as_node* node, const char* req,
+	as_async_info_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	as_metrics_add_api_deferred(as);
+	return as_info_command_node_async(as, err, policy, node, req, listener, udata, event_loop);
+}
+
+as_status
 aerospike_info_host(
 	aerospike* as, as_error* err, const as_policy_info* policy, const char* hostname, uint16_t port,
 	const char* req, char** res

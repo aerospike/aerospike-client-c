@@ -33,7 +33,7 @@
 //---------------------------------
 
 as_status
-aerospike_info_node_internal(
+aerospike_info_node(
 	aerospike* as, as_error* err, const as_policy_info* policy, as_node* node,
 	const char* req, char** res
 	)
@@ -47,15 +47,6 @@ aerospike_info_node_internal(
 
 	uint64_t deadline = as_socket_deadline(policy->timeout);
 	return as_info_command_node(err, node, (char*)req, policy->send_as_is, deadline, res);
-}
-
-as_status
-aerospike_info_node(
-	aerospike* as, as_error* err, const as_policy_info* policy, as_node* node,
-	const char* req, char** res
-	)
-{
-	return aerospike_info_node_internal(as, err, policy, node, req, res);
 }
 
 as_status

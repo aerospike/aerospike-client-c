@@ -48,6 +48,18 @@
 
 extern bool as_op_is_write[];
 
+as_status
+aerospike_scan_foreach_internal(
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
+	aerospike_scan_foreach_callback callback, void* udata
+	);
+
+as_status
+aerospike_scan_async_internal(
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan, uint64_t* scan_id,
+	as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	);
+
 //---------------------------------
 // Types
 //---------------------------------
@@ -2134,7 +2146,7 @@ aerospike_query_foreach(
 		as_scan scan;
 		convert_query_to_scan(policy, query, &scan_policy, &scan);
 
-		return aerospike_scan_foreach_no_api_count(as, err, &scan_policy, &scan, callback, udata);
+		return aerospike_scan_foreach_internal(as, err, &scan_policy, &scan, callback, udata);
 	}
 
 	as_nodes* nodes;
@@ -2336,7 +2348,7 @@ aerospike_query_async(
 		as_scan scan;
 		convert_query_to_scan(policy, query, &scan_policy, &scan);
 
-		return aerospike_scan_async_no_api_count(as, err, &scan_policy, &scan, NULL, listener, udata, event_loop);
+		return aerospike_scan_async_internal(as, err, &scan_policy, &scan, NULL, listener, udata, event_loop);
 	}
 
 	uint64_t task_id = as_random_get_uint64();

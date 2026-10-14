@@ -579,28 +579,6 @@ aerospike_scan_partitions_async(
 	as_partition_filter* pf, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	);
 
-/**
- * @private
- * Scan without incrementing usage metrics counters. A query with no filter uses
- * this after it has already counted the query.
- */
-AS_EXTERN as_status
-aerospike_scan_foreach_no_api_count(
-	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
-	aerospike_scan_foreach_callback callback, void* udata
-	);
-
-/**
- * @private
- * Async scan without incrementing usage metrics counters. A query with no filter
- * uses this after it has already counted the query.
- */
-AS_EXTERN as_status
-aerospike_scan_async_no_api_count(
-	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan, uint64_t* scan_id,
-	as_async_scan_listener listener, void* udata, as_event_loop* event_loop
-	);
-
 #ifdef __cplusplus
 } // end extern "C"
 #endif

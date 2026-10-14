@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2026 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,7 +16,6 @@
  */
 #include <aerospike/as_job.h>
 #include <aerospike/as_info.h>
-#include <aerospike/as_metrics.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_socket.h>
 #include <citrusleaf/alloc.h>

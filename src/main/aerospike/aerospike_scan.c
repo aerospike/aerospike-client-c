@@ -1430,8 +1430,6 @@ aerospike_scan_info(
 	aerospike* as, as_error* err, const as_policy_info* policy, uint64_t scan_id, as_scan_info* info
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_job_info job_info;
 	as_status status = aerospike_job_info(as, err, policy, "scan", scan_id, false, &job_info);
 	
@@ -1455,8 +1453,12 @@ aerospike_scan_info(
 	return status;
 }
 
+// *_internal and *_async_internal do not increment feature.api. The public
+// functions do: blocking for sync, deferred for async. aerospike_query_foreach()
+// and aerospike_query_async() call these after converting the caller's as_query
+// into an as_scan. That public query call already incremented feature.api.
 as_status
-aerospike_scan_foreach_no_api_count(
+aerospike_scan_foreach_internal(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	aerospike_scan_foreach_callback callback, void* udata
 	)
@@ -1496,7 +1498,7 @@ aerospike_scan_foreach(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return aerospike_scan_foreach_no_api_count(as, err, policy, scan, callback, udata);
+	return aerospike_scan_foreach_internal(as, err, policy, scan, callback, udata);
 }
 
 as_status
@@ -1586,8 +1588,9 @@ aerospike_scan_partitions(
 	return status;
 }
 
+// Skips feature.api. See aerospike_scan_foreach_internal().
 as_status
-aerospike_scan_async_no_api_count(
+aerospike_scan_async_internal(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
 	uint64_t* scan_id, as_async_scan_listener listener, void* udata, as_event_loop* event_loop
 	)
@@ -1627,7 +1630,7 @@ aerospike_scan_async(
 	)
 {
 	as_metrics_add_api_deferred(as);
-	return aerospike_scan_async_no_api_count(as, err, policy, scan, scan_id, listener, udata, event_loop);
+	return aerospike_scan_async_internal(as, err, policy, scan, scan_id, listener, udata, event_loop);
 }
 
 as_status

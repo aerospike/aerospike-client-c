@@ -275,7 +275,6 @@ as_admin_execute_node(
 		return status;
 	}
 
-	as_metrics_add_api_blocking(as);
 	status = as_admin_send(err, &socket, node, buffer, end, 0, deadline_ms);
 	
 	if (status) {
@@ -401,7 +400,6 @@ as_admin_read_list(
 		return status;
 	}
 	
-	as_metrics_add_api_blocking(as);
 	status = as_admin_send(err, &socket, node, command, end, 0, deadline_ms);
 	
 	if (status) {

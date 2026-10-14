@@ -28,6 +28,16 @@
 #include <stdlib.h>
 
 //---------------------------------
+// Delarations
+//---------------------------------
+
+as_status
+aerospike_info_node_internal(
+	aerospike* as, as_error* err, const as_policy_info* policy, as_node* node,
+	const char* req, char** res
+	);
+
+//---------------------------------
 // Static Functions
 //---------------------------------
 
@@ -207,7 +217,7 @@ aerospike_index_create_private(
 	}
 
 	char* response = NULL;
-	as_status status = aerospike_info_node_no_api_count(as, err, policy, node, sb.data, &response);
+	as_status status = aerospike_info_node_internal(as, err, policy, node, sb.data, &response);
 	as_node_release(node);
 
 	if (status != AEROSPIKE_OK) {
@@ -256,7 +266,7 @@ aerospike_index_get_status(as_index_task* task, as_error* err, as_policy_info* p
 		aerospike_index_stat_command(node, task, command, sizeof(command));
 
 		char* response = NULL;
-		as_status status = aerospike_info_node_no_api_count(task->as, err, policy, node, command, &response);
+		as_status status = aerospike_info_node_internal(task->as, err, policy, node, command, &response);
 
 		if (status != AEROSPIKE_OK) {
 			as_nodes_release(nodes);
@@ -388,7 +398,7 @@ aerospike_index_remove(
 	}
 	
 	char* response = NULL;
-	as_status status = aerospike_info_node_no_api_count(as, err, policy, node, command, &response);
+	as_status status = aerospike_info_node_internal(as, err, policy, node, command, &response);
 	as_node_release(node);
 
 	if (status != AEROSPIKE_OK) {

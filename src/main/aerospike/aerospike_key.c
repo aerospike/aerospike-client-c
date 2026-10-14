@@ -450,6 +450,12 @@ as_policy_read_merge(aerospike* as, const as_policy_read* src, as_policy_read* m
 	}
 }
 
+// *_internal and *_async_internal do not increment feature.api. The public
+// functions do: blocking for sync, deferred for async. Batch single-record
+// fallbacks and the transaction monitor call these helpers so a batch or
+// transaction is counted once, not once per key. The Node.js client does not
+// call the key helpers. It uses the public async key functions, which already
+// increment deferred.
 as_status
 aerospike_key_get_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
@@ -501,6 +507,7 @@ aerospike_key_get(
 	return aerospike_key_get_internal(as, err, policy, key, rec);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_get_async_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
@@ -674,6 +681,7 @@ aerospike_key_select_async(
 	return as_event_command_execute(cmd, err);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_select_bins_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
@@ -739,6 +747,7 @@ aerospike_key_select_bins(
 	return aerospike_key_select_bins_internal(as, err, policy, key, bins, n_bins, rec);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_select_bins_async_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
@@ -809,6 +818,7 @@ aerospike_key_select_bins_async(
 // Exists
 //---------------------------------
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_exists_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
@@ -859,6 +869,7 @@ aerospike_key_exists(
 	return aerospike_key_exists_internal(as, err, policy, key, rec);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_exists_async_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
@@ -1213,6 +1224,7 @@ as_policy_remove_merge(
 	return src;
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_remove_internal(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
@@ -1264,6 +1276,7 @@ aerospike_key_remove(
 	return aerospike_key_remove_internal(as, err, policy, key);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_remove_async_ex_internal(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
@@ -1317,6 +1330,7 @@ aerospike_key_remove_async_ex(
 	return aerospike_key_remove_async_ex_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener, length);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_remove_async_internal(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
@@ -1548,6 +1562,7 @@ as_operate_write(void* udata, uint8_t* buf)
 	return as_command_write_end(buf, p);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_operate_internal(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key,
@@ -1626,6 +1641,7 @@ aerospike_key_operate(
 	return aerospike_key_operate_internal(as, err, policy, key, ops, rec);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_operate_async_internal(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
@@ -1869,6 +1885,7 @@ as_apply_write(void* udata, uint8_t* buf)
 	return as_command_write_end(buf, p);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_apply_internal(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
@@ -1912,6 +1929,7 @@ aerospike_key_apply(
 	return aerospike_key_apply_internal(as, err, policy, key, module, function, arglist, result);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_apply_async_internal(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,

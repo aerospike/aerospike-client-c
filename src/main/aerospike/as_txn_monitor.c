@@ -39,6 +39,7 @@
 // Declarations
 //---------------------------------
 
+// Sync and async helpers skip feature.api. Transaction monitor cleanup is not a user API call.
 as_status
 aerospike_key_remove_internal(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key

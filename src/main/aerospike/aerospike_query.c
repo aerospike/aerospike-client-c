@@ -49,6 +49,7 @@
 
 extern bool as_op_is_write[];
 
+// Sync and async scan helpers skip feature.api. This query already counted the user API.
 as_status
 aerospike_scan_foreach_internal(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
@@ -2097,6 +2098,8 @@ aerospike_query_foreach(
 	return aerospike_query_foreach_internal(as, err, policy, query, callback, udata);
 }
 
+// Skips feature.api.blocking. The public function increments it. The Node.js client
+// calls this and then increments deferred. See as_metrics_internal.h.
 as_status
 aerospike_query_foreach_internal(
 	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,

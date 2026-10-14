@@ -38,8 +38,15 @@ typedef enum as_metrics_builtin_exporter_e {
 /**
  * Synchronous commands the Node.js client calls. These do not increment
  * feature.api. The public functions still increment blocking. Node calls the
- * internal function and then as_metrics_add_api_deferred(). Background query
- * and scan stay on the public functions, which increment feature.api.background.
+ * internal function and then as_metrics_add_api_deferred().
+ *
+ * Async commands are not listed. Their public functions already increment
+ * feature.api.deferred, and that is what Node calls. *_internal and
+ * *_async_internal elsewhere skip the count so an internal caller, such as a
+ * batch single-record fallback, does not count the command again.
+ *
+ * Background query and scan stay on the public functions, which increment
+ * feature.api.background.
  */
 
 /**

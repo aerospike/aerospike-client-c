@@ -1453,6 +1453,9 @@ aerospike_scan_info(
 	return status;
 }
 
+// *_internal and *_async_internal do not increment feature.api. The public
+// functions do: blocking for sync, deferred for async. A query that runs as a
+// scan calls these helpers, and that query already counted the user API.
 as_status
 aerospike_scan_foreach_internal(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
@@ -1584,6 +1587,7 @@ aerospike_scan_partitions(
 	return status;
 }
 
+// Skips feature.api. See aerospike_scan_foreach_internal().
 as_status
 aerospike_scan_async_internal(
 	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,

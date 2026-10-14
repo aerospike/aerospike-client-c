@@ -65,6 +65,8 @@ extern bool as_op_is_write[];
 // Declarations
 //---------------------------------
 
+// Sync and async key helpers skip feature.api so this batch is not counted again
+// per key. See aerospike_key_get_internal().
 as_status
 aerospike_key_get_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
@@ -5414,6 +5416,8 @@ aerospike_batch_get(
 	return aerospike_batch_get_internal(as, err, policy, batch, listener, udata);
 }
 
+// Skips feature.api.blocking. The public function increments it. The Node.js client
+// calls this and then increments deferred. See as_metrics_internal.h.
 as_status
 aerospike_batch_get_internal(
 	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,

@@ -1430,8 +1430,6 @@ aerospike_scan_info(
 	aerospike* as, as_error* err, const as_policy_info* policy, uint64_t scan_id, as_scan_info* info
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_job_info job_info;
 	as_status status = aerospike_job_info(as, err, policy, "scan", scan_id, false, &job_info);
 	

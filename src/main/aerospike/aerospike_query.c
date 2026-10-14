@@ -14,6 +14,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/aerospike_query.h>
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/as_aerospike.h>
@@ -2093,7 +2094,14 @@ aerospike_query_foreach(
 	aerospike_query_foreach_callback callback, void* udata)
 {
 	as_metrics_add_api_blocking(as);
+	return aerospike_query_foreach_internal(as, err, policy, query, callback, udata);
+}
 
+as_status
+aerospike_query_foreach_internal(
+	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
+	aerospike_query_foreach_callback callback, void* udata)
+{
 	if (query->ops) {
 		if (query->apply.function[0]) {
 			return as_error_update(err, AEROSPIKE_ERR_PARAM,
@@ -2619,7 +2627,6 @@ aerospike_query_info(
 	const as_query* query, uint64_t query_id, as_job_info* info
 	)
 {
-	as_metrics_add_api_blocking(as);
 	const char* module = (query->where.size > 0)? "query" : "scan";
 	return aerospike_job_info(as, err, policy, module, query_id, false, info);
 }

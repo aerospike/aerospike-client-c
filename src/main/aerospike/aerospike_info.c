@@ -55,7 +55,6 @@ aerospike_info_node(
 	const char* req, char** res
 	)
 {
-	as_metrics_add_api_blocking(as);
 	return aerospike_info_node_internal(as, err, policy, node, req, res);
 }
 
@@ -65,7 +64,6 @@ aerospike_info_node_async(
 	as_async_info_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
-	as_metrics_add_api_deferred(as);
 	return as_info_command_node_async(as, err, policy, node, req, listener, udata, event_loop);
 }
 
@@ -75,8 +73,6 @@ aerospike_info_host(
 	const char* req, char** res
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	if (! policy) {
@@ -122,8 +118,6 @@ aerospike_info_socket_address(
 	const char* req, char** res
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	if (! policy) {
@@ -140,8 +134,6 @@ aerospike_info_any(
 	aerospike* as, as_error* err, const as_policy_info* policy, const char* req, char** res
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	if (! policy) {
@@ -181,8 +173,6 @@ aerospike_info_foreach(
 	aerospike_info_foreach_callback callback, void* udata
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	if (! policy) {

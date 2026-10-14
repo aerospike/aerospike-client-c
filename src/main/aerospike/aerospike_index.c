@@ -317,7 +317,6 @@ aerospike_index_create_ctx(
 	as_index_datatype dtype, as_cdt_ctx* ctx
 	)
 {
-	as_metrics_add_api_blocking(as);
 	return aerospike_index_create_private(as, err, task, policy, ns, set, bin_name, index_name, itype,
 		dtype, ctx, NULL);
 }
@@ -328,7 +327,6 @@ aerospike_index_create_exp(
 	const char* set, const char* index_name, as_index_type itype, as_index_datatype dtype, as_exp* exp
 	)
 {
-	as_metrics_add_api_blocking(as);
 	return aerospike_index_create_private(as, err, task, policy, ns, set, NULL, index_name, itype,
 		dtype, NULL, exp);
 }
@@ -336,8 +334,6 @@ aerospike_index_create_exp(
 as_status
 aerospike_index_create_wait(as_error* err, as_index_task* task, uint32_t interval_ms)
 {
-	as_metrics_add_api_blocking(task->as);
-
 	if (task->done) {
 		return AEROSPIKE_OK;
 	}
@@ -377,8 +373,6 @@ aerospike_index_remove(
 	const char* index_name
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	as_node* node = as_node_get_random(as->cluster);

@@ -16,6 +16,14 @@
  */
 #pragma once
 
+#include <aerospike/aerospike.h>
+#include <aerospike/aerospike_batch.h>
+#include <aerospike/aerospike_query.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @private
  * Dynamic configuration metrics.exporter. Stored in as_metrics_policy.metrics_exporter.
@@ -26,3 +34,76 @@ typedef enum as_metrics_builtin_exporter_e {
 	AS_METRICS_BUILTIN_EXPORTER_NONE = 1,
 	AS_METRICS_BUILTIN_EXPORTER_CUSTOM = 2
 } as_metrics_builtin_exporter;
+
+/**
+ * Synchronous commands the Node.js client calls. These do not increment
+ * feature.api. The public functions still increment blocking. Node calls the
+ * internal function and then as_metrics_add_api_deferred(). Background query
+ * and scan stay on the public functions, which increment feature.api.background.
+ */
+
+/**
+ * @private
+ * aerospike_query_foreach() without incrementing feature.api.blocking.
+ */
+AS_EXTERN as_status
+aerospike_query_foreach_internal(
+	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
+	aerospike_query_foreach_callback callback, void* udata);
+
+/**
+ * @private
+ * aerospike_batch_get() without incrementing feature.api.blocking.
+ */
+AS_EXTERN as_status
+aerospike_batch_get_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	as_batch_listener listener, void* udata
+	);
+
+/**
+ * @private
+ * aerospike_batch_get_bins() without incrementing feature.api.blocking.
+ */
+AS_EXTERN as_status
+aerospike_batch_get_bins_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	const char** bins, uint32_t n_bins, as_batch_listener listener, void* udata
+	);
+
+/**
+ * @private
+ * aerospike_batch_exists() without incrementing feature.api.blocking.
+ */
+AS_EXTERN as_status
+aerospike_batch_exists_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	as_batch_listener listener, void* udata
+	);
+
+/**
+ * @private
+ * aerospike_batch_apply() without incrementing feature.api.blocking.
+ */
+AS_EXTERN as_status
+aerospike_batch_apply_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy,
+	const as_policy_batch_apply* policy_apply, const as_batch* batch,
+	const char* module, const char* function, as_list* arglist,
+	as_batch_listener listener, void* udata
+	);
+
+/**
+ * @private
+ * aerospike_batch_remove() without incrementing feature.api.blocking.
+ */
+AS_EXTERN as_status
+aerospike_batch_remove_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy,
+	const as_policy_batch_remove* policy_remove, const as_batch* batch,
+	as_batch_listener listener, void* udata
+	);
+
+#ifdef __cplusplus
+}
+#endif

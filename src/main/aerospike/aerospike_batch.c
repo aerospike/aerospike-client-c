@@ -14,6 +14,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
@@ -5410,7 +5411,15 @@ aerospike_batch_get(
 	)
 {
 	as_metrics_add_api_blocking(as);
+	return aerospike_batch_get_internal(as, err, policy, batch, listener, udata);
+}
 
+as_status
+aerospike_batch_get_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	as_batch_listener listener, void* udata
+	)
+{
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5446,7 +5455,15 @@ aerospike_batch_get_bins(
 	)
 {
 	as_metrics_add_api_blocking(as);
+	return aerospike_batch_get_bins_internal(as, err, policy, batch, bins, n_bins, listener, udata);
+}
 
+as_status
+aerospike_batch_get_bins_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	const char** bins, uint32_t n_bins, as_batch_listener listener, void* udata
+	)
+{
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5519,7 +5536,15 @@ aerospike_batch_exists(
 	)
 {
 	as_metrics_add_api_blocking(as);
+	return aerospike_batch_exists_internal(as, err, policy, batch, listener, udata);
+}
 
+as_status
+aerospike_batch_exists_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	as_batch_listener listener, void* udata
+	)
+{
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5646,7 +5671,17 @@ aerospike_batch_apply(
 	)
 {
 	as_metrics_add_api_blocking(as);
+	return aerospike_batch_apply_internal(as, err, policy, policy_apply, batch, module, function, arglist, listener, udata);
+}
 
+as_status
+aerospike_batch_apply_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy,
+	const as_policy_batch_apply* policy_apply, const as_batch* batch,
+	const char* module, const char* function, as_list* arglist,
+	as_batch_listener listener, void* udata
+	)
+{
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5698,7 +5733,16 @@ aerospike_batch_remove(
 	)
 {
 	as_metrics_add_api_blocking(as);
+	return aerospike_batch_remove_internal(as, err, policy, policy_remove, batch, listener, udata);
+}
 
+as_status
+aerospike_batch_remove_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy,
+	const as_policy_batch_remove* policy_remove, const as_batch* batch,
+	as_batch_listener listener, void* udata
+	)
+{
 	as_error_reset(err);
 	
 	as_policy_batch merged;

@@ -374,20 +374,18 @@ typedef struct as_metrics_snapshot_s {
 
 	/**
 	 * Pre-node connect failures, including TLS and auth. Cumulative.
-	 * cluster.validation.open.failure. Zero unless operational metrics are enabled.
+	 * Zero unless operational metrics are enabled.
 	 */
 	uint32_t validation_open_failures;
 
 	/**
 	 * Pre-node TLS handshake failures. Also included in validation_open_failures.
-	 * cluster.validation.tls.handshake.failure.
 	 * Zero unless operational metrics are enabled.
 	 */
 	uint32_t validation_tls_handshake_failures;
 
 	/**
 	 * Pre-node authentication failures. Also included in validation_open_failures.
-	 * cluster.validation.auth.failure.
 	 * Zero unless operational metrics are enabled.
 	 */
 	uint32_t validation_auth_failures;

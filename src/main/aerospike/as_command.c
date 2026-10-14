@@ -697,11 +697,11 @@ as_command_execute(as_command* cmd, as_error* err)
 
 	// One sampler decision for this command, before retries. Re-sends of this
 	// command reuse it. A new sub-batch is a new command and draws again.
-	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
-	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
+	cmd->record_cluster_metrics = as_cluster_sample_operational(cmd->cluster);
+	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->record_cluster_metrics);
 	cmd->metrics_begin = 0;
 
-	if (cmd->metrics_sample_decision && !cmd->metrics_node_sub_command) {
+	if (cmd->record_cluster_metrics && !cmd->metrics_node_sub_command) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 
@@ -947,7 +947,7 @@ Retry:
 			}
 		}
 
-		if (cmd->metrics_sample_decision) {
+		if (cmd->record_cluster_metrics) {
 			as_cluster_add_retry(cmd->cluster);
 		}
 	}

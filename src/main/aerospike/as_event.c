@@ -1062,7 +1062,7 @@ as_event_execute_retry(as_event_command* cmd)
 	}
 
 	// Retry command. Reuse the sampler decision from the first attempt.
-	if (cmd->metrics_sample_decision) {
+	if (cmd->record_cluster_metrics) {
 		as_cluster_add_retry(cmd->cluster);
 	}
 	as_event_command_begin(cmd->event_loop, cmd);

@@ -167,9 +167,10 @@ typedef struct as_event_command {
 	uint32_t bytes_in;
 	uint32_t bytes_out;
 	as_latency_type latency_type;
-	// Stored operational sampler decision. Reused for retries. Gates the cluster
-	// command_count.
-	bool metrics_sample_decision;
+	// True when this command updates the cluster command_count and retry counter.
+	// False when operational metrics are off, or when the sampler skips this call.
+	// Reused for retries of this command.
+	bool record_cluster_metrics;
 	// True when this command updates per-namespace histograms, bytes, and error
 	// counts. When operational metrics are off, set only if a learn-metrics file
 	// writer is installed.
@@ -196,8 +197,8 @@ typedef struct as_event_executor {
 	uint32_t queued;
 	bool notify;
 	bool valid;
-	// User-call sampler decision. Partition retries reuse it.
-	bool metrics_sample_decision;
+	// User-call cluster command_count and retry decision. Partition retries reuse it.
+	bool record_cluster_metrics;
 } as_event_executor;
 
 /**
@@ -209,10 +210,10 @@ static inline void
 as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
 	cmd->begin = 0;
-	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
-	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
+	cmd->record_cluster_metrics = as_cluster_sample_operational(cmd->cluster);
+	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->record_cluster_metrics);
 
-	if (cmd->metrics_sample_decision && count_command) {
+	if (cmd->record_cluster_metrics && count_command) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 }

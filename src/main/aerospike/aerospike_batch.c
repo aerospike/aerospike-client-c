@@ -4282,7 +4282,7 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 		}
 	}
 	
-	if (parent->metrics_sampled) {
+	if (parent->metrics_sample_decision) {
 		as_cluster_add_retries(cluster, batch_nodes.size);
 	}
 	parent->flags |= AS_COMMAND_FLAGS_SPLIT_RETRY;
@@ -4372,7 +4372,7 @@ as_batch_retry_keys(as_batch_task_keys* btk, as_command* parent, as_error* err)
 		}
 	}
 	
-	if (parent->metrics_sampled) {
+	if (parent->metrics_sample_decision) {
 		as_cluster_add_retries(cluster, batch_nodes.size);
 	}
 	parent->flags |= AS_COMMAND_FLAGS_SPLIT_RETRY;
@@ -4758,7 +4758,7 @@ as_batch_retry_async(as_event_command* parent, bool timeout)
 		}
 	}
 
-	if (parent->metrics_sampled) {
+	if (parent->metrics_sample_decision) {
 		as_cluster_add_retries(cluster, bnodes.size);
 	}
 

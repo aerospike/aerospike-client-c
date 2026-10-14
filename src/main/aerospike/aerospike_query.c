@@ -1954,7 +1954,7 @@ as_query_partition_async(
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
-	ee->metrics_sampled = sampled;
+	ee->metrics_sample_decision = sampled;
 
 	return as_query_partition_execute_async(qe, pt, err);
 }
@@ -2001,9 +2001,9 @@ as_query_partition_retry_async(as_async_query_executor* qe_old, as_error* err)
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
-	ee->metrics_sampled = ee_old->metrics_sampled;
+	ee->metrics_sample_decision = ee_old->metrics_sample_decision;
 
-	if (ee->metrics_sampled) {
+	if (ee->metrics_sample_decision) {
 		as_cluster_add_retry(qe->cluster);
 	}
 

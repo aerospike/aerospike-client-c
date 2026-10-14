@@ -650,7 +650,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_node_reserve(cmd->node);
 	}
 
-	if (cmd->metrics_namespace) {
+	if (cmd->record_namespace_metrics) {
 		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
 
 		// Keep the clock from the first attempt so success latency includes retries.
@@ -1062,7 +1062,7 @@ as_event_execute_retry(as_event_command* cmd)
 	}
 
 	// Retry command. Reuse the sampler decision from the first attempt.
-	if (cmd->metrics_sampled) {
+	if (cmd->metrics_sample_decision) {
 		as_cluster_add_retry(cmd->cluster);
 	}
 	as_event_command_begin(cmd->event_loop, cmd);

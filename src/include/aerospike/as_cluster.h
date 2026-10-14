@@ -527,12 +527,14 @@ typedef struct as_cluster_s {
 	/**
 	 * @private
 	 * cluster.validation.tls.handshake.failure. Also included in metrics_validation_open_failures.
+	 * Recorded only when operational metrics are enabled.
 	 */
 	uint32_t metrics_validation_tls_handshake_failures;
 
 	/**
 	 * @private
 	 * cluster.validation.auth.failure. Also included in metrics_validation_open_failures.
+	 * Recorded only when operational metrics are enabled.
 	 */
 	uint32_t metrics_validation_auth_failures;
 

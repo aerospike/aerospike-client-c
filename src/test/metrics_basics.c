@@ -635,31 +635,6 @@ metrics_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
 				continue;
 			}
 
-			as_metrics_latency_snapshot* latency_snapshot = &namespace_snapshot->latencies[AS_LATENCY_TYPE_WRITE];
-
-			for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
-				total += latency_snapshot->buckets[k];
-			}
-		}
-	}
-	return total;
-}
-
-static uint64_t
-metrics_write_command_latency_total(const as_metrics_snapshot* metrics_snapshot)
-{
-	uint64_t total = 0;
-
-	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
-		as_metrics_node_snapshot* node_snapshot = metrics_snapshot->nodes[i];
-
-		for (uint32_t j = 0; j < node_snapshot->namespace_count; j++) {
-			as_metrics_namespace_snapshot* namespace_snapshot = &node_snapshot->namespaces[j];
-
-			if (!namespace_snapshot->name || strcmp(namespace_snapshot->name, "test") != 0) {
-				continue;
-			}
-
 			as_metrics_latency_snapshot* latency_snapshot =
 				&namespace_snapshot->command_latencies[AS_LATENCY_TYPE_WRITE];
 
@@ -687,7 +662,8 @@ metrics_test_namespace_ok(const as_metrics_snapshot* metrics_snapshot, uint8_t b
 			}
 
 			found = true;
-			as_metrics_latency_snapshot* latency_snapshot = &namespace_snapshot->latencies[AS_LATENCY_TYPE_WRITE];
+			as_metrics_latency_snapshot* latency_snapshot =
+				&namespace_snapshot->command_latencies[AS_LATENCY_TYPE_WRITE];
 
 			if (latency_snapshot->type != AS_LATENCY_TYPE_WRITE || latency_snapshot->bucket_count != bucket_count ||
 					!latency_snapshot->buckets) {
@@ -1026,13 +1002,10 @@ TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on 
 	assert_int_eq(metrics_snapshot->latency_columns, 7);
 	assert_int_eq(metrics_snapshot->latency_shift, 1);
 	assert_true(metrics_test_namespace_ok(metrics_snapshot, 7));
-	uint64_t attempt_latency = metrics_write_latency_total(metrics_snapshot);
-	uint64_t command_latency = metrics_write_command_latency_total(metrics_snapshot);
+	uint64_t command_latency = metrics_write_latency_total(metrics_snapshot);
 	as_metrics_snapshot_destroy(metrics_snapshot);
 
-	// One put and no retry: both series record that attempt.
-	assert_true(attempt_latency > 0);
-	assert_int_eq(command_latency, attempt_latency);
+	assert_true(command_latency > 0);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);

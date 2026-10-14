@@ -760,10 +760,11 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 		ns->bytes_out = as_node_get_bytes_out(metrics);
 
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			as_metrics_copy_latency(&ns->latencies[j], metrics->latency[j], j);
+			// latencies is private. Only the learn-metrics file prints it.
+			if (file_fields) {
+				as_metrics_copy_latency(&ns->latencies[j], metrics->latency[j], j);
+			}
 
-			// File readers keep the per-attempt series. v3 command latency is
-			// only on the operational snapshot.
 			if (node->cluster->metrics_operational_enabled && !file_fields) {
 				as_metrics_copy_latency(&ns->command_latencies[j], metrics->command_latency[j], j);
 			}

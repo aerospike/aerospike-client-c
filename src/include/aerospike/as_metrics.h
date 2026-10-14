@@ -193,7 +193,8 @@ typedef struct as_metrics_namespace_snapshot_s {
 	 * @private
 	 * Per-attempt latency histograms, one entry per `AS_LATENCY_TYPE_*`.
 	 * Same series as `as_ns_metrics.latency`. The learn-metrics file writer
-	 * prints this series on each log line. Filled only on the file snapshot.
+	 * prints this series, and metrics listeners read it. Filled when a
+	 * learn-metrics file writer or a metrics listener is installed.
 	 * The metrics snapshot model uses `command_latencies`.
 	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];

@@ -762,11 +762,22 @@ as_cluster_sample_operational(as_cluster* cluster)
 
 /**
  * @private
+ * True when per-attempt namespace latency is published. The learn-metrics file
+ * writer and metrics listeners read that series.
+ */
+static inline bool
+as_cluster_record_attempt_latency(const as_cluster* cluster)
+{
+	return cluster->metrics_file_writer || cluster->metrics_listeners.snapshot_listener != NULL;
+}
+
+/**
+ * @private
  * True when this command should update per-namespace histograms, bytes, and
  * error counts. When operational metrics are on, operational_sample is that
  * decision: false skips namespace metrics. When operational metrics are off,
  * there is no sampler draw, and this records only if a learn-metrics file
- * writer is installed.
+ * writer or a metrics listener is installed.
  */
 static inline bool
 as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_sample)
@@ -782,8 +793,8 @@ as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_
 	}
 
 	// The on-demand snapshot omits these fields while operational metrics are
-	// off. The file writer still publishes them, so keep recording only then.
-	return cluster->metrics_file_writer;
+	// off. The file writer and metrics listeners still read them.
+	return as_cluster_record_attempt_latency(cluster);
 }
 
 /**

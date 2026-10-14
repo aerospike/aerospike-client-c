@@ -350,7 +350,10 @@ as_metrics_write_node_snapshot(as_string_builder* sb, const as_metrics_node_snap
 
 		as_string_builder_append(sb, namespace_snapshot->name ? namespace_snapshot->name : "");
 		as_string_builder_append_char(sb, ',');
-		as_string_builder_append_uint64(sb, namespace_snapshot->errors);
+		// header(2) has one errors column. It is the v2 error_count, which includes
+		// record too big and device overload.
+		as_string_builder_append_uint64(sb, namespace_snapshot->errors +
+			namespace_snapshot->record_too_big + namespace_snapshot->device_overload);
 		as_string_builder_append_char(sb, ',');
 		// header(2) has one timeouts column. It is client plus server timeouts.
 		as_string_builder_append_uint64(sb,

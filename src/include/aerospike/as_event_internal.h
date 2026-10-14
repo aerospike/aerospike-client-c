@@ -172,8 +172,8 @@ typedef struct as_event_command {
 	// Reused for retries of this command.
 	bool record_cluster_metrics;
 	// True when this command updates per-namespace histograms, bytes, and error
-	// counts. When operational metrics are off, set only if a learn-metrics file
-	// writer is installed.
+	// counts. While operational metrics are on, a sampler "no" sets this false.
+	// While they are off, set only if a learn-metrics file writer is installed.
 	bool record_namespace_metrics;
 } as_event_command;
 
@@ -210,6 +210,8 @@ static inline void
 as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
 	cmd->begin = 0;
+	// While operational metrics are on, record_cluster_metrics false also skips
+	// namespace histograms, bytes, and error counts.
 	cmd->record_cluster_metrics = as_cluster_sample_operational(cmd->cluster);
 	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->record_cluster_metrics);
 

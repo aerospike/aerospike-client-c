@@ -763,8 +763,10 @@ as_cluster_sample_operational(as_cluster* cluster)
 /**
  * @private
  * True when this command should update per-namespace histograms, bytes, and
- * error counts. When operational metrics are on, operational_sample decides.
- * When they are off, record only if a learn-metrics file writer is installed.
+ * error counts. When operational metrics are on, operational_sample is that
+ * decision: false skips namespace metrics. When operational metrics are off,
+ * there is no sampler draw, and this records only if a learn-metrics file
+ * writer is installed.
  */
 static inline bool
 as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_sample)
@@ -774,6 +776,8 @@ as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_
 	}
 
 	if (cluster->metrics_operational_enabled) {
+		// The sampler decided. A "no" skips namespace metrics as well as the
+		// cluster command_count and retry counter.
 		return operational_sample;
 	}
 

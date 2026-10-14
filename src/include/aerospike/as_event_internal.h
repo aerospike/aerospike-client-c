@@ -256,7 +256,8 @@ as_event_socket_retry(as_event_command* cmd);
 /**
  * @private
  * Count an async connection.open.failure, connection.tls.handshake.failure, or
- * connection.auth.failure from the command state. Other states are ignored.
+ * connection.auth.failure from the command state. TLS and auth also count as open.
+ * Other states are ignored.
  */
 void
 as_event_add_conn_failure(as_event_command* cmd);

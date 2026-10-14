@@ -14,6 +14,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
@@ -59,6 +60,87 @@
 //---------------------------------
 
 extern bool as_op_is_write[];
+
+//---------------------------------
+// Declarations
+//---------------------------------
+
+// Sync and async key helpers skip feature.api so this batch is not counted again
+// per key. See aerospike_key_get_internal().
+as_status
+aerospike_key_get_internal(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
+	);
+
+as_status
+aerospike_key_get_async_internal(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	);
+
+as_status
+aerospike_key_select_bins_internal(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	const char* bins[], uint32_t n_bins, as_record** rec
+	);
+
+as_status
+aerospike_key_select_bins_async_internal(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
+	uint32_t n_bins, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	);
+
+as_status
+aerospike_key_exists_internal(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
+	);
+
+as_status
+aerospike_key_exists_async_internal(
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	);
+
+as_status
+aerospike_key_operate_internal(
+	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key,
+	const as_operations* ops, as_record** rec
+	);
+
+as_status
+aerospike_key_operate_async_internal(
+	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
+	);
+
+as_status
+aerospike_key_apply_internal(
+	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
+	const char* module, const char* function, as_list* arglist, as_val** result
+	);
+
+as_status
+aerospike_key_apply_async_internal(
+	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
+	const char* module, const char* function, as_list* arglist,
+	as_async_value_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	);
+
+as_status
+aerospike_key_remove_internal(
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
+	);
+
+as_status
+aerospike_key_remove_async_internal(
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
+	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
+	as_pipe_listener pipe_listener
+	);
 
 //---------------------------------
 // Types
@@ -2764,22 +2846,22 @@ as_single_execute(
 			if (br->n_bin_names > 0) {
 				as_policy_read pr;
 				as_read_policy_copy(&pr, pb, br->policy);
-				status = aerospike_key_select_bins_no_api_count(as, err, &pr, key, (const char**)br->bin_names, br->n_bin_names, &record);
+				status = aerospike_key_select_bins_internal(as, err, &pr, key, (const char**)br->bin_names, br->n_bin_names, &record);
 			}
 			else if (br->ops) {
 				as_policy_operate po;
 				as_operate_policy_copy_read(&po, pb, br->policy);
-				status = aerospike_key_operate_no_api_count(as, err, &po, key, br->ops, &record);
+				status = aerospike_key_operate_internal(as, err, &po, key, br->ops, &record);
 			}
 			else {
 				as_policy_read pr;
 				as_read_policy_copy(&pr, pb, br->policy);
 
 				if (br->read_all_bins) {
-					status = aerospike_key_get_no_api_count(as, err, &pr, key, &record);
+					status = aerospike_key_get_internal(as, err, &pr, key, &record);
 				}
 				else {
-					status = aerospike_key_exists_no_api_count(as, err, &pr, key, &record);
+					status = aerospike_key_exists_internal(as, err, &pr, key, &record);
 				}
 			}
 			return status;
@@ -2791,7 +2873,7 @@ as_single_execute(
 			as_policy_operate po;
 			as_operate_policy_copy_write(as, pb, bw, &po);
 
-			return aerospike_key_operate_no_api_count(as, err, &po, key, bw->ops, &record);
+			return aerospike_key_operate_internal(as, err, &po, key, bw->ops, &record);
 		}
 
 		case AS_BATCH_APPLY: {
@@ -2801,7 +2883,7 @@ as_single_execute(
 			as_apply_policy_copy(as, pb, ba, &pa);
 
 			as_val* val = NULL;
-			as_status status = aerospike_key_apply_no_api_count(as, err, &pa, key, ba->module, ba->function, ba->arglist, &val);
+			as_status status = aerospike_key_apply_internal(as, err, &pa, key, ba->module, ba->function, ba->arglist, &val);
 
 			if (status == AEROSPIKE_OK) {
 				// Create SUCCESS bin from val.
@@ -2823,7 +2905,7 @@ as_single_execute(
 			as_policy_remove pr;
 			as_remove_policy_copy(as, pb, br, &pr);
 
-			return aerospike_key_remove_no_api_count(as, err, &pr, key);
+			return aerospike_key_remove_internal(as, err, &pr, key);
 		}
 
 		case AS_BATCH_TXN_VERIFY: {
@@ -3205,13 +3287,13 @@ as_single_execute_record_async(
 			if (br->n_bin_names > 0) {
 				as_policy_read pr;
 				as_read_policy_copy(&pr, pb, br->policy);
-				status = aerospike_key_select_bins_async_no_api_count(as, err, &pr, &rec->key, (const char**)br->bin_names,
+				status = aerospike_key_select_bins_async_internal(as, err, &pr, &rec->key, (const char**)br->bin_names,
 					br->n_bin_names, as_single_record_listener, data, exec->event_loop, NULL);
 			}
 			else if (br->ops) {
 				as_policy_operate po;
 				as_operate_policy_copy_read(&po, pb, br->policy);
-				status = aerospike_key_operate_async_no_api_count(as, err, &po, &rec->key, br->ops, as_single_record_listener,
+				status = aerospike_key_operate_async_internal(as, err, &po, &rec->key, br->ops, as_single_record_listener,
 					data, exec->event_loop, NULL);
 			}
 			else {
@@ -3219,11 +3301,11 @@ as_single_execute_record_async(
 				as_read_policy_copy(&pr, pb, br->policy);
 
 				if (br->read_all_bins) {
-					status = aerospike_key_get_async_no_api_count(as, err, &pr, &rec->key, as_single_record_listener, data,
+					status = aerospike_key_get_async_internal(as, err, &pr, &rec->key, as_single_record_listener, data,
 						exec->event_loop, NULL);
 				}
 				else {
-					status = aerospike_key_exists_async_no_api_count(as, err, &pr, &rec->key, as_single_record_listener, data,
+					status = aerospike_key_exists_async_internal(as, err, &pr, &rec->key, as_single_record_listener, data,
 						exec->event_loop, NULL);
 				}
 			}
@@ -3236,7 +3318,7 @@ as_single_execute_record_async(
 			as_policy_operate po;
 			as_operate_policy_copy_write(as, pb, bw, &po);
 
-			status = aerospike_key_operate_async_no_api_count(as, err, &po, &rec->key, bw->ops, as_single_record_listener,
+			status = aerospike_key_operate_async_internal(as, err, &po, &rec->key, bw->ops, as_single_record_listener,
 				data, exec->event_loop, NULL);
 			break;
 		}
@@ -3247,7 +3329,7 @@ as_single_execute_record_async(
 			as_policy_apply pa;
 			as_apply_policy_copy(as, pb, ba, &pa);
 
-			status = aerospike_key_apply_async_no_api_count(as, err, &pa, &rec->key, ba->module, ba->function,
+			status = aerospike_key_apply_async_internal(as, err, &pa, &rec->key, ba->module, ba->function,
 				ba->arglist, as_single_value_listener, data, exec->event_loop, NULL);
 			break;
 		}
@@ -3258,7 +3340,7 @@ as_single_execute_record_async(
 			as_policy_remove pr;
 			as_remove_policy_copy(as, pb, br, &pr);
 
-			status = aerospike_key_remove_async_no_api_count(as, err, &pr, &rec->key, as_single_write_listener, data,
+			status = aerospike_key_remove_async_internal(as, err, &pr, &rec->key, as_single_write_listener, data,
 				exec->event_loop, NULL);
 			break;
 		}
@@ -5342,7 +5424,17 @@ aerospike_batch_get(
 	)
 {
 	as_metrics_add_api_blocking(as);
+	return aerospike_batch_get_internal(as, err, policy, batch, listener, udata);
+}
 
+// Skips feature.api.blocking. The public function increments it. The Node.js client
+// calls this and then increments deferred. See as_metrics_internal.h.
+as_status
+aerospike_batch_get_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	as_batch_listener listener, void* udata
+	)
+{
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5378,7 +5470,15 @@ aerospike_batch_get_bins(
 	)
 {
 	as_metrics_add_api_blocking(as);
+	return aerospike_batch_get_bins_internal(as, err, policy, batch, bins, n_bins, listener, udata);
+}
 
+as_status
+aerospike_batch_get_bins_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	const char** bins, uint32_t n_bins, as_batch_listener listener, void* udata
+	)
+{
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5451,7 +5551,15 @@ aerospike_batch_exists(
 	)
 {
 	as_metrics_add_api_blocking(as);
+	return aerospike_batch_exists_internal(as, err, policy, batch, listener, udata);
+}
 
+as_status
+aerospike_batch_exists_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy, const as_batch* batch,
+	as_batch_listener listener, void* udata
+	)
+{
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5578,7 +5686,17 @@ aerospike_batch_apply(
 	)
 {
 	as_metrics_add_api_blocking(as);
+	return aerospike_batch_apply_internal(as, err, policy, policy_apply, batch, module, function, arglist, listener, udata);
+}
 
+as_status
+aerospike_batch_apply_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy,
+	const as_policy_batch_apply* policy_apply, const as_batch* batch,
+	const char* module, const char* function, as_list* arglist,
+	as_batch_listener listener, void* udata
+	)
+{
 	as_error_reset(err);
 	
 	as_policy_batch merged;
@@ -5630,7 +5748,16 @@ aerospike_batch_remove(
 	)
 {
 	as_metrics_add_api_blocking(as);
+	return aerospike_batch_remove_internal(as, err, policy, policy_remove, batch, listener, udata);
+}
 
+as_status
+aerospike_batch_remove_internal(
+	aerospike* as, as_error* err, const as_policy_batch* policy,
+	const as_policy_batch_remove* policy_remove, const as_batch* batch,
+	as_batch_listener listener, void* udata
+	)
+{
 	as_error_reset(err);
 	
 	as_policy_batch merged;

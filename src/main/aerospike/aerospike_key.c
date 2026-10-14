@@ -450,8 +450,14 @@ as_policy_read_merge(aerospike* as, const as_policy_read* src, as_policy_read* m
 	}
 }
 
+// *_internal and *_async_internal do not increment feature.api. The public
+// functions do: blocking for sync, deferred for async. Batch single-record
+// fallbacks and the transaction monitor call these helpers so a batch or
+// transaction is counted once, not once per key. The Node.js client does not
+// call the key helpers. It uses the public async key functions, which already
+// increment deferred.
 as_status
-aerospike_key_get_no_api_count(
+aerospike_key_get_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
 	)
 {
@@ -498,11 +504,12 @@ aerospike_key_get(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return aerospike_key_get_no_api_count(as, err, policy, key, rec);
+	return aerospike_key_get_internal(as, err, policy, key, rec);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
-aerospike_key_get_async_no_api_count(
+aerospike_key_get_async_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener
@@ -551,7 +558,7 @@ aerospike_key_get_async(
 	)
 {
 	as_metrics_add_api_deferred(as);
-	return aerospike_key_get_async_no_api_count(as, err, policy, key, listener, udata, event_loop, pipe_listener);
+	return aerospike_key_get_async_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener);
 }
 
 //---------------------------------
@@ -674,8 +681,9 @@ aerospike_key_select_async(
 	return as_event_command_execute(cmd, err);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
-aerospike_key_select_bins_no_api_count(
+aerospike_key_select_bins_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	const char* bins[], uint32_t n_bins, as_record** rec
 	)
@@ -736,11 +744,12 @@ aerospike_key_select_bins(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return aerospike_key_select_bins_no_api_count(as, err, policy, key, bins, n_bins, rec);
+	return aerospike_key_select_bins_internal(as, err, policy, key, bins, n_bins, rec);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
-aerospike_key_select_bins_async_no_api_count(
+aerospike_key_select_bins_async_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
 	uint32_t n_bins, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener
@@ -801,7 +810,7 @@ aerospike_key_select_bins_async(
 	)
 {
 	as_metrics_add_api_deferred(as);
-	return aerospike_key_select_bins_async_no_api_count(as, err, policy, key, bins, n_bins, listener, udata, event_loop,
+	return aerospike_key_select_bins_async_internal(as, err, policy, key, bins, n_bins, listener, udata, event_loop,
 		pipe_listener);
 }
 
@@ -809,8 +818,9 @@ aerospike_key_select_bins_async(
 // Exists
 //---------------------------------
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
-aerospike_key_exists_no_api_count(
+aerospike_key_exists_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
 	)
 {
@@ -856,11 +866,12 @@ aerospike_key_exists(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return aerospike_key_exists_no_api_count(as, err, policy, key, rec);
+	return aerospike_key_exists_internal(as, err, policy, key, rec);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
-aerospike_key_exists_async_no_api_count(
+aerospike_key_exists_async_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener
@@ -908,7 +919,7 @@ aerospike_key_exists_async(
 	)
 {
 	as_metrics_add_api_deferred(as);
-	return aerospike_key_exists_async_no_api_count(as, err, policy, key, listener, udata, event_loop, pipe_listener);
+	return aerospike_key_exists_async_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener);
 }
 
 //---------------------------------
@@ -1213,8 +1224,9 @@ as_policy_remove_merge(
 	return src;
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
-aerospike_key_remove_no_api_count(
+aerospike_key_remove_internal(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
 	)
 {
@@ -1261,11 +1273,12 @@ aerospike_key_remove(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return aerospike_key_remove_no_api_count(as, err, policy, key);
+	return aerospike_key_remove_internal(as, err, policy, key);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
-aerospike_key_remove_async_ex_no_api_count(
+aerospike_key_remove_async_ex_internal(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
 	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t* length
@@ -1314,17 +1327,18 @@ aerospike_key_remove_async_ex(
 	)
 {
 	as_metrics_add_api_deferred(as);
-	return aerospike_key_remove_async_ex_no_api_count(as, err, policy, key, listener, udata, event_loop, pipe_listener, length);
+	return aerospike_key_remove_async_ex_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener, length);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
-aerospike_key_remove_async_no_api_count(
+aerospike_key_remove_async_internal(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
 	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener
 	)
 {
-	return aerospike_key_remove_async_ex_no_api_count(as, err, policy, key, listener, udata, event_loop, pipe_listener, NULL);
+	return aerospike_key_remove_async_ex_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener, NULL);
 }
 
 as_status
@@ -1548,8 +1562,9 @@ as_operate_write(void* udata, uint8_t* buf)
 	return as_command_write_end(buf, p);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
-aerospike_key_operate_no_api_count(
+aerospike_key_operate_internal(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key,
 	const as_operations* ops, as_record** rec
 	)
@@ -1623,11 +1638,12 @@ aerospike_key_operate(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return aerospike_key_operate_no_api_count(as, err, policy, key, ops, rec);
+	return aerospike_key_operate_internal(as, err, policy, key, ops, rec);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
-aerospike_key_operate_async_no_api_count(
+aerospike_key_operate_async_internal(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
 	)
@@ -1753,7 +1769,7 @@ aerospike_key_operate_async(
 	)
 {
 	as_metrics_add_api_deferred(as);
-	return aerospike_key_operate_async_no_api_count(as, err, policy, key, ops, listener, udata, event_loop, pipe_listener);
+	return aerospike_key_operate_async_internal(as, err, policy, key, ops, listener, udata, event_loop, pipe_listener);
 }
 
 //---------------------------------
@@ -1869,8 +1885,9 @@ as_apply_write(void* udata, uint8_t* buf)
 	return as_command_write_end(buf, p);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
-aerospike_key_apply_no_api_count(
+aerospike_key_apply_internal(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
 	const char* module, const char* function, as_list* arglist, as_val** result
 	)
@@ -1909,11 +1926,12 @@ aerospike_key_apply(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return aerospike_key_apply_no_api_count(as, err, policy, key, module, function, arglist, result);
+	return aerospike_key_apply_internal(as, err, policy, key, module, function, arglist, result);
 }
 
+// Skips feature.api. See aerospike_key_get_internal().
 as_status
-aerospike_key_apply_async_no_api_count(
+aerospike_key_apply_async_internal(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
 	const char* module, const char* function, as_list* arglist,
 	as_async_value_listener listener, void* udata, as_event_loop* event_loop,
@@ -1978,7 +1996,7 @@ aerospike_key_apply_async(
 	)
 {
 	as_metrics_add_api_deferred(as);
-	return aerospike_key_apply_async_no_api_count(as, err, policy, key, module, function, arglist, listener, udata,
+	return aerospike_key_apply_async_internal(as, err, policy, key, module, function, arglist, listener, udata,
 		event_loop, pipe_listener);
 }
 

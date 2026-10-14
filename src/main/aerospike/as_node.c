@@ -432,6 +432,7 @@ as_node_add_conn_tls_handshake_failure(as_node* node)
 {
 	if (node->cluster->metrics_operational_enabled) {
 		as_incr_uint32(&node->conn_tls_handshake_failures);
+		as_incr_uint32(&node->conn_open_failures);
 	}
 }
 
@@ -440,6 +441,7 @@ as_node_add_conn_auth_failure(as_node* node)
 {
 	if (node->cluster->metrics_operational_enabled) {
 		as_incr_uint32(&node->conn_auth_failures);
+		as_incr_uint32(&node->conn_open_failures);
 	}
 }
 
@@ -1603,13 +1605,8 @@ as_node_append_metrics(as_node* node, const char* ns)
 	as_ns_metrics* metrics = as_node_find_namespace(node, ns);
 
 	if (!metrics) {
-		metrics = cf_malloc(sizeof(as_ns_metrics));
+		metrics = cf_calloc(1, sizeof(as_ns_metrics));
 		metrics->ns = ns;
-		metrics->bytes_in = 0;
-		metrics->bytes_out = 0;
-		metrics->error_count = 0;
-		metrics->timeout_count = 0;
-		metrics->key_busy_count = 0;
 
 		uint8_t latency_columns;
 		uint8_t latency_shift;
@@ -1722,6 +1719,39 @@ as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
 	as_incr_uint64(&metrics->timeout_count);
 }
 
+static as_ns_metrics*
+as_node_metrics_for_count(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	if (!metrics) {
+		metrics = as_node_prepare_metrics(node, ns);
+	}
+	return metrics;
+}
+
+void
+as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	metrics = as_node_metrics_for_count(node, ns, metrics);
+
+	if (!metrics) {
+		return;
+	}
+	as_incr_uint64(&metrics->timeout_count);
+	as_incr_uint64(&metrics->client_timeout_count);
+}
+
+void
+as_node_add_server_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	metrics = as_node_metrics_for_count(node, ns, metrics);
+
+	if (!metrics) {
+		return;
+	}
+	as_incr_uint64(&metrics->timeout_count);
+	as_incr_uint64(&metrics->server_timeout_count);
+}
+
 void
 as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics)
 {
@@ -1734,6 +1764,30 @@ as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics)
 		}
 	}
 	as_incr_uint64(&metrics->key_busy_count);
+}
+
+void
+as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	metrics = as_node_metrics_for_count(node, ns, metrics);
+
+	if (!metrics) {
+		return;
+	}
+	as_incr_uint64(&metrics->error_count);
+	as_incr_uint64(&metrics->record_too_big_count);
+}
+
+void
+as_node_add_device_overload(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	metrics = as_node_metrics_for_count(node, ns, metrics);
+
+	if (!metrics) {
+		return;
+	}
+	as_incr_uint64(&metrics->error_count);
+	as_incr_uint64(&metrics->device_overload_count);
 }
 
 static as_status

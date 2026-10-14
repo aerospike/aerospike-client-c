@@ -725,8 +725,11 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 
 		as_metrics_namespace_snapshot* ns = &snap->namespaces[snap->namespace_count];
 		ns->name = as_metrics_strdup_or_empty(metrics->ns);
-		ns->errors = as_node_get_error_count(metrics);
-		ns->timeouts = as_node_get_timeout_count(metrics);
+		ns->record_too_big = as_load_uint64(&metrics->record_too_big_count);
+		ns->device_overload = as_load_uint64(&metrics->device_overload_count);
+		ns->errors = as_node_get_error_count(metrics) - ns->record_too_big - ns->device_overload;
+		ns->client_timeouts = as_load_uint64(&metrics->client_timeout_count);
+		ns->server_timeouts = as_load_uint64(&metrics->server_timeout_count);
 		ns->key_busy = as_node_get_key_busy_count(metrics);
 		ns->bytes_in = as_node_get_bytes_in(metrics);
 		ns->bytes_out = as_node_get_bytes_out(metrics);
@@ -842,6 +845,13 @@ as_metrics_snapshot_create_impl(
 	snap->cpu = cpu_usage;
 	snap->mem = mem;
 	snap->invalid_node_count = cluster->invalid_node_count;
+
+	if (operational) {
+		snap->validation_open_failures = as_load_uint32(&cluster->metrics_validation_open_failures);
+		snap->validation_tls_handshake_failures =
+			as_load_uint32(&cluster->metrics_validation_tls_handshake_failures);
+		snap->validation_auth_failures = as_load_uint32(&cluster->metrics_validation_auth_failures);
+	}
 	snap->recover_queue_size = as_cluster_recover_queue_size(cluster);
 	snap->delay_queue_timeout_count = as_cluster_get_delay_queue_timeout_count(cluster);
 	snap->command_count = as_cluster_get_command_count(cluster);

@@ -123,8 +123,11 @@ typedef struct as_metrics_latency_snapshot_s {
 /**
  * Per-namespace counters and histograms copied into a metrics snapshot.
  * Present only when operational metrics are enabled.
- * `as_node_stats.error_count`, `timeout_count`, and `key_busy_count` are the
- * sums of `errors`, `timeouts`, and `key_busy` across these entries.
+ * `as_node_stats.timeout_count` is the sum of `client_timeouts` and `server_timeouts`
+ * across these entries.
+ * `as_node_stats.key_busy_count` is the sum of `key_busy` across these entries.
+ * `as_node_stats.error_count` is the sum of `errors`, `record_too_big`, and
+ * `device_overload`. `errors` is the remainder.
  */
 typedef struct as_metrics_namespace_snapshot_s {
 	/**
@@ -135,18 +138,25 @@ typedef struct as_metrics_namespace_snapshot_s {
 	/**
 	 * Command errors for this namespace since the node was initialized.
 	 * A retryable error can be counted more than once for one command.
-	 * Same counter as `as_ns_metrics.error_count`. Contributes to
-	 * `as_node_stats.error_count`.
+	 * Remainder after the split counters below. Timeouts, key busy, record too big,
+	 * and device overload are not included.
+	 * `as_ns_metrics.error_count` still includes record too big and device overload.
 	 */
 	uint64_t errors;
 
 	/**
-	 * Command timeouts for this namespace since the node was initialized.
+	 * Client timeouts (connect, socket, or total) since the node was initialized.
 	 * A retryable timeout can be counted more than once for one command.
-	 * Same counter as `as_ns_metrics.timeout_count`. Contributes to
-	 * `as_node_stats.timeout_count`.
+	 * Not included in errors or server_timeouts.
 	 */
-	uint64_t timeouts;
+	uint64_t client_timeouts;
+
+	/**
+	 * Server timeouts since the node was initialized.
+	 * A retryable timeout can be counted more than once for one command.
+	 * Not included in errors or client_timeouts.
+	 */
+	uint64_t server_timeouts;
 
 	/**
 	 * Key busy errors for this namespace since the node was initialized.
@@ -154,6 +164,18 @@ typedef struct as_metrics_namespace_snapshot_s {
 	 * `as_node_stats.key_busy_count`.
 	 */
 	uint64_t key_busy;
+
+	/**
+	 * Record too big errors since the node was initialized.
+	 * Not included in errors.
+	 */
+	uint64_t record_too_big;
+
+	/**
+	 * Device overload errors since the node was initialized.
+	 * Not included in errors.
+	 */
+	uint64_t device_overload;
 
 	/**
 	 * Bytes received from the server for this namespace.
@@ -183,8 +205,8 @@ typedef struct as_metrics_namespace_snapshot_s {
  *   node           -> name, address, port
  *   sync           -> sync
  *   async          -> async
- *   error_count    -> sum of namespaces[].errors
- *   timeout_count  -> sum of namespaces[].timeouts
+ *   error_count    -> sum of namespaces[].errors, record_too_big, and device_overload
+ *   timeout_count  -> sum of namespaces[].client_timeouts and server_timeouts
  *   key_busy_count -> sum of namespaces[].key_busy
  * `as_node_stats.pipeline` has no snapshot field.
  */
@@ -218,21 +240,24 @@ typedef struct as_metrics_node_snapshot_s {
 	as_metrics_conn_snapshot async;
 
 	/**
-	 * Failed attempts to open a connection. Cumulative and not sampler-gated.
+	 * Failed attempts to open a connection, including TLS and auth failures.
+	 * Cumulative and not sampler-gated.
 	 * Operational connection failure counter (CM-8).
 	 * Zero unless operational metrics are enabled.
 	 */
 	uint32_t conn_open_failures;
 
 	/**
-	 * Failed TLS handshakes. Cumulative and not sampler-gated.
+	 * Failed TLS handshakes. Also included in conn_open_failures.
+	 * Cumulative and not sampler-gated.
 	 * Operational connection failure counter (CM-8).
 	 * Zero unless operational metrics are enabled.
 	 */
 	uint32_t conn_tls_handshake_failures;
 
 	/**
-	 * Failed authentications. Cumulative and not sampler-gated.
+	 * Failed authentications. Also included in conn_open_failures.
+	 * Cumulative and not sampler-gated.
 	 * Operational connection failure counter (CM-8).
 	 * Zero unless operational metrics are enabled.
 	 */
@@ -278,8 +303,11 @@ typedef struct as_metrics_event_loop_snapshot_s {
  * `as_cluster_stats.thread_pool_queued_tasks` has no snapshot field.
  * On each node, `as_node_stats.sync` and `async` are `nodes[i].sync` and
  * `nodes[i].async`. `as_node_stats.pipeline` has no snapshot field.
- * `as_node_stats.error_count`, `timeout_count`, and `key_busy_count` are the
- * sums of `nodes[i].namespaces[].errors`, `timeouts`, and `key_busy`.
+ * `as_node_stats.timeout_count` is the sum of `nodes[i].namespaces[].client_timeouts`
+ * and `server_timeouts`.
+ * `as_node_stats.key_busy_count` is the sum of `nodes[i].namespaces[].key_busy`.
+ * `as_node_stats.error_count` also includes `record_too_big` and `device_overload`.
+ * `errors` is the remainder.
  */
 typedef struct as_metrics_snapshot_s {
 	/**
@@ -343,6 +371,24 @@ typedef struct as_metrics_snapshot_s {
 	 * Add-node failures in the most recent cluster tend iteration.
 	 */
 	uint32_t invalid_node_count;
+
+	/**
+	 * Pre-node connect failures, including TLS and auth. Cumulative.
+	 * Zero unless operational metrics are enabled.
+	 */
+	uint32_t validation_open_failures;
+
+	/**
+	 * Pre-node TLS handshake failures. Also included in validation_open_failures.
+	 * Cumulative. Zero unless operational metrics are enabled.
+	 */
+	uint32_t validation_tls_handshake_failures;
+
+	/**
+	 * Pre-node authentication failures. Also included in validation_open_failures.
+	 * Cumulative. Zero unless operational metrics are enabled.
+	 */
+	uint32_t validation_auth_failures;
 
 	/**
 	 * Commands that timed out in the delay queue. Cumulative since the cluster started.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -275,7 +275,6 @@ as_admin_execute_node(
 		return status;
 	}
 
-	as_metrics_add_api_blocking(as);
 	bool sample = as_cluster_record_namespace_metrics(node->cluster,
 		as_cluster_sample_operational(node->cluster));
 	status = as_admin_send(err, &socket, node, buffer, end, 0, deadline_ms, sample);
@@ -403,7 +402,6 @@ as_admin_read_list(
 		return status;
 	}
 	
-	as_metrics_add_api_blocking(as);
 	bool sample = as_cluster_record_namespace_metrics(node->cluster,
 		as_cluster_sample_operational(node->cluster));
 	status = as_admin_send(err, &socket, node, command, end, 0, deadline_ms, sample);

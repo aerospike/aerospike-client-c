@@ -1664,6 +1664,9 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->metrics_api_background = 0;
 	cluster->retry_count = 0;
 	cluster->delay_queue_timeout_count = 0;
+	cluster->metrics_validation_open_failures = 0;
+	cluster->metrics_validation_tls_handshake_failures = 0;
+	cluster->metrics_validation_auth_failures = 0;
 
 	cluster->as = as;
 

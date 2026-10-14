@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -33,7 +33,7 @@
 //---------------------------------
 
 as_status
-aerospike_info_node_no_api_count(
+aerospike_info_node(
 	aerospike* as, as_error* err, const as_policy_info* policy, as_node* node,
 	const char* req, char** res
 	)
@@ -50,13 +50,12 @@ aerospike_info_node_no_api_count(
 }
 
 as_status
-aerospike_info_node(
-	aerospike* as, as_error* err, const as_policy_info* policy, as_node* node,
-	const char* req, char** res
+aerospike_info_node_async(
+	aerospike* as, as_error* err, as_policy_info* policy, as_node* node, const char* req,
+	as_async_info_listener listener, void* udata, as_event_loop* event_loop
 	)
 {
-	as_metrics_add_api_blocking(as);
-	return aerospike_info_node_no_api_count(as, err, policy, node, req, res);
+	return as_info_command_node_async(as, err, policy, node, req, listener, udata, event_loop);
 }
 
 as_status
@@ -65,8 +64,6 @@ aerospike_info_host(
 	const char* req, char** res
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	if (! policy) {
@@ -112,8 +109,6 @@ aerospike_info_socket_address(
 	const char* req, char** res
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	if (! policy) {
@@ -130,8 +125,6 @@ aerospike_info_any(
 	aerospike* as, as_error* err, const as_policy_info* policy, const char* req, char** res
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	if (! policy) {
@@ -171,8 +164,6 @@ aerospike_info_foreach(
 	aerospike_info_foreach_callback callback, void* udata
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 	
 	if (! policy) {

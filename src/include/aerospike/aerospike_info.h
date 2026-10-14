@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -25,7 +25,6 @@
  */
 
 #include <aerospike/aerospike.h>
-#include <aerospike/as_metrics.h>
 #include <aerospike/aerospike_scan.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_info.h>
@@ -123,15 +122,11 @@ aerospike_info_node(
  *
  * @ingroup info_operations
  */
-static inline as_status
+AS_EXTERN as_status
 aerospike_info_node_async(
 	aerospike* as, as_error* err, as_policy_info* policy, as_node* node, const char* req,
 	as_async_info_listener listener, void* udata, as_event_loop* event_loop
-	)
-{
-	as_metrics_add_api_deferred(as);
-	return as_info_command_node_async(as, err, policy, node, req, listener, udata, event_loop);
-}
+	);
 
 /**
  * Send an info request to a specific host. The response must be freed by the caller on success.

@@ -371,8 +371,6 @@ aerospike_truncate(
 	uint64_t before_nanos
 	)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	if (! policy) {
@@ -436,8 +434,6 @@ aerospike_set_xdr_filter(
 	aerospike* as, as_error* err, as_policy_info* policy, const char* dc, const char* ns,
 	const char* filter_b64)
 {
-	as_metrics_add_api_blocking(as);
-
 	as_error_reset(err);
 
 	if (! policy) {

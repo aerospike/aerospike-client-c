@@ -948,30 +948,10 @@ as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * @private
- * Return client timeout count for the metrics snapshot.
- */
-static inline uint64_t
-as_node_get_client_timeout_count(as_ns_metrics* metrics)
-{
-	return as_load_uint64(&metrics->client_timeout_count);
-}
-
-/**
- * @private
  * Increment the snapshot client timeout count. Also increments timeout_count.
  */
 void
 as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
-
-/**
- * @private
- * Return server timeout count for the metrics snapshot.
- */
-static inline uint64_t
-as_node_get_server_timeout_count(as_ns_metrics* metrics)
-{
-	return as_load_uint64(&metrics->server_timeout_count);
-}
 
 /**
  * @private
@@ -997,30 +977,10 @@ as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * @private
- * Return record too big error count for the metrics snapshot.
- */
-static inline uint64_t
-as_node_get_record_too_big_count(as_ns_metrics* metrics)
-{
-	return as_load_uint64(&metrics->record_too_big_count);
-}
-
-/**
- * @private
  * Increment the snapshot record too big count. Also increments error_count.
  */
 void
 as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics);
-
-/**
- * @private
- * Return device overload error count for the metrics snapshot.
- */
-static inline uint64_t
-as_node_get_device_overload_count(as_ns_metrics* metrics)
-{
-	return as_load_uint64(&metrics->device_overload_count);
-}
 
 /**
  * @private

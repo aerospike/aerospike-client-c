@@ -242,6 +242,32 @@ typedef struct {
 	 */
 	as_latency* latency[AS_LATENCY_TYPE_MAX];
 
+	/**
+	 * @private
+	 * Client timeouts copied into the metrics snapshot. Also included in timeout_count.
+	 * A retryable timeout can be counted more than once for one command.
+	 */
+	uint64_t client_timeout_count;
+
+	/**
+	 * @private
+	 * Server timeouts copied into the metrics snapshot. Also included in timeout_count.
+	 * A retryable timeout can be counted more than once for one command.
+	 */
+	uint64_t server_timeout_count;
+
+	/**
+	 * @private
+	 * Record too big errors copied into the metrics snapshot. Also included in error_count.
+	 */
+	uint64_t record_too_big_count;
+
+	/**
+	 * @private
+	 * Device overload errors copied into the metrics snapshot. Also included in error_count.
+	 */
+	uint64_t device_overload_count;
+
 } as_ns_metrics;
 
 struct as_cluster_s;
@@ -924,8 +950,11 @@ as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
  * @private
  * Return client timeout count for the metrics snapshot.
  */
-uint64_t
-as_node_get_client_timeout_count(as_ns_metrics* metrics);
+static inline uint64_t
+as_node_get_client_timeout_count(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&metrics->client_timeout_count);
+}
 
 /**
  * @private
@@ -938,8 +967,11 @@ as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics
  * @private
  * Return server timeout count for the metrics snapshot.
  */
-uint64_t
-as_node_get_server_timeout_count(as_ns_metrics* metrics);
+static inline uint64_t
+as_node_get_server_timeout_count(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&metrics->server_timeout_count);
+}
 
 /**
  * @private
@@ -967,8 +999,11 @@ as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics);
  * @private
  * Return record too big error count for the metrics snapshot.
  */
-uint64_t
-as_node_get_record_too_big_count(as_ns_metrics* metrics);
+static inline uint64_t
+as_node_get_record_too_big_count(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&metrics->record_too_big_count);
+}
 
 /**
  * @private
@@ -981,8 +1016,11 @@ as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics
  * @private
  * Return device overload error count for the metrics snapshot.
  */
-uint64_t
-as_node_get_device_overload_count(as_ns_metrics* metrics);
+static inline uint64_t
+as_node_get_device_overload_count(as_ns_metrics* metrics)
+{
+	return as_load_uint64(&metrics->device_overload_count);
+}
 
 /**
  * @private

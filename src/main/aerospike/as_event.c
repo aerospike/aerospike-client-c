@@ -590,7 +590,7 @@ as_event_add_attempt_latency(as_event_command* cmd, as_latency_type type)
 	}
 
 	uint64_t elapsed = cf_getns() - cmd->attempt_begin;
-	as_node_add_latency(cmd->metrics, type, elapsed);
+	as_node_add_attempt_latency(cmd->metrics, type, elapsed);
 }
 
 static inline void
@@ -604,7 +604,7 @@ as_event_add_success_latency(as_event_command* cmd)
 
 	// Existing histograms: this attempt only.
 	if (cmd->attempt_begin != 0) {
-		as_node_add_latency(cmd->metrics, cmd->latency_type, now - cmd->attempt_begin);
+		as_node_add_attempt_latency(cmd->metrics, cmd->latency_type, now - cmd->attempt_begin);
 	}
 
 	// v3 command latency: elapsed time from the first attempt, including retries.

@@ -695,7 +695,7 @@ as_command_add_latencies(as_command* cmd, as_ns_metrics* metrics, uint64_t attem
 	uint64_t now = cf_getns();
 
 	if (attempt_begin != 0) {
-		as_node_add_latency(metrics, cmd->latency_type, now - attempt_begin);
+		as_node_add_attempt_latency(metrics, cmd->latency_type, now - attempt_begin);
 	}
 
 	// v3 command latency: elapsed time from the first attempt, including retries.

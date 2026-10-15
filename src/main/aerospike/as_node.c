@@ -606,7 +606,7 @@ as_node_create_connection(
 	if (metrics_enabled) {
 		uint64_t elapsed = cf_getns() - begin;
 		as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
-		as_node_add_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);
+		as_node_add_attempt_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);
 	}
 	return AEROSPIKE_OK;
 }
@@ -1709,7 +1709,7 @@ as_node_add_latency_buckets(as_latency* latency, uint64_t elapsed_nanos)
 }
 
 void
-as_node_add_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos)
+as_node_add_attempt_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos)
 {
 	if (!metrics) {
 		return;

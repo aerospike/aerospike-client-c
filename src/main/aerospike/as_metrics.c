@@ -732,10 +732,10 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 	// The file log and metrics listeners read per-attempt namespace histograms.
 	// Keep them when operational metrics are off so those readers are not broken.
 	bool attempt_reader = file_fields || node->cluster->metrics_listeners.snapshot_listener != NULL;
-	bool command_path = node->cluster->metrics_enabled &&
+	bool should_copy_namespace_metrics = node->cluster->metrics_enabled &&
 		(node->cluster->metrics_operational_enabled || attempt_reader);
 
-	if (command_path) {
+	if (should_copy_namespace_metrics) {
 		ns_max = node->metrics_size;
 	}
 
@@ -834,12 +834,12 @@ as_metrics_snapshot_create_impl(
 {
 	*snapshot = NULL;
 	bool operational = cluster->metrics_enabled && cluster->metrics_operational_enabled;
-	bool command_path = cluster->metrics_enabled &&
+	bool should_read_cpu_mem = cluster->metrics_enabled &&
 		(cluster->metrics_operational_enabled || file_fields);
 	uint32_t cpu_usage = 0;
 	uint64_t mem = 0;
 
-	if (command_path) {
+	if (should_read_cpu_mem) {
 		as_status status = as_metrics_read_cpu_mem(err, cpu, &cpu_usage, &mem);
 
 		if (status != AEROSPIKE_OK) {

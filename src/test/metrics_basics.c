@@ -780,7 +780,20 @@ TEST(metrics_policy_defaults, "metrics policy defaults leave operational and usa
 	assert_int_eq(policy.sampler_range, 1);
 	assert_int_eq(policy.sampler_threshold, 1);
 	assert_false(policy.enable);
-	as_metrics_policy_set_sampler_probability(&policy, 0.1);
+
+	as_error err;
+	assert_int_eq(as_metrics_policy_set_sampler_probability(&err, &policy, 0.1), AEROSPIKE_OK);
+	assert_int_eq(policy.sampler_range, 1000000);
+	assert_int_eq(policy.sampler_threshold, 100000);
+
+	assert_int_eq(as_metrics_policy_set_sampler_probability(&err, &policy, -0.1), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(policy.sampler_range, 1000000);
+	assert_int_eq(policy.sampler_threshold, 100000);
+	assert_int_eq(as_metrics_policy_set_sampler_probability(&err, &policy, 1.1), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(policy.sampler_range, 1000000);
+	assert_int_eq(policy.sampler_threshold, 100000);
+	volatile double zero = 0.0;
+	assert_int_eq(as_metrics_policy_set_sampler_probability(&err, &policy, zero / zero), AEROSPIKE_ERR_PARAM);
 	assert_int_eq(policy.sampler_range, 1000000);
 	assert_int_eq(policy.sampler_threshold, 100000);
 	assert_int_eq(policy.interval, 30);

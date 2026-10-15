@@ -169,18 +169,19 @@ aerospike_disable_metrics(aerospike* as, as_error* err)
 	return status;
 }
 
-void
-as_metrics_policy_set_sampler_probability(as_metrics_policy* policy, double probability)
+as_status
+as_metrics_policy_set_sampler_probability(as_error* err, as_metrics_policy* policy, double probability)
 {
-	if (probability < 0.0) {
-		probability = 0.0;
-	}
-	else if (probability > 1.0) {
-		probability = 1.0;
+	// NaN fails both comparisons, so it is rejected with the out-of-range values.
+	if (!(probability >= 0.0 && probability <= 1.0)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid metrics sampler probability: must be from 0 through 1");
 	}
 
+	as_error_reset(err);
 	policy->sampler_range = 1000000;
 	policy->sampler_threshold = (uint32_t)(probability * 1000000.0 + 0.5);
+	return AEROSPIKE_OK;
 }
 
 void

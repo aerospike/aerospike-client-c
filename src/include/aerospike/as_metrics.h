@@ -696,10 +696,11 @@ typedef struct as_metrics_policy_s {
 /**
  * Set the operational sampler to approximately probability.
  * range becomes 1000000 and threshold becomes round(probability * 1000000).
- * probability is clamped to 0 through 1.
+ * probability must be from 0 through 1. An invalid value, including NaN,
+ * returns AEROSPIKE_ERR_PARAM and leaves the policy unchanged.
  */
-AS_EXTERN void
-as_metrics_policy_set_sampler_probability(as_metrics_policy* policy, double probability);
+AS_EXTERN as_status
+as_metrics_policy_set_sampler_probability(as_error* err, as_metrics_policy* policy, double probability);
 
 /**
  * Initalize metrics policy.

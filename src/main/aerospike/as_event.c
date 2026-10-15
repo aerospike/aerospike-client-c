@@ -688,7 +688,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 	}
 
 	// v3 command latency starts on the first attempt and includes retries.
-	if (cmd->record_cluster_metrics && cmd->command_begin == 0 &&
+	if (cmd->metrics_sample_decision && cmd->command_begin == 0 &&
 			cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 		if (cmd->attempt_begin != 0) {
 			cmd->command_begin = cmd->attempt_begin;
@@ -1101,7 +1101,7 @@ as_event_execute_retry(as_event_command* cmd)
 	}
 
 	// Retry command. Reuse the sampler decision from the first attempt.
-	if (cmd->record_cluster_metrics) {
+	if (cmd->metrics_sample_decision) {
 		as_cluster_add_retry(cmd->cluster);
 	}
 	as_event_command_begin(cmd->event_loop, cmd);

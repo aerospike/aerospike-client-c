@@ -171,8 +171,8 @@ typedef struct as_event_command {
 	uint32_t bytes_in;
 	uint32_t bytes_out;
 	as_latency_type latency_type;
-	// See as_command.record_cluster_metrics.
-	bool record_cluster_metrics;
+	// See as_command.metrics_sample_decision.
+	bool metrics_sample_decision;
 	// See as_command.record_namespace_metrics.
 	bool record_namespace_metrics;
 } as_event_command;
@@ -197,8 +197,8 @@ typedef struct as_event_executor {
 	uint32_t queued;
 	bool notify;
 	bool valid;
-	// User-call cluster command_count and retry decision. Partition retries reuse it.
-	bool record_cluster_metrics;
+	// User-call sampler decision. Partition retries reuse it.
+	bool metrics_sample_decision;
 } as_event_executor;
 
 /**
@@ -209,12 +209,12 @@ typedef struct as_event_executor {
 static inline void
 as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
-	// While operational metrics are on, record_cluster_metrics false also skips
+	// While operational metrics are on, metrics_sample_decision false also skips
 	// namespace histograms, bytes, and error counts.
-	cmd->record_cluster_metrics = as_cluster_sample_operational(cmd->cluster);
-	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->record_cluster_metrics);
+	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
+	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
 
-	if (cmd->record_cluster_metrics && count_command) {
+	if (cmd->metrics_sample_decision && count_command) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 }

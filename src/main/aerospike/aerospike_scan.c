@@ -1255,9 +1255,9 @@ as_scan_partition_retry_async(as_async_scan_executor* se_old, as_error* err)
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
-	ee->record_cluster_metrics = ee_old->record_cluster_metrics;
+	ee->metrics_sample_decision = ee_old->metrics_sample_decision;
 
-	if (ee->record_cluster_metrics) {
+	if (ee->metrics_sample_decision) {
 		as_cluster_add_retry(se->cluster);
 	}
 
@@ -1346,7 +1346,7 @@ as_scan_partition_async(
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
-	ee->record_cluster_metrics = sampled;
+	ee->metrics_sample_decision = sampled;
 
 	return as_scan_partition_execute_async(se, pt, err);
 }

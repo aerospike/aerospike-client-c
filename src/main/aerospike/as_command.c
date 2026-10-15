@@ -717,19 +717,19 @@ as_command_execute(as_command* cmd, as_error* err)
 
 	// One sampler decision for this command, before retries. Re-sends of this
 	// command reuse it. A new sub-batch is a new command and draws again.
-	// While operational metrics are on, record_cluster_metrics false also skips
+	// While operational metrics are on, metrics_sample_decision false also skips
 	// namespace histograms, bytes, and error counts.
-	cmd->record_cluster_metrics = as_cluster_sample_operational(cmd->cluster);
-	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->record_cluster_metrics);
+	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
+	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
 	// v3 command latency starts once and includes retries.
 	// Existing histograms time each attempt inside the loop.
 	cmd->command_begin = 0;
 
-	if (cmd->record_cluster_metrics && !cmd->metrics_node_sub_command) {
+	if (cmd->metrics_sample_decision && !cmd->metrics_node_sub_command) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 
-	if (cmd->record_cluster_metrics && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+	if (cmd->metrics_sample_decision && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 		cmd->command_begin = cf_getns();
 	}
 
@@ -975,7 +975,7 @@ Retry:
 			}
 		}
 
-		if (cmd->record_cluster_metrics) {
+		if (cmd->metrics_sample_decision) {
 			as_cluster_add_retry(cmd->cluster);
 		}
 	}

@@ -225,10 +225,11 @@ typedef struct as_command_s {
 	// Elapsed time is cf_getns() minus this value and includes retries.
 	// Existing histograms time each attempt separately.
 	uint64_t command_begin;
-	// True when this command updates the cluster command_count and retry counter.
+	// Stored operational sampler decision. Reused for retries of this command.
 	// False when operational metrics are off, or when the sampler skips this call.
-	// Reused for retries of this command.
-	bool record_cluster_metrics;
+	// Gates the cluster command_count, the retry counter, and v3 command latency.
+	// While operational metrics are on, this is also the namespace-metrics decision.
+	bool metrics_sample_decision;
 	// True when this command updates per-namespace histograms, bytes, and error
 	// counts. While operational metrics are on, a sampler "no" sets this false.
 	// While they are off, set only if a learn-metrics file writer or a metrics

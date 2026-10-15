@@ -731,9 +731,9 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 	uint8_t ns_max = 0;
 	// The file log and metrics listeners read per-attempt namespace histograms.
 	// Keep them when operational metrics are off so those readers are not broken.
-	bool attempt_reader = file_fields || node->cluster->metrics_listeners.snapshot_listener != NULL;
+	bool should_copy_attempt_latencies = file_fields || node->cluster->metrics_listeners.snapshot_listener != NULL;
 	bool should_copy_namespace_metrics = node->cluster->metrics_enabled &&
-		(node->cluster->metrics_operational_enabled || attempt_reader);
+		(node->cluster->metrics_operational_enabled || should_copy_attempt_latencies);
 
 	if (should_copy_namespace_metrics) {
 		ns_max = node->metrics_size;
@@ -762,7 +762,7 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 		ns->bytes_out = as_node_get_bytes_out(metrics);
 
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			if (attempt_reader) {
+			if (should_copy_attempt_latencies) {
 				as_metrics_copy_latency(&ns->latencies[j], metrics->latency[j], j);
 			}
 

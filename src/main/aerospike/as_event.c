@@ -582,7 +582,7 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 }
 
 static inline void
-as_event_add_latency(as_event_command* cmd, as_latency_type type)
+as_event_add_attempt_latency(as_event_command* cmd, as_latency_type type)
 {
 	// attempt_begin is 0 when this attempt is not timed for the learn-metrics series.
 	if (cmd->attempt_begin == 0) {
@@ -617,7 +617,7 @@ bool
 as_event_connection_complete(as_event_command* cmd)
 {
 	if (cmd->metrics) {
-		as_event_add_latency(cmd, AS_LATENCY_TYPE_CONN);
+		as_event_add_attempt_latency(cmd, AS_LATENCY_TYPE_CONN);
 	}
 
 	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {

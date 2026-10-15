@@ -209,8 +209,6 @@ typedef struct as_event_executor {
 static inline void
 as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
-	cmd->attempt_begin = 0;
-	cmd->command_begin = 0;
 	// While operational metrics are on, record_cluster_metrics false also skips
 	// namespace histograms, bytes, and error counts.
 	cmd->record_cluster_metrics = as_cluster_sample_operational(cmd->cluster);

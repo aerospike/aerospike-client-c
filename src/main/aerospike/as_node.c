@@ -1552,8 +1552,9 @@ as_node_init_latency_slot(as_node* node, as_latency** slot, const as_metrics_pol
 	}
 
 	as_latency* latency_old = latency;
-	as_store_ptr_rls((void**)slot, as_node_create_latency(policy->latency_columns, policy->latency_shift,
-		policy->latency_unit));
+	as_latency* latency_new = as_node_create_latency(policy->latency_columns, policy->latency_shift,
+		policy->latency_unit);
+	as_store_ptr_rls((void**)slot, latency_new);
 
 	if (!latency_old) {
 		return;

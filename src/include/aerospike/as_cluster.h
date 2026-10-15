@@ -766,7 +766,7 @@ as_cluster_sample_operational(as_cluster* cluster)
  * writer and metrics listeners read that series.
  */
 static inline bool
-as_cluster_record_attempt_latency(const as_cluster* cluster)
+as_cluster_should_record_attempt_latency(const as_cluster* cluster)
 {
 	return cluster->metrics_file_writer || cluster->metrics_listeners.snapshot_listener != NULL;
 }
@@ -794,7 +794,7 @@ as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_
 
 	// The on-demand snapshot omits these fields while operational metrics are
 	// off. The file writer and metrics listeners still read them.
-	return as_cluster_record_attempt_latency(cluster);
+	return as_cluster_should_record_attempt_latency(cluster);
 }
 
 /**

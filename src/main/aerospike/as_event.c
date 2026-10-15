@@ -681,7 +681,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 
 		// Each attempt is for the learn-metrics file and metrics listeners.
 		// Restart that clock on retry.
-		if (as_cluster_record_attempt_latency(cmd->cluster) &&
+		if (as_cluster_should_record_attempt_latency(cmd->cluster) &&
 				cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 			cmd->attempt_begin = cf_getns();
 		}

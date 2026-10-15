@@ -770,7 +770,7 @@ as_command_execute(as_command* cmd, as_error* err)
 
 			// Each attempt is for the learn-metrics file and metrics listeners.
 			// Operational command latency uses command_begin.
-			if (as_cluster_record_attempt_latency(cmd->cluster) &&
+			if (as_cluster_should_record_attempt_latency(cmd->cluster) &&
 					cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 				attempt_begin = cf_getns();
 			}

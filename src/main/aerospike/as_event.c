@@ -679,7 +679,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 	if (cmd->record_namespace_metrics) {
 		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
 
-		// Each attempt is for the learn-metrics file and metrics listeners.
+		// See as_cluster_should_record_attempt_latency().
 		// Restart that clock on retry.
 		if (as_cluster_should_record_attempt_latency(cmd->cluster) &&
 				cmd->latency_type != AS_LATENCY_TYPE_NONE) {

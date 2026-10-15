@@ -18,13 +18,13 @@
 
 #include <aerospike/as_atomic.h>
 #include <aerospike/as_config.h>
-#include <aerospike/as_random.h>
 #include <aerospike/as_file.h>
 #include <aerospike/as_metrics.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_queue_mt.h>
+#include <aerospike/as_random.h>
 #include <aerospike/as_thread_pool.h>
 
 #ifdef __cplusplus

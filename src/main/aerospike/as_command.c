@@ -717,8 +717,7 @@ as_command_execute(as_command* cmd, as_error* err)
 
 	// One sampler decision for this command, before retries. Re-sends of this
 	// command reuse it. A new sub-batch is a new command and draws again.
-	// While operational metrics are on, metrics_sample_decision false also skips
-	// namespace histograms, bytes, and error counts.
+	// See as_command.metrics_sample_decision.
 	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
 	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
 	// v3 command latency starts once and includes retries.
@@ -768,7 +767,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		if (cmd->record_namespace_metrics) {
 			metrics = as_node_prepare_metrics(node, cmd->ns);
 
-			// Each attempt is for the learn-metrics file and metrics listeners.
+			// See as_cluster_should_record_attempt_latency().
 			// Operational command latency uses command_begin.
 			if (as_cluster_should_record_attempt_latency(cmd->cluster) &&
 					cmd->latency_type != AS_LATENCY_TYPE_NONE) {

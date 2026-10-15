@@ -738,7 +738,7 @@ as_scan_command_execute(as_scan_task* task)
 	cmd.policy = &task->policy->base;
 	cmd.node = task->node;
 	cmd.key = NULL;       // Not referenced when node set.
-	// Must use global namespace due to reference equality logic in as_node_add_attempt_latency().
+	// Must use global namespace due to reference equality logic in as_node_find_namespace().
 	cmd.ns = as_partition_tables_get_ns(task->cluster, task->scan->ns);
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_scan_parse_records;
@@ -1074,7 +1074,7 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 	as_event_executor* ee = &se->executor;
 	uint32_t n_nodes = pt->node_parts.size;
 
-	// Must use global namespace due to reference equality logic in as_node_add_attempt_latency().
+	// Must use global namespace due to reference equality logic in as_node_find_namespace().
 	const char*	global_ns = as_partition_tables_get_ns(se->cluster, se->executor.ns);
 
 	for (uint32_t i = 0; i < n_nodes; i++) {

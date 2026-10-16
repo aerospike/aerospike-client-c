@@ -654,8 +654,8 @@ typedef struct as_metrics_policy_s {
 
 	/**
 	 * Record command-path operational metrics (latency, namespace errors and bytes,
-	 * cpu, memory) on the metrics snapshot. Off until set true. When false,
-	 * commands are not timed. Enabling metrics does not turn this on.
+	 * cpu, memory) on the metrics snapshot. When false, commands are not timed.
+	 * Enabling metrics does not turn this on.
 	 * Dynamic configuration metrics.enabled does not change this flag.
 	 * The legacy metrics.enable key turns it on when extended.operational.enabled
 	 * is absent.

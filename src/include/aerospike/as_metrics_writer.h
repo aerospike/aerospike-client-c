@@ -32,8 +32,10 @@ extern "C" {
 /**
  * Built-in learn-metrics file exporter. Embeds as_metrics_exporter as its first field.
  * The log is header(3). CamelCase segment names are unchanged. Cpu, memory,
- * and namespace counters are written when operational metrics are enabled.
- * Per-attempt latency columns stay in the line and are no longer filled.
+ * namespace counters, and namespace latency are written when operational
+ * metrics are enabled. Namespace RPC latency is filled for a successful
+ * sampled RPC. Connection latency is filled when operational metrics are on
+ * and is not sampler-gated. See as_metrics_namespace_snapshot.latencies.
  * Cluster command latency is not written.
  * blockingCount, deferredCount, and backgroundCount follow commandCount on
  * the cluster line. They are feature.api.blocking, feature.api.deferred, and

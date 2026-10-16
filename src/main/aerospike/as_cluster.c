@@ -580,6 +580,8 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 }
 
 AS_METRICS_TLS uint32_t as_metrics_batch_sub_command = 0;
+AS_METRICS_TLS uint32_t as_metrics_batch_sample_depth = 0;
+AS_METRICS_TLS bool as_metrics_batch_sampled = false;
 
 bool
 as_cluster_sample_operational(as_cluster* cluster)

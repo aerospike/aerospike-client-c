@@ -200,20 +200,21 @@ typedef struct as_event_executor {
 
 /**
  * @private
- * Draw the operational sampler once for this command. count_command increments
+ * Store a sampler decision on this command. count_command increments
  * cluster.command.count for a user call. Node sub-commands pass false.
+ * See as_command.metrics_sample_decision.
  */
 static inline void
-as_event_command_select_sample(as_event_command* cmd, bool count_command)
+as_event_command_apply_sample(as_event_command* cmd, bool sampled, bool count_command)
 {
-	// See as_command.metrics_sample_decision.
 	bool count_command_now = count_command;
 
-	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
-	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
+	cmd->metrics_sample_decision = sampled;
+	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, sampled);
 
 	// A single-key batch fallback already counted the batch. Record batch latency.
-	if (as_metrics_batch_sub_command > 0) {
+	// See as_metrics_batch_sample_begin() and as_metrics_batch_sub_command_begin().
+	if (as_metrics_batch_sample_depth > 0 || as_metrics_batch_sub_command > 0) {
 		count_command_now = false;
 
 		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
@@ -224,6 +225,27 @@ as_event_command_select_sample(as_event_command* cmd, bool count_command)
 	if (cmd->metrics_sample_decision && count_command_now) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
+}
+
+/**
+ * @private
+ * Draw the operational sampler once for this command. A single-key batch
+ * fallback reuses the user-batch decision instead of drawing again.
+ * See as_event_command_apply_sample().
+ */
+static inline void
+as_event_command_select_sample(as_event_command* cmd, bool count_command)
+{
+	bool sampled;
+
+	if (as_metrics_batch_sample_depth > 0) {
+		sampled = as_metrics_batch_sampled;
+	}
+	else {
+		sampled = as_cluster_sample_operational(cmd->cluster);
+	}
+
+	as_event_command_apply_sample(cmd, sampled, count_command);
 }
 
 //---------------------------------

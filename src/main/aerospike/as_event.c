@@ -583,14 +583,30 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 static inline void
 as_event_add_success_latency(as_event_command* cmd)
 {
+	uint64_t now;
+	uint64_t elapsed;
+	as_ns_metrics* metrics;
+
 	if (cmd->latency_type == AS_LATENCY_TYPE_NONE || cmd->command_begin == 0) {
 		return;
 	}
 
-	uint64_t now = cf_getns();
+	now = cf_getns();
+	elapsed = now - cmd->command_begin;
 
 	// See as_command_add_latencies().
-	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, now - cmd->command_begin);
+	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, elapsed);
+
+	if (!cmd->record_namespace_metrics) {
+		return;
+	}
+
+	metrics = cmd->metrics;
+
+	if (!metrics) {
+		metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
+	}
+	as_node_add_attempt_latency(metrics, cmd->latency_type, elapsed);
 }
 
 bool
@@ -825,7 +841,9 @@ static void
 as_event_retry_timeout(as_event_command* cmd)
 {
 	if (cmd->pipe_listener) {
-		as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
+		if (cmd->record_namespace_metrics) {
+			as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
+		}
 		as_pipe_timeout(cmd, true);
 		return;
 	}
@@ -946,7 +964,9 @@ as_event_total_timeout(as_event_command* cmd)
 {
 	// Node should not be null at this point.
 	if (cmd->pipe_listener) {
-		as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
+		if (cmd->record_namespace_metrics) {
+			as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
+		}
 		as_pipe_timeout(cmd, false);
 		return;
 	}
@@ -1287,8 +1307,11 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 		return;
 	}
 	// One namespace error or timeout for the failure returned to the caller.
-	// A retry that later succeeds does not get here.
-	as_node_add_terminal_result(cmd->node, cmd->ns, cmd->metrics, err);
+	// A retry that later succeeds does not get here. An unsampled call does not
+	// increment the counters. See as_command.record_namespace_metrics.
+	if (cmd->record_namespace_metrics) {
+		as_node_add_terminal_result(cmd->node, cmd->ns, cmd->metrics, err);
+	}
 	as_event_notify_error(cmd, err);
 	as_event_command_release(cmd);
 }
@@ -2440,8 +2463,9 @@ as_event_recover_connection(as_event_command* cmd)
 	}
 
 	recover->type = AS_ASYNC_TYPE_CONN_RECOVER;
-	// Draining the socket is not a successful command. Keep the per-attempt
-	// clock and do not record a v3 command latency sample.
+	// Draining the socket is not a successful command. Leave the clock unset
+	// so recovery does not record command or namespace latency.
+	// See as_event_add_success_latency().
 	recover->command_begin = 0;
 	recover->flags = cmd->flags & AS_ASYNC_FLAGS_READ;
 	recover->txn = NULL;

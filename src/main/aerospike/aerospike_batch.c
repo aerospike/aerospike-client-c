@@ -205,6 +205,9 @@ typedef struct as_batch_task_s {
 	uint8_t type;
 	uint8_t txn_attr;
 	bool has_write;
+	// Sampler decision for this user batch. Node commands and later sub-batches
+	// reuse it. See as_metrics_batch_sample_begin().
+	bool metrics_sampled;
 } as_batch_task;
 
 typedef struct as_batch_task_records_s {
@@ -2370,7 +2373,7 @@ as_batch_execute_records(as_batch_task_records* btr, as_error* err, as_command* 
 	as_command cmd;
 	as_batch_command_init(&cmd, task, policy, buf, size, parent);
 
-	status = as_command_execute(&cmd, err);
+	status = as_command_execute_sample(&cmd, err, true, task->metrics_sampled);
 
 	// Set in_doubt for keys associated this batch command when
 	// the command was not retried and split. If a split retry occurred,
@@ -2629,7 +2632,7 @@ as_batch_execute_keys(as_batch_task_keys* btk, as_error* err, as_command* parent
 	as_command cmd;
 	as_batch_command_init(&cmd, task, policy, buf, size, parent);
 
-	status = as_command_execute(&cmd, err);
+	status = as_command_execute_sample(&cmd, err, true, task->metrics_sampled);
 
 	// Set in_doubt for keys associated this batch command when
 	// the command was not retried and split. If a split retry occurred,
@@ -2928,11 +2931,14 @@ as_single_execute(
 {
 	as_status status;
 
-	// The key command is created on this thread. Keep the batch depth raised
-	// until that command has taken its sample.
+	// The key command is created on this thread. Reuse the user-batch decision
+	// and keep the batch depth raised until that command has taken its sample.
+	// See as_metrics_batch_sample_begin().
+	as_metrics_batch_sample_begin(task->metrics_sampled);
 	as_metrics_batch_sub_command_begin();
 	status = as_single_execute_command(task, err, key, bb, record, offset);
 	as_metrics_batch_sub_command_end();
+	as_metrics_batch_sample_end();
 	return status;
 }
 
@@ -3296,6 +3302,8 @@ as_single_execute_record_async(
 	as_status status;
 
 	// The async key command is created on this thread before it is queued.
+	// Reuse the user-batch decision. See as_metrics_batch_sample_begin().
+	as_metrics_batch_sample_begin(exec->metrics_sample_decision);
 	as_metrics_batch_sub_command_begin();
 
 	switch (rec->type) {
@@ -3381,6 +3389,7 @@ as_single_execute_record_async(
 	}
 
 	as_metrics_batch_sub_command_end();
+	as_metrics_batch_sample_end();
 
 	if (status != AEROSPIKE_OK) {
 		rec->result = status;
@@ -3544,7 +3553,7 @@ as_batch_keys_execute(
 	)
 {
 	as_cluster* cluster = as->cluster;
-	as_cluster_add_command_count(cluster);
+	bool sampled = as_cluster_add_command_count(cluster);
 	uint32_t n_keys = batch->keys.size;
 	
 	if (n_keys == 0) {
@@ -3668,6 +3677,7 @@ as_batch_keys_execute(
 	btk.base.replica_index = rep.replica_index;
 	btk.base.replica_index_sc = rep.replica_index_sc;
 	btk.base.txn_attr = 0;
+	btk.base.metrics_sampled = sampled;
 	btk.ns = ns;
 	btk.keys = batch->keys.entries;
 	btk.batch = batch;
@@ -3754,7 +3764,7 @@ static as_status
 as_batch_execute_sync(
 	aerospike* as, as_error* err, const as_policy_batch* policy, as_txn* txn, uint64_t* versions,
 	uint8_t txn_attr, bool has_write, as_batch_replica* rep, as_vector* records, uint32_t n_keys,
-	as_vector* batch_nodes, as_command* parent, bool* error_row
+	as_vector* batch_nodes, as_command* parent, bool* error_row, bool metrics_sampled
 	)
 {
 	as_config* config = aerospike_load_config(as);
@@ -3782,6 +3792,7 @@ as_batch_execute_sync(
 	btr.base.replica_index = rep->replica_index;
 	btr.base.replica_index_sc = rep->replica_index_sc;
 	btr.base.txn_attr = txn_attr;
+	btr.base.metrics_sampled = metrics_sampled;
 	btr.defs = defs;
 	btr.records = records;
 
@@ -3916,8 +3927,9 @@ as_batch_command_create(
 	cmd->ubuf = ubuf;
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
-	// A new node sub-batch draws again. The user batch already counted command.count.
-	as_event_command_select_sample(cmd, false);
+	// Reuse the user-batch sampler decision. The user batch already counted command.count.
+	// See as_event_command_apply_sample().
+	as_event_command_apply_sample(cmd, executor->executor.metrics_sample_decision, false);
 	return bc;
 }
 
@@ -4060,10 +4072,11 @@ as_batch_records_execute(
 	)
 {
 	as_cluster* cluster = as->cluster;
+	bool sampled = false;
 
 	// The async entry point already counted this user batch.
 	if (!async_executor) {
-		as_cluster_add_command_count(cluster);
+		sampled = as_cluster_add_command_count(cluster);
 	}
 
 	as_vector* list = &records->list;
@@ -4158,7 +4171,7 @@ as_batch_records_execute(
 	}
 	else {
 		status = as_batch_execute_sync(as, err, policy, txn, versions, txn_attr, has_write, &rep, list,
-			n_keys, &batch_nodes, NULL, &error_row);
+			n_keys, &batch_nodes, NULL, &error_row, sampled);
 
 		destroy_versions(versions);
 
@@ -4181,7 +4194,7 @@ as_batch_records_execute_async(
 	as_event_loop* event_loop, uint8_t txn_attr, bool has_write
 	)
 {
-	as_cluster_add_command_count(as->cluster);
+	bool sampled = as_cluster_add_command_count(as->cluster);
 	// Check for empty batch.
 	if (records->list.size == 0) {
 		destroy_versions(versions);
@@ -4217,6 +4230,7 @@ as_batch_records_execute_async(
 	exec->queued = 0;
 	exec->notify = true;
 	exec->valid = true;
+	exec->metrics_sample_decision = sampled;
 
 	return as_batch_records_execute(as, err, policy, records, txn, versions, be, txn_attr, has_write);
 }
@@ -4314,7 +4328,7 @@ as_batch_retry_records(as_batch_task_records* btr, as_command* parent, as_error*
 
 	return as_batch_execute_sync(task->as, err, task->policy, btr->base.txn, btr->base.versions,
 		btr->base.txn_attr, task->has_write, &rep, list, task->n_keys, &batch_nodes, parent,
-		task->error_row);
+		task->error_row, parent->metrics_sample_decision);
 }
 
 static as_status
@@ -4477,8 +4491,9 @@ as_batch_retry_command_create(
 	cmd->ubuf = ubuf;
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_BATCH;
-	// Remaining keys are a new sub-batch, so they draw again.
-	as_event_command_select_sample(cmd, false);
+	// Remaining keys are a new sub-batch under the same user-batch decision.
+	// See as_event_command_apply_sample().
+	as_event_command_apply_sample(cmd, parent->metrics_sample_decision, false);
 	return bc;
 }
 

@@ -558,13 +558,15 @@ as_node_create_connection(
 	as_conn_pool* pool, as_socket* sock, as_socket_context* ctx
 	)
 {
-	// Snapshot metrics_enabled once so the begin timestamp and the latency recording below
-	// use a consistent view. Re-reading the flag could leave begin at 0 (bogus latency) if
-	// metrics are enabled by another thread during connection setup.
-	bool metrics_enabled = node->cluster->metrics_enabled;
+	// Connection latency is operational and is not sampler-gated.
+	// Snapshot the flag so the begin timestamp and the recording below use a
+	// consistent view. Re-reading the flag could leave begin at 0 (bogus latency)
+	// if operational metrics are enabled during connection setup.
+	// See as_node_add_attempt_latency().
+	bool record_conn_latency = node->cluster->metrics_operational_enabled;
 	uint64_t begin = 0;
 
-	if (metrics_enabled) {
+	if (record_conn_latency) {
 		begin = cf_getns();
 	}
 	
@@ -598,7 +600,7 @@ as_node_create_connection(
 		}
 	}
 
-	if (metrics_enabled) {
+	if (record_conn_latency) {
 		uint64_t elapsed = cf_getns() - begin;
 		as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
 		as_node_add_attempt_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);

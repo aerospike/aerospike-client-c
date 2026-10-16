@@ -730,7 +730,8 @@ as_metrics_node_snapshot_create_impl(as_node* node, as_metrics_node_snapshot** s
 
 	uint8_t ns_max = 0;
 	// Disable leaves metrics_operational_enabled set so an on-demand snapshot
-	// still shows the last namespace counters. Per-attempt buckets are not copied.
+	// still shows the last namespace counters and latency buckets.
+	// See as_metrics_namespace_snapshot.latencies.
 	bool should_copy_namespace_metrics = node->cluster->metrics_operational_enabled;
 
 	if (should_copy_namespace_metrics) {
@@ -760,7 +761,7 @@ as_metrics_node_snapshot_create_impl(as_node* node, as_metrics_node_snapshot** s
 		ns->bytes_out = as_node_get_bytes_out(metrics);
 
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			ns->latencies[j].type = j;
+			as_metrics_copy_latency(&ns->latencies[j], metrics->latency[j], j);
 		}
 		snap->namespace_count++;
 	}

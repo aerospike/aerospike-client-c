@@ -31,13 +31,13 @@ extern "C" {
 
 /**
  * Built-in learn-metrics file exporter. Embeds as_metrics_exporter as its first field.
- * The log line format keeps legacy camelCase segment names. Cpu, memory,
+ * The log is header(3). CamelCase segment names are unchanged. Cpu, memory,
  * and namespace histograms are written whenever metrics are enabled, including
  * when operational_enabled is false.
- * When usage is enabled, each cluster line appends
- * feature.api[blocking,deferred,background]. That section is omitted when
- * usage is off. Node and namespace segments are not changed.
- * The same rule is documented on as_metrics_snapshot.usage_metrics_enabled.
+ * blockingCount, deferredCount, and backgroundCount follow commandCount on
+ * the cluster line. They are feature.api.blocking, feature.api.deferred, and
+ * feature.api.background. The columns are always present. They increment only
+ * while as_metrics_snapshot.usage_metrics_enabled is true.
  */
 typedef struct as_metrics_file_exporter_s as_metrics_file_exporter;
 

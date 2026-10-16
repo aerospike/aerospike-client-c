@@ -496,30 +496,87 @@ metrics_file_line_has_memory(const char* line)
 	return *p >= '1' && *p <= '9';
 }
 
-// feature.api follows the cluster segment: "...]] feature.api[blocking,deferred,background]".
-static bool
-metrics_parse_feature_api(const char* line, uint64_t* blocking, uint64_t* deferred, uint64_t* background)
+// Skip one integer field and the comma after it. Returns NULL when the field is missing.
+static const char*
+metrics_skip_integer_field(const char* p)
 {
-	const char* feature = strstr(line, " feature.api[");
+	if (*p < '0' || *p > '9') {
+		return NULL;
+	}
 
-	if (!feature || feature == line || feature[-1] != ']') {
+	while (*p >= '0' && *p <= '9') {
+		p++;
+	}
+
+	if (*p != ',') {
+		return NULL;
+	}
+	return p + 1;
+}
+
+// header(3) cluster fields after the label list are
+// cpu,mem,invalidNodeCount,commandCount,blockingCount,deferredCount,backgroundCount.
+static bool
+metrics_parse_usage_counts(const char* line, uint64_t* blocking, uint64_t* deferred, uint64_t* background)
+{
+	const char* cluster = strstr(line, " cluster[");
+
+	if (!cluster) {
 		return false;
+	}
+
+	const char* open = strchr(cluster, '[');
+
+	if (!open) {
+		return false;
+	}
+
+	// The next bracket is the label list. The usage columns follow it.
+	open = strchr(open + 1, '[');
+
+	if (!open) {
+		return false;
+	}
+
+	int depth = 0;
+	const char* p = open;
+
+	for (; *p; p++) {
+		if (*p == '[') {
+			depth++;
+		}
+		else if (*p == ']') {
+			depth--;
+
+			if (depth == 0) {
+				break;
+			}
+		}
+	}
+
+	if (*p != ']' || p[1] != ',') {
+		return false;
+	}
+
+	p += 2;
+
+	// cpu, mem, invalidNodeCount, commandCount.
+	for (int field = 0; field < 4; field++) {
+		p = metrics_skip_integer_field(p);
+
+		if (!p) {
+			return false;
+		}
 	}
 
 	unsigned long long blocking_value = 0;
 	unsigned long long deferred_value = 0;
 	unsigned long long background_value = 0;
 	int consumed = 0;
-	int parsed = sscanf(feature, " feature.api[%llu,%llu,%llu]%n",
+	int parsed = sscanf(p, "%llu,%llu,%llu,%n",
 		&blocking_value, &deferred_value, &background_value, &consumed);
 
 	if (parsed != 3 || consumed <= 0) {
-		return false;
-	}
-
-	char next = feature[consumed];
-
-	if (next != '\0' && next != '\n' && next != '\r') {
 		return false;
 	}
 
@@ -725,14 +782,13 @@ metrics_test_namespace_ok(const as_metrics_snapshot* metrics_snapshot, uint8_t b
 	return true;
 }
 
-// expect_feature_api selects the usage section. True requires
-// feature.api[blocking,deferred,background]. False rejects any feature.api text.
-// Header(2) field names stay camelCase either way: syncConn/asyncConn are not
-// arrays, and latency has no unit.
+// header(3) keeps camelCase names. syncConn/asyncConn are not arrays, and
+// latency has no unit. blockingCount, deferredCount, and backgroundCount
+// follow commandCount. See as_metrics_file_exporter.
 static bool
-metrics_header_ok(const char* header, const char* latency_token, bool expect_feature_api)
+metrics_header_ok(const char* header, const char* latency_token)
 {
-	if (!strstr(header, " header(2) ")) {
+	if (!strstr(header, " header(3) ")) {
 		return false;
 	}
 
@@ -741,8 +797,7 @@ metrics_header_ok(const char* header, const char* latency_token, bool expect_fea
 		"clientVersion",
 		"appId",
 		"invalidNodeCount",
-		"commandCount",
-		"retryCount",
+		"commandCount,blockingCount,deferredCount,backgroundCount,retryCount",
 		"delayQueueTimeoutCount",
 		"eventloop",
 		"processSize",
@@ -763,21 +818,18 @@ metrics_header_ok(const char* header, const char* latency_token, bool expect_fea
 		}
 	}
 
-	if (expect_feature_api && !strstr(header, " feature.api[blocking,deferred,background]")) {
-		return false;
-	}
-
 	const char* rejected[] = {
 		"client_type",
 		"key_busy",
 		"bytes_in",
 		"bytes_out",
 		"eventLoop",
-		"header(3)",
+		"header(2)",
 		"syncConn[]",
 		"asyncConn[]",
 		"milliseconds",
 		"microseconds",
+		"feature.api",
 		NULL
 	};
 
@@ -785,10 +837,6 @@ metrics_header_ok(const char* header, const char* latency_token, bool expect_fea
 		if (strstr(header, rejected[i])) {
 			return false;
 		}
-	}
-
-	if (!expect_feature_api && strstr(header, "feature.api")) {
-		return false;
 	}
 	return true;
 }
@@ -1125,7 +1173,7 @@ TEST(metrics_file_header, "report_dir installs a camelCase metrics log")
 
 	char header[2048];
 	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
-		metrics_header_ok(header, "latency(7,1)", false);
+		metrics_header_ok(header, "latency(7,1)");
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -1151,7 +1199,7 @@ TEST(metrics_file_header_microseconds, "file header stays latency(columns,shift)
 
 	char header[2048];
 	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
-		metrics_header_ok(header, "latency(7,1)", false);
+		metrics_header_ok(header, "latency(7,1)");
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -1207,7 +1255,7 @@ TEST(metrics_file_operational_off, "file exporter writes latencies when operatio
 	as_metrics_policy_destroy(&policy);
 }
 
-TEST(metrics_file_omits_feature_when_usage_off, "the cluster line omits feature.api when usage is off")
+TEST(metrics_file_keeps_usage_columns_when_usage_off, "header(3) keeps the usage columns when usage is off")
 {
 	char dir[256];
 	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
@@ -1229,9 +1277,12 @@ TEST(metrics_file_omits_feature_when_usage_off, "the cluster line omits feature.
 	char header[2048];
 	char line[65536];
 	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
-		metrics_header_ok(header, "latency(7,1)", false);
+		metrics_header_ok(header, "latency(7,1)");
+	uint64_t blocking = 0;
+	uint64_t deferred = 0;
+	uint64_t background = 0;
 	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
-		strstr(line, " cluster[") && !strstr(line, "feature.api");
+		metrics_parse_usage_counts(line, &blocking, &deferred, &background);
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -1243,7 +1294,7 @@ TEST(metrics_file_omits_feature_when_usage_off, "the cluster line omits feature.
 	as_metrics_policy_destroy(&policy);
 }
 
-TEST(metrics_file_writes_feature_api_when_usage_on, "the cluster line appends feature.api when usage is on")
+TEST(metrics_file_writes_feature_api_when_usage_on, "the cluster line writes usage counts after commandCount")
 {
 	char dir[256];
 	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
@@ -1273,13 +1324,13 @@ TEST(metrics_file_writes_feature_api_when_usage_on, "the cluster line appends fe
 	char header[2048];
 	char line[65536];
 	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
-		metrics_header_ok(header, "latency(7,1)", true);
+		metrics_header_ok(header, "latency(7,1)");
 
 	uint64_t blocking = 0;
 	uint64_t deferred = 0;
 	uint64_t background = 0;
 	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
-		metrics_parse_feature_api(line, &blocking, &deferred, &background);
+		metrics_parse_usage_counts(line, &blocking, &deferred, &background);
 	bool snapshot_present = metrics_snapshot != NULL;
 	bool usage_metrics_enabled = false;
 	bool counts_match = false;
@@ -2099,7 +2150,7 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_file_header);
 	suite_add(metrics_file_header_microseconds);
 	suite_add(metrics_file_operational_off);
-	suite_add(metrics_file_omits_feature_when_usage_off);
+	suite_add(metrics_file_keeps_usage_columns_when_usage_off);
 	suite_add(metrics_file_writes_feature_api_when_usage_on);
 	suite_add(metrics_empty_report_dir);
 	suite_add(metrics_exporter_suppresses_file);

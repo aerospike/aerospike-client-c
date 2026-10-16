@@ -294,8 +294,8 @@ typedef struct as_metrics_event_loop_snapshot_s {
  *
  * Enabling metrics does not turn on operational or usage metrics. Set
  * `as_metrics_policy.operational_enabled` or `usage_enabled` for those blocks.
- * The metrics file header uses the original camelCase field names.
- * See usage_metrics_enabled for the optional feature.api cluster section.
+ * The metrics file header uses camelCase field names. See usage_metrics_enabled
+ * for blockingCount, deferredCount, and backgroundCount.
  *
  * `as_cluster_stats` fields land here as follows:
  *   recover_queue_size -> recover_queue_size
@@ -332,11 +332,10 @@ typedef struct as_metrics_snapshot_s {
 
 	/**
 	 * True when feature.api usage counters in this snapshot were collected.
-	 * The learn-metrics cluster line includes
-	 * feature.api[blocking,deferred,background] only while this is true.
-	 * api_blocking, api_deferred, and api_background stay on this snapshot
-	 * either way. OpenTelemetry names for those fields are
-	 * aerospike_client_feature_api_blocking,
+	 * The header(3) cluster line always writes api_blocking, api_deferred, and
+	 * api_background as blockingCount, deferredCount, and backgroundCount after
+	 * commandCount. See as_metrics_file_exporter. OpenTelemetry names for those
+	 * fields are aerospike_client_feature_api_blocking,
 	 * aerospike_client_feature_api_deferred, and
 	 * aerospike_client_feature_api_background. Emit those instruments only
 	 * while this is true.

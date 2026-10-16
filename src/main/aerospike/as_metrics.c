@@ -980,15 +980,13 @@ aerospike_get_metrics_snapshot(aerospike* as, as_error* err, as_metrics_snapshot
 static void
 as_metrics_clone_latency_buckets(as_metrics_latency_snapshot* latency)
 {
-	uint64_t* copy = NULL;
-
 	if (latency->bucket_count == 0 || !latency->buckets) {
 		latency->buckets = NULL;
 		latency->bucket_count = 0;
 		return;
 	}
 
-	copy = cf_malloc(sizeof(uint64_t) * latency->bucket_count);
+	uint64_t* copy = cf_malloc(sizeof(uint64_t) * latency->bucket_count);
 	memcpy(copy, latency->buckets, sizeof(uint64_t) * latency->bucket_count);
 	latency->buckets = copy;
 }

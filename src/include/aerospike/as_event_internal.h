@@ -143,9 +143,6 @@ typedef struct as_event_command {
 	cf_ll_element pipe_link;
 	
 	uint8_t* buf;
-	// Monotonic nanoseconds from cf_getns() at the start of the current attempt.
-	// Learn-metrics histograms use this clock. 0 skips that sample.
-	uint64_t attempt_begin;
 	// See as_command.command_begin.
 	uint64_t command_begin;
 	uint32_t iteration;

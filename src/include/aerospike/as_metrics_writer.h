@@ -31,9 +31,10 @@ extern "C" {
 
 /**
  * Built-in learn-metrics file exporter. Embeds as_metrics_exporter as its first field.
- * The log line format keeps legacy camelCase segment names. Cpu, memory,
- * and namespace histograms are written whenever metrics are enabled, including
- * when operational_enabled is false.
+ * The log line format keeps legacy camelCase segment names. Cpu, memory, and
+ * namespace counters are written when operational metrics are enabled.
+ * Per-attempt latency columns stay in the line and are no longer filled.
+ * Cluster command latency is not written.
  * When usage is enabled, each cluster line appends
  * feature.api[blocking,deferred,background]. That section is omitted when
  * usage is off. Node and namespace segments are not changed.

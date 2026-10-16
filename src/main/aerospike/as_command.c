@@ -684,25 +684,18 @@ as_command_prepare_error(as_command* cmd, as_error* err)
 	}
 }
 
-// attempt_begin is cf_getns() at the start of this attempt. 0 skips that sample.
 static void
-as_command_add_latencies(as_command* cmd, as_ns_metrics* metrics, uint64_t attempt_begin)
+as_command_add_latencies(as_command* cmd)
 {
-	if (cmd->latency_type == AS_LATENCY_TYPE_NONE) {
+	if (cmd->latency_type == AS_LATENCY_TYPE_NONE || cmd->command_begin == 0) {
 		return;
 	}
 
 	uint64_t now = cf_getns();
 
-	if (metrics && attempt_begin != 0) {
-		as_node_add_attempt_latency(metrics, cmd->latency_type, now - attempt_begin);
-	}
-
-	// v3 command latency: elapsed time from the first attempt, including retries.
+	// Elapsed time from the first attempt, including retries.
 	// The sample is cluster-wide because a retry can move to another node.
-	if (cmd->command_begin != 0) {
-		as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, now - cmd->command_begin);
-	}
+	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, now - cmd->command_begin);
 }
 
 as_status
@@ -721,8 +714,7 @@ as_command_execute(as_command* cmd, as_error* err)
 	// See as_command.metrics_sample_decision.
 	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
 	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
-	// v3 command latency starts once and includes retries.
-	// Existing histograms time each attempt inside the loop.
+	// Command latency starts once and includes retries.
 	cmd->command_begin = 0;
 
 	// A single-key batch fallback already counted the batch. Record batch latency.
@@ -770,17 +762,9 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		as_ns_metrics* metrics = NULL;
-		uint64_t attempt_begin = 0;
 
 		if (cmd->record_namespace_metrics) {
 			metrics = as_node_prepare_metrics(node, cmd->ns);
-
-			// See as_cluster_should_record_attempt_latency().
-			// Operational command latency uses command_begin.
-			if (as_cluster_should_record_attempt_latency(cmd->cluster) &&
-					cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-				attempt_begin = cf_getns();
-			}
 		}
 
 		as_socket socket;
@@ -835,7 +819,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		if (status == AEROSPIKE_OK) {
-			as_command_add_latencies(cmd, metrics, attempt_begin);
+			as_command_add_latencies(cmd);
 
 			// Reset error code if retry had occurred.
 			if (cmd->iteration > 0) {
@@ -885,7 +869,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 					// Do not increment error count on record not found.
 					// Add latency metrics instead.
-					as_command_add_latencies(cmd, metrics, attempt_begin);
+					as_command_add_latencies(cmd);
 					as_command_prepare_error(cmd, err);
 					break;
 

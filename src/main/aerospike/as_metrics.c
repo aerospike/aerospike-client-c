@@ -1539,8 +1539,6 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		slot.exporter = file_exporter;
 		slot.owned = true;
 		as_vector_append(rt->slots, &slot);
-		// The metrics log file is not created until the next Export.
-		// See as_metrics_file_exporter_create().
 	}
 
 	cluster->metrics_runtime = rt;

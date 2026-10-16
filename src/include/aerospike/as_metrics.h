@@ -574,10 +574,6 @@ typedef struct as_metrics_policy_s {
 	 *   empty and no exporters were added. Added exporters are called instead.
 	 *
 	 * Collection can still run with no exporter.
-	 * The metrics log file is not created until the next Export, including the
-	 * first Export after re-enable. That Export creates a new
-	 * metrics-YYYYMMDDHHMMSS.log.
-	 * Disable closes the previous log and does not append to it later.
 	 * See as_metrics_file_exporter_create().
 	 *
 	 * Default: . (current directory)
@@ -950,8 +946,6 @@ as_metrics_departed_destroy(struct as_cluster_s* cluster);
  * Enable periodic metrics collection and the export timer.
  * Operational metrics follow the policy and stay off by default.
  * Usage metrics stay off unless the policy enables them.
- * The metrics log file is not created until the next Export.
- * See as_metrics_policy.report_dir.
  */
 AS_EXTERN as_status
 aerospike_enable_metrics(struct aerospike_s* as, as_error* err, const as_metrics_policy* policy);

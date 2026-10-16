@@ -242,9 +242,7 @@ typedef struct {
 	/**
 	 * Latency histograms. One sample per successful RPC, including that RPC's
 	 * retries. Connection buckets (AS_LATENCY_TYPE_CONN) are recorded when
-	 * metrics are enabled. The operational connection-open series is
-	 * as_node.conn_latency. See as_node_add_conn_latency() and
-	 * as_metrics_namespace_snapshot.latencies.
+	 * metrics are enabled. See as_metrics_namespace_snapshot.latencies.
 	 */
 	as_latency* latency[AS_LATENCY_TYPE_MAX];
 

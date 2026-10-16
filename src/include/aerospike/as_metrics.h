@@ -646,10 +646,10 @@ typedef struct as_metrics_policy_s {
 
 	/**
 	 * Record command-path operational metrics (latency, namespace errors and bytes,
-	 * cpu, memory) on the metrics snapshot. Off until set true. Enabling metrics
-	 * does not turn this on. Dynamic configuration metrics.enabled does not
-	 * change this flag. The legacy metrics.enable key turns it on when
-	 * extended.operational.enabled is absent.
+	 * cpu, memory) on the metrics snapshot. Enabling metrics does not turn this on.
+	 * Dynamic configuration metrics.enabled does not change this flag.
+	 * The legacy metrics.enable key turns it on when extended.operational.enabled
+	 * is absent.
 	 * The learn-metrics file exporter still writes those fields so existing log
 	 * readers keep working. Tier 0 pool gauges are collected whenever metrics are enabled.
 	 *

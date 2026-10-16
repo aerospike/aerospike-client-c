@@ -1430,7 +1430,9 @@ as_parse_open_mapping(as_yaml* yaml, as_parse_metrics_field_fn fn, as_metrics_po
 			return false;
 		}
 
-		char name[256];
+		// Zeroed so an inlined strcmp() against a literal, which the compiler may
+		// widen to a fixed-length memcmp(), never reads uninitialized bytes.
+		char name[256] = {0};
 		as_strncpy(name, (const char*)yaml->event.data.scalar.value, sizeof(name));
 		yaml_event_delete(&yaml->event);
 

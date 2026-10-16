@@ -429,7 +429,8 @@ void
 as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd)
 {
 	// Initialize read buffer (buf) to be located after write buffer.
-	cmd->begin = 0;
+	cmd->attempt_begin = 0;
+	cmd->command_begin = 0;
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
 	cmd->conn = NULL;
@@ -581,17 +582,42 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 }
 
 static inline void
-as_event_add_latency(as_event_command* cmd, as_latency_type type)
+as_event_add_attempt_latency(as_event_command* cmd, as_latency_type type)
 {
-	uint64_t elapsed = cf_getns() - cmd->begin;
-	as_node_add_latency(cmd->metrics, type, elapsed);
+	// attempt_begin is 0 when this attempt is not timed for the learn-metrics series.
+	if (cmd->attempt_begin == 0) {
+		return;
+	}
+
+	uint64_t elapsed = cf_getns() - cmd->attempt_begin;
+	as_node_add_attempt_latency(cmd->metrics, type, elapsed);
+}
+
+static inline void
+as_event_add_success_latency(as_event_command* cmd)
+{
+	if (cmd->latency_type == AS_LATENCY_TYPE_NONE) {
+		return;
+	}
+
+	uint64_t now = cf_getns();
+
+	// Existing histograms: this attempt only.
+	if (cmd->metrics && cmd->attempt_begin != 0) {
+		as_node_add_attempt_latency(cmd->metrics, cmd->latency_type, now - cmd->attempt_begin);
+	}
+
+	// See as_command_add_latencies().
+	if (cmd->command_begin != 0) {
+		as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, now - cmd->command_begin);
+	}
 }
 
 bool
 as_event_connection_complete(as_event_command* cmd)
 {
 	if (cmd->metrics) {
-		as_event_add_latency(cmd, AS_LATENCY_TYPE_CONN);
+		as_event_add_attempt_latency(cmd, AS_LATENCY_TYPE_CONN);
 	}
 
 	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
@@ -650,11 +676,25 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_node_reserve(cmd->node);
 	}
 
-	if (cmd->cluster->metrics_enabled) {
+	if (cmd->record_namespace_metrics) {
 		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
 
-		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-			cmd->begin = cf_getns();
+		// See as_cluster_should_record_attempt_latency().
+		// Restart that clock on retry.
+		if (as_cluster_should_record_attempt_latency(cmd->cluster) &&
+				cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			cmd->attempt_begin = cf_getns();
+		}
+	}
+
+	// v3 command latency starts on the first attempt and includes retries.
+	if (cmd->metrics_sample_decision && cmd->command_begin == 0 &&
+			cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+		if (cmd->attempt_begin != 0) {
+			cmd->command_begin = cmd->attempt_begin;
+		}
+		else {
+			cmd->command_begin = cf_getns();
 		}
 	}
 
@@ -1060,8 +1100,10 @@ as_event_execute_retry(as_event_command* cmd)
 		as_event_timer_repeat(cmd, cmd->socket_timeout);
 	}
 
-	// Retry command.
-	as_cluster_add_retry(cmd->cluster);
+	// Retry command. Reuse the sampler decision from the first attempt.
+	if (cmd->metrics_sample_decision) {
+		as_cluster_add_retry(cmd->cluster);
+	}
 	as_event_command_begin(cmd->event_loop, cmd);
 }
 
@@ -1083,9 +1125,7 @@ as_event_response_complete(as_event_command* cmd)
 		as_node_add_bytes_out(cmd->metrics, cmd->bytes_out);
 		as_node_add_bytes_in(cmd->metrics, cmd->bytes_in);
 
-		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-			as_event_add_latency(cmd, cmd->latency_type);
-		}
+		as_event_add_success_latency(cmd);
 	}
 
 	if (cmd->pipe_listener != NULL) {
@@ -1522,9 +1562,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 			// Do not increment error count on record not found.
 			// Add latency metrics instead.
-			if (cmd->metrics && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-				as_event_add_latency(cmd, cmd->latency_type);
-			}
+			as_event_add_success_latency(cmd);
 			as_event_put_connection(cmd, pool);
 			break;
 
@@ -2444,6 +2482,9 @@ as_event_recover_connection(as_event_command* cmd)
 	}
 
 	recover->type = AS_ASYNC_TYPE_CONN_RECOVER;
+	// Draining the socket is not a successful command. Keep the per-attempt
+	// clock and do not record a v3 command latency sample.
+	recover->command_begin = 0;
 	recover->flags = cmd->flags & AS_ASYNC_FLAGS_READ;
 	recover->txn = NULL;
 	recover->ubuf = NULL;

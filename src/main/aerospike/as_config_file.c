@@ -1318,10 +1318,65 @@ as_parse_latency_unit(as_yaml* yaml, const char* name, const char* value, as_met
 }
 
 static bool
+as_parse_sampler_field(as_yaml* yaml, const char* name, as_metrics_policy* policy)
+{
+	if (yaml->event.type == YAML_MAPPING_START_EVENT) {
+		yaml_event_delete(&yaml->event);
+		as_log_info("Unexpected field: metrics.extended.operational.sampler.%s", name);
+		return as_skip_open_mapping(yaml);
+	}
+
+	if (yaml->event.type != YAML_SCALAR_EVENT) {
+		as_expected_error(yaml, YAML_SCALAR_EVENT);
+		yaml_event_delete(&yaml->event);
+		return false;
+	}
+
+	const char* value = (const char*)yaml->event.data.scalar.value;
+	const char* saved = yaml->name;
+	bool rv = true;
+
+	yaml->name = "metrics.extended.operational.sampler";
+
+	if (strcmp(name, "range") == 0) {
+		rv = as_parse_uint32(yaml, name, value, &policy->sampler_range, AS_METRICS_SAMPLER_RANGE);
+	}
+	else if (strcmp(name, "threshold") == 0) {
+		rv = as_parse_uint32(yaml, name, value, &policy->sampler_threshold, AS_METRICS_SAMPLER_THRESHOLD);
+	}
+	else {
+		as_log_info("Unexpected field: metrics.extended.operational.sampler.%s", name);
+	}
+
+	yaml->name = saved;
+	yaml_event_delete(&yaml->event);
+	return rv;
+}
+
+typedef bool (*as_parse_metrics_field_fn)(as_yaml* yaml, const char* name, as_metrics_policy* policy);
+
+static bool
+as_parse_open_mapping(as_yaml* yaml, as_parse_metrics_field_fn fn, as_metrics_policy* policy);
+
+static bool
 as_parse_operational_field(as_yaml* yaml, const char* name, as_metrics_policy* policy)
 {
 	if (yaml->event.type == YAML_MAPPING_START_EVENT) {
-		// sampler and other nested groups are not applied.
+		if (strcmp(name, "sampler") == 0) {
+			yaml_event_delete(&yaml->event);
+
+			if (!as_parse_open_mapping(yaml, as_parse_sampler_field, policy)) {
+				return false;
+			}
+
+			if (policy->sampler_range < 1 || policy->sampler_threshold > policy->sampler_range) {
+				as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+					"Invalid metrics.extended.operational.sampler: range must be >= 1 and threshold must be <= range");
+				return false;
+			}
+			return true;
+		}
+
 		yaml_event_delete(&yaml->event);
 		as_log_info("Unexpected field: metrics.extended.operational.%s", name);
 		return as_skip_open_mapping(yaml);
@@ -1359,8 +1414,6 @@ as_parse_operational_field(as_yaml* yaml, const char* name, as_metrics_policy* p
 	yaml_event_delete(&yaml->event);
 	return rv;
 }
-
-typedef bool (*as_parse_metrics_field_fn)(as_yaml* yaml, const char* name, as_metrics_policy* policy);
 
 static bool
 as_parse_open_mapping(as_yaml* yaml, as_parse_metrics_field_fn fn, as_metrics_policy* policy)
@@ -2309,6 +2362,16 @@ as_cluster_update_metrics(
 		src->operational_enabled : orig->operational_enabled;
 	trg->usage_enabled = as_field_is_set(bitmap, AS_METRICS_USAGE) ?
 		src->usage_enabled : orig->usage_enabled;
+	trg->sampler_range = as_field_is_set(bitmap, AS_METRICS_SAMPLER_RANGE) ?
+		src->sampler_range : orig->sampler_range;
+	trg->sampler_threshold = as_field_is_set(bitmap, AS_METRICS_SAMPLER_THRESHOLD) ?
+		src->sampler_threshold : orig->sampler_threshold;
+
+	if (trg->sampler_range < 1 || trg->sampler_threshold > trg->sampler_range) {
+		pthread_mutex_unlock(&cluster->metrics_lock);
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid metrics.extended.operational.sampler: range must be >= 1 and threshold must be <= range");
+	}
 	trg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT) ?
 		src->report_size_limit : orig->report_size_limit;
 
@@ -2367,6 +2430,12 @@ as_cluster_update_metrics(
 
 		if (!cluster->metrics_enabled || export_changed || latency_changed || tier_changed) {
 			enable_metrics = true;
+		}
+		else if (as_load_uint32(&cluster->metrics_sampler_range) != trg->sampler_range ||
+				as_load_uint32(&cluster->metrics_sampler_threshold) != trg->sampler_threshold) {
+			// Sampler changes apply to the next command. They do not restart export.
+			as_store_uint32(&cluster->metrics_sampler_range, trg->sampler_range);
+			as_store_uint32(&cluster->metrics_sampler_threshold, trg->sampler_threshold);
 		}
 
 		if (enable_metrics) {

@@ -41,10 +41,6 @@
 // Replicas take ~2K per namespace, so this will cover most deployments:
 #define INFO_STACK_BUF_SIZE (16 * 1024)
 
-// Number of nanoseconds per millisecond
-#define NS_TO_MS 1000000
-#define NS_TO_US 1000
-
 //---------------------------------
 // Globals
 //---------------------------------
@@ -605,7 +601,7 @@ as_node_create_connection(
 	if (metrics_enabled) {
 		uint64_t elapsed = cf_getns() - begin;
 		as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
-		as_node_add_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);
+		as_node_add_attempt_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);
 	}
 	return AEROSPIKE_OK;
 }
@@ -1017,7 +1013,12 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 		return 0;
 	}
 	
-	as_ns_metrics* metrics = (node->cluster->metrics_enabled)? as_node_prepare_metrics(node, NULL) : NULL;
+	bool sample = as_cluster_sample_operational(node->cluster);
+	as_ns_metrics* metrics = NULL;
+
+	if (as_cluster_record_namespace_metrics(node->cluster, sample)) {
+		metrics = as_node_prepare_metrics(node, NULL);
+	}
 
 	if (metrics) {
 		as_node_add_bytes_out(metrics, write_size);
@@ -1514,16 +1515,6 @@ as_node_parse_racks(as_cluster* cluster, as_error* err, as_node* node, char* buf
 	return AEROSPIKE_OK;
 }
 
-/**
- * Use non-inline function for garbarge collector function pointer reference.
- * Forward to inlined release.
- */
-static inline void
-release_latency(as_latency* latency)
-{
-	as_latency_release(latency);
-}
-
 void
 as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 {
@@ -1534,34 +1525,8 @@ as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 	for (uint8_t i = 0; i < max; i++) {
 		as_ns_metrics* metrics = array[i];
 
-		// Initialize latency buckets.
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			as_latency* latency = metrics->latency[j];
-
-			if (policy->latency_columns == latency->size && policy->latency_shift == latency->shift &&
-				policy->latency_unit == latency->unit) {
-				// Initialize existing latency histogram.
-				for (uint8_t k = 0; k < latency->size; k++) {
-					as_store_uint64(&latency->buckets[k], 0);
-				}
-			}
-			else {
-				// Create new latency histogram.
-				as_latency* latency_old = latency;
-				latency = cf_calloc(1, sizeof(as_latency) + (sizeof(uint64_t) * policy->latency_columns));
-				latency->ref_count = 1;
-				latency->shift = policy->latency_shift;
-				latency->size = policy->latency_columns;
-				latency->unit = policy->latency_unit;
-
-				as_store_ptr_rls((void**)&metrics->latency[j], latency);
-
-				// Put old latency on garbage collector stack.
-				as_gc_item item;
-				item.data = latency_old;
-				item.release_fn = (as_release_fn)release_latency;
-				as_vector_append(node->cluster->gc, &item);
-			}
+			as_latency_gc_init(node->cluster, &metrics->latency[j], policy);
 		}
 	}
 }
@@ -1622,12 +1587,7 @@ as_node_append_metrics(as_node* node, const char* ns)
 		}
 
 		for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
-			as_latency* latency = cf_calloc(1, sizeof(as_latency) + (sizeof(uint64_t) * latency_columns));
-			latency->ref_count = 1;
-			latency->shift = latency_shift;
-			latency->size = latency_columns;
-			latency->unit = latency_unit;
-			metrics->latency[i] = latency;
+			metrics->latency[i] = as_latency_create(latency_columns, latency_shift, latency_unit);
 		}
 		node->metrics[node->metrics_size++] = metrics;
 	}
@@ -1651,42 +1611,14 @@ as_node_prepare_metrics(as_node* node, const char* ns)
 	return metrics;
 }
 
-static inline uint8_t
-as_latency_get_index(as_latency* latency, uint64_t elapsed)
-{
-	uint64_t limit = 1;
-	uint8_t last_bucket = latency->size - 1;
-
-	for (uint8_t i = 0; i < last_bucket; i++) {
-		if (elapsed <= limit) {
-			return i;
-		}
-		limit <<= latency->shift;
-	}
-	return last_bucket;
-}
-
 void
-as_node_add_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos)
+as_node_add_attempt_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos)
 {
 	if (!metrics) {
 		return;
 	}
 
-	as_latency* latency = as_latency_reserve(metrics->latency[latency_type]);
-	uint64_t scale = latency->unit == AS_METRICS_LATENCY_MICROSECONDS ? NS_TO_US : NS_TO_MS;
-
-	// Convert nanoseconds to the histogram unit and round up.
-	uint64_t elapsed = elapsed_nanos / scale;
-
-	if ((elapsed_nanos - (elapsed * scale)) > 0) {
-		elapsed++;
-	}
-
-	uint8_t index = as_latency_get_index(latency, elapsed);
-	as_incr_uint64(&latency->buckets[index]);
-
-	as_latency_release(latency);
+	as_latency_add(metrics->latency[latency_type], elapsed_nanos);
 }
 
 void

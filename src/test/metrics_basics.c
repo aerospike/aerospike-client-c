@@ -624,6 +624,19 @@ static uint64_t
 metrics_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
 {
 	uint64_t total = 0;
+	const as_metrics_latency_snapshot* latency_snapshot =
+		&metrics_snapshot->command_latencies[AS_LATENCY_TYPE_WRITE];
+
+	for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
+		total += latency_snapshot->buckets[k];
+	}
+	return total;
+}
+
+static uint64_t
+metrics_attempt_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
+{
+	uint64_t total = 0;
 
 	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
 		as_metrics_node_snapshot* node_snapshot = metrics_snapshot->nodes[i];
@@ -635,7 +648,8 @@ metrics_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
 				continue;
 			}
 
-			as_metrics_latency_snapshot* latency_snapshot = &namespace_snapshot->latencies[AS_LATENCY_TYPE_WRITE];
+			as_metrics_latency_snapshot* latency_snapshot =
+				&namespace_snapshot->latencies[AS_LATENCY_TYPE_WRITE];
 
 			for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
 				total += latency_snapshot->buckets[k];
@@ -661,15 +675,21 @@ metrics_test_namespace_ok(const as_metrics_snapshot* metrics_snapshot, uint8_t b
 			}
 
 			found = true;
-			as_metrics_latency_snapshot* latency_snapshot = &namespace_snapshot->latencies[AS_LATENCY_TYPE_WRITE];
-
-			if (latency_snapshot->type != AS_LATENCY_TYPE_WRITE || latency_snapshot->bucket_count != bucket_count ||
-					!latency_snapshot->buckets) {
-				return false;
-			}
 		}
 	}
-	return found;
+
+	if (!found) {
+		return false;
+	}
+
+	const as_metrics_latency_snapshot* latency_snapshot =
+		&metrics_snapshot->command_latencies[AS_LATENCY_TYPE_WRITE];
+
+	if (latency_snapshot->type != AS_LATENCY_TYPE_WRITE || latency_snapshot->bucket_count != bucket_count ||
+			!latency_snapshot->buckets) {
+		return false;
+	}
+	return true;
 }
 
 static bool
@@ -749,7 +769,25 @@ TEST(metrics_policy_defaults, "metrics policy defaults leave operational and usa
 
 	assert_false(policy.operational_enabled);
 	assert_false(policy.usage_enabled);
+	assert_int_eq(policy.sampler_range, 1);
+	assert_int_eq(policy.sampler_threshold, 1);
 	assert_false(policy.enable);
+
+	as_error err;
+	assert_int_eq(as_metrics_policy_set_sampler_probability(&err, &policy, 0.1), AEROSPIKE_OK);
+	assert_int_eq(policy.sampler_range, 1000000);
+	assert_int_eq(policy.sampler_threshold, 100000);
+
+	assert_int_eq(as_metrics_policy_set_sampler_probability(&err, &policy, -0.1), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(policy.sampler_range, 1000000);
+	assert_int_eq(policy.sampler_threshold, 100000);
+	assert_int_eq(as_metrics_policy_set_sampler_probability(&err, &policy, 1.1), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(policy.sampler_range, 1000000);
+	assert_int_eq(policy.sampler_threshold, 100000);
+	volatile double zero = 0.0;
+	assert_int_eq(as_metrics_policy_set_sampler_probability(&err, &policy, zero / zero), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(policy.sampler_range, 1000000);
+	assert_int_eq(policy.sampler_threshold, 100000);
 	assert_int_eq(policy.interval, 30);
 	assert_string_eq(policy.export_interval, "");
 	assert_int_eq(policy.latency_columns, 7);
@@ -870,6 +908,11 @@ TEST(metrics_enable_leaves_operational_off, "metrics.enabled does not turn on op
 	as_error err;
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
 
+	as_metrics_snapshot* before_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &before_snapshot), AEROSPIKE_OK);
+	uint64_t command_count = before_snapshot->command_count;
+	as_metrics_snapshot_destroy(before_snapshot);
+
 	assert_int_eq(metrics_put(&err, "metrics-master-only"), AEROSPIKE_OK);
 
 	as_metrics_snapshot* metrics_snapshot = NULL;
@@ -895,7 +938,8 @@ TEST(metrics_enable_leaves_operational_off, "metrics.enabled does not turn on op
 	assert_false(metrics_snapshot->metrics_enabled);
 	assert_false(metrics_snapshot->operational_metrics_enabled);
 	assert_true(metrics_nodes_ok(metrics_snapshot));
-	assert_true(metrics_snapshot->command_count > 0);
+	// command.count is operational and sampler-gated, so this put does not move it.
+	assert_true(metrics_snapshot->command_count == command_count);
 	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	as_metrics_policy_destroy(&policy);
@@ -989,8 +1033,12 @@ TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on 
 	assert_int_eq(metrics_snapshot->latency_columns, 7);
 	assert_int_eq(metrics_snapshot->latency_shift, 1);
 	assert_true(metrics_test_namespace_ok(metrics_snapshot, 7));
-	assert_true(metrics_write_latency_total(metrics_snapshot) > 0);
+	uint64_t command_latency = metrics_write_latency_total(metrics_snapshot);
+	uint64_t attempt_latency = metrics_attempt_write_latency_total(metrics_snapshot);
 	as_metrics_snapshot_destroy(metrics_snapshot);
+
+	assert_true(command_latency > 0);
+	assert_int_eq(attempt_latency, 0);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
@@ -1457,6 +1505,36 @@ TEST(metrics_deprecated_listeners, "deprecated listeners still run on enable and
 	assert_int_eq(logs, 0);
 }
 
+TEST(metrics_listener_reads_attempt_latency, "a metrics listener can read per-attempt namespace latency")
+{
+	metrics_listener_counts counts;
+	memset(&counts, 0, sizeof(counts));
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.interval = 3600;
+	as_metrics_policy_set_listeners(&policy, metrics_on_enable, metrics_on_disable,
+		metrics_on_node_close, metrics_on_snapshot, &counts);
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq(metrics_put(&err, "metrics-listener-latency"), AEROSPIKE_OK);
+
+	as_metrics_snapshot* metrics_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
+	bool operational = metrics_snapshot->operational_metrics_enabled;
+	uint64_t attempt_latency = metrics_attempt_write_latency_total(metrics_snapshot);
+	uint64_t command_latency = metrics_write_latency_total(metrics_snapshot);
+	as_metrics_snapshot_destroy(metrics_snapshot);
+
+	metrics_disable();
+	as_metrics_policy_destroy(&policy);
+
+	assert_false(operational);
+	assert_true(attempt_latency > 0);
+	assert_int_eq(command_latency, 0);
+}
+
 TEST(metrics_usage_api_counters, "usage counters record blocking, deferred, and background API calls")
 {
 	as_metrics_policy policy;
@@ -1524,7 +1602,7 @@ TEST(metrics_usage_api_counters, "usage counters record blocking, deferred, and 
 	as_metrics_policy_destroy(&policy);
 }
 
-TEST(metrics_command_count_is_cumulative, "command_count grows while enabled and stays after disable")
+TEST(metrics_command_count_is_cumulative, "command_count grows while operational metrics are on and stays after disable")
 {
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
@@ -1537,6 +1615,15 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while enabled and
 	uint64_t count = before_snapshot->command_count;
 	as_metrics_snapshot_destroy(before_snapshot);
 
+	assert_int_eq(metrics_put(&err, "metrics-command-count-off"), AEROSPIKE_OK);
+
+	as_metrics_snapshot* idle_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &idle_snapshot), AEROSPIKE_OK);
+	assert_true(idle_snapshot->command_count == count);
+	as_metrics_snapshot_destroy(idle_snapshot);
+
+	policy.operational_enabled = true;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
 	assert_int_eq(metrics_put(&err, "metrics-command-count"), AEROSPIKE_OK);
 
 	as_metrics_snapshot* after_snapshot = NULL;
@@ -1546,7 +1633,7 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while enabled and
 	as_metrics_snapshot_destroy(after_snapshot);
 
 	metrics_disable();
-	assert_int_eq(metrics_put(&err, "metrics-command-count-off"), AEROSPIKE_OK);
+	assert_int_eq(metrics_put(&err, "metrics-command-count-disabled"), AEROSPIKE_OK);
 
 	as_metrics_snapshot* frozen_snapshot = NULL;
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &frozen_snapshot), AEROSPIKE_OK);
@@ -1554,6 +1641,35 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while enabled and
 	assert_true(frozen_snapshot->command_count == enabled_count);
 	as_metrics_snapshot_destroy(frozen_snapshot);
 
+	as_metrics_policy_destroy(&policy);
+}
+
+TEST(metrics_operational_sampler_off, "threshold 0 records no command-path operational metrics")
+{
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = true;
+	policy.sampler_threshold = 0;
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+
+	as_metrics_snapshot* before_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &before_snapshot), AEROSPIKE_OK);
+	uint64_t count = before_snapshot->command_count;
+	uint64_t retries = before_snapshot->retry_count;
+	as_metrics_snapshot_destroy(before_snapshot);
+
+	assert_int_eq(metrics_put(&err, "metrics-sampler-off"), AEROSPIKE_OK);
+
+	as_metrics_snapshot* after_snapshot = NULL;
+	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &after_snapshot), AEROSPIKE_OK);
+	assert_true(after_snapshot->operational_metrics_enabled);
+	assert_true(after_snapshot->command_count == count);
+	assert_true(after_snapshot->retry_count == retries);
+	as_metrics_snapshot_destroy(after_snapshot);
+
+	metrics_disable();
 	as_metrics_policy_destroy(&policy);
 }
 
@@ -1755,6 +1871,41 @@ TEST(metrics_dynamic_config_enabled_and_operational, "metrics.enabled and extend
 	assert_int_eq(policy.latency_unit, AS_METRICS_LATENCY_MICROSECONDS);
 	assert_int_eq(policy.latency_columns, 5);
 	assert_int_eq(policy.latency_shift, 3);
+	assert_int_eq(policy.sampler_range, 1);
+	assert_int_eq(policy.sampler_threshold, 1);
+}
+
+TEST(metrics_dynamic_config_sampler, "operational sampler range and threshold override the application policy")
+{
+	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
+	assert_true(metrics_read_dynamic_client_config_policy(
+		"version: 1.2.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    extended:\n"
+		"      operational:\n"
+		"        sampler:\n"
+		"          range: 10\n"
+		"          threshold: 1\n",
+		&policy, false, NULL, &exporter));
+
+	assert_int_eq(policy.sampler_range, 10);
+	assert_int_eq(policy.sampler_threshold, 1);
+
+	// A rejected sampler is not applied. Defaults stay in place.
+	assert_true(metrics_read_dynamic_client_config_policy(
+		"version: 1.2.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    extended:\n"
+		"      operational:\n"
+		"        sampler:\n"
+		"          range: 0\n"
+		"          threshold: 1\n",
+		&policy, false, NULL, &exporter));
+	assert_int_eq(policy.sampler_range, 1);
+	assert_int_eq(policy.sampler_threshold, 1);
 }
 
 TEST(metrics_dynamic_config_usage, "metrics.extended.usage.enabled overrides the application policy")
@@ -1812,8 +1963,10 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_invalid_report_dir);
 	suite_add(metrics_listeners_require_all_callbacks);
 	suite_add(metrics_deprecated_listeners);
+	suite_add(metrics_listener_reads_attempt_latency);
 	suite_add(metrics_usage_api_counters);
 	suite_add(metrics_command_count_is_cumulative);
+	suite_add(metrics_operational_sampler_off);
 	suite_add(metrics_dynamic_config_export);
 	suite_add(metrics_dynamic_config_keeps_export_interval);
 	suite_add(metrics_dynamic_config_rejects_unknown_exporter);
@@ -1821,5 +1974,6 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_dynamic_config_empty_report_dir_skips_file);
 	suite_add(metrics_dynamic_config_empty_export_interval);
 	suite_add(metrics_dynamic_config_enabled_and_operational);
+	suite_add(metrics_dynamic_config_sampler);
 	suite_add(metrics_dynamic_config_usage);
 }

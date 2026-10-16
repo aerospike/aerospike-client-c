@@ -433,6 +433,13 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * A learn-metrics file writer is installed. Namespace histograms, bytes, and
+	 * error counts are recorded for that writer when operational metrics are off.
+	 */
+	bool metrics_file_writer;
+
+	/**
+	 * @private
 	 * Histogram bucket unit. This is set using as_metrics_policy.
 	 */
 	as_metrics_latency_unit metrics_latency_unit;
@@ -459,6 +466,27 @@ typedef struct as_cluster_s {
 	 * This is set using as_policy_metrics.
 	 */
 	uint8_t metrics_latency_shift;
+
+	/**
+	 * @private
+	 * v3 command latency. One sample per command for total elapsed time
+	 * including retries, across nodes. Allocated only while operational
+	 * metrics are enabled.
+	 */
+	as_latency* command_latency[AS_LATENCY_TYPE_MAX];
+
+	/**
+	 * @private
+	 * Operational sampler modulus. >= 1. Read with as_load_uint32().
+	 */
+	uint32_t metrics_sampler_range;
+
+	/**
+	 * @private
+	 * Operational sampler threshold, 0 through range. 0 records no command-path
+	 * operational metrics. Read with as_load_uint32().
+	 */
+	uint32_t metrics_sampler_threshold;
 
 	/**
 	 * @private
@@ -713,14 +741,88 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster);
 
 /**
  * @private
- * Increment command count when metrics are enabled.
+ * Allocate or reset cluster command latency histograms when operational
+ * metrics are on. Release them when operational metrics are off.
  */
-static inline void
+void
+as_cluster_enable_command_latency(as_cluster* cluster, const as_metrics_policy* policy);
+
+/**
+ * @private
+ * Release cluster command latency histograms. In-flight samples keep the
+ * histogram alive until they finish.
+ */
+void
+as_cluster_disable_command_latency(as_cluster* cluster);
+
+/**
+ * @private
+ * Record one v3 command latency sample. elapsed_nanos includes retries.
+ * No-op when operational command histograms are not allocated.
+ */
+void
+as_cluster_add_command_latency(as_cluster* cluster, as_latency_type latency_type, uint64_t elapsed_nanos);
+
+/**
+ * @private
+ * True when this draw should record command-path operational metrics.
+ * One call is one decision. Draw before the retry loop and reuse the result.
+ */
+bool
+as_cluster_sample_operational(as_cluster* cluster);
+
+/**
+ * @private
+ * True when per-attempt namespace latency is published. The learn-metrics file
+ * writer and metrics listeners read that series.
+ */
+static inline bool
+as_cluster_should_record_attempt_latency(const as_cluster* cluster)
+{
+	return cluster->metrics_file_writer || cluster->metrics_listeners.snapshot_listener != NULL;
+}
+
+/**
+ * @private
+ * True when this command should update per-namespace histograms, bytes, and
+ * error counts. When operational metrics are on, operational_sample is that
+ * decision: false skips namespace metrics. When operational metrics are off,
+ * there is no sampler draw, and this records only if a learn-metrics file
+ * writer or a metrics listener is installed.
+ */
+static inline bool
+as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_sample)
+{
+	if (!cluster->metrics_enabled) {
+		return false;
+	}
+
+	if (cluster->metrics_operational_enabled) {
+		// The sampler decided. A "no" skips namespace metrics as well as the
+		// cluster command_count and retry counter.
+		return operational_sample;
+	}
+
+	// The on-demand snapshot omits these fields while operational metrics are
+	// off. The file writer and metrics listeners still read them.
+	return as_cluster_should_record_attempt_latency(cluster);
+}
+
+/**
+ * @private
+ * Increment command count when this user call is sampled.
+ * Returns whether the call was sampled, so later retries of that same call
+ * can reuse the decision.
+ */
+static inline bool
 as_cluster_add_command_count(as_cluster* cluster)
 {
-	if (cluster->metrics_enabled) {
-		as_incr_uint64(&cluster->command_count);
+	if (!as_cluster_sample_operational(cluster)) {
+		return false;
 	}
+
+	as_incr_uint64(&cluster->command_count);
+	return true;
 }
 
 /**

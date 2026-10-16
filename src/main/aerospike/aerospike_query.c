@@ -1220,7 +1220,7 @@ as_query_command_execute_old(as_query_task* task)
 	cmd.policy = policy;
 	cmd.node = task->node;
 	cmd.key = NULL;       // Not referenced when node set.
-	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	// Must use global namespace due to reference equality logic in as_node_find_namespace().
 	cmd.ns = as_partition_tables_get_ns(task->cluster, task->query->ns);
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_query_parse_records;
@@ -1576,7 +1576,7 @@ as_query_partitions(
 	as_cluster* cluster, as_error* err, const as_policy_query* policy, const as_query* query,
 	as_partition_tracker* pt, aerospike_query_foreach_callback callback, void* udata)
 {
-	as_cluster_add_command_count(cluster);
+	bool sampled = as_cluster_add_command_count(cluster);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -1591,7 +1591,7 @@ as_query_partitions(
 
 		uint32_t n_nodes = pt->node_parts.size;
 
-		if (pt->iteration > 1) {
+		if (pt->iteration > 1 && sampled) {
 			as_cluster_add_retries(cluster, n_nodes);
 		}
 
@@ -1709,7 +1709,7 @@ as_query_partition_execute_async(
 	as_event_executor* ee = &qe->executor;
 	uint32_t n_nodes = pt->node_parts.size;
 
-	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	// Must use global namespace due to reference equality logic in as_node_find_namespace().
 	const char*	global_ns = as_partition_tables_get_ns(qe->cluster, qe->executor.ns);
 
 	for (uint32_t i = 0; i < n_nodes; i++) {
@@ -1839,6 +1839,7 @@ as_query_partition_execute_async(
 		cmd->ubuf = NULL;
 		cmd->ubuf_size = 0;
 		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
+		as_event_command_select_sample(cmd, false);
 		ee->commands[i] = cmd;
 	}
 
@@ -1877,7 +1878,7 @@ as_query_partition_async(
 	as_event_loop* event_loop
 	)
 {
-	as_cluster_add_command_count(cluster);
+	bool sampled = as_cluster_add_command_count(cluster);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, query->ns, err);
 
@@ -1951,6 +1952,7 @@ as_query_partition_async(
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
+	ee->metrics_sample_decision = sampled;
 
 	return as_query_partition_execute_async(qe, pt, err);
 }
@@ -1997,7 +1999,11 @@ as_query_partition_retry_async(as_async_query_executor* qe_old, as_error* err)
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
-	as_cluster_add_retry(qe->cluster);
+	ee->metrics_sample_decision = ee_old->metrics_sample_decision;
+
+	if (ee->metrics_sample_decision) {
+		as_cluster_add_retry(qe->cluster);
+	}
 
 	return as_query_partition_execute_async(qe, qe->pt, err);
 }
@@ -2427,7 +2433,7 @@ aerospike_query_async(
 	// read to reuse buffer.
 	size_t s = (sizeof(as_async_query_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
 
-	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	// Must use global namespace due to reference equality logic in as_node_find_namespace().
 	const char* global_ns = as_partition_tables_get_ns(cluster, query->ns);
 
 	// Create all query commands.
@@ -2464,6 +2470,7 @@ aerospike_query_async(
 		cmd->ubuf = NULL;
 		cmd->ubuf_size = 0;
 		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
+		as_event_command_select_sample(cmd, false);
 		memcpy(cmd->buf, cmd_buf, size);
 		exec->commands[i] = cmd;
 	}

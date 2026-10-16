@@ -738,7 +738,7 @@ as_scan_command_execute(as_scan_task* task)
 	cmd.policy = &task->policy->base;
 	cmd.node = task->node;
 	cmd.key = NULL;       // Not referenced when node set.
-	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	// Must use global namespace due to reference equality logic in as_node_find_namespace().
 	cmd.ns = as_partition_tables_get_ns(task->cluster, task->scan->ns);
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_scan_parse_records;
@@ -949,7 +949,7 @@ as_scan_partitions(
 	as_cluster* cluster, as_error* err, const as_policy_scan* policy, const as_scan* scan,
 	as_partition_tracker* pt, aerospike_scan_foreach_callback callback, void* udata)
 {
-	as_cluster_add_command_count(cluster);
+	bool sampled = as_cluster_add_command_count(cluster);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -964,7 +964,7 @@ as_scan_partitions(
 
 		uint32_t n_nodes = pt->node_parts.size;
 		
-		if (pt->iteration > 1) {
+		if (pt->iteration > 1 && sampled) {
 			as_cluster_add_retries(cluster, n_nodes);
 		}
 
@@ -1073,7 +1073,7 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 	as_event_executor* ee = &se->executor;
 	uint32_t n_nodes = pt->node_parts.size;
 
-	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	// Must use global namespace due to reference equality logic in as_node_find_namespace().
 	const char*	global_ns = as_partition_tables_get_ns(se->cluster, se->executor.ns);
 
 	for (uint32_t i = 0; i < n_nodes; i++) {
@@ -1181,6 +1181,7 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 		cmd->ubuf = NULL;
 		cmd->ubuf_size = 0;
 		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
+		as_event_command_select_sample(cmd, false);
 		ee->commands[i] = cmd;
 	}
 
@@ -1253,7 +1254,11 @@ as_scan_partition_retry_async(as_async_scan_executor* se_old, as_error* err)
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
-	as_cluster_add_retry(se->cluster);
+	ee->metrics_sample_decision = ee_old->metrics_sample_decision;
+
+	if (ee->metrics_sample_decision) {
+		as_cluster_add_retry(se->cluster);
+	}
 
 	return as_scan_partition_execute_async(se, se->pt, err);
 }
@@ -1265,7 +1270,7 @@ as_scan_partition_async(
 	as_event_loop* event_loop
 	)
 {
-	as_cluster_add_command_count(cluster);
+	bool sampled = as_cluster_add_command_count(cluster);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, scan->ns, err);
 
@@ -1340,6 +1345,7 @@ as_scan_partition_async(
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
+	ee->metrics_sample_decision = sampled;
 
 	return as_scan_partition_execute_async(se, pt, err);
 }

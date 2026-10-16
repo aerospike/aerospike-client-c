@@ -99,6 +99,39 @@ as_latency_get_bucket(as_latency* latency, uint32_t index)
 AS_EXTERN char*
 as_latency_type_to_string(as_latency_type type);
 
+struct as_cluster_s;
+struct as_metrics_policy_s;
+
+/**
+ * @private
+ * Allocate a zeroed latency histogram. The caller owns the initial reference.
+ */
+as_latency*
+as_latency_create(uint8_t columns, uint8_t shift, as_metrics_latency_unit unit);
+
+/**
+ * @private
+ * Add one elapsed sample. No-op when latency is NULL.
+ */
+void
+as_latency_add(as_latency* latency, uint64_t elapsed_nanos);
+
+/**
+ * @private
+ * Publish slot and garbage-collect the previous histogram on cluster.
+ */
+void
+as_latency_gc_publish(struct as_cluster_s* cluster, as_latency** slot, as_latency* latency_new);
+
+/**
+ * @private
+ * Reset slot to the policy shape. See as_latency_gc_publish() when the histogram is replaced.
+ */
+void
+as_latency_gc_init(
+	struct as_cluster_s* cluster, as_latency** slot, const struct as_metrics_policy_s* policy
+	);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

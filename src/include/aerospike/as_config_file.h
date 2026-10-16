@@ -103,6 +103,8 @@ extern "C" {
 #define AS_METRICS_OPERATIONAL 124
 #define AS_METRICS_LATENCY_UNIT 125
 #define AS_METRICS_USAGE 126
+#define AS_METRICS_SAMPLER_RANGE 127
+#define AS_METRICS_SAMPLER_THRESHOLD 128
 
 #define AS_BATCH_CONNECT_TIMEOUT 0
 #define AS_BATCH_SOCKET_TIMEOUT 1
@@ -119,8 +121,8 @@ extern "C" {
 #define AS_BATCH_ALLOW_INLINE_SSD 12
 #define AS_BATCH_RESPOND_ALL_KEYS 13
 
-// 128 total bits / 8 = 16 bytes
-#define AS_CONFIG_BITMAP_SIZE 16
+// Bits 0-128. 17 bytes covers offsets through AS_METRICS_SAMPLER_THRESHOLD.
+#define AS_CONFIG_BITMAP_SIZE 17
 
 //---------------------------------
 // Types

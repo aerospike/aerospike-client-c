@@ -26,6 +26,7 @@
 #include <aerospike/as_lookup.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_peers.h>
+#include <aerospike/as_random.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
@@ -577,6 +578,30 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	as_vector_append(cluster->gc, &item);
 }
 
+bool
+as_cluster_sample_operational(as_cluster* cluster)
+{
+	if (!cluster->metrics_enabled || !cluster->metrics_operational_enabled) {
+		return false;
+	}
+
+	uint32_t threshold = as_load_uint32(&cluster->metrics_sampler_threshold);
+
+	if (threshold == 0) {
+		return false;
+	}
+
+	uint32_t range = as_load_uint32(&cluster->metrics_sampler_range);
+
+	// range 1 and threshold 1, the default, records every command.
+	if (range <= 1 || threshold >= range) {
+		return true;
+	}
+
+	uint32_t draw = as_random_get_uint32();
+	return (draw % range) < threshold;
+}
+
 as_status
 as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_policy* policy)
 {
@@ -587,6 +612,37 @@ as_status
 as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
 {
 	return as_metrics_runtime_disable(err, cluster);
+}
+
+void
+as_cluster_enable_command_latency(as_cluster* cluster, const as_metrics_policy* policy)
+{
+	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+		if (policy->operational_enabled) {
+			as_latency_gc_init(cluster, &cluster->command_latency[i], policy);
+		}
+		else {
+			as_latency_gc_publish(cluster, &cluster->command_latency[i], NULL);
+		}
+	}
+}
+
+void
+as_cluster_disable_command_latency(as_cluster* cluster)
+{
+	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+		as_latency_gc_publish(cluster, &cluster->command_latency[i], NULL);
+	}
+}
+
+void
+as_cluster_add_command_latency(as_cluster* cluster, as_latency_type latency_type, uint64_t elapsed_nanos)
+{
+	if (!cluster) {
+		return;
+	}
+
+	as_latency_add(cluster->command_latency[latency_type], elapsed_nanos);
 }
 
 static void
@@ -1652,10 +1708,13 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->metrics_enabled = false;
 	cluster->metrics_operational_enabled = false;
 	cluster->metrics_usage_enabled = false;
+	cluster->metrics_file_writer = false;
 	cluster->metrics_latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
 	cluster->metrics_interval = 0;
 	cluster->metrics_latency_columns = 0;
 	cluster->metrics_latency_shift = 0;
+	cluster->metrics_sampler_range = 1;
+	cluster->metrics_sampler_threshold = 1;
 	cluster->command_count = 0;
 	cluster->metrics_api_blocking = 0;
 	cluster->metrics_api_deferred = 0;

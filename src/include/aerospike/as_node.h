@@ -238,7 +238,8 @@ typedef struct {
 	uint64_t key_busy_count;
 
 	/**
-	 * Latency histograms.
+	 * Latency histograms. One sample per successful attempt.
+	 * The learn-metrics file and snapshot `latencies` use this series.
 	 */
 	as_latency* latency[AS_LATENCY_TYPE_MAX];
 
@@ -864,10 +865,10 @@ as_node_prepare_metrics(as_node* node, const char* ns);
 
 /**
  * @private
- * Record latency of type latency_type for node
+ * Record one per-attempt latency sample in the learn-metrics histogram.
  */
 void
-as_node_add_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos);
+as_node_add_attempt_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos);
 
 struct as_metrics_policy_s;
 

@@ -209,6 +209,11 @@ typedef struct as_command_s {
 	size_t buf_size;
 	uint32_t partition_id;
 	as_policy_replica replica;
+	// Monotonic nanoseconds from cf_getns() at the start of this command.
+	// 0 when the v3 command latency sample is not taken.
+	// Elapsed time is cf_getns() minus this value and includes retries.
+	// Existing histograms time each attempt separately.
+	uint64_t command_begin;
 	uint64_t deadline_ms;
 	uint32_t socket_timeout;
 	uint32_t total_timeout;
@@ -220,6 +225,16 @@ typedef struct as_command_s {
 	uint8_t replica_index;
 	uint8_t replica_index_sc; // Used in batch only.
 	as_latency_type latency_type;
+	// Stored operational sampler decision. Reused for retries of this command.
+	// False when operational metrics are off, or when the sampler skips this call.
+	// Gates the cluster command_count, the retry counter, and v3 command latency.
+	// While operational metrics are on, this is also the namespace-metrics decision.
+	bool metrics_sample_decision;
+	// True when this command updates per-namespace histograms, bytes, and error
+	// counts. While operational metrics are on, a sampler "no" sets this false.
+	// While they are off, set only if a learn-metrics file writer or a metrics
+	// listener is installed.
+	bool record_namespace_metrics;
 } as_command;
 
 /**

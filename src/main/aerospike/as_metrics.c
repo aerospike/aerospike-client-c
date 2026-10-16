@@ -110,6 +110,10 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 			cfg->operational_enabled : src->operational_enabled;
 		mrg->usage_enabled = as_field_is_set(bitmap, AS_METRICS_USAGE) ?
 			cfg->usage_enabled : src->usage_enabled;
+		mrg->sampler_range = as_field_is_set(bitmap, AS_METRICS_SAMPLER_RANGE) ?
+			cfg->sampler_range : src->sampler_range;
+		mrg->sampler_threshold = as_field_is_set(bitmap, AS_METRICS_SAMPLER_THRESHOLD) ?
+			cfg->sampler_threshold : src->sampler_threshold;
 		return mrg;
 	}
 	else {
@@ -165,6 +169,21 @@ aerospike_disable_metrics(aerospike* as, as_error* err)
 	return status;
 }
 
+as_status
+as_metrics_policy_set_sampler_probability(as_error* err, as_metrics_policy* policy, double probability)
+{
+	// NaN fails both comparisons, so it is rejected with the out-of-range values.
+	if (!(probability >= 0.0 && probability <= 1.0)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid metrics sampler probability: must be from 0 through 1");
+	}
+
+	as_error_reset(err);
+	policy->sampler_range = 1000000;
+	policy->sampler_threshold = (uint32_t)(probability * 1000000.0 + 0.5);
+	return AEROSPIKE_OK;
+}
+
 void
 as_metrics_policy_init(as_metrics_policy* policy)
 {
@@ -178,6 +197,8 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
 	policy->operational_enabled = false;
 	policy->usage_enabled = false;
+	policy->sampler_range = 1;
+	policy->sampler_threshold = 1;
 	policy->metrics_listeners.enable_listener = NULL;
 	policy->metrics_listeners.snapshot_listener = NULL;
 	policy->metrics_listeners.node_close_listener = NULL;
@@ -635,6 +656,30 @@ as_metrics_node_snapshot_destroy(as_metrics_node_snapshot* snapshot)
 }
 
 static void
+as_metrics_copy_latency(as_metrics_latency_snapshot* dst, as_latency* latency, uint8_t type)
+{
+	dst->type = type;
+
+	if (!latency) {
+		return;
+	}
+
+	latency = as_latency_reserve(latency);
+	uint8_t size = latency->size;
+
+	if (size > 0) {
+		uint64_t* buckets = cf_malloc(sizeof(uint64_t) * size);
+
+		for (uint8_t k = 0; k < size; k++) {
+			buckets[k] = as_latency_get_bucket(latency, k);
+		}
+		dst->buckets = buckets;
+		dst->bucket_count = size;
+	}
+	as_latency_release(latency);
+}
+
+static void
 as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics_node_snapshot** snapshot)
 {
 	as_metrics_node_snapshot* snap = cf_calloc(1, sizeof(as_metrics_node_snapshot));
@@ -683,12 +728,13 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 	}
 
 	uint8_t ns_max = 0;
-	// The file log has always carried namespace histograms. Keep writing them when
-	// operational metrics are off so existing readers are not broken.
-	bool command_path = node->cluster->metrics_enabled &&
-		(node->cluster->metrics_operational_enabled || file_fields);
+	// The file log and metrics listeners read per-attempt namespace histograms.
+	// Keep them when operational metrics are off so those readers are not broken.
+	bool should_copy_attempt_latencies = file_fields || node->cluster->metrics_listeners.snapshot_listener != NULL;
+	bool should_copy_namespace_metrics = node->cluster->metrics_enabled &&
+		(node->cluster->metrics_operational_enabled || should_copy_attempt_latencies);
 
-	if (command_path) {
+	if (should_copy_namespace_metrics) {
 		ns_max = node->metrics_size;
 	}
 
@@ -715,26 +761,9 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 		ns->bytes_out = as_node_get_bytes_out(metrics);
 
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			ns->latencies[j].type = j;
-			as_latency* latency = metrics->latency[j];
-
-			if (!latency) {
-				continue;
+			if (should_copy_attempt_latencies) {
+				as_metrics_copy_latency(&ns->latencies[j], metrics->latency[j], j);
 			}
-
-			latency = as_latency_reserve(latency);
-			uint8_t size = latency->size;
-
-			if (size > 0) {
-				uint64_t* buckets = cf_malloc(sizeof(uint64_t) * size);
-
-				for (uint8_t k = 0; k < size; k++) {
-					buckets[k] = as_latency_get_bucket(latency, k);
-				}
-				ns->latencies[j].buckets = buckets;
-				ns->latencies[j].bucket_count = size;
-			}
-			as_latency_release(latency);
 		}
 		snap->namespace_count++;
 	}
@@ -774,6 +803,10 @@ as_metrics_snapshot_destroy(as_metrics_snapshot* snapshot)
 		cf_free(snapshot->labels);
 	}
 
+	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+		cf_free(snapshot->command_latencies[i].buckets);
+	}
+
 	cf_free(snapshot->event_loops);
 
 	if (snapshot->nodes) {
@@ -800,12 +833,12 @@ as_metrics_snapshot_create_impl(
 {
 	*snapshot = NULL;
 	bool operational = cluster->metrics_enabled && cluster->metrics_operational_enabled;
-	bool command_path = cluster->metrics_enabled &&
+	bool should_read_cpu_mem = cluster->metrics_enabled &&
 		(cluster->metrics_operational_enabled || file_fields);
 	uint32_t cpu_usage = 0;
 	uint64_t mem = 0;
 
-	if (command_path) {
+	if (should_read_cpu_mem) {
 		as_status status = as_metrics_read_cpu_mem(err, cpu, &cpu_usage, &mem);
 
 		if (status != AEROSPIKE_OK) {
@@ -842,6 +875,14 @@ as_metrics_snapshot_create_impl(
 	snap->latency_unit = cluster->metrics_latency_unit;
 	snap->latency_columns = cluster->metrics_latency_columns;
 	snap->latency_shift = cluster->metrics_latency_shift;
+
+	// Command latency spans retries, which can change nodes, so it is copied
+	// once for the cluster. The learn-metrics file does not write this series.
+	if (operational && !file_fields) {
+		for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+			as_metrics_copy_latency(&snap->command_latencies[i], cluster->command_latency[i], i);
+		}
+	}
 
 	if (labels && labels->size > 0) {
 		snap->labels = cf_calloc(labels->size, sizeof(as_metrics_label));
@@ -1242,6 +1283,11 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
 	}
 
+	if (policy->sampler_range < 1 || policy->sampler_threshold > policy->sampler_range) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid metrics sampler: range must be >= 1 and threshold must be <= range");
+	}
+
 	uint32_t tend_ms = cluster->tend_interval;
 
 	// An empty export_interval leaves interval_ms at 0. Fall back to the
@@ -1270,6 +1316,8 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	cluster->metrics_latency_unit = policy->latency_unit;
 	cluster->metrics_operational_enabled = policy->operational_enabled;
 	cluster->metrics_usage_enabled = policy->usage_enabled;
+	as_store_uint32(&cluster->metrics_sampler_range, policy->sampler_range);
+	as_store_uint32(&cluster->metrics_sampler_threshold, policy->sampler_threshold);
 	cluster->metrics_listeners = policy->metrics_listeners;
 
 	as_metrics_runtime* rt = cf_calloc(1, sizeof(as_metrics_runtime));
@@ -1338,11 +1386,13 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		as_node_enable_metrics(nodes->array[i], policy);
 	}
 	as_nodes_release(nodes);
+	as_cluster_enable_command_latency(cluster, policy);
 
 	if (custom_listener) {
 		as_status status = cluster->metrics_listeners.enable_listener(err, cluster->metrics_listeners.udata);
 
 		if (status != AEROSPIKE_OK) {
+			as_cluster_disable_command_latency(cluster);
 			as_metrics_runtime_free(rt);
 			cluster->metrics_runtime = NULL;
 			memset(&cluster->metrics_listeners, 0, sizeof(cluster->metrics_listeners));
@@ -1350,6 +1400,8 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		}
 	}
 
+	cluster->metrics_file_writer = as_metrics_runtime_has_file_exporter(rt) ||
+		cluster->metrics_listeners.snapshot_listener == as_metrics_writer_snapshot;
 	cluster->metrics_enabled = true;
 
 	if (rt->slots->size > 0 || cluster->metrics_listeners.snapshot_listener) {
@@ -1358,6 +1410,8 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		if (pthread_create(&rt->thread, NULL, as_metrics_thread, rt) != 0) {
 			pthread_mutex_unlock(&rt->lock);
 			cluster->metrics_enabled = false;
+			cluster->metrics_file_writer = false;
+			as_cluster_disable_command_latency(cluster);
 			as_status status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
 				"Failed to create metrics thread: %s", strerror(errno));
 
@@ -1423,6 +1477,8 @@ as_metrics_runtime_disable(as_error* err, as_cluster* cluster)
 	}
 
 	cluster->metrics_enabled = false;
+	cluster->metrics_file_writer = false;
+	as_cluster_disable_command_latency(cluster);
 
 	if (rt) {
 		as_metrics_runtime_free(rt);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -269,7 +269,15 @@ as_info_command(
 		names = "";
 	}
 
-	as_ns_metrics* metrics = (node && node->cluster->metrics_enabled)? as_node_prepare_metrics(node, NULL) : NULL;
+	as_ns_metrics* metrics = NULL;
+
+	if (node) {
+		bool operational_sample = as_cluster_sample_operational(node->cluster);
+
+		if (as_cluster_record_namespace_metrics(node->cluster, operational_sample)) {
+			metrics = as_node_prepare_metrics(node, NULL);
+		}
+	}
 
 	uint8_t* cmd = as_command_buffer_init(size);
 	

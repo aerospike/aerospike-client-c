@@ -190,9 +190,12 @@ typedef struct as_metrics_namespace_snapshot_s {
 	uint64_t bytes_out;
 
 	/**
-	 * Latency histograms for this namespace, one entry per `AS_LATENCY_TYPE_*`.
-	 * Same series as `as_ns_metrics.latency`. Bucket totals are cumulative
-	 * since metrics were enabled.
+	 * @private
+	 * Per-attempt latency histograms, one entry per `AS_LATENCY_TYPE_*`.
+	 * Same series as `as_ns_metrics.latency`. The learn-metrics file writer
+	 * prints this series, and metrics listeners read it. Filled when a
+	 * learn-metrics file writer or a metrics listener is installed.
+	 * v3 command latency is `as_metrics_snapshot.command_latencies`.
 	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];
 } as_metrics_namespace_snapshot;
@@ -489,6 +492,15 @@ typedef struct as_metrics_snapshot_s {
 	 * Power of 2 multiple between latency histogram buckets, starting at bucket 3.
 	 */
 	uint8_t latency_shift;
+
+	/**
+	 * v3 command latency, one entry per `AS_LATENCY_TYPE_*`.
+	 * One sample per command for total elapsed time including retries.
+	 * A retry can move the command to another node, so this series is
+	 * cluster-wide. Empty unless operational metrics are enabled.
+	 * The learn-metrics file does not write this series.
+	 */
+	as_metrics_latency_snapshot command_latencies[AS_LATENCY_TYPE_MAX];
 } as_metrics_snapshot;
 
 /**
@@ -633,6 +645,24 @@ typedef struct as_metrics_policy_s {
 	bool usage_enabled;
 
 	/**
+	 * Operational command-path sampler modulus. A command is recorded when
+	 * operational metrics are enabled, threshold > 0, and (draw % range) < threshold.
+	 * Must be >= 1.
+	 *
+	 * Default: 1
+	 */
+	uint32_t sampler_range;
+
+	/**
+	 * Operational command-path sampler threshold, from 0 through sampler_range.
+	 * 0 records nothing. range 1 and threshold 1 record every command.
+	 * range 10 and threshold 1 record about 10 percent.
+	 *
+	 * Default: 1
+	 */
+	uint32_t sampler_threshold;
+
+	/**
 	 * @private
 	 * Should metrics be started as part of dynamic configuration. If aerospike_enable_metrics()
 	 * is called, metrics will automaticallly be enabled and this field is ignored.
@@ -663,6 +693,15 @@ typedef struct as_metrics_policy_s {
 //---------------------------------
 // Functions
 //---------------------------------
+
+/**
+ * Set the operational sampler to approximately probability.
+ * range becomes 1000000 and threshold becomes round(probability * 1000000).
+ * probability must be from 0 through 1. An invalid value, including NaN,
+ * returns AEROSPIKE_ERR_PARAM and leaves the policy unchanged.
+ */
+AS_EXTERN as_status
+as_metrics_policy_set_sampler_probability(as_error* err, as_metrics_policy* policy, double probability);
 
 /**
  * Initalize metrics policy.

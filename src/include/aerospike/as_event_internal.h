@@ -143,7 +143,11 @@ typedef struct as_event_command {
 	cf_ll_element pipe_link;
 	
 	uint8_t* buf;
-	uint64_t begin; // Used for metrics
+	// Monotonic nanoseconds from cf_getns() at the start of the current attempt.
+	// Learn-metrics histograms use this clock. 0 skips that sample.
+	uint64_t attempt_begin;
+	// See as_command.command_begin.
+	uint64_t command_begin;
 	uint32_t iteration;
 	uint32_t command_sent_counter;
 	uint32_t write_offset;
@@ -167,6 +171,10 @@ typedef struct as_event_command {
 	uint32_t bytes_in;
 	uint32_t bytes_out;
 	as_latency_type latency_type;
+	// See as_command.metrics_sample_decision.
+	bool metrics_sample_decision;
+	// See as_command.record_namespace_metrics.
+	bool record_namespace_metrics;
 } as_event_command;
 
 typedef struct {
@@ -189,7 +197,26 @@ typedef struct as_event_executor {
 	uint32_t queued;
 	bool notify;
 	bool valid;
+	// User-call sampler decision. Partition retries reuse it.
+	bool metrics_sample_decision;
 } as_event_executor;
+
+/**
+ * @private
+ * Draw the operational sampler once for this command. count_command increments
+ * cluster.command.count for a user call. Node sub-commands pass false.
+ */
+static inline void
+as_event_command_select_sample(as_event_command* cmd, bool count_command)
+{
+	// See as_command.metrics_sample_decision.
+	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
+	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
+
+	if (cmd->metrics_sample_decision && count_command) {
+		as_incr_uint64(&cmd->cluster->command_count);
+	}
+}
 
 //---------------------------------
 // Common Functions

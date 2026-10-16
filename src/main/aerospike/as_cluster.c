@@ -1710,7 +1710,6 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->metrics_usage_enabled = false;
 	cluster->metrics_file_writer = false;
 	cluster->metrics_nodes_departed = NULL;
-	cluster->metrics_nodes_departed_truncated = false;
 
 	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
 		cluster->command_latency[i] = NULL;

@@ -860,9 +860,8 @@ as_event_decompress(as_event_command* cmd)
 static void
 as_event_retry_timeout(as_event_command* cmd)
 {
-	as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
-
 	if (cmd->pipe_listener) {
+		as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
 		as_pipe_timeout(cmd, true);
 		return;
 	}
@@ -982,9 +981,8 @@ void
 as_event_total_timeout(as_event_command* cmd)
 {
 	// Node should not be null at this point.
-	as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
-
 	if (cmd->pipe_listener) {
+		as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
 		as_pipe_timeout(cmd, false);
 		return;
 	}
@@ -1324,6 +1322,9 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 		as_event_executor_complete(executor);
 		return;
 	}
+	// One namespace error or timeout for the failure returned to the caller.
+	// A retry that later succeeds does not get here.
+	as_node_add_terminal_result(cmd->node, cmd->ns, cmd->metrics, err);
 	as_event_notify_error(cmd, err);
 	as_event_command_release(cmd);
 }
@@ -1531,13 +1532,11 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 	// Close socket on errors that can leave unread data in socket.
 	switch (err->code) {
 		case AEROSPIKE_ERR_CLUSTER:
-			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_node_incr_error_rate(cmd->node);
 			as_event_put_connection(cmd, pool);
 			break;
 
 		case AEROSPIKE_ERR_DEVICE_OVERLOAD:
-			as_node_add_device_overload(cmd->node, cmd->ns, cmd->metrics);
 			as_node_incr_error_rate(cmd->node);
 			as_event_put_connection(cmd, pool);
 			break;
@@ -1549,13 +1548,11 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 		case AEROSPIKE_ERR_CLIENT_ABORT:
 		case AEROSPIKE_ERR_CLIENT:
 		case AEROSPIKE_NOT_AUTHENTICATED:
-			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_node_incr_error_rate(cmd->node);
 			as_event_release_async_connection((as_async_connection*)cmd->conn, pool);
 			break;
 		
 		case AEROSPIKE_ERR_TIMEOUT:
-			as_node_add_server_timeout(cmd->node, cmd->ns, cmd->metrics);
 			as_event_put_connection(cmd, pool);
 			break;
 			
@@ -1567,17 +1564,14 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 			break;
 
 		case AEROSPIKE_ERR_RECORD_BUSY:
-			as_node_add_key_busy(cmd->node, cmd->ns, cmd->metrics);
 			as_event_put_connection(cmd, pool);
 			break;
 
 		case AEROSPIKE_ERR_RECORD_TOO_BIG:
-			as_node_add_record_too_big(cmd->node, cmd->ns, cmd->metrics);
 			as_event_put_connection(cmd, pool);
 			break;
 
 		default:
-			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_event_put_connection(cmd, pool);
 			break;
 	}

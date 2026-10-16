@@ -214,7 +214,6 @@ as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes
 	for (uint32_t i = 0; i < nodes_to_add->size; i++) {
 		as_node* node = as_vector_get_ptr(nodes_to_add, i);
 		as_log_info("Add node %s %s", node->name, as_node_get_address_string(node));
-		as_metrics_departed_remove(cluster, node);
 		as_cluster_event_notify(cluster, node, AS_CLUSTER_ADD_NODE);
 	}
 	

@@ -479,6 +479,8 @@ typedef struct as_metrics_snapshot_s {
 	 * Final samples for nodes that left, one entry per node name. Included in
 	 * on-demand snapshots and kept when no exporter is installed. Cleared only
 	 * after a successful periodic export.
+	 * A node that rejoins keeps its entry. If it leaves again before that
+	 * export, its counters and histogram buckets are added into the same entry.
 	 */
 	as_metrics_node_snapshot** nodes_departed;
 
@@ -927,13 +929,6 @@ as_metrics_runtime_disable(as_error* err, struct as_cluster_s* cluster);
  */
 AS_EXTERN as_status
 as_metrics_runtime_node_close(as_error* err, struct as_cluster_s* cluster, struct as_node_s* node);
-
-/**
- * @private
- * Drop a departed-node sample when that node rejoins. Locks cluster->metrics_lock.
- */
-void
-as_metrics_departed_remove(struct as_cluster_s* cluster, struct as_node_s* node);
 
 /**
  * @private

@@ -205,6 +205,7 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->metrics_listeners.disable_listener = NULL;
 	policy->metrics_listeners.udata = NULL;
 	policy->enable = false;
+	policy->legacy_enable = false;
 	policy->metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
 	policy->exporters = NULL;
 }

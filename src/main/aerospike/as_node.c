@@ -212,6 +212,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->conn_open_failures = 0;
 	node->conn_tls_handshake_failures = 0;
 	node->conn_auth_failures = 0;
+	node->conn_latency = NULL;
 	node->conn_iter = 0;
 
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;
@@ -316,6 +317,12 @@ as_node_destroy(as_node* node)
 	}
 	
 	as_node_destroy_metrics(node);
+
+	as_latency* conn_latency = node->conn_latency;
+
+	if (conn_latency) {
+		as_latency_release(conn_latency);
+	}
 	cf_free(node);
 }
 
@@ -558,13 +565,16 @@ as_node_create_connection(
 	as_conn_pool* pool, as_socket* sock, as_socket_context* ctx
 	)
 {
-	// Snapshot metrics_enabled once so the begin timestamp and the latency recording below
-	// use a consistent view. Re-reading the flag could leave begin at 0 (bogus latency) if
-	// metrics are enabled by another thread during connection setup.
-	bool metrics_enabled = node->cluster->metrics_enabled;
+	// Snapshot both flags so the begin timestamp and the recording below use
+	// one view. Re-reading a flag could leave begin at 0 if that flag is
+	// turned on during connection setup.
+	// Namespace conn buckets follow metrics_enabled. See as_ns_metrics.latency.
+	// The operational series is node->conn_latency. See as_node_add_conn_latency().
+	bool record_conn_buckets = node->cluster->metrics_enabled;
+	bool record_conn_open = node->cluster->metrics_operational_enabled;
 	uint64_t begin = 0;
 
-	if (metrics_enabled) {
+	if (record_conn_buckets || record_conn_open) {
 		begin = cf_getns();
 	}
 	
@@ -598,10 +608,17 @@ as_node_create_connection(
 		}
 	}
 
-	if (metrics_enabled) {
+	if (record_conn_buckets || record_conn_open) {
 		uint64_t elapsed = cf_getns() - begin;
-		as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
-		as_node_add_attempt_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);
+
+		if (record_conn_buckets) {
+			as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
+			as_node_add_attempt_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);
+		}
+
+		if (record_conn_open) {
+			as_node_add_conn_latency(node, elapsed);
+		}
 	}
 	return AEROSPIKE_OK;
 }
@@ -1529,6 +1546,15 @@ as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 			as_latency_gc_init(node->cluster, &metrics->latency[j], policy);
 		}
 	}
+
+	// See as_node.conn_latency. Cleared when operational metrics are off so a
+	// later enable starts a new histogram.
+	if (policy->operational_enabled) {
+		as_latency_gc_init(node->cluster, &node->conn_latency, policy);
+	}
+	else {
+		as_latency_gc_publish(node->cluster, &node->conn_latency, NULL);
+	}
 }
 
 static inline as_ns_metrics*
@@ -1621,6 +1647,45 @@ as_node_add_attempt_latency(as_ns_metrics* metrics, as_latency_type latency_type
 	as_latency_add(metrics->latency[latency_type], elapsed_nanos);
 }
 
+static as_latency*
+as_node_prepare_conn_latency(as_node* node)
+{
+	as_cluster* cluster = node->cluster;
+
+	// as_node_enable_metrics() also publishes this slot and holds the same lock.
+	pthread_mutex_lock(&cluster->metrics_lock);
+	as_latency* latency = node->conn_latency;
+
+	if (!latency) {
+		uint8_t columns = cluster->metrics_latency_columns;
+		uint8_t shift = cluster->metrics_latency_shift;
+		as_metrics_latency_unit unit = cluster->metrics_latency_unit;
+
+		if (columns == 0) {
+			columns = 1;
+			shift = 1;
+			unit = AS_METRICS_LATENCY_MILLISECONDS;
+		}
+
+		latency = as_latency_create(columns, shift, unit);
+		as_store_ptr_rls((void**)&node->conn_latency, latency);
+	}
+	pthread_mutex_unlock(&cluster->metrics_lock);
+	return latency;
+}
+
+void
+as_node_add_conn_latency(as_node* node, uint64_t elapsed_nanos)
+{
+	as_latency* latency = node->conn_latency;
+
+	if (!latency) {
+		latency = as_node_prepare_conn_latency(node);
+	}
+
+	as_latency_add(latency, elapsed_nanos);
+}
+
 void
 as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics)
 {
@@ -1633,6 +1698,94 @@ as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics)
 		}
 	}
 	as_incr_uint64(&metrics->error_count);
+}
+
+static bool
+as_node_message_is_client_timeout(const char* message)
+{
+	const char* prefix = "Client timeout";
+
+	if (!message) {
+		return false;
+	}
+
+	while (*prefix != '\0') {
+		if (*message != *prefix) {
+			return false;
+		}
+		message++;
+		prefix++;
+	}
+	return true;
+}
+
+static as_ns_metrics*
+as_node_metrics_for_count(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	if (!metrics) {
+		metrics = as_node_prepare_metrics(node, ns);
+	}
+	return metrics;
+}
+
+void
+as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metrics, as_error* err)
+{
+	bool server_timeout;
+
+	if (!node || !err) {
+		return;
+	}
+
+	switch (err->code) {
+	case AEROSPIKE_OK:
+	case AEROSPIKE_ERR_RECORD_NOT_FOUND:
+	case AEROSPIKE_ERR_NO_MORE_CONNECTIONS:
+	case AEROSPIKE_MAX_ERROR_RATE:
+	case AEROSPIKE_ERR_INVALID_NODE:
+		return;
+
+	case AEROSPIKE_ERR_TIMEOUT:
+		// Sync client timeouts leave the message empty. Async client timeouts
+		// start with "Client timeout". Any other timeout text came from the server.
+		// These snapshot counters do not change as_node_stats.timeout_count.
+		server_timeout = err->message[0] != '\0' &&
+			!as_node_message_is_client_timeout(err->message);
+
+		if (server_timeout) {
+			as_node_add_server_timeout(node, ns, metrics);
+		}
+		else {
+			as_node_add_client_timeout(node, ns, metrics);
+		}
+		return;
+
+	case AEROSPIKE_ERR_DEVICE_OVERLOAD:
+		as_node_add_device_overload(node, ns, metrics);
+		return;
+
+	case AEROSPIKE_ERR_RECORD_BUSY:
+		metrics = as_node_metrics_for_count(node, ns, metrics);
+
+		if (!metrics) {
+			return;
+		}
+		as_incr_uint64(&metrics->snapshot_key_busy_count);
+		return;
+
+	case AEROSPIKE_ERR_RECORD_TOO_BIG:
+		as_node_add_record_too_big(node, ns, metrics);
+		return;
+
+	default:
+		metrics = as_node_metrics_for_count(node, ns, metrics);
+
+		if (!metrics) {
+			return;
+		}
+		as_incr_uint64(&metrics->snapshot_error_count);
+		return;
+	}
 }
 
 void
@@ -1649,15 +1802,6 @@ as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
 	as_incr_uint64(&metrics->timeout_count);
 }
 
-static as_ns_metrics*
-as_node_metrics_for_count(as_node* node, const char* ns, as_ns_metrics* metrics)
-{
-	if (!metrics) {
-		metrics = as_node_prepare_metrics(node, ns);
-	}
-	return metrics;
-}
-
 void
 as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
 {
@@ -1666,7 +1810,6 @@ as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics
 	if (!metrics) {
 		return;
 	}
-	as_incr_uint64(&metrics->timeout_count);
 	as_incr_uint64(&metrics->client_timeout_count);
 }
 
@@ -1678,7 +1821,6 @@ as_node_add_server_timeout(as_node* node, const char* ns, as_ns_metrics* metrics
 	if (!metrics) {
 		return;
 	}
-	as_incr_uint64(&metrics->timeout_count);
 	as_incr_uint64(&metrics->server_timeout_count);
 }
 
@@ -1704,7 +1846,6 @@ as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics
 	if (!metrics) {
 		return;
 	}
-	as_incr_uint64(&metrics->error_count);
 	as_incr_uint64(&metrics->record_too_big_count);
 }
 
@@ -1716,7 +1857,6 @@ as_node_add_device_overload(as_node* node, const char* ns, as_ns_metrics* metric
 	if (!metrics) {
 		return;
 	}
-	as_incr_uint64(&metrics->error_count);
 	as_incr_uint64(&metrics->device_overload_count);
 }
 

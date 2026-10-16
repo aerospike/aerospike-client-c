@@ -1057,15 +1057,21 @@ TEST(metrics_operational_namespace_latency, "operational metrics copy namespace 
 	assert_true(metrics_validation_failures_zero(first_snapshot));
 
 	uint64_t before = metrics_write_latency_total(first_snapshot);
+	uint64_t before_namespace = metrics_attempt_write_latency_total(first_snapshot);
 	assert_true(before > 0);
+	assert_true(before_namespace > 0);
 	as_metrics_snapshot_destroy(first_snapshot);
 
 	assert_int_eq(metrics_put(&err, "metrics-operational-2"), AEROSPIKE_OK);
 
 	as_metrics_snapshot* second_snapshot = NULL;
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &second_snapshot), AEROSPIKE_OK);
-	assert_true(metrics_write_latency_total(second_snapshot) > before);
+	uint64_t after = metrics_write_latency_total(second_snapshot);
+	uint64_t after_namespace = metrics_attempt_write_latency_total(second_snapshot);
 	as_metrics_snapshot_destroy(second_snapshot);
+
+	assert_true(after > before);
+	assert_true(after_namespace > before_namespace);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
@@ -1129,7 +1135,7 @@ TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on 
 	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	assert_true(command_latency > 0);
-	assert_int_eq(attempt_latency, 0);
+	assert_true(attempt_latency > 0);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
@@ -1249,7 +1255,7 @@ TEST(metrics_file_header_microseconds, "file header stays latency(columns,shift)
 	as_metrics_policy_destroy(&policy);
 }
 
-TEST(metrics_file_operational_off, "file exporter writes latencies when operational metrics are off")
+TEST(metrics_file_operational_off, "file exporter omits latency and memory when operational metrics are off")
 {
 	char dir[256];
 	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
@@ -1283,10 +1289,9 @@ TEST(metrics_file_operational_off, "file exporter writes latencies when operatio
 
 	as_status disable_status = aerospike_disable_metrics(as, &err);
 	char line[65536];
-	// "test," is the namespace from metrics_put(), then the comma before errors.
 	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
-		strstr(line, "test,") && metrics_file_line_has_write_latency(line) &&
-		metrics_file_line_has_memory(line);
+		!metrics_file_line_has_write_latency(line) &&
+		!metrics_file_line_has_memory(line);
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -1755,13 +1760,14 @@ TEST(metrics_deprecated_listeners, "deprecated listeners still run on enable and
 	assert_int_eq(logs, 0);
 }
 
-TEST(metrics_listener_reads_attempt_latency, "a metrics listener can read per-attempt namespace latency")
+TEST(metrics_listener_reads_attempt_latency, "a metrics listener sees no namespace latency when operational metrics are off")
 {
 	metrics_listener_counts counts;
 	memset(&counts, 0, sizeof(counts));
 
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = false;
 	policy.interval = 3600;
 	as_metrics_policy_set_listeners(&policy, metrics_on_enable, metrics_on_disable,
 		metrics_on_node_close, metrics_on_snapshot, &counts);
@@ -1781,7 +1787,7 @@ TEST(metrics_listener_reads_attempt_latency, "a metrics listener can read per-at
 	as_metrics_policy_destroy(&policy);
 
 	assert_false(operational);
-	assert_true(attempt_latency > 0);
+	assert_int_eq(attempt_latency, 0);
 	assert_int_eq(command_latency, 0);
 }
 
@@ -1856,6 +1862,7 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while operational
 {
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = false;
 
 	as_error err;
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
@@ -1888,7 +1895,9 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while operational
 	as_metrics_snapshot* frozen_snapshot = NULL;
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &frozen_snapshot), AEROSPIKE_OK);
 	assert_false(frozen_snapshot->metrics_enabled);
+	assert_false(frozen_snapshot->operational_metrics_enabled);
 	assert_true(frozen_snapshot->command_count == enabled_count);
+	assert_true(metrics_write_latency_total(frozen_snapshot) > 0);
 	as_metrics_snapshot_destroy(frozen_snapshot);
 
 	as_metrics_policy_destroy(&policy);

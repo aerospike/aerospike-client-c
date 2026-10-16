@@ -123,11 +123,9 @@ typedef struct as_metrics_latency_snapshot_s {
 /**
  * Per-namespace counters and histograms copied into a metrics snapshot.
  * Present only when operational metrics are enabled.
- * `as_node_stats.timeout_count` is the sum of `client_timeouts` and `server_timeouts`
- * across these entries.
- * `as_node_stats.key_busy_count` is the sum of `key_busy` across these entries.
- * `as_node_stats.error_count` is the sum of `errors`, `record_too_big`, and
- * `device_overload`. `errors` is the remainder.
+ * These counters are the sampled terminal-failure series. They are not
+ * `as_node_stats.error_count`, `timeout_count`, or `key_busy_count`, which
+ * still count each failed attempt. See as_node_stats.
  */
 typedef struct as_metrics_namespace_snapshot_s {
 	/**
@@ -137,31 +135,31 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * Command errors for this namespace since the node was initialized.
-	 * A retryable error can be counted more than once for one command.
+	 * Counted once when a sampled user call fails with this outcome, not on each retry.
 	 * Remainder after the split counters below. Timeouts, key busy, record too big,
 	 * and device overload are not included.
-	 * `as_ns_metrics.error_count` still includes record too big and device overload.
+	 * Not `as_ns_metrics.error_count`. See as_node_stats.error_count.
 	 */
 	uint64_t errors;
 
 	/**
 	 * Client timeouts (connect, socket, or total) since the node was initialized.
-	 * A retryable timeout can be counted more than once for one command.
+	 * Counted once when the user call fails with a client timeout, not on each retry.
 	 * Not included in errors or server_timeouts.
 	 */
 	uint64_t client_timeouts;
 
 	/**
 	 * Server timeouts since the node was initialized.
-	 * A retryable timeout can be counted more than once for one command.
+	 * Counted once when the user call fails with a server timeout, not on each retry.
 	 * Not included in errors or client_timeouts.
 	 */
 	uint64_t server_timeouts;
 
 	/**
 	 * Key busy errors for this namespace since the node was initialized.
-	 * Same counter as `as_ns_metrics.key_busy_count`. Contributes to
-	 * `as_node_stats.key_busy_count`.
+	 * Counted once when a sampled user call fails with key busy.
+	 * Not `as_ns_metrics.key_busy_count`. See as_node_stats.key_busy_count.
 	 */
 	uint64_t key_busy;
 
@@ -191,10 +189,12 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * @private
-	 * Per-attempt latency histograms, one entry per `AS_LATENCY_TYPE_*`.
-	 * Same series as `as_ns_metrics.latency`. The learn-metrics file writer
-	 * prints this series, and metrics listeners read it. Filled when a
-	 * learn-metrics file writer or a metrics listener is installed.
+	 * Namespace latency histograms, one entry per `AS_LATENCY_TYPE_*`.
+	 * A successful sampled RPC records read, write, batch, or query, including
+	 * that RPC's retries. Connection buckets are recorded when metrics are
+	 * enabled. The operational connection-open series is
+	 * as_metrics_node_snapshot.conn_latency.
+	 * See as_node_add_attempt_latency() and as_node_add_conn_latency().
 	 * v3 command latency is `as_metrics_snapshot.command_latencies`.
 	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];
@@ -208,9 +208,10 @@ typedef struct as_metrics_namespace_snapshot_s {
  *   node           -> name, address, port
  *   sync           -> sync
  *   async          -> async
- *   error_count    -> sum of namespaces[].errors, record_too_big, and device_overload
- *   timeout_count  -> sum of namespaces[].client_timeouts and server_timeouts
- *   key_busy_count -> sum of namespaces[].key_busy
+ *   error_count, timeout_count, and key_busy_count are not copied here.
+ *   Those as_node_stats totals still count each failed attempt.
+ *   namespaces[].errors, timeouts, and key_busy are the sampled terminal series.
+ *   See as_node_stats.
  * `as_node_stats.pipeline` has no snapshot field.
  */
 typedef struct as_metrics_node_snapshot_s {
@@ -277,6 +278,14 @@ typedef struct as_metrics_node_snapshot_s {
 	 * Number of `namespaces` entries.
 	 */
 	uint32_t namespace_count;
+
+	/**
+	 * Successful connection-open latency for this node.
+	 * Recorded when operational metrics are enabled. Not sampler-gated.
+	 * Not as_ns_metrics.latency[AS_LATENCY_TYPE_CONN].
+	 * See as_node.conn_latency. The learn-metrics file does not write this series.
+	 */
+	as_metrics_latency_snapshot conn_latency;
 } as_metrics_node_snapshot;
 
 /**
@@ -307,11 +316,9 @@ typedef struct as_metrics_event_loop_snapshot_s {
  * `as_cluster_stats.thread_pool_queued_tasks` has no snapshot field.
  * On each node, `as_node_stats.sync` and `async` are `nodes[i].sync` and
  * `nodes[i].async`. `as_node_stats.pipeline` has no snapshot field.
- * `as_node_stats.timeout_count` is the sum of `nodes[i].namespaces[].client_timeouts`
- * and `server_timeouts`.
- * `as_node_stats.key_busy_count` is the sum of `nodes[i].namespaces[].key_busy`.
- * `as_node_stats.error_count` also includes `record_too_big` and `device_overload`.
- * `errors` is the remainder.
+ * `as_node_stats.error_count`, `timeout_count`, and `key_busy_count` are not
+ * these namespace snapshot counters. The node stats still count each failed
+ * attempt. See as_node_stats.
  */
 typedef struct as_metrics_snapshot_s {
 	/**
@@ -513,7 +520,8 @@ typedef struct as_metrics_snapshot_s {
 	 * v3 command latency, one entry per `AS_LATENCY_TYPE_*`.
 	 * One sample per command for total elapsed time including retries.
 	 * A retry can move the command to another node, so this series is
-	 * cluster-wide. Empty unless operational metrics are enabled.
+	 * cluster-wide. Recorded while operational metrics are enabled.
+	 * An on-demand snapshot after disable still returns the last values.
 	 * The learn-metrics file does not write this series.
 	 */
 	as_metrics_latency_snapshot command_latencies[AS_LATENCY_TYPE_MAX];
@@ -649,12 +657,11 @@ typedef struct as_metrics_policy_s {
 
 	/**
 	 * Record command-path operational metrics (latency, namespace errors and bytes,
-	 * cpu, memory) on the metrics snapshot.
+	 * cpu, memory) on the metrics snapshot. When false, commands are not timed.
 	 * Dynamic configuration metrics.enabled does not change this flag.
 	 * The legacy metrics.enable key turns it on when extended.operational.enabled
 	 * is absent.
-	 * The learn-metrics file exporter still writes those fields so existing log
-	 * readers keep working. Tier 0 pool gauges are collected whenever metrics are enabled.
+	 * Tier 0 pool gauges are collected whenever metrics are enabled.
 	 *
 	 * Default: false
 	 */
@@ -859,8 +866,8 @@ as_metrics_snapshot_create(
 
 /**
  * @private
- * Learn-metrics file snapshot. Same fields as as_metrics_snapshot_create(), except
- * cpu, memory, and namespace histograms are copied whenever metrics are enabled.
+ * Learn-metrics file snapshot. Same fields as as_metrics_snapshot_create().
+ * Histograms are copied only when operational metrics are enabled.
  * operational_metrics_enabled still follows the policy.
  */
 as_status
@@ -879,15 +886,21 @@ as_metrics_snapshot_destroy(as_metrics_snapshot* snapshot);
 /**
  * @private
  * Copy one node's metrics. Used for nodes_departed and by the deprecated file listener.
- * Namespace histograms are copied only when operational metrics are enabled.
+ * Namespace counters and latency buckets are copied only when operational metrics
+ * are enabled. See as_metrics_namespace_snapshot.latencies.
+ * conn_latency is copied when operational metrics are enabled.
+ * See as_metrics_node_snapshot.conn_latency.
  */
 AS_EXTERN void
 as_metrics_node_snapshot_create(struct as_node_s* node, as_metrics_node_snapshot** snapshot);
 
 /**
  * @private
- * Node snapshot for the learn-metrics file. Namespace histograms are copied
- * whenever metrics are enabled.
+ * Node snapshot for the learn-metrics file. Namespace counters and latency
+ * buckets are copied only when operational metrics are enabled.
+ * See as_metrics_namespace_snapshot.latencies.
+ * conn_latency is copied when operational metrics are enabled. The file
+ * writer does not write it. See as_metrics_node_snapshot.conn_latency.
  */
 void
 as_metrics_node_snapshot_create_file(struct as_node_s* node, as_metrics_node_snapshot** snapshot);

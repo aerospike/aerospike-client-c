@@ -212,7 +212,8 @@ typedef struct as_command_s {
 	// Monotonic nanoseconds from cf_getns() at the start of this command.
 	// 0 when the v3 command latency sample is not taken.
 	// Elapsed time is cf_getns() minus this value and includes retries.
-	// Existing histograms time each attempt separately.
+	// A successful command records that elapsed time as namespace latency.
+	// See as_command_add_latencies().
 	uint64_t command_begin;
 	uint64_t deadline_ms;
 	uint32_t socket_timeout;
@@ -231,9 +232,8 @@ typedef struct as_command_s {
 	// While operational metrics are on, this is also the namespace-metrics decision.
 	bool metrics_sample_decision;
 	// True when this command updates per-namespace histograms, bytes, and error
-	// counts. While operational metrics are on, a sampler "no" sets this false.
-	// While they are off, set only if a learn-metrics file writer or a metrics
-	// listener is installed.
+	// counts. False when operational metrics are off, or when the sampler skips
+	// this call. Namespace error counters are recorded once on terminal failure.
 	bool record_namespace_metrics;
 } as_command;
 

@@ -992,7 +992,7 @@ as_metrics_clone_latency_buckets(const as_metrics_latency_snapshot* src)
 	return buckets;
 }
 
-// Overwrites dst's heap fields without freeing them.
+// dst must be uninitialized. It receives its own copies of the name and buckets.
 static void
 as_metrics_copy_namespace_snapshot(
 	as_metrics_namespace_snapshot* dst, const as_metrics_namespace_snapshot* src

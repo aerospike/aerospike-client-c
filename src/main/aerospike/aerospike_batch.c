@@ -2932,12 +2932,10 @@ as_single_execute(
 	as_status status;
 
 	// The key command is created on this thread. Reuse the user-batch decision
-	// and keep the batch depth raised until that command has taken its sample.
+	// until that command has taken its sample.
 	// See as_metrics_batch_sample_begin().
 	as_metrics_batch_sample_begin(task->metrics_sampled);
-	as_metrics_batch_sub_command_begin();
 	status = as_single_execute_command(task, err, key, bb, record, offset);
-	as_metrics_batch_sub_command_end();
 	as_metrics_batch_sample_end();
 	return status;
 }
@@ -3304,7 +3302,6 @@ as_single_execute_record_async(
 	// The async key command is created on this thread before it is queued.
 	// Reuse the user-batch decision. See as_metrics_batch_sample_begin().
 	as_metrics_batch_sample_begin(exec->metrics_sample_decision);
-	as_metrics_batch_sub_command_begin();
 
 	switch (rec->type) {
 		case AS_BATCH_READ: {
@@ -3388,7 +3385,6 @@ as_single_execute_record_async(
 			break;
 	}
 
-	as_metrics_batch_sub_command_end();
 	as_metrics_batch_sample_end();
 
 	if (status != AEROSPIKE_OK) {

@@ -725,7 +725,9 @@ as_command_execute(as_command* cmd, as_error* err)
 	// Existing histograms time each attempt inside the loop.
 	cmd->command_begin = 0;
 
-	if (cmd->metrics_sample_decision && !cmd->metrics_node_sub_command) {
+	// A null node is a single-record command. Batch, scan, and query set node
+	// on each node command and already counted the user call.
+	if (cmd->metrics_sample_decision && !cmd->node) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 

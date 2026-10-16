@@ -657,7 +657,7 @@ static uint64_t
 metrics_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
 {
 	uint64_t total = 0;
-	as_metrics_latency_snapshot* latency_snapshot =
+	const as_metrics_latency_snapshot* latency_snapshot =
 		&metrics_snapshot->command_latencies[AS_LATENCY_TYPE_WRITE];
 
 	for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
@@ -715,7 +715,7 @@ metrics_test_namespace_ok(const as_metrics_snapshot* metrics_snapshot, uint8_t b
 		return false;
 	}
 
-	as_metrics_latency_snapshot* latency_snapshot =
+	const as_metrics_latency_snapshot* latency_snapshot =
 		&metrics_snapshot->command_latencies[AS_LATENCY_TYPE_WRITE];
 
 	if (latency_snapshot->type != AS_LATENCY_TYPE_WRITE || latency_snapshot->bucket_count != bucket_count ||

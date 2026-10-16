@@ -1280,10 +1280,15 @@ TEST(metrics_file_writes_feature_api_when_usage_on, "the cluster line appends fe
 	uint64_t background = 0;
 	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
 		metrics_parse_feature_api(line, &blocking, &deferred, &background);
+	bool snapshot_present = metrics_snapshot != NULL;
+	bool usage_metrics_enabled = false;
 	bool counts_match = false;
 
-	if (line_ok && metrics_snapshot && metrics_snapshot->usage_metrics_enabled) {
-		counts_match = blocking == metrics_snapshot->api_blocking &&
+	// Save these before the snapshot is destroyed. The asserts run after cleanup.
+	if (snapshot_present) {
+		usage_metrics_enabled = metrics_snapshot->usage_metrics_enabled;
+		counts_match = line_ok &&
+			blocking == metrics_snapshot->api_blocking &&
 			deferred == metrics_snapshot->api_deferred &&
 			background == metrics_snapshot->api_background &&
 			blocking > 0;
@@ -1296,6 +1301,8 @@ TEST(metrics_file_writes_feature_api_when_usage_on, "the cluster line appends fe
 	assert_int_eq(put_status, AEROSPIKE_OK);
 	assert_int_eq(snapshot_status, AEROSPIKE_OK);
 	assert_int_eq(disable_status, AEROSPIKE_OK);
+	assert_true(snapshot_present);
+	assert_true(usage_metrics_enabled);
 	assert_true(header_ok);
 	assert_true(line_ok);
 	assert_true(counts_match);

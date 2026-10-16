@@ -213,8 +213,8 @@ as_event_command_apply_sample(as_event_command* cmd, bool sampled, bool count_co
 	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, sampled);
 
 	// A single-key batch fallback already counted the batch. Record batch latency.
-	// See as_metrics_batch_sample_begin() and as_metrics_batch_sub_command_begin().
-	if (as_metrics_batch_sample_depth > 0 || as_metrics_batch_sub_command > 0) {
+	// See as_metrics_batch_sample_begin().
+	if (as_metrics_batch_sub_command) {
 		count_command_now = false;
 
 		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
@@ -238,7 +238,7 @@ as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
 	bool sampled;
 
-	if (as_metrics_batch_sample_depth > 0) {
+	if (as_metrics_batch_sub_command) {
 		sampled = as_metrics_batch_sampled;
 	}
 	else {

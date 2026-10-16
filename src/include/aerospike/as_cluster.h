@@ -809,54 +809,31 @@ as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_
 
 /**
  * @private
- * Depth of single-key batch fallbacks on this thread. While it is above zero,
- * the key command is part of a batch the caller already counted. It records
- * batch latency and does not increment command_count again.
+ * True while this thread is creating the one key command for a single-key
+ * batch fallback. That command records batch latency and does not increment
+ * command_count again. See as_metrics_batch_sample_begin().
  */
-extern AS_METRICS_TLS uint32_t as_metrics_batch_sub_command;
-
-static inline void
-as_metrics_batch_sub_command_begin(void)
-{
-	as_metrics_batch_sub_command++;
-}
-
-static inline void
-as_metrics_batch_sub_command_end(void)
-{
-	as_metrics_batch_sub_command--;
-}
+extern AS_METRICS_TLS bool as_metrics_batch_sub_command;
 
 /**
  * @private
- * Depth of a user batch whose sampler decision is stored in
- * as_metrics_batch_sampled. Single-key batch fallback sets this so the key
- * command reuses that decision and does not draw again.
+ * Sampler decision for the single-key batch fallback on this thread.
+ * Meaningful while as_metrics_batch_sub_command is true.
  * See as_command_execute_sample() and as_event_command_select_sample().
- */
-extern AS_METRICS_TLS uint32_t as_metrics_batch_sample_depth;
-
-/**
- * @private
- * Sampler decision for the user batch that raised as_metrics_batch_sample_depth.
  */
 extern AS_METRICS_TLS bool as_metrics_batch_sampled;
 
 static inline void
 as_metrics_batch_sample_begin(bool sampled)
 {
-	if (as_metrics_batch_sample_depth == 0) {
-		as_metrics_batch_sampled = sampled;
-	}
-	as_metrics_batch_sample_depth++;
+	as_metrics_batch_sub_command = true;
+	as_metrics_batch_sampled = sampled;
 }
 
 static inline void
 as_metrics_batch_sample_end(void)
 {
-	if (as_metrics_batch_sample_depth > 0) {
-		as_metrics_batch_sample_depth--;
-	}
+	as_metrics_batch_sub_command = false;
 }
 
 /**

@@ -210,10 +210,21 @@ static inline void
 as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
 	// See as_command.metrics_sample_decision.
+	bool count_command_now = count_command;
+
 	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
 	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
 
-	if (cmd->metrics_sample_decision && count_command) {
+	// A single-key batch fallback already counted the batch. Record batch latency.
+	if (as_metrics_batch_sub_command > 0) {
+		count_command_now = false;
+
+		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			cmd->latency_type = AS_LATENCY_TYPE_BATCH;
+		}
+	}
+
+	if (cmd->metrics_sample_decision && count_command_now) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 }

@@ -977,22 +977,19 @@ aerospike_get_metrics_snapshot(aerospike* as, as_error* err, as_metrics_snapshot
 
 #define AS_METRICS_NODES_DEPARTED_MAX 256
 
-// Overwrites dst->buckets without freeing it.
-static void
-as_metrics_copy_latency_buckets(
-	as_metrics_latency_snapshot* dst, const as_metrics_latency_snapshot* src
-	)
+// Returns a heap copy of src->buckets that the caller owns, or NULL when src
+// has none.
+static uint64_t*
+as_metrics_clone_latency_buckets(const as_metrics_latency_snapshot* src)
 {
 	if (src->bucket_count == 0 || !src->buckets) {
-		dst->buckets = NULL;
-		dst->bucket_count = 0;
-		return;
+		return NULL;
 	}
 
 	size_t size = sizeof(uint64_t) * src->bucket_count;
-	dst->buckets = cf_malloc(size);
-	memcpy(dst->buckets, src->buckets, size);
-	dst->bucket_count = src->bucket_count;
+	uint64_t* buckets = cf_malloc(size);
+	memcpy(buckets, src->buckets, size);
+	return buckets;
 }
 
 // Overwrites dst's heap fields without freeing them.
@@ -1005,7 +1002,7 @@ as_metrics_copy_namespace_snapshot(
 	dst->name = as_metrics_strdup_or_empty(src->name);
 
 	for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-		as_metrics_copy_latency_buckets(&dst->latencies[j], &src->latencies[j]);
+		dst->latencies[j].buckets = as_metrics_clone_latency_buckets(&src->latencies[j]);
 	}
 }
 
@@ -1103,7 +1100,8 @@ as_metrics_add_latency_buckets(
 	}
 
 	if (!dst->buckets) {
-		as_metrics_copy_latency_buckets(dst, src);
+		dst->buckets = as_metrics_clone_latency_buckets(src);
+		dst->bucket_count = src->bucket_count;
 		return;
 	}
 

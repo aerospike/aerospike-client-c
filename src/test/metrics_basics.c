@@ -943,7 +943,7 @@ TEST(metrics_snapshot_before_enable, "on-demand snapshot works while periodic ex
 	as_metrics_snapshot_destroy(metrics_snapshot);
 }
 
-TEST(metrics_enable_leaves_operational_off, "metrics.enabled does not turn on operational or usage")
+TEST(metrics_enable_leaves_operational_off, "aerospike_enable_metrics leaves operational and usage off by default")
 {
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
@@ -1822,9 +1822,10 @@ TEST(metrics_operational_sampler_off, "threshold 0 records no command-path opera
 }
 
 static bool
-metrics_read_dynamic_client_config_policy(
+metrics_read_dynamic_client_config_policy_ex(
 	const char* yaml_body, as_metrics_policy* policy, bool app_report_dir_empty,
-	const char* app_report_dir, as_metrics_builtin_exporter* exporter)
+	const char* app_report_dir, as_metrics_builtin_exporter* exporter,
+	bool set_app_operational, bool app_operational)
 {
 	char dir[512];
 
@@ -1856,6 +1857,10 @@ metrics_read_dynamic_client_config_policy(
 			sizeof(config.policies.metrics.report_dir));
 	}
 
+	if (set_app_operational) {
+		config.policies.metrics.operational_enabled = app_operational;
+	}
+
 	as_config_provider_set_path(&config, path);
 
 	aerospike client;
@@ -1881,6 +1886,15 @@ metrics_read_dynamic_client_config_policy(
 	}
 	metrics_remove_dir(dir);
 	return true;
+}
+
+static bool
+metrics_read_dynamic_client_config_policy(
+	const char* yaml_body, as_metrics_policy* policy, bool app_report_dir_empty,
+	const char* app_report_dir, as_metrics_builtin_exporter* exporter)
+{
+	return metrics_read_dynamic_client_config_policy_ex(
+		yaml_body, policy, app_report_dir_empty, app_report_dir, exporter, false, false);
 }
 
 TEST(metrics_dynamic_config_export, "dynamic config sets export interval, exporter, and report file")
@@ -2074,6 +2088,36 @@ TEST(metrics_dynamic_config_usage, "metrics.extended.usage.enabled overrides the
 	assert_true(policy.usage_enabled);
 }
 
+TEST(metrics_dynamic_config_legacy_enable, "metrics.enable turns operational on when that key is absent")
+{
+	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
+	assert_true(metrics_read_dynamic_client_config_policy_ex(
+		"version: 1.2.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    enable: true\n",
+		&policy, false, NULL, &exporter, true, false));
+
+	assert_true(policy.enable);
+	assert_true(policy.operational_enabled);
+}
+
+TEST(metrics_dynamic_config_enabled_leaves_operational, "metrics.enabled does not turn operational on")
+{
+	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
+	assert_true(metrics_read_dynamic_client_config_policy_ex(
+		"version: 1.2.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    enabled: true\n",
+		&policy, false, NULL, &exporter, true, false));
+
+	assert_true(policy.enable);
+	assert_false(policy.operational_enabled);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -2126,4 +2170,6 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_dynamic_config_enabled_and_operational);
 	suite_add(metrics_dynamic_config_sampler);
 	suite_add(metrics_dynamic_config_usage);
+	suite_add(metrics_dynamic_config_legacy_enable);
+	suite_add(metrics_dynamic_config_enabled_leaves_operational);
 }

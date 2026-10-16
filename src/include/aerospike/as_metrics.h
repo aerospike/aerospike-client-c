@@ -643,6 +643,9 @@ typedef struct as_metrics_policy_s {
 	 * Record command-path operational metrics (latency, namespace errors and bytes,
 	 * cpu, memory) on the metrics snapshot. Off until set true. When false,
 	 * commands are not timed. Enabling metrics does not turn this on.
+	 * Dynamic configuration metrics.enabled does not change this flag.
+	 * The legacy metrics.enable key turns it on when extended.operational.enabled
+	 * is absent.
 	 * Tier 0 pool gauges are collected whenever metrics are enabled.
 	 *
 	 * Default: false
@@ -702,6 +705,14 @@ typedef struct as_metrics_policy_s {
 	 * Default: NULL
 	 */
 	as_vector* exporters;
+
+	/**
+	 * @private
+	 * True when dynamic configuration set the legacy metrics.enable key.
+	 * metrics.enabled leaves this false. Used to map that legacy switch to
+	 * operational metrics when extended.operational.enabled is absent.
+	 */
+	bool legacy_enable;
 } as_metrics_policy;
 
 //---------------------------------
@@ -935,7 +946,8 @@ as_metrics_departed_destroy(struct as_cluster_s* cluster);
 
 /**
  * Enable periodic metrics collection and the export timer.
- * Operational and usage metrics stay off unless the policy enables them.
+ * Operational metrics follow the policy and stay off by default.
+ * Usage metrics stay off unless the policy enables them.
  */
 AS_EXTERN as_status
 aerospike_enable_metrics(struct aerospike_s* as, as_error* err, const as_metrics_policy* policy);

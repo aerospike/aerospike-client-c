@@ -255,13 +255,17 @@ as_metrics_open_writer(as_metrics_file_exporter* mw, as_error* err)
 	char now_str[128];
 	as_metrics_timestamp(now_str, sizeof(now_str));
 
-	// Keep header(2) until the next major release. Existing shippers expect
-	// syncConn/asyncConn and latency(columns,shift), without a latency unit.
+	// header(3) adds blockingCount, deferredCount, and backgroundCount after
+	// commandCount. See as_metrics_file_exporter. syncConn/asyncConn stay
+	// scalars and latency stays latency(columns,shift), without a unit.
+	// 1024 holds this header with room to spare. The timestamp is 19 characters
+	// and both latency fields are uint8_t, so the line stays under 500 bytes.
+	// The size check below rejects a truncated snprintf.
 	char data[1024];
-	int rv = snprintf(data, sizeof(data), "%s header(2) cluster[name,clientType,clientVersion,appId,label[],cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] label[name,value] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,namespace[]] conn[inUse,inPool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,keyBusy,bytesIn,bytesOut,latency[]] latency(%u,%u)[type[l1,l2,l3...]]\n",
+	int rv = snprintf(data, sizeof(data), "%s header(3) cluster[name,clientType,clientVersion,appId,label[],cpu,mem,invalidNodeCount,commandCount,blockingCount,deferredCount,backgroundCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] label[name,value] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,namespace[]] conn[inUse,inPool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,keyBusy,bytesIn,bytesOut,latency[]] latency(%u,%u)[type[l1,l2,l3...]]\n",
 		now_str, mw->latency_columns, mw->latency_shift);
 
-	if (rv <= 0) {
+	if (rv <= 0 || rv >= (int)sizeof(data)) {
 		fclose(mw->file);
 		mw->file = NULL;
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
@@ -350,12 +354,13 @@ as_metrics_write_node_snapshot(as_string_builder* sb, const as_metrics_node_snap
 
 		as_string_builder_append(sb, namespace_snapshot->name ? namespace_snapshot->name : "");
 		as_string_builder_append_char(sb, ',');
-		// header(2) has one errors column. It is the v2 error_count, which includes
-		// record too big and device overload.
+		// header(3) keeps header(2)'s one errors column. It is the v2 error_count,
+		// which includes record too big and device overload.
 		as_string_builder_append_uint64(sb, namespace_snapshot->errors +
 			namespace_snapshot->record_too_big + namespace_snapshot->device_overload);
 		as_string_builder_append_char(sb, ',');
-		// header(2) has one timeouts column. It is client plus server timeouts.
+		// header(3) keeps header(2)'s one timeouts column. It is client plus server
+		// timeouts.
 		as_string_builder_append_uint64(sb,
 			namespace_snapshot->client_timeouts + namespace_snapshot->server_timeouts);
 		as_string_builder_append_char(sb, ',');
@@ -408,6 +413,13 @@ as_metrics_write_cluster_line(as_error* err, as_metrics_file_exporter* mw, const
 	as_string_builder_append_uint(&sb, snapshot->invalid_node_count);
 	as_string_builder_append_char(&sb, ',');
 	as_string_builder_append_uint64(&sb, snapshot->command_count);
+	as_string_builder_append_char(&sb, ',');
+	// blockingCount, deferredCount, backgroundCount. See as_metrics_file_exporter.
+	as_string_builder_append_uint64(&sb, snapshot->api_blocking);
+	as_string_builder_append_char(&sb, ',');
+	as_string_builder_append_uint64(&sb, snapshot->api_deferred);
+	as_string_builder_append_char(&sb, ',');
+	as_string_builder_append_uint64(&sb, snapshot->api_background);
 	as_string_builder_append_char(&sb, ',');
 	as_string_builder_append_uint64(&sb, snapshot->retry_count);
 	as_string_builder_append_char(&sb, ',');

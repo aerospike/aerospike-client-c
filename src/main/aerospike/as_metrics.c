@@ -1190,7 +1190,7 @@ as_metrics_departed_add(as_cluster* cluster, as_node* node)
 {
 	as_metrics_node_snapshot* snap = NULL;
 	as_vector* departed;
-	int existing;
+	int existing_node_idx;
 
 	as_metrics_node_snapshot_create(node, &snap);
 
@@ -1198,14 +1198,14 @@ as_metrics_departed_add(as_cluster* cluster, as_node* node)
 		cluster->metrics_nodes_departed = as_vector_create(sizeof(as_metrics_node_snapshot*), 4);
 	}
 	departed = cluster->metrics_nodes_departed;
-	existing = as_metrics_departed_find(departed, snap->name);
+	existing_node_idx = as_metrics_departed_find(departed, snap->name);
 
-	if (existing >= 0) {
-		as_metrics_node_snapshot* prev = as_vector_get_ptr(departed, (uint32_t)existing);
+	if (existing_node_idx >= 0) {
+		as_metrics_node_snapshot* prev = as_vector_get_ptr(departed, (uint32_t)existing_node_idx);
 
 		as_metrics_node_snapshot_merge(snap, prev);
 		as_metrics_node_snapshot_destroy(prev);
-		as_vector_set(departed, (uint32_t)existing, &snap);
+		as_vector_set(departed, (uint32_t)existing_node_idx, &snap);
 		return;
 	}
 

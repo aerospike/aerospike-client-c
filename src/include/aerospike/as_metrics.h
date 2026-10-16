@@ -563,12 +563,17 @@ typedef struct as_metrics_policy_s {
 	 * Directory path for the built-in learn-metrics file exporter.
 	 *
 	 * Dynamic configuration keys metrics.exporter and metrics.report_dir override
-	 * this policy field. metrics.exporter file installs the file exporter when
-	 * deprecated listeners are not set. An empty metrics.report_dir overrides
-	 * report_dir and installs nothing. When metrics.report_dir is absent, an empty
-	 * report_dir uses ".". An empty report_dir with no metrics.exporter key also
-	 * installs nothing. metrics.exporter none and custom do not install the file
-	 * exporter. Collection can still run with no exporter.
+	 * this policy field. The file exporter is not installed when deprecated
+	 * listeners are set. Otherwise:
+	 * - metrics.report_dir set: replaces report_dir. An empty value installs no
+	 *   file exporter.
+	 * - metrics.exporter file with no metrics.report_dir: installs the file
+	 *   exporter. An empty report_dir uses ".".
+	 * - metrics.exporter none or custom: does not install the file exporter.
+	 * - No metrics.exporter key: installs the file exporter when report_dir is not
+	 *   empty and no exporters were added. Added exporters are called instead.
+	 *
+	 * Collection can still run with no exporter.
 	 * The metrics log file is not created until the next Export, including the
 	 * first Export after re-enable. That Export creates a new
 	 * metrics-YYYYMMDDHHMMSS.log.

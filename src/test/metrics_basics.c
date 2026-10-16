@@ -496,6 +496,39 @@ metrics_file_line_has_memory(const char* line)
 	return *p >= '1' && *p <= '9';
 }
 
+// feature.api follows the cluster segment: "...]] feature.api[blocking,deferred,background]".
+static bool
+metrics_parse_feature_api(const char* line, uint64_t* blocking, uint64_t* deferred, uint64_t* background)
+{
+	const char* feature = strstr(line, " feature.api[");
+
+	if (!feature || feature == line || feature[-1] != ']') {
+		return false;
+	}
+
+	unsigned long long blocking_value = 0;
+	unsigned long long deferred_value = 0;
+	unsigned long long background_value = 0;
+	int consumed = 0;
+	int parsed = sscanf(feature, " feature.api[%llu,%llu,%llu]%n",
+		&blocking_value, &deferred_value, &background_value, &consumed);
+
+	if (parsed != 3 || consumed <= 0) {
+		return false;
+	}
+
+	char next = feature[consumed];
+
+	if (next != '\0' && next != '\n' && next != '\r') {
+		return false;
+	}
+
+	*blocking = (uint64_t)blocking_value;
+	*deferred = (uint64_t)deferred_value;
+	*background = (uint64_t)background_value;
+	return true;
+}
+
 static void
 metrics_remove_dir(const char* dir)
 {
@@ -739,6 +772,8 @@ metrics_header_ok(const char* header, const char* latency_token)
 		"asyncConn[]",
 		"milliseconds",
 		"microseconds",
+		// Usage off keeps the legacy header. feature.api is appended only when usage is on.
+		"feature.api",
 		NULL
 	};
 
@@ -1161,6 +1196,116 @@ TEST(metrics_file_operational_off, "file exporter writes latencies when operatio
 	assert_true(snapshot_hides_operational);
 	assert_int_eq(disable_status, AEROSPIKE_OK);
 	assert_true(line_ok);
+	as_metrics_policy_destroy(&policy);
+}
+
+TEST(metrics_file_omits_feature_when_usage_off, "the cluster line omits feature.api when usage is off")
+{
+	char dir[256];
+	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
+
+	as_metrics_policy policy;
+	as_metrics_policy_init(&policy);
+	policy.interval = 3600;
+	as_metrics_policy_set_report_dir(&policy, dir);
+
+	as_error err;
+	as_status status = metrics_enable(&policy, &err);
+	as_status put_status = AEROSPIKE_ERR_CLIENT;
+
+	if (status == AEROSPIKE_OK) {
+		put_status = metrics_put(&err, "metrics-file-usage-off");
+	}
+
+	as_status disable_status = aerospike_disable_metrics(as, &err);
+	char header[2048];
+	char line[65536];
+	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
+		metrics_header_ok(header, "latency(7,1)");
+	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
+		strstr(line, " cluster[") && !strstr(line, "feature.api");
+	metrics_remove_dir(dir);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(put_status, AEROSPIKE_OK);
+	assert_int_eq(disable_status, AEROSPIKE_OK);
+	assert_false(policy.usage_enabled);
+	assert_true(header_ok);
+	assert_true(line_ok);
+	as_metrics_policy_destroy(&policy);
+}
+
+TEST(metrics_file_writes_feature_api_when_usage_on, "the cluster line appends feature.api when usage is on")
+{
+	char dir[256];
+	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
+
+	as_metrics_policy policy;
+	as_metrics_policy_init(&policy);
+	policy.usage_enabled = true;
+	policy.interval = 3600;
+	as_metrics_policy_set_report_dir(&policy, dir);
+
+	as_error err;
+	as_status status = metrics_enable(&policy, &err);
+	as_status put_status = AEROSPIKE_ERR_CLIENT;
+
+	if (status == AEROSPIKE_OK) {
+		put_status = metrics_put(&err, "metrics-file-usage-on");
+	}
+
+	as_metrics_snapshot* metrics_snapshot = NULL;
+	as_status snapshot_status = AEROSPIKE_ERR_CLIENT;
+
+	if (status == AEROSPIKE_OK && put_status == AEROSPIKE_OK) {
+		snapshot_status = aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot);
+	}
+
+	as_status disable_status = aerospike_disable_metrics(as, &err);
+	char header[2048];
+	char legacy_header[2048];
+	char line[65536];
+	bool header_read = metrics_read_header(dir, header, sizeof(header));
+	bool legacy_ok = false;
+	const char* feature_schema = " feature.api[blocking,deferred,background]";
+	char* schema = NULL;
+
+	if (header_read) {
+		as_strncpy(legacy_header, header, sizeof(legacy_header));
+		schema = strstr(legacy_header, feature_schema);
+
+		if (schema) {
+			*schema = '\0';
+			legacy_ok = metrics_header_ok(legacy_header, "latency(7,1)");
+		}
+	}
+
+	uint64_t blocking = 0;
+	uint64_t deferred = 0;
+	uint64_t background = 0;
+	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
+		metrics_parse_feature_api(line, &blocking, &deferred, &background);
+	bool counts_match = false;
+
+	if (line_ok && metrics_snapshot && metrics_snapshot->usage_metrics_enabled) {
+		counts_match = blocking == metrics_snapshot->api_blocking &&
+			deferred == metrics_snapshot->api_deferred &&
+			background == metrics_snapshot->api_background &&
+			blocking > 0;
+	}
+
+	as_metrics_snapshot_destroy(metrics_snapshot);
+	metrics_remove_dir(dir);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(put_status, AEROSPIKE_OK);
+	assert_int_eq(snapshot_status, AEROSPIKE_OK);
+	assert_int_eq(disable_status, AEROSPIKE_OK);
+	assert_true(header_read);
+	assert_true(schema != NULL);
+	assert_true(legacy_ok);
+	assert_true(line_ok);
+	assert_true(counts_match);
 	as_metrics_policy_destroy(&policy);
 }
 
@@ -1954,6 +2099,8 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_file_header);
 	suite_add(metrics_file_header_microseconds);
 	suite_add(metrics_file_operational_off);
+	suite_add(metrics_file_omits_feature_when_usage_off);
+	suite_add(metrics_file_writes_feature_api_when_usage_on);
 	suite_add(metrics_empty_report_dir);
 	suite_add(metrics_exporter_suppresses_file);
 	suite_add(metrics_exporter_none_or_file_skips_added_exporters);

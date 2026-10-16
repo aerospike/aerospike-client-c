@@ -59,6 +59,9 @@ struct as_metrics_file_exporter_s {
 	uint8_t latency_columns;
 	uint8_t latency_shift;
 	bool legacy_active;
+	// Copied from the policy at create. Usage changes restart metrics, so this
+	// matches snapshot->usage_metrics_enabled for the life of the file.
+	bool usage_enabled;
 };
 
 //---------------------------------
@@ -257,11 +260,18 @@ as_metrics_open_writer(as_metrics_file_exporter* mw, as_error* err)
 
 	// Keep header(2) until the next major release. Existing shippers expect
 	// syncConn/asyncConn and latency(columns,shift), without a latency unit.
-	char data[1024];
-	int rv = snprintf(data, sizeof(data), "%s header(2) cluster[name,clientType,clientVersion,appId,label[],cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] label[name,value] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,namespace[]] conn[inUse,inPool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,keyBusy,bytesIn,bytesOut,latency[]] latency(%u,%u)[type[l1,l2,l3...]]\n",
-		now_str, mw->latency_columns, mw->latency_shift);
+	// The feature.api suffix is described on as_metrics_file_exporter.
+	const char* feature_schema = "";
 
-	if (rv <= 0) {
+	if (mw->usage_enabled) {
+		feature_schema = " feature.api[blocking,deferred,background]";
+	}
+
+	char data[1024];
+	int rv = snprintf(data, sizeof(data), "%s header(2) cluster[name,clientType,clientVersion,appId,label[],cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] label[name,value] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,namespace[]] conn[inUse,inPool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,keyBusy,bytesIn,bytesOut,latency[]] latency(%u,%u)[type[l1,l2,l3...]]%s\n",
+		now_str, mw->latency_columns, mw->latency_shift, feature_schema);
+
+	if (rv <= 0 || rv >= (int)sizeof(data)) {
 		fclose(mw->file);
 		mw->file = NULL;
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
@@ -371,6 +381,24 @@ as_metrics_write_node_snapshot(as_string_builder* sb, const as_metrics_node_snap
 	as_string_builder_append(sb, "]]");
 }
 
+// See as_metrics_file_exporter. This section is client-scoped, so node and
+// namespace lines do not write it.
+static void
+as_metrics_write_feature_api(as_string_builder* sb, const as_metrics_snapshot* snapshot)
+{
+	if (!snapshot->usage_metrics_enabled) {
+		return;
+	}
+
+	as_string_builder_append(sb, " feature.api[");
+	as_string_builder_append_uint64(sb, snapshot->api_blocking);
+	as_string_builder_append_char(sb, ',');
+	as_string_builder_append_uint64(sb, snapshot->api_deferred);
+	as_string_builder_append_char(sb, ',');
+	as_string_builder_append_uint64(sb, snapshot->api_background);
+	as_string_builder_append_char(sb, ']');
+}
+
 static as_status
 as_metrics_write_cluster_line(as_error* err, as_metrics_file_exporter* mw, const as_metrics_snapshot* snapshot)
 {
@@ -435,6 +463,7 @@ as_metrics_write_cluster_line(as_error* err, as_metrics_file_exporter* mw, const
 		as_metrics_write_node_snapshot(&sb, snapshot->nodes[i]);
 	}
 	as_string_builder_append(&sb, "]]");
+	as_metrics_write_feature_api(&sb, snapshot);
 	as_string_builder_append_newline(&sb);
 
 	as_status status = as_metrics_write_line(mw, sb.data, err);
@@ -519,6 +548,7 @@ as_metrics_file_exporter_create(
 	mw->max_size = policy->report_size_limit;
 	mw->latency_columns = policy->latency_columns;
 	mw->latency_shift = policy->latency_shift;
+	mw->usage_enabled = policy->usage_enabled;
 	*exporter = &mw->base;
 	return AEROSPIKE_OK;
 }

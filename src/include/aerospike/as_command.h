@@ -235,9 +235,6 @@ typedef struct as_command_s {
 	// While they are off, set only if a learn-metrics file writer or a metrics
 	// listener is installed.
 	bool record_namespace_metrics;
-	// True for a node command under a user call that already incremented the
-	// cluster command_count. A single-key command leaves this false.
-	bool metrics_node_sub_command;
 } as_command;
 
 /**

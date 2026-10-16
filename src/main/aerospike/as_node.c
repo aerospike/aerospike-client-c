@@ -1656,6 +1656,15 @@ as_node_message_is_client_timeout(const char* message)
 	return true;
 }
 
+static as_ns_metrics*
+as_node_metrics_for_count(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	if (!metrics) {
+		metrics = as_node_prepare_metrics(node, ns);
+	}
+	return metrics;
+}
+
 void
 as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metrics, as_error* err)
 {
@@ -1676,6 +1685,7 @@ as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metric
 	case AEROSPIKE_ERR_TIMEOUT:
 		// Sync client timeouts leave the message empty. Async client timeouts
 		// start with "Client timeout". Any other timeout text came from the server.
+		// These snapshot counters do not change as_node_stats.timeout_count.
 		server_timeout = err->message[0] != '\0' &&
 			!as_node_message_is_client_timeout(err->message);
 
@@ -1692,7 +1702,12 @@ as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metric
 		return;
 
 	case AEROSPIKE_ERR_RECORD_BUSY:
-		as_node_add_key_busy(node, ns, metrics);
+		metrics = as_node_metrics_for_count(node, ns, metrics);
+
+		if (!metrics) {
+			return;
+		}
+		as_incr_uint64(&metrics->snapshot_key_busy_count);
 		return;
 
 	case AEROSPIKE_ERR_RECORD_TOO_BIG:
@@ -1700,7 +1715,12 @@ as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metric
 		return;
 
 	default:
-		as_node_add_error(node, ns, metrics);
+		metrics = as_node_metrics_for_count(node, ns, metrics);
+
+		if (!metrics) {
+			return;
+		}
+		as_incr_uint64(&metrics->snapshot_error_count);
 		return;
 	}
 }
@@ -1719,15 +1739,6 @@ as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
 	as_incr_uint64(&metrics->timeout_count);
 }
 
-static as_ns_metrics*
-as_node_metrics_for_count(as_node* node, const char* ns, as_ns_metrics* metrics)
-{
-	if (!metrics) {
-		metrics = as_node_prepare_metrics(node, ns);
-	}
-	return metrics;
-}
-
 void
 as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
 {
@@ -1736,7 +1747,6 @@ as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics
 	if (!metrics) {
 		return;
 	}
-	as_incr_uint64(&metrics->timeout_count);
 	as_incr_uint64(&metrics->client_timeout_count);
 }
 
@@ -1748,7 +1758,6 @@ as_node_add_server_timeout(as_node* node, const char* ns, as_ns_metrics* metrics
 	if (!metrics) {
 		return;
 	}
-	as_incr_uint64(&metrics->timeout_count);
 	as_incr_uint64(&metrics->server_timeout_count);
 }
 
@@ -1774,7 +1783,6 @@ as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics
 	if (!metrics) {
 		return;
 	}
-	as_incr_uint64(&metrics->error_count);
 	as_incr_uint64(&metrics->record_too_big_count);
 }
 
@@ -1786,7 +1794,6 @@ as_node_add_device_overload(as_node* node, const char* ns, as_ns_metrics* metric
 	if (!metrics) {
 		return;
 	}
-	as_incr_uint64(&metrics->error_count);
 	as_incr_uint64(&metrics->device_overload_count);
 }
 

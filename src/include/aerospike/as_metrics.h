@@ -123,11 +123,9 @@ typedef struct as_metrics_latency_snapshot_s {
 /**
  * Per-namespace counters and histograms copied into a metrics snapshot.
  * Present only when operational metrics are enabled.
- * `as_node_stats.timeout_count` is the sum of `client_timeouts` and `server_timeouts`
- * across these entries.
- * `as_node_stats.key_busy_count` is the sum of `key_busy` across these entries.
- * `as_node_stats.error_count` is the sum of `errors`, `record_too_big`, and
- * `device_overload`. `errors` is the remainder.
+ * These counters are the sampled terminal-failure series. They are not
+ * `as_node_stats.error_count`, `timeout_count`, or `key_busy_count`, which
+ * still count each failed attempt. See as_node_stats.
  */
 typedef struct as_metrics_namespace_snapshot_s {
 	/**
@@ -137,10 +135,10 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * Command errors for this namespace since the node was initialized.
-	 * Counted once when the user call fails with this outcome, not on each retry.
+	 * Counted once when a sampled user call fails with this outcome, not on each retry.
 	 * Remainder after the split counters below. Timeouts, key busy, record too big,
 	 * and device overload are not included.
-	 * `as_ns_metrics.error_count` still includes record too big and device overload.
+	 * Not `as_ns_metrics.error_count`. See as_node_stats.error_count.
 	 */
 	uint64_t errors;
 
@@ -160,8 +158,8 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * Key busy errors for this namespace since the node was initialized.
-	 * Same counter as `as_ns_metrics.key_busy_count`. Contributes to
-	 * `as_node_stats.key_busy_count`.
+	 * Counted once when a sampled user call fails with key busy.
+	 * Not `as_ns_metrics.key_busy_count`. See as_node_stats.key_busy_count.
 	 */
 	uint64_t key_busy;
 
@@ -209,9 +207,10 @@ typedef struct as_metrics_namespace_snapshot_s {
  *   node           -> name, address, port
  *   sync           -> sync
  *   async          -> async
- *   error_count    -> sum of namespaces[].errors, record_too_big, and device_overload
- *   timeout_count  -> sum of namespaces[].client_timeouts and server_timeouts
- *   key_busy_count -> sum of namespaces[].key_busy
+ *   error_count, timeout_count, and key_busy_count are not copied here.
+ *   Those as_node_stats totals still count each failed attempt.
+ *   namespaces[].errors, timeouts, and key_busy are the sampled terminal series.
+ *   See as_node_stats.
  * `as_node_stats.pipeline` has no snapshot field.
  */
 typedef struct as_metrics_node_snapshot_s {
@@ -308,11 +307,9 @@ typedef struct as_metrics_event_loop_snapshot_s {
  * `as_cluster_stats.thread_pool_queued_tasks` has no snapshot field.
  * On each node, `as_node_stats.sync` and `async` are `nodes[i].sync` and
  * `nodes[i].async`. `as_node_stats.pipeline` has no snapshot field.
- * `as_node_stats.timeout_count` is the sum of `nodes[i].namespaces[].client_timeouts`
- * and `server_timeouts`.
- * `as_node_stats.key_busy_count` is the sum of `nodes[i].namespaces[].key_busy`.
- * `as_node_stats.error_count` also includes `record_too_big` and `device_overload`.
- * `errors` is the remainder.
+ * `as_node_stats.error_count`, `timeout_count`, and `key_busy_count` are not
+ * these namespace snapshot counters. The node stats still count each failed
+ * attempt. See as_node_stats.
  */
 typedef struct as_metrics_snapshot_s {
 	/**

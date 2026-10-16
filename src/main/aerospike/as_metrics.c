@@ -995,6 +995,20 @@ as_metrics_copy_latency_buckets(
 	dst->bucket_count = src->bucket_count;
 }
 
+// Overwrites dst's heap fields without freeing them.
+static void
+as_metrics_copy_namespace_snapshot(
+	as_metrics_namespace_snapshot* dst, const as_metrics_namespace_snapshot* src
+	)
+{
+	*dst = *src;
+	dst->name = as_metrics_strdup_or_empty(src->name);
+
+	for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
+		as_metrics_copy_latency_buckets(&dst->latencies[j], &src->latencies[j]);
+	}
+}
+
 static as_metrics_node_snapshot*
 as_metrics_node_snapshot_clone(const as_metrics_node_snapshot* src)
 {
@@ -1011,18 +1025,9 @@ as_metrics_node_snapshot_clone(const as_metrics_node_snapshot* src)
 	}
 
 	dst->namespaces = cf_malloc(sizeof(as_metrics_namespace_snapshot) * src->namespace_count);
-	memcpy(dst->namespaces, src->namespaces,
-		sizeof(as_metrics_namespace_snapshot) * src->namespace_count);
 
 	for (uint32_t i = 0; i < src->namespace_count; i++) {
-		as_metrics_namespace_snapshot* ns = &dst->namespaces[i];
-		const as_metrics_namespace_snapshot* src_ns = &src->namespaces[i];
-
-		ns->name = as_metrics_strdup_or_empty(src_ns->name);
-
-		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			as_metrics_copy_latency_buckets(&ns->latencies[j], &src_ns->latencies[j]);
-		}
+		as_metrics_copy_namespace_snapshot(&dst->namespaces[i], &src->namespaces[i]);
 	}
 	return dst;
 }
@@ -1155,10 +1160,9 @@ as_metrics_find_namespace_snapshot(as_metrics_node_snapshot* snap, const char* n
 
 // A rejoined node is a new as_node with counters at zero. Add the pending final
 // into the new final so the node keeps one entry that spans each stint.
-// Identity and gauges come from snap. Moves heap fields out of prev; the caller
-// destroys prev.
+// Identity and gauges come from snap.
 static void
-as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, as_metrics_node_snapshot* prev)
+as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, const as_metrics_node_snapshot* prev)
 {
 	as_metrics_add_conn_counts(&snap->sync, &prev->sync);
 	as_metrics_add_conn_counts(&snap->async, &prev->async);
@@ -1167,7 +1171,7 @@ as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, as_metrics_node_s
 	snap->conn_auth_failures += prev->conn_auth_failures;
 
 	for (uint32_t i = 0; i < prev->namespace_count; i++) {
-		as_metrics_namespace_snapshot* src = &prev->namespaces[i];
+		const as_metrics_namespace_snapshot* src = &prev->namespaces[i];
 		as_metrics_namespace_snapshot* dst = as_metrics_find_namespace_snapshot(snap, src->name);
 
 		if (dst) {
@@ -1175,12 +1179,10 @@ as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, as_metrics_node_s
 			continue;
 		}
 
-		// The namespace only appeared in the earlier stint. Move it over.
 		size_t size = sizeof(as_metrics_namespace_snapshot) * (snap->namespace_count + 1);
 		snap->namespaces = cf_realloc(snap->namespaces, size);
-		snap->namespaces[snap->namespace_count] = *src;
+		as_metrics_copy_namespace_snapshot(&snap->namespaces[snap->namespace_count], src);
 		snap->namespace_count++;
-		memset(src, 0, sizeof(as_metrics_namespace_snapshot));
 	}
 }
 

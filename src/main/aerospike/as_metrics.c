@@ -1189,16 +1189,14 @@ static void
 as_metrics_departed_add(as_cluster* cluster, as_node* node)
 {
 	as_metrics_node_snapshot* snap = NULL;
-	as_vector* departed;
-	int existing_node_idx;
-
 	as_metrics_node_snapshot_create(node, &snap);
 
 	if (!cluster->metrics_nodes_departed) {
 		cluster->metrics_nodes_departed = as_vector_create(sizeof(as_metrics_node_snapshot*), 4);
 	}
-	departed = cluster->metrics_nodes_departed;
-	existing_node_idx = as_metrics_departed_find(departed, snap->name);
+
+	as_vector* departed = cluster->metrics_nodes_departed;
+	int existing_node_idx = as_metrics_departed_find(departed, snap->name);
 
 	if (existing_node_idx >= 0) {
 		as_metrics_node_snapshot* prev = as_vector_get_ptr(departed, (uint32_t)existing_node_idx);

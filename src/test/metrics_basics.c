@@ -1263,7 +1263,6 @@ TEST(metrics_file_writes_feature_api_when_usage_on, "the cluster line appends fe
 
 	as_status disable_status = aerospike_disable_metrics(as, &err);
 	char header[2048];
-	char legacy_header[2048];
 	char line[65536];
 	bool header_read = metrics_read_header(dir, header, sizeof(header));
 	bool legacy_ok = false;
@@ -1271,12 +1270,13 @@ TEST(metrics_file_writes_feature_api_when_usage_on, "the cluster line appends fe
 	char* schema = NULL;
 
 	if (header_read) {
-		as_strncpy(legacy_header, header, sizeof(legacy_header));
-		schema = strstr(legacy_header, feature_schema);
+		schema = strstr(header, feature_schema);
 
 		if (schema) {
+			// metrics_header_ok rejects feature.api. End the string there so it
+			// checks the header(2) prefix. See metrics_header_ok.
 			*schema = '\0';
-			legacy_ok = metrics_header_ok(legacy_header, "latency(7,1)");
+			legacy_ok = metrics_header_ok(header, "latency(7,1)");
 		}
 	}
 

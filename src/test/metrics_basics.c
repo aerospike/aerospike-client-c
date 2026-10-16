@@ -725,8 +725,12 @@ metrics_test_namespace_ok(const as_metrics_snapshot* metrics_snapshot, uint8_t b
 	return true;
 }
 
+// expect_feature_api selects the usage section. True requires
+// feature.api[blocking,deferred,background]. False rejects any feature.api text.
+// Header(2) field names stay camelCase either way: syncConn/asyncConn are not
+// arrays, and latency has no unit.
 static bool
-metrics_header_ok(const char* header, const char* latency_token)
+metrics_header_ok(const char* header, const char* latency_token, bool expect_feature_api)
 {
 	if (!strstr(header, " header(2) ")) {
 		return false;
@@ -759,8 +763,10 @@ metrics_header_ok(const char* header, const char* latency_token)
 		}
 	}
 
-	// Field names stay camelCase. The header stays header(2) until the next major:
-	// syncConn/asyncConn are not arrays, and latency has no unit.
+	if (expect_feature_api && !strstr(header, " feature.api[blocking,deferred,background]")) {
+		return false;
+	}
+
 	const char* rejected[] = {
 		"client_type",
 		"key_busy",
@@ -772,8 +778,6 @@ metrics_header_ok(const char* header, const char* latency_token)
 		"asyncConn[]",
 		"milliseconds",
 		"microseconds",
-		// Usage off keeps the legacy header. feature.api is appended only when usage is on.
-		"feature.api",
 		NULL
 	};
 
@@ -781,6 +785,10 @@ metrics_header_ok(const char* header, const char* latency_token)
 		if (strstr(header, rejected[i])) {
 			return false;
 		}
+	}
+
+	if (!expect_feature_api && strstr(header, "feature.api")) {
+		return false;
 	}
 	return true;
 }
@@ -1117,7 +1125,7 @@ TEST(metrics_file_header, "report_dir installs a camelCase metrics log")
 
 	char header[2048];
 	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
-		metrics_header_ok(header, "latency(7,1)");
+		metrics_header_ok(header, "latency(7,1)", false);
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -1143,7 +1151,7 @@ TEST(metrics_file_header_microseconds, "file header stays latency(columns,shift)
 
 	char header[2048];
 	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
-		metrics_header_ok(header, "latency(7,1)");
+		metrics_header_ok(header, "latency(7,1)", false);
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -1221,7 +1229,7 @@ TEST(metrics_file_omits_feature_when_usage_off, "the cluster line omits feature.
 	char header[2048];
 	char line[65536];
 	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
-		metrics_header_ok(header, "latency(7,1)");
+		metrics_header_ok(header, "latency(7,1)", false);
 	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
 		strstr(line, " cluster[") && !strstr(line, "feature.api");
 	metrics_remove_dir(dir);
@@ -1264,21 +1272,8 @@ TEST(metrics_file_writes_feature_api_when_usage_on, "the cluster line appends fe
 	as_status disable_status = aerospike_disable_metrics(as, &err);
 	char header[2048];
 	char line[65536];
-	bool header_read = metrics_read_header(dir, header, sizeof(header));
-	bool legacy_ok = false;
-	const char* feature_schema = " feature.api[blocking,deferred,background]";
-	char* schema = NULL;
-
-	if (header_read) {
-		schema = strstr(header, feature_schema);
-
-		if (schema) {
-			// metrics_header_ok rejects feature.api. End the string there so it
-			// checks the header(2) prefix. See metrics_header_ok.
-			*schema = '\0';
-			legacy_ok = metrics_header_ok(header, "latency(7,1)");
-		}
-	}
+	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
+		metrics_header_ok(header, "latency(7,1)", true);
 
 	uint64_t blocking = 0;
 	uint64_t deferred = 0;
@@ -1301,9 +1296,7 @@ TEST(metrics_file_writes_feature_api_when_usage_on, "the cluster line appends fe
 	assert_int_eq(put_status, AEROSPIKE_OK);
 	assert_int_eq(snapshot_status, AEROSPIKE_OK);
 	assert_int_eq(disable_status, AEROSPIKE_OK);
-	assert_true(header_read);
-	assert_true(schema != NULL);
-	assert_true(legacy_ok);
+	assert_true(header_ok);
 	assert_true(line_ok);
 	assert_true(counts_match);
 	as_metrics_policy_destroy(&policy);

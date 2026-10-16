@@ -1014,7 +1014,7 @@ as_metrics_node_snapshot_clone(const as_metrics_node_snapshot* src)
 	dst->name = as_metrics_strdup_or_empty(src->name);
 	dst->address = as_metrics_strdup_or_empty(src->address);
 	dst->namespaces = NULL;
-	as_metrics_clone_latency_buckets(&dst->conn_latency);
+	dst->conn_latency.buckets = as_metrics_clone_latency_buckets(&src->conn_latency);
 
 	if (src->namespace_count == 0 || !src->namespaces) {
 		dst->namespace_count = 0;

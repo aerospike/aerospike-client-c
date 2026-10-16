@@ -783,8 +783,10 @@ as_command_execute(as_command* cmd, as_error* err)
 		status = as_node_get_connection(err, node, cmd, cmd->deadline_ms, &socket, &ctx);
 
 		if (status != AEROSPIKE_OK) {
+			// Timeouts retry. A positive status such as invalid user/password does not.
+			// The timeout is counted once if the user call fails overall.
 			if (status == AEROSPIKE_ERR_TIMEOUT) {
-				as_node_add_client_timeout(node, cmd->ns, metrics);
+				goto Retry;
 			}
 			else if (status > 0) {
 				// Do not retry on server error response such as invalid user/password.
@@ -841,31 +843,23 @@ as_command_execute(as_command* cmd, as_error* err)
 			// Close socket on errors that can leave unread data in socket.
 			switch (status) {
 				case AEROSPIKE_ERR_CLUSTER:
-					as_node_add_error(node, cmd->ns, metrics);
 					as_node_put_conn_error(node, &socket);
 					goto Retry;
 
 				case AEROSPIKE_ERR_DEVICE_OVERLOAD:
-					as_node_add_device_overload(node, cmd->ns, metrics);
 					as_node_put_conn_error(node, &socket);
 					goto Retry;
 
 				case AEROSPIKE_ERR_CONNECTION:
-					as_node_add_error(node, cmd->ns, metrics);
 					as_node_close_conn_error(node, &socket, socket.pool);
 					goto Retry;
 
 				case AEROSPIKE_ERR_TIMEOUT:
 					if (is_server_timeout(err)) {
-						as_node_add_server_timeout(node, cmd->ns, metrics);
 						as_node_put_conn_error(node, &socket);
 					}
-					else {
-						as_node_add_client_timeout(node, cmd->ns, metrics);
-
-						if (! ctx.in_recovery) {
-							as_node_close_conn_error(node, &socket, socket.pool);
-						}
+					else if (! ctx.in_recovery) {
+						as_node_close_conn_error(node, &socket, socket.pool);
 					}
 					goto Retry;
 
@@ -986,11 +980,17 @@ Retry:
 	// Fill in timeout stats if timeout occurred.
 	if (err->code == AEROSPIKE_ERR_TIMEOUT) {
 		// Server timeouts have a message.  Client timeouts do not have a message.
+		// Record the split before as_error_update() writes a message, which would
+		// make a client timeout look like a server timeout.
+		as_node_add_terminal_result(node, cmd->ns, NULL, err);
 		const char* type = is_server_timeout(err)? "Server" : "Client";
 		as_error_update(err, AEROSPIKE_ERR_TIMEOUT,
 			"%s timeout: socket=%u total=%u iterations=%u lastNode=%s",
 			type, cmd->policy->socket_timeout, cmd->policy->total_timeout, cmd->iteration,
 			as_node_get_address_string(node));
+	}
+	else {
+		as_node_add_terminal_result(node, cmd->ns, NULL, err);
 	}
 
 	if (ctx.is_single) {

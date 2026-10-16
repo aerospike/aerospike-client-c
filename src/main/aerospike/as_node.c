@@ -1635,6 +1635,74 @@ as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics)
 	as_incr_uint64(&metrics->error_count);
 }
 
+static bool
+as_node_message_is_client_timeout(const char* message)
+{
+	const char* prefix = "Client timeout";
+
+	if (!message) {
+		return false;
+	}
+
+	while (*prefix != '\0') {
+		if (*message != *prefix) {
+			return false;
+		}
+		message++;
+		prefix++;
+	}
+	return true;
+}
+
+void
+as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metrics, as_error* err)
+{
+	bool server_timeout;
+
+	if (!node || !err) {
+		return;
+	}
+
+	switch (err->code) {
+	case AEROSPIKE_OK:
+	case AEROSPIKE_ERR_RECORD_NOT_FOUND:
+	case AEROSPIKE_ERR_NO_MORE_CONNECTIONS:
+	case AEROSPIKE_MAX_ERROR_RATE:
+	case AEROSPIKE_ERR_INVALID_NODE:
+		return;
+
+	case AEROSPIKE_ERR_TIMEOUT:
+		// Sync client timeouts leave the message empty. Async client timeouts
+		// start with "Client timeout". Any other timeout text came from the server.
+		server_timeout = err->message[0] != '\0' &&
+			!as_node_message_is_client_timeout(err->message);
+
+		if (server_timeout) {
+			as_node_add_server_timeout(node, ns, metrics);
+		}
+		else {
+			as_node_add_client_timeout(node, ns, metrics);
+		}
+		return;
+
+	case AEROSPIKE_ERR_DEVICE_OVERLOAD:
+		as_node_add_device_overload(node, ns, metrics);
+		return;
+
+	case AEROSPIKE_ERR_RECORD_BUSY:
+		as_node_add_key_busy(node, ns, metrics);
+		return;
+
+	case AEROSPIKE_ERR_RECORD_TOO_BIG:
+		as_node_add_record_too_big(node, ns, metrics);
+		return;
+
+	default:
+		as_node_add_error(node, ns, metrics);
+		return;
+	}
+}
+
 void
 as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
 {

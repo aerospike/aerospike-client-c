@@ -429,7 +429,6 @@ void
 as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd)
 {
 	// Initialize read buffer (buf) to be located after write buffer.
-	cmd->attempt_begin = 0;
 	cmd->command_begin = 0;
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
@@ -582,44 +581,21 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 }
 
 static inline void
-as_event_add_attempt_latency(as_event_command* cmd, as_latency_type type)
-{
-	// attempt_begin is 0 when this attempt is not timed for the learn-metrics series.
-	if (cmd->attempt_begin == 0) {
-		return;
-	}
-
-	uint64_t elapsed = cf_getns() - cmd->attempt_begin;
-	as_node_add_attempt_latency(cmd->metrics, type, elapsed);
-}
-
-static inline void
 as_event_add_success_latency(as_event_command* cmd)
 {
-	if (cmd->latency_type == AS_LATENCY_TYPE_NONE) {
+	if (cmd->latency_type == AS_LATENCY_TYPE_NONE || cmd->command_begin == 0) {
 		return;
 	}
 
 	uint64_t now = cf_getns();
 
-	// Existing histograms: this attempt only.
-	if (cmd->metrics && cmd->attempt_begin != 0) {
-		as_node_add_attempt_latency(cmd->metrics, cmd->latency_type, now - cmd->attempt_begin);
-	}
-
 	// See as_command_add_latencies().
-	if (cmd->command_begin != 0) {
-		as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, now - cmd->command_begin);
-	}
+	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, now - cmd->command_begin);
 }
 
 bool
 as_event_connection_complete(as_event_command* cmd)
 {
-	if (cmd->metrics) {
-		as_event_add_attempt_latency(cmd, AS_LATENCY_TYPE_CONN);
-	}
-
 	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
 		as_event_connector_success(cmd);
 		return true;
@@ -678,24 +654,12 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 
 	if (cmd->record_namespace_metrics) {
 		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
-
-		// See as_cluster_should_record_attempt_latency().
-		// Restart that clock on retry.
-		if (as_cluster_should_record_attempt_latency(cmd->cluster) &&
-				cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-			cmd->attempt_begin = cf_getns();
-		}
 	}
 
-	// v3 command latency starts on the first attempt and includes retries.
+	// Command latency starts on the first attempt and includes retries.
 	if (cmd->metrics_sample_decision && cmd->command_begin == 0 &&
 			cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-		if (cmd->attempt_begin != 0) {
-			cmd->command_begin = cmd->attempt_begin;
-		}
-		else {
-			cmd->command_begin = cf_getns();
-		}
+		cmd->command_begin = cf_getns();
 	}
 
 	if (! as_node_valid_error_rate(cmd->node)) {

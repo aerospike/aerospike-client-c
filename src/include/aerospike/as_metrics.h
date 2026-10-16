@@ -191,10 +191,8 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * @private
-	 * Per-attempt latency histograms, one entry per `AS_LATENCY_TYPE_*`.
-	 * Same series as `as_ns_metrics.latency`. The learn-metrics file writer
-	 * prints this series, and metrics listeners read it. Filled when a
-	 * learn-metrics file writer or a metrics listener is installed.
+	 * Legacy per-attempt latency histograms, one entry per `AS_LATENCY_TYPE_*`.
+	 * The learn-metrics file still prints this series. No longer filled.
 	 * v3 command latency is `as_metrics_snapshot.command_latencies`.
 	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];
@@ -511,7 +509,8 @@ typedef struct as_metrics_snapshot_s {
 	 * v3 command latency, one entry per `AS_LATENCY_TYPE_*`.
 	 * One sample per command for total elapsed time including retries.
 	 * A retry can move the command to another node, so this series is
-	 * cluster-wide. Empty unless operational metrics are enabled.
+	 * cluster-wide. Recorded while operational metrics are enabled.
+	 * An on-demand snapshot after disable still returns the last values.
 	 * The learn-metrics file does not write this series.
 	 */
 	as_metrics_latency_snapshot command_latencies[AS_LATENCY_TYPE_MAX];
@@ -641,9 +640,9 @@ typedef struct as_metrics_policy_s {
 
 	/**
 	 * Record command-path operational metrics (latency, namespace errors and bytes,
-	 * cpu, memory) on the metrics snapshot. Enabling metrics does not turn this on.
-	 * The learn-metrics file exporter still writes those fields so existing log
-	 * readers keep working. Tier 0 pool gauges are collected whenever metrics are enabled.
+	 * cpu, memory) on the metrics snapshot. Off until set true. When false,
+	 * commands are not timed. Enabling metrics does not turn this on.
+	 * Tier 0 pool gauges are collected whenever metrics are enabled.
 	 *
 	 * Default: false
 	 */
@@ -848,8 +847,8 @@ as_metrics_snapshot_create(
 
 /**
  * @private
- * Learn-metrics file snapshot. Same fields as as_metrics_snapshot_create(), except
- * cpu, memory, and namespace histograms are copied whenever metrics are enabled.
+ * Learn-metrics file snapshot. Same fields as as_metrics_snapshot_create().
+ * Histograms are copied only when operational metrics are enabled.
  * operational_metrics_enabled still follows the policy.
  */
 as_status
@@ -875,8 +874,8 @@ as_metrics_node_snapshot_create(struct as_node_s* node, as_metrics_node_snapshot
 
 /**
  * @private
- * Node snapshot for the learn-metrics file. Namespace histograms are copied
- * whenever metrics are enabled.
+ * Node snapshot for the learn-metrics file. Namespace counters are copied only
+ * when operational metrics are enabled. Per-attempt latency buckets are empty.
  */
 void
 as_metrics_node_snapshot_create_file(struct as_node_s* node, as_metrics_node_snapshot** snapshot);

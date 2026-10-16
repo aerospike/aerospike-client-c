@@ -823,6 +823,32 @@ as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_
 	return as_cluster_should_record_attempt_latency(cluster);
 }
 
+#if defined(_MSC_VER)
+#define AS_METRICS_TLS __declspec(thread)
+#else
+#define AS_METRICS_TLS __thread
+#endif
+
+/**
+ * @private
+ * Depth of single-key batch fallbacks on this thread. While it is above zero,
+ * the key command is part of a batch the caller already counted. It records
+ * batch latency and does not increment command_count again.
+ */
+extern AS_METRICS_TLS uint32_t as_metrics_batch_sub_command;
+
+static inline void
+as_metrics_batch_sub_command_begin(void)
+{
+	as_metrics_batch_sub_command++;
+}
+
+static inline void
+as_metrics_batch_sub_command_end(void)
+{
+	as_metrics_batch_sub_command--;
+}
+
 /**
  * @private
  * Increment command count when this user call is sampled.

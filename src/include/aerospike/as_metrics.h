@@ -137,7 +137,7 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * Command errors for this namespace since the node was initialized.
-	 * A retryable error can be counted more than once for one command.
+	 * Counted once when the user call fails with this outcome, not on each retry.
 	 * Remainder after the split counters below. Timeouts, key busy, record too big,
 	 * and device overload are not included.
 	 * `as_ns_metrics.error_count` still includes record too big and device overload.
@@ -146,14 +146,14 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * Client timeouts (connect, socket, or total) since the node was initialized.
-	 * A retryable timeout can be counted more than once for one command.
+	 * Counted once when the user call fails with a client timeout, not on each retry.
 	 * Not included in errors or server_timeouts.
 	 */
 	uint64_t client_timeouts;
 
 	/**
 	 * Server timeouts since the node was initialized.
-	 * A retryable timeout can be counted more than once for one command.
+	 * Counted once when the user call fails with a server timeout, not on each retry.
 	 * Not included in errors or client_timeouts.
 	 */
 	uint64_t server_timeouts;

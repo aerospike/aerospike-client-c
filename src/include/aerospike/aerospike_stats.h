@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2026 Aerospike, Inc.
+ * Copyright 2008-2025 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -104,14 +104,14 @@ typedef struct as_node_stats_s {
 	as_conn_stats pipeline;
 
 	/**
-	 * Command error count since node was initialized. Incremented once for a
-	 * terminal user-call failure. See as_ns_metrics.error_count.
+	 * Command error count since node was initialized. If the error is retryable, multiple errors per
+	 * command may occur.
 	 */
 	uint64_t error_count;
 
 	/**
-	 * Command timeout count since node was initialized. Incremented once for a
-	 * terminal user-call failure. See as_ns_metrics.timeout_count.
+	 * Command timeout count since node was initialized. If the timeout is retryable (ie socket timeout),
+	 * multiple timeouts per command may occur.
 	 */
 	uint64_t timeout_count;
 

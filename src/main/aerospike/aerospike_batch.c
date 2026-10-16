@@ -2829,7 +2829,7 @@ as_record_reset(as_record* record, uint32_t capacity)
 }
 
 static as_status
-as_single_execute(
+as_single_execute_command(
 	as_batch_task* task, as_error* err, as_key* key, as_batch_base_record* bb, as_record* record,
 	uint32_t offset
 	)
@@ -2918,6 +2918,22 @@ as_single_execute(
 		default:
 			return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid batch rec type: %u", bb->type);
 	}
+}
+
+static as_status
+as_single_execute(
+	as_batch_task* task, as_error* err, as_key* key, as_batch_base_record* bb, as_record* record,
+	uint32_t offset
+	)
+{
+	as_status status;
+
+	// The key command is created on this thread. Keep the batch depth raised
+	// until that command has taken its sample.
+	as_metrics_batch_sub_command_begin();
+	status = as_single_execute_command(task, err, key, bb, record, offset);
+	as_metrics_batch_sub_command_end();
+	return status;
 }
 
 static as_status
@@ -3279,6 +3295,9 @@ as_single_execute_record_async(
 
 	as_status status;
 
+	// The async key command is created on this thread before it is queued.
+	as_metrics_batch_sub_command_begin();
+
 	switch (rec->type) {
 		case AS_BATCH_READ: {
 			as_batch_read_record* br = (as_batch_read_record*)rec;
@@ -3360,6 +3379,8 @@ as_single_execute_record_async(
 			status = as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid batch rec type: %u", rec->type);
 			break;
 	}
+
+	as_metrics_batch_sub_command_end();
 
 	if (status != AEROSPIKE_OK) {
 		rec->result = status;
@@ -4039,7 +4060,12 @@ as_batch_records_execute(
 	)
 {
 	as_cluster* cluster = as->cluster;
-	as_cluster_add_command_count(cluster);
+
+	// The async entry point already counted this user batch.
+	if (!async_executor) {
+		as_cluster_add_command_count(cluster);
+	}
+
 	as_vector* list = &records->list;
 	uint32_t n_keys = records->list.size;
 	

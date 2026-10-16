@@ -725,9 +725,14 @@ as_command_execute(as_command* cmd, as_error* err)
 	// Existing histograms time each attempt inside the loop.
 	cmd->command_begin = 0;
 
+	// A single-key batch fallback already counted the batch. Record batch latency.
+	if (as_metrics_batch_sub_command > 0 && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+		cmd->latency_type = AS_LATENCY_TYPE_BATCH;
+	}
+
 	// A null node is a single-record command. Batch, scan, and query set node
 	// on each node command and already counted the user call.
-	if (cmd->metrics_sample_decision && !cmd->node) {
+	if (cmd->metrics_sample_decision && !cmd->node && as_metrics_batch_sub_command == 0) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 

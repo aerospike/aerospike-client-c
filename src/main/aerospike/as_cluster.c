@@ -578,6 +578,8 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	as_vector_append(cluster->gc, &item);
 }
 
+AS_METRICS_TLS uint32_t as_metrics_batch_sub_command = 0;
+
 bool
 as_cluster_sample_operational(as_cluster* cluster)
 {

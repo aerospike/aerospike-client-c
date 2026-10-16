@@ -535,12 +535,6 @@ as_metrics_file_exporter_create(
 	return AEROSPIKE_OK;
 }
 
-as_status
-as_metrics_file_exporter_open(as_error* err, as_metrics_exporter* exporter)
-{
-	return as_metrics_ensure_open((as_metrics_file_exporter*)exporter, err);
-}
-
 void
 as_metrics_file_exporter_destroy(as_metrics_exporter* exporter)
 {
@@ -583,13 +577,8 @@ as_metrics_writer_create(as_error* err, const as_metrics_policy* policy, as_metr
 as_status
 as_metrics_writer_enable(as_error* err, void* udata)
 {
+	as_error_reset(err);
 	as_metrics_file_exporter* mw = udata;
-	as_status status = as_metrics_ensure_open(mw, err);
-
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
 	mw->legacy_active = true;
 	return AEROSPIKE_OK;
 }
@@ -600,7 +589,7 @@ as_metrics_writer_snapshot(as_error* err, as_cluster* cluster, void* udata)
 	as_error_reset(err);
 	as_metrics_file_exporter* mw = udata;
 
-	if (!mw->legacy_active || !mw->file) {
+	if (!mw->legacy_active) {
 		return AEROSPIKE_OK;
 	}
 
@@ -656,7 +645,7 @@ as_metrics_writer_disable(as_error* err, as_cluster* cluster, void* udata)
 
 	as_status status = AEROSPIKE_OK;
 
-	if (mw->legacy_active && mw->file) {
+	if (mw->legacy_active) {
 		as_metrics_snapshot* snapshot = NULL;
 		status = as_metrics_snapshot_create_file(err, cluster, mw->labels, mw->cpu, &snapshot);
 

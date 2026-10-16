@@ -1540,14 +1540,7 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		slot.exporter = file_exporter;
 		slot.owned = true;
 		as_vector_append(rt->slots, &slot);
-
-		// Open now so enable fails when the log cannot be created.
-		status = as_metrics_file_exporter_open(err, file_exporter);
-
-		if (status != AEROSPIKE_OK) {
-			as_metrics_runtime_free(rt);
-			return status;
-		}
+		// Leave the log closed. See as_metrics_file_exporter_create().
 	}
 
 	cluster->metrics_runtime = rt;

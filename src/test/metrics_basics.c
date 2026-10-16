@@ -1163,22 +1163,64 @@ TEST(metrics_file_header, "report_dir installs a camelCase metrics log")
 
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.interval = 3600;
 	as_metrics_policy_set_report_dir(&policy, dir);
 
 	as_error err;
 	as_status status = metrics_enable(&policy, &err);
-	int logs = metrics_count_logs(dir);
+	int logs_before_export = metrics_count_logs(dir);
 
 	metrics_disable();
 
+	int logs = metrics_count_logs(dir);
 	char header[2048];
 	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
 		metrics_header_ok(header, "latency(7,1)");
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(logs_before_export, 0);
 	assert_int_eq(logs, 1);
 	assert_true(header_ok);
+	as_metrics_policy_destroy(&policy);
+}
+
+TEST(metrics_file_opens_on_export, "re-enable opens a new log on the next export")
+{
+	char dir[256];
+	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.interval = 3600;
+	as_metrics_policy_set_report_dir(&policy, dir);
+
+	as_error err;
+	as_status status = metrics_enable(&policy, &err);
+	int logs_after_enable = metrics_count_logs(dir);
+
+	as_status disable_status = aerospike_disable_metrics(as, &err);
+	int logs_after_disable = metrics_count_logs(dir);
+
+	as_status reopen_status = metrics_enable(&policy, &err);
+	int logs_after_reenable = metrics_count_logs(dir);
+
+	// The log name is metrics-YYYYMMDDHHMMSS.log. Wait so the second export
+	// does not truncate the file created by the first.
+	as_sleep(1100);
+
+	as_status second_disable_status = aerospike_disable_metrics(as, &err);
+	int logs_after_second_disable = metrics_count_logs(dir);
+	metrics_remove_dir(dir);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(logs_after_enable, 0);
+	assert_int_eq(disable_status, AEROSPIKE_OK);
+	assert_int_eq(logs_after_disable, 1);
+	assert_int_eq(reopen_status, AEROSPIKE_OK);
+	assert_int_eq(logs_after_reenable, 1);
+	assert_int_eq(second_disable_status, AEROSPIKE_OK);
+	assert_int_eq(logs_after_second_disable, 2);
 	as_metrics_policy_destroy(&policy);
 }
 
@@ -1606,7 +1648,7 @@ TEST(metrics_periodic_export_stops_on_disable, "disable stops the export thread 
 	cf_free(exporter);
 }
 
-TEST(metrics_invalid_report_dir, "file exporter open failure leaves metrics disabled")
+TEST(metrics_invalid_report_dir, "a bad report_dir does not open a log or fail enable")
 {
 	char parent[256];
 	assert_true(metrics_create_temp_dir_path(parent, sizeof(parent)));
@@ -1627,6 +1669,7 @@ TEST(metrics_invalid_report_dir, "file exporter open failure leaves metrics disa
 
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.interval = 3600;
 	as_metrics_policy_set_report_dir(&policy, dir);
 
 	as_error err;
@@ -1634,13 +1677,24 @@ TEST(metrics_invalid_report_dir, "file exporter open failure leaves metrics disa
 
 	as_metrics_snapshot* metrics_snapshot = NULL;
 	as_status snapshot_status = aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot);
-	bool metrics_off = metrics_snapshot && !metrics_snapshot->metrics_enabled;
+	bool metrics_on = metrics_snapshot && metrics_snapshot->metrics_enabled;
 	as_metrics_snapshot_destroy(metrics_snapshot);
+
+	as_status disable_status = aerospike_disable_metrics(as, &err);
+	as_metrics_snapshot* after = NULL;
+	as_status after_status = aerospike_get_metrics_snapshot(as, &err, &after);
+	bool metrics_off = after && !after->metrics_enabled;
+	as_metrics_snapshot_destroy(after);
+	int logs = metrics_count_logs(parent);
 	metrics_remove_dir(parent);
 
-	assert_int_eq(status, AEROSPIKE_ERR_CLIENT);
+	assert_int_eq(status, AEROSPIKE_OK);
 	assert_int_eq(snapshot_status, AEROSPIKE_OK);
+	assert_true(metrics_on);
+	assert_int_eq(disable_status, AEROSPIKE_OK);
+	assert_int_eq(after_status, AEROSPIKE_OK);
 	assert_true(metrics_off);
+	assert_int_eq(logs, 0);
 	as_metrics_policy_destroy(&policy);
 }
 
@@ -2192,6 +2246,7 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_latency_unit_microseconds);
 	suite_add(metrics_labels);
 	suite_add(metrics_file_header);
+	suite_add(metrics_file_opens_on_export);
 	suite_add(metrics_file_header_microseconds);
 	suite_add(metrics_file_operational_off);
 	suite_add(metrics_file_keeps_usage_columns_when_usage_off);

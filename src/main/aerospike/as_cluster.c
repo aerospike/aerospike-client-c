@@ -214,6 +214,7 @@ as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes
 	for (uint32_t i = 0; i < nodes_to_add->size; i++) {
 		as_node* node = as_vector_get_ptr(nodes_to_add, i);
 		as_log_info("Add node %s %s", node->name, as_node_get_address_string(node));
+		as_metrics_departed_remove(cluster, node);
 		as_cluster_event_notify(cluster, node, AS_CLUSTER_ADD_NODE);
 	}
 	
@@ -1709,6 +1710,8 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->metrics_operational_enabled = false;
 	cluster->metrics_usage_enabled = false;
 	cluster->metrics_file_writer = false;
+	cluster->metrics_nodes_departed = NULL;
+	cluster->metrics_nodes_departed_truncated = false;
 	cluster->metrics_latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
 	cluster->metrics_interval = 0;
 	cluster->metrics_latency_columns = 0;
@@ -1821,6 +1824,7 @@ as_cluster_destroy(as_cluster* cluster)
 		as_metrics_runtime_disable(&metrics_err, cluster);
 		pthread_mutex_unlock(&cluster->metrics_lock);
 	}
+	as_metrics_departed_destroy(cluster);
 
 	// Shutdown thread pool.
 	int rc = as_thread_pool_destroy(&cluster->thread_pool);

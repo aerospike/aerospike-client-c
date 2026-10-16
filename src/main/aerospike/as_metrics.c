@@ -352,7 +352,6 @@ typedef struct as_metrics_runtime_s as_metrics_runtime;
 struct as_metrics_runtime_s {
 	as_cluster* cluster;
 	as_vector* slots;
-	as_vector* departed;
 	as_vector* labels;
 	as_metrics_cpu_state* cpu;
 	pthread_t thread;
@@ -363,6 +362,7 @@ struct as_metrics_runtime_s {
 
 static as_status as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool force, as_error* err);
 static void as_metrics_runtime_free(as_metrics_runtime* rt);
+static void as_metrics_snapshot_copy_departed(as_cluster* cluster, as_metrics_snapshot* snap);
 
 #if defined(__linux__)
 static as_status
@@ -967,31 +967,203 @@ aerospike_get_metrics_snapshot(aerospike* as, as_error* err, as_metrics_snapshot
 	}
 
 	as_status status = as_metrics_snapshot_create(err, cluster, labels, cpu, snapshot);
+
+	if (status == AEROSPIKE_OK) {
+		as_metrics_snapshot_copy_departed(cluster, *snapshot);
+	}
 	pthread_mutex_unlock(&cluster->metrics_lock);
 	return status;
 }
 
-static void
-as_metrics_snapshot_take_departed(as_metrics_runtime* rt, as_metrics_snapshot* snap)
-{
-	uint32_t n = rt->departed->size;
+#define AS_METRICS_NODES_DEPARTED_MAX 256
 
-	if (n == 0) {
+static void
+as_metrics_clone_latency_buckets(as_metrics_latency_snapshot* latency)
+{
+	uint64_t* copy = NULL;
+
+	if (latency->bucket_count == 0 || !latency->buckets) {
+		latency->buckets = NULL;
+		latency->bucket_count = 0;
 		return;
 	}
 
-	snap->nodes_departed = cf_malloc(sizeof(as_metrics_node_snapshot*) * n);
+	copy = cf_malloc(sizeof(uint64_t) * latency->bucket_count);
+	memcpy(copy, latency->buckets, sizeof(uint64_t) * latency->bucket_count);
+	latency->buckets = copy;
+}
 
-	for (uint32_t i = 0; i < n; i++) {
-		snap->nodes_departed[i] = as_vector_get_ptr(rt->departed, i);
+static as_metrics_node_snapshot*
+as_metrics_node_snapshot_clone(const as_metrics_node_snapshot* src)
+{
+	as_metrics_node_snapshot* dst = cf_malloc(sizeof(as_metrics_node_snapshot));
+
+	memcpy(dst, src, sizeof(as_metrics_node_snapshot));
+	dst->name = as_metrics_strdup_or_empty(src->name);
+	dst->address = as_metrics_strdup_or_empty(src->address);
+	dst->namespaces = NULL;
+
+	if (src->namespace_count == 0 || !src->namespaces) {
+		dst->namespace_count = 0;
+		return dst;
 	}
-	snap->nodes_departed_count = n;
-	as_vector_clear(rt->departed);
+
+	dst->namespaces = cf_malloc(sizeof(as_metrics_namespace_snapshot) * src->namespace_count);
+	memcpy(dst->namespaces, src->namespaces,
+		sizeof(as_metrics_namespace_snapshot) * src->namespace_count);
+
+	for (uint32_t i = 0; i < src->namespace_count; i++) {
+		as_metrics_namespace_snapshot* ns = &dst->namespaces[i];
+
+		ns->name = as_metrics_strdup_or_empty(src->namespaces[i].name);
+
+		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
+			as_metrics_clone_latency_buckets(&ns->latencies[j]);
+		}
+	}
+	return dst;
+}
+
+static int
+as_metrics_departed_find(as_vector* departed, const char* name)
+{
+	if (!departed || !name) {
+		return -1;
+	}
+
+	for (uint32_t i = 0; i < departed->size; i++) {
+		as_metrics_node_snapshot* snap = as_vector_get_ptr(departed, i);
+
+		if (snap && snap->name && strcmp(snap->name, name) == 0) {
+			return (int)i;
+		}
+	}
+	return -1;
 }
 
 static void
+as_metrics_departed_clear(as_cluster* cluster)
+{
+	as_vector* departed = cluster->metrics_nodes_departed;
+
+	if (!departed) {
+		cluster->metrics_nodes_departed_truncated = false;
+		return;
+	}
+
+	for (uint32_t i = 0; i < departed->size; i++) {
+		as_metrics_node_snapshot* snap = as_vector_get_ptr(departed, i);
+
+		as_metrics_node_snapshot_destroy(snap);
+	}
+	as_vector_clear(departed);
+	cluster->metrics_nodes_departed_truncated = false;
+}
+
+static void
+as_metrics_snapshot_copy_departed(as_cluster* cluster, as_metrics_snapshot* snap)
+{
+	as_vector* departed = cluster->metrics_nodes_departed;
+	uint32_t n;
+
+	snap->nodes_departed_truncated = cluster->metrics_nodes_departed_truncated;
+
+	if (!departed || departed->size == 0) {
+		return;
+	}
+
+	n = departed->size;
+	snap->nodes_departed = cf_malloc(sizeof(as_metrics_node_snapshot*) * n);
+
+	for (uint32_t i = 0; i < n; i++) {
+		as_metrics_node_snapshot* src = as_vector_get_ptr(departed, i);
+
+		snap->nodes_departed[i] = as_metrics_node_snapshot_clone(src);
+	}
+	snap->nodes_departed_count = n;
+}
+
+// Caller holds cluster->metrics_lock.
+static void
+as_metrics_departed_add(as_cluster* cluster, as_node* node)
+{
+	as_metrics_node_snapshot* snap = NULL;
+	as_vector* departed;
+	int existing;
+
+	as_metrics_node_snapshot_create(node, &snap);
+
+	if (!cluster->metrics_nodes_departed) {
+		cluster->metrics_nodes_departed = as_vector_create(sizeof(as_metrics_node_snapshot*), 4);
+	}
+	departed = cluster->metrics_nodes_departed;
+	existing = as_metrics_departed_find(departed, snap->name);
+
+	if (existing >= 0) {
+		as_metrics_node_snapshot* old = as_vector_get_ptr(departed, (uint32_t)existing);
+
+		as_metrics_node_snapshot_destroy(old);
+		as_vector_set(departed, (uint32_t)existing, &snap);
+		return;
+	}
+
+	if (departed->size >= AS_METRICS_NODES_DEPARTED_MAX) {
+		if (!cluster->metrics_nodes_departed_truncated) {
+			as_log_warn(
+				"Metrics nodes_departed reached %u entries; possibly more departed nodes were omitted",
+				AS_METRICS_NODES_DEPARTED_MAX);
+		}
+		cluster->metrics_nodes_departed_truncated = true;
+		as_metrics_node_snapshot_destroy(snap);
+		return;
+	}
+
+	as_vector_append(departed, &snap);
+}
+
+void
+as_metrics_departed_remove(as_cluster* cluster, as_node* node)
+{
+	as_vector* departed;
+	int existing;
+
+	if (!cluster || !node || node->name[0] == '\0') {
+		return;
+	}
+
+	pthread_mutex_lock(&cluster->metrics_lock);
+	departed = cluster->metrics_nodes_departed;
+
+	if (departed) {
+		existing = as_metrics_departed_find(departed, node->name);
+
+		if (existing >= 0) {
+			as_metrics_node_snapshot* old = as_vector_get_ptr(departed, (uint32_t)existing);
+
+			as_metrics_node_snapshot_destroy(old);
+			as_vector_remove(departed, (uint32_t)existing);
+		}
+	}
+	pthread_mutex_unlock(&cluster->metrics_lock);
+}
+
+void
+as_metrics_departed_destroy(as_cluster* cluster)
+{
+	if (!cluster || !cluster->metrics_nodes_departed) {
+		return;
+	}
+
+	as_metrics_departed_clear(cluster);
+	as_vector_destroy(cluster->metrics_nodes_departed);
+	cluster->metrics_nodes_departed = NULL;
+}
+
+static bool
 as_metrics_export_slots(as_metrics_runtime* rt, const as_metrics_snapshot* snap, bool force)
 {
+	bool any_ok = false;
+
 	for (uint32_t i = 0; i < rt->slots->size; i++) {
 		as_metrics_exporter_slot* slot = as_vector_get(rt->slots, i);
 
@@ -1025,8 +1197,10 @@ as_metrics_export_slots(as_metrics_runtime* rt, const as_metrics_snapshot* snap,
 		else {
 			slot->consecutive_failures = 0;
 			slot->suspend_remaining = 0;
+			any_ok = true;
 		}
 	}
+	return any_ok;
 }
 
 static bool
@@ -1050,6 +1224,7 @@ static as_status
 as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool force, as_error* err)
 {
 	as_metrics_snapshot* snap = NULL;
+	bool exported = false;
 	// One snapshot is shared by every exporter. When the file exporter is present,
 	// include the learn-metrics fields even if operational metrics are off.
 	as_status status;
@@ -1065,8 +1240,12 @@ as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool forc
 		return status;
 	}
 
-	as_metrics_snapshot_take_departed(rt, snap);
-	as_metrics_export_slots(rt, snap, force);
+	as_metrics_snapshot_copy_departed(cluster, snap);
+	exported = as_metrics_export_slots(rt, snap, force);
+
+	if (exported) {
+		as_metrics_departed_clear(cluster);
+	}
 	as_metrics_snapshot_destroy(snap);
 	return AEROSPIKE_OK;
 }
@@ -1165,13 +1344,6 @@ as_metrics_runtime_free(as_metrics_runtime* rt)
 			}
 		}
 		as_vector_destroy(rt->slots);
-	}
-
-	if (rt->departed) {
-		for (uint32_t i = 0; i < rt->departed->size; i++) {
-			as_metrics_node_snapshot_destroy(as_vector_get_ptr(rt->departed, i));
-		}
-		as_vector_destroy(rt->departed);
 	}
 
 	as_metrics_labels_destroy(rt->labels);
@@ -1323,7 +1495,6 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	as_metrics_runtime* rt = cf_calloc(1, sizeof(as_metrics_runtime));
 	rt->cluster = cluster;
 	rt->slots = as_vector_create(sizeof(as_metrics_exporter_slot), 2);
-	rt->departed = as_vector_create(sizeof(as_metrics_node_snapshot*), 4);
 	rt->labels = as_metrics_labels_copy(policy->labels);
 	rt->cpu = as_metrics_cpu_state_create();
 	pthread_mutex_init(&rt->lock, NULL);
@@ -1491,19 +1662,7 @@ as_metrics_runtime_disable(as_error* err, as_cluster* cluster)
 as_status
 as_metrics_runtime_node_close(as_error* err, as_cluster* cluster, as_node* node)
 {
-	as_metrics_runtime* rt = cluster->metrics_runtime;
-
-	if (rt && rt->slots && rt->slots->size > 0) {
-		as_metrics_node_snapshot* snap = NULL;
-
-		if (as_metrics_runtime_has_file_exporter(rt)) {
-			as_metrics_node_snapshot_create_file(node, &snap);
-		}
-		else {
-			as_metrics_node_snapshot_create(node, &snap);
-		}
-		as_vector_append(rt->departed, &snap);
-	}
+	as_metrics_departed_add(cluster, node);
 
 	if (cluster->metrics_listeners.node_close_listener) {
 		return cluster->metrics_listeners.node_close_listener(

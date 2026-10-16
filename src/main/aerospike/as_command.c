@@ -685,21 +685,45 @@ as_command_prepare_error(as_command* cmd, as_error* err)
 }
 
 static void
-as_command_add_latencies(as_command* cmd)
+as_command_add_latencies(as_command* cmd, as_node* node, as_ns_metrics* metrics)
 {
+	uint64_t now;
+	uint64_t elapsed;
+
 	if (cmd->latency_type == AS_LATENCY_TYPE_NONE || cmd->command_begin == 0) {
 		return;
 	}
 
-	uint64_t now = cf_getns();
+	now = cf_getns();
+	elapsed = now - cmd->command_begin;
 
 	// Elapsed time from the first attempt, including retries.
-	// The sample is cluster-wide because a retry can move to another node.
-	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, now - cmd->command_begin);
+	// The cluster sample has no node. A retry can move to another node.
+	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, elapsed);
+
+	// Namespace latency is this successful RPC, including its retries.
+	// See as_metrics_namespace_snapshot.latencies.
+	if (!cmd->record_namespace_metrics) {
+		return;
+	}
+
+	if (!metrics) {
+		metrics = as_node_prepare_metrics(node, cmd->ns);
+	}
+	as_node_add_attempt_latency(metrics, cmd->latency_type, elapsed);
 }
 
 as_status
+as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, bool metrics_sampled);
+
+as_status
 as_command_execute(as_command* cmd, as_error* err)
+{
+	return as_command_execute_sample(cmd, err, false, false);
+}
+
+as_status
+as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, bool metrics_sampled)
 {
 	as_socket_context ctx = {
 		.cluster = cmd->cluster,
@@ -708,12 +732,27 @@ as_command_execute(as_command* cmd, as_error* err)
 
 	as_node* node = NULL;
 	as_status status;
+	bool sampled;
+	bool count_command;
 
-	// One sampler decision for this command, before retries. Re-sends of this
-	// command reuse it. A new sub-batch is a new command and draws again.
-	// See as_command.metrics_sample_decision.
-	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
-	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
+	// One sampler decision for this user call, before retries. Re-sends of this
+	// command reuse it. A user batch draws once and passes that decision here.
+	// See as_command.metrics_sample_decision and as_metrics_batch_sample_begin().
+	if (as_metrics_batch_sample_depth > 0) {
+		sampled = as_metrics_batch_sampled;
+		count_command = false;
+	}
+	else if (inherit_sample) {
+		sampled = metrics_sampled;
+		count_command = false;
+	}
+	else {
+		sampled = as_cluster_sample_operational(cmd->cluster);
+		count_command = true;
+	}
+
+	cmd->metrics_sample_decision = sampled;
+	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, sampled);
 	// Command latency starts once and includes retries.
 	cmd->command_begin = 0;
 
@@ -724,7 +763,7 @@ as_command_execute(as_command* cmd, as_error* err)
 
 	// A null node is a single-record command. Batch, scan, and query set node
 	// on each node command and already counted the user call.
-	if (cmd->metrics_sample_decision && !cmd->node && as_metrics_batch_sub_command == 0) {
+	if (count_command && cmd->metrics_sample_decision && !cmd->node && as_metrics_batch_sub_command == 0) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 
@@ -819,7 +858,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		if (status == AEROSPIKE_OK) {
-			as_command_add_latencies(cmd);
+			as_command_add_latencies(cmd, node, metrics);
 
 			// Reset error code if retry had occurred.
 			if (cmd->iteration > 0) {
@@ -858,7 +897,9 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_SCAN_ABORTED:
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
-					as_node_add_error(node, cmd->ns, metrics);
+					if (cmd->record_namespace_metrics) {
+						as_node_add_error(node, cmd->ns, metrics);
+					}
 					as_node_close_conn_error(node, &socket, socket.pool);
 					if (ctx.is_single) {
 						as_node_release(node);
@@ -869,22 +910,28 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 					// Do not increment error count on record not found.
 					// Add latency metrics instead.
-					as_command_add_latencies(cmd);
+					as_command_add_latencies(cmd, node, metrics);
 					as_command_prepare_error(cmd, err);
 					break;
 
 				case AEROSPIKE_ERR_RECORD_BUSY:
-					as_node_add_key_busy(node, cmd->ns, metrics);
+					if (cmd->record_namespace_metrics) {
+						as_node_add_key_busy(node, cmd->ns, metrics);
+					}
 					as_command_prepare_error(cmd, err);
 					break;
 
 				case AEROSPIKE_ERR_RECORD_TOO_BIG:
-					as_node_add_record_too_big(node, cmd->ns, metrics);
+					if (cmd->record_namespace_metrics) {
+						as_node_add_record_too_big(node, cmd->ns, metrics);
+					}
 					as_command_prepare_error(cmd, err);
 					break;
 
 				default:
-					as_node_add_error(node, cmd->ns, metrics);
+					if (cmd->record_namespace_metrics) {
+						as_node_add_error(node, cmd->ns, metrics);
+					}
 					as_command_prepare_error(cmd, err);
 					break;
 			}
@@ -971,14 +1018,16 @@ Retry:
 		// Server timeouts have a message.  Client timeouts do not have a message.
 		// Record the split before as_error_update() writes a message, which would
 		// make a client timeout look like a server timeout.
-		as_node_add_terminal_result(node, cmd->ns, NULL, err);
+		if (cmd->record_namespace_metrics) {
+			as_node_add_terminal_result(node, cmd->ns, NULL, err);
+		}
 		const char* type = is_server_timeout(err)? "Server" : "Client";
 		as_error_update(err, AEROSPIKE_ERR_TIMEOUT,
 			"%s timeout: socket=%u total=%u iterations=%u lastNode=%s",
 			type, cmd->policy->socket_timeout, cmd->policy->total_timeout, cmd->iteration,
 			as_node_get_address_string(node));
 	}
-	else {
+	else if (cmd->record_namespace_metrics) {
 		as_node_add_terminal_result(node, cmd->ns, NULL, err);
 	}
 

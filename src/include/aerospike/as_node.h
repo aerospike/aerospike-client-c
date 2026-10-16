@@ -221,14 +221,14 @@ typedef struct {
 	uint64_t bytes_out;
 
 	/**
-	 * Command error count since node was initialized. If the error is retryable, multiple errors per
-	 * command may occur.
+	 * Command error count since node was initialized. Incremented once for a
+	 * terminal user-call failure. See as_node_add_error().
 	 */
 	uint64_t error_count;
 
 	/**
-	 * Command timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
-	 * multiple timeouts per command may occur.
+	 * Command timeout count since node was initialized. Incremented once for a
+	 * terminal user-call failure. See as_node_add_terminal_result().
 	 */
 	uint64_t timeout_count;
 
@@ -238,22 +238,26 @@ typedef struct {
 	uint64_t key_busy_count;
 
 	/**
-	 * Latency histograms. One sample per successful attempt.
+	 * Latency histograms. One sample per successful RPC, including that RPC's
+	 * retries. Connection-open time is recorded when operational metrics are on.
 	 * The learn-metrics file and snapshot `latencies` use this series.
+	 * See as_metrics_namespace_snapshot.latencies.
 	 */
 	as_latency* latency[AS_LATENCY_TYPE_MAX];
 
 	/**
 	 * @private
 	 * Client timeouts copied into the metrics snapshot. Also included in timeout_count.
-	 * A retryable timeout can be counted more than once for one command.
+	 * Recorded once for a sampled terminal user-call failure.
+	 * See as_node_add_terminal_result().
 	 */
 	uint64_t client_timeout_count;
 
 	/**
 	 * @private
 	 * Server timeouts copied into the metrics snapshot. Also included in timeout_count.
-	 * A retryable timeout can be counted more than once for one command.
+	 * Recorded once for a sampled terminal user-call failure.
+	 * See as_node_add_terminal_result().
 	 */
 	uint64_t server_timeout_count;
 
@@ -865,7 +869,9 @@ as_node_prepare_metrics(as_node* node, const char* ns);
 
 /**
  * @private
- * Record one per-attempt latency sample in the learn-metrics histogram.
+ * Record one latency sample in the namespace histogram.
+ * Used for a successful RPC and for a successful connection open.
+ * See as_metrics_namespace_snapshot.latencies.
  */
 void
 as_node_add_attempt_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos);
@@ -950,8 +956,9 @@ as_node_get_timeout_count(as_ns_metrics* metrics)
 }
 
 /**
- * Increment command timeout count. If the timeout is retryable (ie socketTimeout),
- * multiple timeouts per command may occur.
+ * Increment command timeout count once for this call.
+ * The client records a timeout once for a terminal user-call failure.
+ * See as_node_add_terminal_result().
  */
 void
 as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);

@@ -829,6 +829,38 @@ as_metrics_batch_sub_command_end(void)
 
 /**
  * @private
+ * Depth of a user batch whose sampler decision is stored in
+ * as_metrics_batch_sampled. Single-key batch fallback sets this so the key
+ * command reuses that decision and does not draw again.
+ * See as_command_execute_sample() and as_event_command_select_sample().
+ */
+extern AS_METRICS_TLS uint32_t as_metrics_batch_sample_depth;
+
+/**
+ * @private
+ * Sampler decision for the user batch that raised as_metrics_batch_sample_depth.
+ */
+extern AS_METRICS_TLS bool as_metrics_batch_sampled;
+
+static inline void
+as_metrics_batch_sample_begin(bool sampled)
+{
+	if (as_metrics_batch_sample_depth == 0) {
+		as_metrics_batch_sampled = sampled;
+	}
+	as_metrics_batch_sample_depth++;
+}
+
+static inline void
+as_metrics_batch_sample_end(void)
+{
+	if (as_metrics_batch_sample_depth > 0) {
+		as_metrics_batch_sample_depth--;
+	}
+}
+
+/**
+ * @private
  * Increment command count when this user call is sampled.
  * Returns whether the call was sampled, so later retries of that same call
  * can reuse the decision.

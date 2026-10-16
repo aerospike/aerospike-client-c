@@ -191,8 +191,11 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * @private
-	 * Legacy per-attempt latency histograms, one entry per `AS_LATENCY_TYPE_*`.
-	 * The learn-metrics file still prints this series. No longer filled.
+	 * Namespace latency histograms, one entry per `AS_LATENCY_TYPE_*`.
+	 * A successful sampled RPC records read, write, batch, or query, including
+	 * that RPC's retries. Connection-open time is recorded when operational
+	 * metrics are on and is not sampler-gated.
+	 * See as_node_add_attempt_latency().
 	 * v3 command latency is `as_metrics_snapshot.command_latencies`.
 	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];
@@ -883,15 +886,17 @@ as_metrics_snapshot_destroy(as_metrics_snapshot* snapshot);
 /**
  * @private
  * Copy one node's metrics. Used for nodes_departed and by the deprecated file listener.
- * Namespace histograms are copied only when operational metrics are enabled.
+ * Namespace counters and latency buckets are copied only when operational metrics
+ * are enabled. See as_metrics_namespace_snapshot.latencies.
  */
 AS_EXTERN void
 as_metrics_node_snapshot_create(struct as_node_s* node, as_metrics_node_snapshot** snapshot);
 
 /**
  * @private
- * Node snapshot for the learn-metrics file. Namespace counters are copied only
- * when operational metrics are enabled. Per-attempt latency buckets are empty.
+ * Node snapshot for the learn-metrics file. Namespace counters and latency
+ * buckets are copied only when operational metrics are enabled.
+ * See as_metrics_namespace_snapshot.latencies.
  */
 void
 as_metrics_node_snapshot_create_file(struct as_node_s* node, as_metrics_node_snapshot** snapshot);

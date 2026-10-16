@@ -1057,15 +1057,21 @@ TEST(metrics_operational_namespace_latency, "operational metrics copy namespace 
 	assert_true(metrics_validation_failures_zero(first_snapshot));
 
 	uint64_t before = metrics_write_latency_total(first_snapshot);
+	uint64_t before_namespace = metrics_attempt_write_latency_total(first_snapshot);
 	assert_true(before > 0);
+	assert_true(before_namespace > 0);
 	as_metrics_snapshot_destroy(first_snapshot);
 
 	assert_int_eq(metrics_put(&err, "metrics-operational-2"), AEROSPIKE_OK);
 
 	as_metrics_snapshot* second_snapshot = NULL;
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &second_snapshot), AEROSPIKE_OK);
-	assert_true(metrics_write_latency_total(second_snapshot) > before);
+	uint64_t after = metrics_write_latency_total(second_snapshot);
+	uint64_t after_namespace = metrics_attempt_write_latency_total(second_snapshot);
 	as_metrics_snapshot_destroy(second_snapshot);
+
+	assert_true(after > before);
+	assert_true(after_namespace > before_namespace);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
@@ -1129,7 +1135,7 @@ TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on 
 	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	assert_true(command_latency > 0);
-	assert_int_eq(attempt_latency, 0);
+	assert_true(attempt_latency > 0);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);

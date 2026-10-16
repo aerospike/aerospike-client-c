@@ -24,7 +24,6 @@
 #include <aerospike/as_partition.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_queue_mt.h>
-#include <aerospike/as_random.h>
 #include <aerospike/as_thread_pool.h>
 
 #ifdef __cplusplus
@@ -737,28 +736,8 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster);
  * True when this draw should record command-path operational metrics.
  * One call is one decision. Draw before the retry loop and reuse the result.
  */
-static inline bool
-as_cluster_sample_operational(as_cluster* cluster)
-{
-	if (!cluster->metrics_enabled || !cluster->metrics_operational_enabled) {
-		return false;
-	}
-
-	uint32_t threshold = as_load_uint32(&cluster->metrics_sampler_threshold);
-
-	if (threshold == 0) {
-		return false;
-	}
-
-	uint32_t range = as_load_uint32(&cluster->metrics_sampler_range);
-
-	// range 1 and threshold 1, the default, records every command.
-	if (range <= 1 || threshold >= range) {
-		return true;
-	}
-
-	return (as_random_get_uint32() % range) < threshold;
-}
+bool
+as_cluster_sample_operational(as_cluster* cluster);
 
 /**
  * @private

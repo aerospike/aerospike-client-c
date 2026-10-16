@@ -26,6 +26,7 @@
 #include <aerospike/as_lookup.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_peers.h>
+#include <aerospike/as_random.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
@@ -575,6 +576,30 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	item.data = nodes_old;
 	item.release_fn = (as_release_fn)release_nodes;
 	as_vector_append(cluster->gc, &item);
+}
+
+bool
+as_cluster_sample_operational(as_cluster* cluster)
+{
+	if (!cluster->metrics_enabled || !cluster->metrics_operational_enabled) {
+		return false;
+	}
+
+	uint32_t threshold = as_load_uint32(&cluster->metrics_sampler_threshold);
+
+	if (threshold == 0) {
+		return false;
+	}
+
+	uint32_t range = as_load_uint32(&cluster->metrics_sampler_range);
+
+	// range 1 and threshold 1, the default, records every command.
+	if (range <= 1 || threshold >= range) {
+		return true;
+	}
+
+	uint32_t draw = as_random_get_uint32();
+	return (draw % range) < threshold;
 }
 
 as_status

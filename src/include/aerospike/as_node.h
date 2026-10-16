@@ -221,21 +221,26 @@ typedef struct {
 	uint64_t bytes_out;
 
 	/**
-	 * Command error count since node was initialized. If the error is retryable, multiple errors per
-	 * command may occur. This is the total reported by as_node_stats.error_count.
+	 * Command error count for this namespace since the node was initialized.
+	 * If the error is retryable, multiple errors per command may occur.
+	 * as_node_stats.error_count is the sum of this field across the node's
+	 * namespaces. See aerospike_node_stats().
 	 */
 	uint64_t error_count;
 
 	/**
-	 * Command timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
-	 * multiple timeouts per command may occur. This is the total reported by as_node_stats.timeout_count.
+	 * Command timeout count for this namespace since the node was initialized.
+	 * If the timeout is retryable (ie socketTimeout), multiple timeouts per
+	 * command may occur. as_node_stats.timeout_count is the sum of this field
+	 * across the node's namespaces. See aerospike_node_stats().
 	 */
 	uint64_t timeout_count;
 
 	/**
-	 * Command key busy error count since node was initialized.
-	 * This is the total reported by as_node_stats.key_busy_count.
+	 * Command key busy error count for this namespace since the node was initialized.
 	 * A retryable key-busy error can be counted more than once for one command.
+	 * as_node_stats.key_busy_count is the sum of this field across the node's
+	 * namespaces. See aerospike_node_stats().
 	 */
 	uint64_t key_busy_count;
 
@@ -955,8 +960,9 @@ as_node_get_error_count(as_ns_metrics* metrics)
 }
 
 /**
- * Increment command error count. If the error is retryable, multiple errors per
- * command may occur. This updates as_node_stats.error_count.
+ * Increment this namespace's command error count. If the error is retryable,
+ * multiple errors per command may occur. aerospike_node_stats() adds this
+ * count into as_node_stats.error_count. See as_ns_metrics.error_count.
  */
 void
 as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics);
@@ -981,8 +987,10 @@ as_node_get_timeout_count(as_ns_metrics* metrics)
 }
 
 /**
- * Increment command timeout count. If the timeout is retryable (ie socketTimeout),
- * multiple timeouts per command may occur. This updates as_node_stats.timeout_count.
+ * Increment this namespace's command timeout count. If the timeout is retryable
+ * (ie socketTimeout), multiple timeouts per command may occur.
+ * aerospike_node_stats() adds this count into as_node_stats.timeout_count.
+ * See as_ns_metrics.timeout_count.
  */
 void
 as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);

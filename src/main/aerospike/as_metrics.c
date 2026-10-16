@@ -1052,7 +1052,6 @@ as_metrics_departed_clear(as_cluster* cluster)
 	as_vector* departed = cluster->metrics_nodes_departed;
 
 	if (!departed) {
-		cluster->metrics_nodes_departed_truncated = false;
 		return;
 	}
 
@@ -1062,22 +1061,19 @@ as_metrics_departed_clear(as_cluster* cluster)
 		as_metrics_node_snapshot_destroy(snap);
 	}
 	as_vector_clear(departed);
-	cluster->metrics_nodes_departed_truncated = false;
 }
 
 static void
 as_metrics_snapshot_clone_nodes_departed(const as_cluster* cluster, as_metrics_snapshot* snap)
 {
 	as_vector* departed = cluster->metrics_nodes_departed;
-	uint32_t n;
-
-	snap->nodes_departed_truncated = cluster->metrics_nodes_departed_truncated;
 
 	if (!departed || departed->size == 0) {
 		return;
 	}
 
-	n = departed->size;
+	uint32_t n = departed->size;
+	snap->nodes_departed_possibly_truncated = n >= AS_METRICS_NODES_DEPARTED_MAX;
 	snap->nodes_departed = cf_malloc(sizeof(as_metrics_node_snapshot*) * n);
 
 	for (uint32_t i = 0; i < n; i++) {
@@ -1209,12 +1205,9 @@ as_metrics_departed_add(as_cluster* cluster, as_node* node)
 	}
 
 	if (departed->size >= AS_METRICS_NODES_DEPARTED_MAX) {
-		if (!cluster->metrics_nodes_departed_truncated) {
-			as_log_warn(
-				"Metrics nodes_departed reached %u entries; possibly more departed nodes were omitted",
-				AS_METRICS_NODES_DEPARTED_MAX);
-		}
-		cluster->metrics_nodes_departed_truncated = true;
+		as_log_warn(
+			"Metrics nodes_departed is full (%u entries); dropping final metrics for departed node %s",
+			AS_METRICS_NODES_DEPARTED_MAX, snap->name);
 		as_metrics_node_snapshot_destroy(snap);
 		return;
 	}

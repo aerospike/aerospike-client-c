@@ -520,12 +520,6 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * True when metrics_nodes_departed hit its cap and later departures were omitted.
-	 */
-	bool metrics_nodes_departed_truncated;
-
-	/**
-	 * @private
 	 * Command retry count. There can be multiple retries for a single command.
 	 * The value is cumulative and not reset per metrics interval.
 	 */

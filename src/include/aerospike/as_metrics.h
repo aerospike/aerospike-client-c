@@ -497,9 +497,11 @@ typedef struct as_metrics_snapshot_s {
 	uint32_t nodes_departed_count;
 
 	/**
-	 * True when the departed-node list hit its cap and later departures were omitted.
+	 * True when `nodes_departed` has reached its cap of 256 entries. Nodes that
+	 * departed after that, before the next successful periodic export, may be
+	 * missing from the list.
 	 */
-	bool nodes_departed_truncated;
+	bool nodes_departed_possibly_truncated;
 
 	/**
 	 * Bucket unit for the latency histograms in this snapshot.

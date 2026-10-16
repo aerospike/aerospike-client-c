@@ -362,7 +362,7 @@ struct as_metrics_runtime_s {
 
 static as_status as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool force, as_error* err);
 static void as_metrics_runtime_free(as_metrics_runtime* rt);
-static void as_metrics_snapshot_copy_departed(as_cluster* cluster, as_metrics_snapshot* snap);
+static void as_metrics_snapshot_clone_nodes_departed(const as_cluster* cluster, as_metrics_snapshot* snap);
 
 #if defined(__linux__)
 static as_status
@@ -969,7 +969,7 @@ aerospike_get_metrics_snapshot(aerospike* as, as_error* err, as_metrics_snapshot
 	as_status status = as_metrics_snapshot_create(err, cluster, labels, cpu, snapshot);
 
 	if (status == AEROSPIKE_OK) {
-		as_metrics_snapshot_copy_departed(cluster, *snapshot);
+		as_metrics_snapshot_clone_nodes_departed(cluster, *snapshot);
 	}
 	pthread_mutex_unlock(&cluster->metrics_lock);
 	return status;
@@ -1066,7 +1066,7 @@ as_metrics_departed_clear(as_cluster* cluster)
 }
 
 static void
-as_metrics_snapshot_copy_departed(as_cluster* cluster, as_metrics_snapshot* snap)
+as_metrics_snapshot_clone_nodes_departed(const as_cluster* cluster, as_metrics_snapshot* snap)
 {
 	as_vector* departed = cluster->metrics_nodes_departed;
 	uint32_t n;
@@ -1314,7 +1314,7 @@ as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool forc
 		return status;
 	}
 
-	as_metrics_snapshot_copy_departed(cluster, snap);
+	as_metrics_snapshot_clone_nodes_departed(cluster, snap);
 	exported = as_metrics_export_slots(rt, snap, force);
 
 	if (exported) {

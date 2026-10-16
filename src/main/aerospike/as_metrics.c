@@ -681,7 +681,7 @@ as_metrics_copy_latency(as_metrics_latency_snapshot* dst, as_latency* latency, u
 }
 
 static void
-as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics_node_snapshot** snapshot)
+as_metrics_node_snapshot_create_impl(as_node* node, as_metrics_node_snapshot** snapshot)
 {
 	as_metrics_node_snapshot* snap = cf_calloc(1, sizeof(as_metrics_node_snapshot));
 	snap->name = as_metrics_strdup_or_empty(node->name);
@@ -729,11 +729,9 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 	}
 
 	uint8_t ns_max = 0;
-	// The file log and metrics listeners read per-attempt namespace histograms.
-	// Keep them when operational metrics are off so those readers are not broken.
-	bool should_copy_attempt_latencies = file_fields || node->cluster->metrics_listeners.snapshot_listener != NULL;
-	bool should_copy_namespace_metrics = node->cluster->metrics_enabled &&
-		(node->cluster->metrics_operational_enabled || should_copy_attempt_latencies);
+	// Disable leaves metrics_operational_enabled set so an on-demand snapshot
+	// still shows the last namespace counters. Per-attempt buckets are not copied.
+	bool should_copy_namespace_metrics = node->cluster->metrics_operational_enabled;
 
 	if (should_copy_namespace_metrics) {
 		ns_max = node->metrics_size;
@@ -762,9 +760,7 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 		ns->bytes_out = as_node_get_bytes_out(metrics);
 
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			if (should_copy_attempt_latencies) {
-				as_metrics_copy_latency(&ns->latencies[j], metrics->latency[j], j);
-			}
+			ns->latencies[j].type = j;
 		}
 		snap->namespace_count++;
 	}
@@ -775,13 +771,13 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 void
 as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapshot)
 {
-	as_metrics_node_snapshot_create_impl(node, false, snapshot);
+	as_metrics_node_snapshot_create_impl(node, snapshot);
 }
 
 void
 as_metrics_node_snapshot_create_file(as_node* node, as_metrics_node_snapshot** snapshot)
 {
-	as_metrics_node_snapshot_create_impl(node, true, snapshot);
+	as_metrics_node_snapshot_create_impl(node, snapshot);
 }
 
 void
@@ -834,8 +830,7 @@ as_metrics_snapshot_create_impl(
 {
 	*snapshot = NULL;
 	bool operational = cluster->metrics_enabled && cluster->metrics_operational_enabled;
-	bool should_read_cpu_mem = cluster->metrics_enabled &&
-		(cluster->metrics_operational_enabled || file_fields);
+	bool should_read_cpu_mem = operational;
 	uint32_t cpu_usage = 0;
 	uint64_t mem = 0;
 
@@ -879,7 +874,7 @@ as_metrics_snapshot_create_impl(
 
 	// Command latency spans retries, which can change nodes, so it is copied
 	// once for the cluster. The learn-metrics file does not write this series.
-	if (operational && !file_fields) {
+	if (cluster->metrics_operational_enabled && !file_fields) {
 		for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
 			as_metrics_copy_latency(&snap->command_latencies[i], cluster->command_latency[i], i);
 		}
@@ -916,7 +911,7 @@ as_metrics_snapshot_create_impl(
 
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_metrics_node_snapshot* node_snap = NULL;
-		as_metrics_node_snapshot_create_impl(nodes->array[i], file_fields, &node_snap);
+		as_metrics_node_snapshot_create_impl(nodes->array[i], &node_snap);
 		snap->nodes[i] = node_snap;
 	}
 	as_nodes_release(nodes);
@@ -1644,7 +1639,6 @@ as_metrics_runtime_disable(as_error* err, as_cluster* cluster)
 
 	cluster->metrics_enabled = false;
 	cluster->metrics_file_writer = false;
-	as_cluster_disable_command_latency(cluster);
 
 	if (rt) {
 		as_metrics_runtime_free(rt);

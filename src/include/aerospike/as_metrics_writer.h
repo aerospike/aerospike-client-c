@@ -32,8 +32,9 @@ extern "C" {
 /**
  * Built-in learn-metrics file exporter. Embeds as_metrics_exporter as its first field.
  * The log is header(3). CamelCase segment names are unchanged. Cpu, memory,
- * and namespace histograms are written whenever metrics are enabled, including
- * when operational_enabled is false.
+ * and namespace counters are written when operational metrics are enabled.
+ * Per-attempt latency columns stay in the line and are no longer filled.
+ * Cluster command latency is not written.
  * blockingCount, deferredCount, and backgroundCount follow commandCount on
  * the cluster line. They are feature.api.blocking, feature.api.deferred, and
  * feature.api.background. The columns are always present. They increment only

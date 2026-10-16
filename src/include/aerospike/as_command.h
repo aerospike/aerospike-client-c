@@ -231,10 +231,8 @@ typedef struct as_command_s {
 	// While operational metrics are on, this is also the namespace-metrics decision.
 	bool metrics_sample_decision;
 	// True when this command updates per-namespace histograms, bytes, and error
-	// counts. While operational metrics are on, a sampler "no" sets this false.
-	// While they are off, set only if a learn-metrics file writer or a metrics
-	// listener is installed. Namespace error counters are recorded once on
-	// terminal failure.
+	// counts. False when operational metrics are off, or when the sampler skips
+	// this call. Namespace error counters are recorded once on terminal failure.
 	bool record_namespace_metrics;
 } as_command;
 

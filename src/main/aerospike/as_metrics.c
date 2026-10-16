@@ -1082,9 +1082,11 @@ as_metrics_snapshot_copy_departed(as_cluster* cluster, as_metrics_snapshot* snap
 }
 
 // Buckets from a different histogram layout cannot be added, so the newer
-// final keeps its own. Moves src buckets when dst has none.
+// final keeps its own. Copies src buckets when dst has none.
 static void
-as_metrics_add_latency_buckets(as_metrics_latency_snapshot* dst, as_metrics_latency_snapshot* src)
+as_metrics_add_latency_buckets(
+	as_metrics_latency_snapshot* dst, const as_metrics_latency_snapshot* src
+	)
 {
 	if (!src->buckets) {
 		return;
@@ -1093,8 +1095,7 @@ as_metrics_add_latency_buckets(as_metrics_latency_snapshot* dst, as_metrics_late
 	if (!dst->buckets) {
 		dst->buckets = src->buckets;
 		dst->bucket_count = src->bucket_count;
-		src->buckets = NULL;
-		src->bucket_count = 0;
+		as_metrics_clone_latency_buckets(dst);
 		return;
 	}
 
@@ -1118,7 +1119,9 @@ as_metrics_add_conn_counts(as_metrics_conn_snapshot* dst, const as_metrics_conn_
 }
 
 static void
-as_metrics_add_namespace_counts(as_metrics_namespace_snapshot* dst, as_metrics_namespace_snapshot* src)
+as_metrics_add_namespace_counts(
+	as_metrics_namespace_snapshot* dst, const as_metrics_namespace_snapshot* src
+	)
 {
 	dst->errors += src->errors;
 	dst->client_timeouts += src->client_timeouts;

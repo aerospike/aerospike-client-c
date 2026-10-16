@@ -245,13 +245,6 @@ typedef struct {
 
 	/**
 	 * @private
-	 * v3 command latency. One sample per command for total elapsed time
-	 * including retries. Allocated only while operational metrics are enabled.
-	 */
-	as_latency* command_latency[AS_LATENCY_TYPE_MAX];
-
-	/**
-	 * @private
 	 * Client timeouts copied into the metrics snapshot. Also included in timeout_count.
 	 * A retryable timeout can be counted more than once for one command.
 	 */
@@ -876,14 +869,6 @@ as_node_prepare_metrics(as_node* node, const char* ns);
  */
 void
 as_node_add_attempt_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos);
-
-/**
- * @private
- * Record one v3 command latency sample. elapsed_nanos includes retries.
- * No-op when operational command histograms are not allocated.
- */
-void
-as_node_add_command_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos);
 
 struct as_metrics_policy_s;
 

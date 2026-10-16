@@ -614,6 +614,37 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
 	return as_metrics_runtime_disable(err, cluster);
 }
 
+void
+as_cluster_enable_command_latency(as_cluster* cluster, const as_metrics_policy* policy)
+{
+	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+		if (policy->operational_enabled) {
+			as_latency_gc_init(cluster, &cluster->command_latency[i], policy);
+		}
+		else {
+			as_latency_gc_publish(cluster, &cluster->command_latency[i], NULL);
+		}
+	}
+}
+
+void
+as_cluster_disable_command_latency(as_cluster* cluster)
+{
+	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+		as_latency_gc_publish(cluster, &cluster->command_latency[i], NULL);
+	}
+}
+
+void
+as_cluster_add_command_latency(as_cluster* cluster, as_latency_type latency_type, uint64_t elapsed_nanos)
+{
+	if (!cluster) {
+		return;
+	}
+
+	as_latency_add(cluster->command_latency[latency_type], elapsed_nanos);
+}
+
 static void
 as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove)
 {

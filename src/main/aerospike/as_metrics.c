@@ -648,7 +648,6 @@ as_metrics_node_snapshot_destroy(as_metrics_node_snapshot* snapshot)
 
 			for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
 				cf_free(ns->latencies[j].buckets);
-				cf_free(ns->command_latencies[j].buckets);
 			}
 		}
 		cf_free(snapshot->namespaces);
@@ -765,10 +764,6 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 			if (should_copy_attempt_latencies) {
 				as_metrics_copy_latency(&ns->latencies[j], metrics->latency[j], j);
 			}
-
-			if (node->cluster->metrics_operational_enabled && !file_fields) {
-				as_metrics_copy_latency(&ns->command_latencies[j], metrics->command_latency[j], j);
-			}
 		}
 		snap->namespace_count++;
 	}
@@ -806,6 +801,10 @@ as_metrics_snapshot_destroy(as_metrics_snapshot* snapshot)
 			cf_free(snapshot->labels[i].value);
 		}
 		cf_free(snapshot->labels);
+	}
+
+	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+		cf_free(snapshot->command_latencies[i].buckets);
 	}
 
 	cf_free(snapshot->event_loops);
@@ -876,6 +875,14 @@ as_metrics_snapshot_create_impl(
 	snap->latency_unit = cluster->metrics_latency_unit;
 	snap->latency_columns = cluster->metrics_latency_columns;
 	snap->latency_shift = cluster->metrics_latency_shift;
+
+	// Command latency spans retries, which can change nodes, so it is copied
+	// once for the cluster. The learn-metrics file does not write this series.
+	if (operational && !file_fields) {
+		for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+			as_metrics_copy_latency(&snap->command_latencies[i], cluster->command_latency[i], i);
+		}
+	}
 
 	if (labels && labels->size > 0) {
 		snap->labels = cf_calloc(labels->size, sizeof(as_metrics_label));
@@ -1379,11 +1386,13 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		as_node_enable_metrics(nodes->array[i], policy);
 	}
 	as_nodes_release(nodes);
+	as_cluster_enable_command_latency(cluster, policy);
 
 	if (custom_listener) {
 		as_status status = cluster->metrics_listeners.enable_listener(err, cluster->metrics_listeners.udata);
 
 		if (status != AEROSPIKE_OK) {
+			as_cluster_disable_command_latency(cluster);
 			as_metrics_runtime_free(rt);
 			cluster->metrics_runtime = NULL;
 			memset(&cluster->metrics_listeners, 0, sizeof(cluster->metrics_listeners));
@@ -1402,6 +1411,7 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 			pthread_mutex_unlock(&rt->lock);
 			cluster->metrics_enabled = false;
 			cluster->metrics_file_writer = false;
+			as_cluster_disable_command_latency(cluster);
 			as_status status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
 				"Failed to create metrics thread: %s", strerror(errno));
 
@@ -1468,6 +1478,7 @@ as_metrics_runtime_disable(as_error* err, as_cluster* cluster)
 
 	cluster->metrics_enabled = false;
 	cluster->metrics_file_writer = false;
+	as_cluster_disable_command_latency(cluster);
 
 	if (rt) {
 		as_metrics_runtime_free(rt);

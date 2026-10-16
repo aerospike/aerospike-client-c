@@ -469,6 +469,14 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * v3 command latency. One sample per command for total elapsed time
+	 * including retries, across nodes. Allocated only while operational
+	 * metrics are enabled.
+	 */
+	as_latency* command_latency[AS_LATENCY_TYPE_MAX];
+
+	/**
+	 * @private
 	 * Operational sampler modulus. >= 1. Read with as_load_uint32().
 	 */
 	uint32_t metrics_sampler_range;
@@ -730,6 +738,30 @@ as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_p
  */
 as_status
 as_cluster_disable_metrics(as_error* err, as_cluster* cluster);
+
+/**
+ * @private
+ * Allocate or reset cluster command latency histograms when operational
+ * metrics are on. Release them when operational metrics are off.
+ */
+void
+as_cluster_enable_command_latency(as_cluster* cluster, const as_metrics_policy* policy);
+
+/**
+ * @private
+ * Release cluster command latency histograms. In-flight samples keep the
+ * histogram alive until they finish.
+ */
+void
+as_cluster_disable_command_latency(as_cluster* cluster);
+
+/**
+ * @private
+ * Record one v3 command latency sample. elapsed_nanos includes retries.
+ * No-op when operational command histograms are not allocated.
+ */
+void
+as_cluster_add_command_latency(as_cluster* cluster, as_latency_type latency_type, uint64_t elapsed_nanos);
 
 /**
  * @private

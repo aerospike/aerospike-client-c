@@ -41,10 +41,6 @@
 // Replicas take ~2K per namespace, so this will cover most deployments:
 #define INFO_STACK_BUF_SIZE (16 * 1024)
 
-// Number of nanoseconds per millisecond
-#define NS_TO_MS 1000000
-#define NS_TO_US 1000
-
 //---------------------------------
 // Globals
 //---------------------------------
@@ -268,7 +264,6 @@ as_node_destroy_metrics(as_node* node)
 
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
 			cf_free(metrics->latency[j]);
-			cf_free(metrics->command_latency[j]);
 		}
 		cf_free(metrics);
 	}
@@ -1520,55 +1515,6 @@ as_node_parse_racks(as_cluster* cluster, as_error* err, as_node* node, char* buf
 	return AEROSPIKE_OK;
 }
 
-/**
- * Use non-inline function for garbarge collector function pointer reference.
- * Forward to inlined release.
- */
-static inline void
-release_latency(as_latency* latency)
-{
-	as_latency_release(latency);
-}
-
-static as_latency*
-as_node_create_latency(uint8_t columns, uint8_t shift, as_metrics_latency_unit unit)
-{
-	as_latency* latency = cf_calloc(1, sizeof(as_latency) + (sizeof(uint64_t) * columns));
-	latency->ref_count = 1;
-	latency->shift = shift;
-	latency->size = columns;
-	latency->unit = unit;
-	return latency;
-}
-
-static void
-as_node_init_latency_slot(as_node* node, as_latency** slot, const as_metrics_policy* policy)
-{
-	as_latency* latency = *slot;
-
-	if (latency && policy->latency_columns == latency->size && policy->latency_shift == latency->shift &&
-		policy->latency_unit == latency->unit) {
-		for (uint8_t k = 0; k < latency->size; k++) {
-			as_store_uint64(&latency->buckets[k], 0);
-		}
-		return;
-	}
-
-	as_latency* latency_old = latency;
-	as_latency* latency_new = as_node_create_latency(policy->latency_columns, policy->latency_shift,
-		policy->latency_unit);
-	as_store_ptr_rls((void**)slot, latency_new);
-
-	if (!latency_old) {
-		return;
-	}
-
-	as_gc_item item;
-	item.data = latency_old;
-	item.release_fn = (as_release_fn)release_latency;
-	as_vector_append(node->cluster->gc, &item);
-}
-
 void
 as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 {
@@ -1580,12 +1526,7 @@ as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 		as_ns_metrics* metrics = array[i];
 
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			as_node_init_latency_slot(node, &metrics->latency[j], policy);
-
-			// v3 command histograms exist only while operational metrics are on.
-			if (policy->operational_enabled) {
-				as_node_init_latency_slot(node, &metrics->command_latency[j], policy);
-			}
+			as_latency_gc_init(node->cluster, &metrics->latency[j], policy);
 		}
 	}
 }
@@ -1646,11 +1587,7 @@ as_node_append_metrics(as_node* node, const char* ns)
 		}
 
 		for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
-			metrics->latency[i] = as_node_create_latency(latency_columns, latency_shift, latency_unit);
-
-			if (cluster->metrics_operational_enabled) {
-				metrics->command_latency[i] = as_node_create_latency(latency_columns, latency_shift, latency_unit);
-			}
+			metrics->latency[i] = as_latency_create(latency_columns, latency_shift, latency_unit);
 		}
 		node->metrics[node->metrics_size++] = metrics;
 	}
@@ -1674,44 +1611,6 @@ as_node_prepare_metrics(as_node* node, const char* ns)
 	return metrics;
 }
 
-static inline uint8_t
-as_latency_get_index(as_latency* latency, uint64_t elapsed)
-{
-	uint64_t limit = 1;
-	uint8_t last_bucket = latency->size - 1;
-
-	for (uint8_t i = 0; i < last_bucket; i++) {
-		if (elapsed <= limit) {
-			return i;
-		}
-		limit <<= latency->shift;
-	}
-	return last_bucket;
-}
-
-static void
-as_node_add_latency_buckets(as_latency* latency, uint64_t elapsed_nanos)
-{
-	if (!latency) {
-		return;
-	}
-
-	latency = as_latency_reserve(latency);
-	uint64_t scale = latency->unit == AS_METRICS_LATENCY_MICROSECONDS ? NS_TO_US : NS_TO_MS;
-
-	// Convert nanoseconds to the histogram unit and round up.
-	uint64_t elapsed = elapsed_nanos / scale;
-
-	if ((elapsed_nanos - (elapsed * scale)) > 0) {
-		elapsed++;
-	}
-
-	uint8_t index = as_latency_get_index(latency, elapsed);
-	as_incr_uint64(&latency->buckets[index]);
-
-	as_latency_release(latency);
-}
-
 void
 as_node_add_attempt_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos)
 {
@@ -1719,17 +1618,7 @@ as_node_add_attempt_latency(as_ns_metrics* metrics, as_latency_type latency_type
 		return;
 	}
 
-	as_node_add_latency_buckets(metrics->latency[latency_type], elapsed_nanos);
-}
-
-void
-as_node_add_command_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos)
-{
-	if (!metrics) {
-		return;
-	}
-
-	as_node_add_latency_buckets(metrics->command_latency[latency_type], elapsed_nanos);
+	as_latency_add(metrics->latency[latency_type], elapsed_nanos);
 }
 
 void

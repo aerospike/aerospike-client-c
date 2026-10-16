@@ -596,20 +596,20 @@ as_event_add_attempt_latency(as_event_command* cmd, as_latency_type type)
 static inline void
 as_event_add_success_latency(as_event_command* cmd)
 {
-	if (!cmd->metrics || cmd->latency_type == AS_LATENCY_TYPE_NONE) {
+	if (cmd->latency_type == AS_LATENCY_TYPE_NONE) {
 		return;
 	}
 
 	uint64_t now = cf_getns();
 
 	// Existing histograms: this attempt only.
-	if (cmd->attempt_begin != 0) {
+	if (cmd->metrics && cmd->attempt_begin != 0) {
 		as_node_add_attempt_latency(cmd->metrics, cmd->latency_type, now - cmd->attempt_begin);
 	}
 
-	// v3 command latency: elapsed time from the first attempt, including retries.
+	// See as_command_add_latencies().
 	if (cmd->command_begin != 0) {
-		as_node_add_command_latency(cmd->metrics, cmd->latency_type, now - cmd->command_begin);
+		as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, now - cmd->command_begin);
 	}
 }
 

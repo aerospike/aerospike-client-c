@@ -624,24 +624,11 @@ static uint64_t
 metrics_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
 {
 	uint64_t total = 0;
+	as_metrics_latency_snapshot* latency_snapshot =
+		&metrics_snapshot->command_latencies[AS_LATENCY_TYPE_WRITE];
 
-	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
-		as_metrics_node_snapshot* node_snapshot = metrics_snapshot->nodes[i];
-
-		for (uint32_t j = 0; j < node_snapshot->namespace_count; j++) {
-			as_metrics_namespace_snapshot* namespace_snapshot = &node_snapshot->namespaces[j];
-
-			if (!namespace_snapshot->name || strcmp(namespace_snapshot->name, "test") != 0) {
-				continue;
-			}
-
-			as_metrics_latency_snapshot* latency_snapshot =
-				&namespace_snapshot->command_latencies[AS_LATENCY_TYPE_WRITE];
-
-			for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
-				total += latency_snapshot->buckets[k];
-			}
-		}
+	for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
+		total += latency_snapshot->buckets[k];
 	}
 	return total;
 }
@@ -688,16 +675,21 @@ metrics_test_namespace_ok(const as_metrics_snapshot* metrics_snapshot, uint8_t b
 			}
 
 			found = true;
-			as_metrics_latency_snapshot* latency_snapshot =
-				&namespace_snapshot->command_latencies[AS_LATENCY_TYPE_WRITE];
-
-			if (latency_snapshot->type != AS_LATENCY_TYPE_WRITE || latency_snapshot->bucket_count != bucket_count ||
-					!latency_snapshot->buckets) {
-				return false;
-			}
 		}
 	}
-	return found;
+
+	if (!found) {
+		return false;
+	}
+
+	as_metrics_latency_snapshot* latency_snapshot =
+		&metrics_snapshot->command_latencies[AS_LATENCY_TYPE_WRITE];
+
+	if (latency_snapshot->type != AS_LATENCY_TYPE_WRITE || latency_snapshot->bucket_count != bucket_count ||
+			!latency_snapshot->buckets) {
+		return false;
+	}
+	return true;
 }
 
 static bool

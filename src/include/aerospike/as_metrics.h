@@ -195,17 +195,9 @@ typedef struct as_metrics_namespace_snapshot_s {
 	 * Same series as `as_ns_metrics.latency`. The learn-metrics file writer
 	 * prints this series, and metrics listeners read it. Filled when a
 	 * learn-metrics file writer or a metrics listener is installed.
-	 * The metrics snapshot model uses `command_latencies`.
+	 * v3 command latency is `as_metrics_snapshot.command_latencies`.
 	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];
-
-	/**
-	 * v3 command latency, one entry per `AS_LATENCY_TYPE_*`.
-	 * Same series as `as_ns_metrics.command_latency`. One sample per command
-	 * for total elapsed time including retries. Empty unless operational
-	 * metrics are enabled. The learn-metrics file does not write this series.
-	 */
-	as_metrics_latency_snapshot command_latencies[AS_LATENCY_TYPE_MAX];
 } as_metrics_namespace_snapshot;
 
 /**
@@ -500,6 +492,15 @@ typedef struct as_metrics_snapshot_s {
 	 * Power of 2 multiple between latency histogram buckets, starting at bucket 3.
 	 */
 	uint8_t latency_shift;
+
+	/**
+	 * v3 command latency, one entry per `AS_LATENCY_TYPE_*`.
+	 * One sample per command for total elapsed time including retries.
+	 * A retry can move the command to another node, so this series is
+	 * cluster-wide. Empty unless operational metrics are enabled.
+	 * The learn-metrics file does not write this series.
+	 */
+	as_metrics_latency_snapshot command_latencies[AS_LATENCY_TYPE_MAX];
 } as_metrics_snapshot;
 
 /**

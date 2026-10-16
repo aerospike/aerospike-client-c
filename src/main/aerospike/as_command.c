@@ -688,19 +688,20 @@ as_command_prepare_error(as_command* cmd, as_error* err)
 static void
 as_command_add_latencies(as_command* cmd, as_ns_metrics* metrics, uint64_t attempt_begin)
 {
-	if (!metrics || cmd->latency_type == AS_LATENCY_TYPE_NONE) {
+	if (cmd->latency_type == AS_LATENCY_TYPE_NONE) {
 		return;
 	}
 
 	uint64_t now = cf_getns();
 
-	if (attempt_begin != 0) {
+	if (metrics && attempt_begin != 0) {
 		as_node_add_attempt_latency(metrics, cmd->latency_type, now - attempt_begin);
 	}
 
 	// v3 command latency: elapsed time from the first attempt, including retries.
+	// The sample is cluster-wide because a retry can move to another node.
 	if (cmd->command_begin != 0) {
-		as_node_add_command_latency(metrics, cmd->latency_type, now - cmd->command_begin);
+		as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, now - cmd->command_begin);
 	}
 }
 

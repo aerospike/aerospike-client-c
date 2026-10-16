@@ -710,14 +710,6 @@ typedef struct as_metrics_policy_s {
 	 * Default: NULL
 	 */
 	as_vector* exporters;
-
-	/**
-	 * @private
-	 * True when dynamic configuration set the legacy metrics.enable key.
-	 * metrics.enabled leaves this false. Used to map that legacy switch to
-	 * operational metrics when extended.operational.enabled is absent.
-	 */
-	bool legacy_enable;
 } as_metrics_policy;
 
 //---------------------------------

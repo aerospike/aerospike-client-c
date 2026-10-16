@@ -1508,8 +1508,13 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 
 	// metrics.enable remains the legacy name. metrics.enabled is the tech spec key.
 	// The legacy key maps to operational metrics when that key is absent.
-	if (strcmp(name, "enable") == 0 || strcmp(name, "enabled") == 0) {
-		policy->legacy_enable = strcmp(name, "enable") == 0;
+	// See as_cluster_update_metrics().
+	if (strcmp(name, "enable") == 0) {
+		as_field_set(yaml->bitmap, AS_METRICS_LEGACY_ENABLE);
+		return as_parse_bool(yaml, name, value, &policy->enable, AS_METRICS_ENABLE);
+	}
+
+	if (strcmp(name, "enabled") == 0) {
 		return as_parse_bool(yaml, name, value, &policy->enable, AS_METRICS_ENABLE);
 	}
 
@@ -2365,7 +2370,7 @@ as_cluster_update_metrics(
 
 	// Legacy metrics.enable, without extended.operational.enabled, is master
 	// plus operational. metrics.enabled does not turn operational on.
-	if (as_field_is_set(bitmap, AS_METRICS_ENABLE) && src->enable && src->legacy_enable &&
+	if (as_field_is_set(bitmap, AS_METRICS_LEGACY_ENABLE) && src->enable &&
 			!as_field_is_set(bitmap, AS_METRICS_OPERATIONAL)) {
 		trg->operational_enabled = true;
 	}
@@ -2620,9 +2625,8 @@ as_config_file_init(aerospike* as, as_error* err)
 	as_status status = as_config_file_read(as, config, as->config_bitmap, true, err);
 
 	if (status == AEROSPIKE_OK &&
-			as_field_is_set(as->config_bitmap, AS_METRICS_ENABLE) &&
+			as_field_is_set(as->config_bitmap, AS_METRICS_LEGACY_ENABLE) &&
 			config->policies.metrics.enable &&
-			config->policies.metrics.legacy_enable &&
 			!as_field_is_set(as->config_bitmap, AS_METRICS_OPERATIONAL)) {
 		// Same mapping as as_cluster_update_metrics(). The first read has no cluster yet.
 		config->policies.metrics.operational_enabled = true;

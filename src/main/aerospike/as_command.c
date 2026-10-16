@@ -812,8 +812,10 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 
 		if (status != AEROSPIKE_OK) {
 			// Timeouts retry. A positive status such as invalid user/password does not.
-			// The timeout is counted once if the user call fails overall.
+			// as_node_stats counts each attempt. The snapshot counts a timeout once
+			// if the user call fails overall. See as_node_add_terminal_result().
 			if (status == AEROSPIKE_ERR_TIMEOUT) {
+				as_node_add_timeout(node, cmd->ns, metrics);
 				goto Retry;
 			}
 			else if (status > 0) {
@@ -871,18 +873,23 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 			// Close socket on errors that can leave unread data in socket.
 			switch (status) {
 				case AEROSPIKE_ERR_CLUSTER:
+					as_node_add_error(node, cmd->ns, metrics);
 					as_node_put_conn_error(node, &socket);
 					goto Retry;
 
 				case AEROSPIKE_ERR_DEVICE_OVERLOAD:
+					as_node_add_error(node, cmd->ns, metrics);
 					as_node_put_conn_error(node, &socket);
 					goto Retry;
 
 				case AEROSPIKE_ERR_CONNECTION:
+					as_node_add_error(node, cmd->ns, metrics);
 					as_node_close_conn_error(node, &socket, socket.pool);
 					goto Retry;
 
 				case AEROSPIKE_ERR_TIMEOUT:
+					as_node_add_timeout(node, cmd->ns, metrics);
+
 					if (is_server_timeout(err)) {
 						as_node_put_conn_error(node, &socket);
 					}
@@ -897,8 +904,10 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 				case AEROSPIKE_ERR_SCAN_ABORTED:
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
+					as_node_add_error(node, cmd->ns, metrics);
+
 					if (cmd->record_namespace_metrics) {
-						as_node_add_error(node, cmd->ns, metrics);
+						as_node_add_terminal_result(node, cmd->ns, metrics, err);
 					}
 					as_node_close_conn_error(node, &socket, socket.pool);
 					if (ctx.is_single) {
@@ -915,22 +924,28 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 					break;
 
 				case AEROSPIKE_ERR_RECORD_BUSY:
+					as_node_add_key_busy(node, cmd->ns, metrics);
+
 					if (cmd->record_namespace_metrics) {
-						as_node_add_key_busy(node, cmd->ns, metrics);
+						as_node_add_terminal_result(node, cmd->ns, metrics, err);
 					}
 					as_command_prepare_error(cmd, err);
 					break;
 
 				case AEROSPIKE_ERR_RECORD_TOO_BIG:
+					as_node_add_error(node, cmd->ns, metrics);
+
 					if (cmd->record_namespace_metrics) {
-						as_node_add_record_too_big(node, cmd->ns, metrics);
+						as_node_add_terminal_result(node, cmd->ns, metrics, err);
 					}
 					as_command_prepare_error(cmd, err);
 					break;
 
 				default:
+					as_node_add_error(node, cmd->ns, metrics);
+
 					if (cmd->record_namespace_metrics) {
-						as_node_add_error(node, cmd->ns, metrics);
+						as_node_add_terminal_result(node, cmd->ns, metrics, err);
 					}
 					as_command_prepare_error(cmd, err);
 					break;

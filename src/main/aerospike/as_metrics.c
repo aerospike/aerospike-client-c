@@ -753,10 +753,10 @@ as_metrics_node_snapshot_create_impl(as_node* node, as_metrics_node_snapshot** s
 		ns->name = as_metrics_strdup_or_empty(metrics->ns);
 		ns->record_too_big = as_load_uint64(&metrics->record_too_big_count);
 		ns->device_overload = as_load_uint64(&metrics->device_overload_count);
-		ns->errors = as_node_get_error_count(metrics) - ns->record_too_big - ns->device_overload;
+		ns->errors = as_load_uint64(&metrics->snapshot_error_count);
 		ns->client_timeouts = as_load_uint64(&metrics->client_timeout_count);
 		ns->server_timeouts = as_load_uint64(&metrics->server_timeout_count);
-		ns->key_busy = as_node_get_key_busy_count(metrics);
+		ns->key_busy = as_load_uint64(&metrics->snapshot_key_busy_count);
 		ns->bytes_in = as_node_get_bytes_in(metrics);
 		ns->bytes_out = as_node_get_bytes_out(metrics);
 

@@ -221,19 +221,21 @@ typedef struct {
 	uint64_t bytes_out;
 
 	/**
-	 * Command error count since node was initialized. Incremented once for a
-	 * terminal user-call failure. See as_node_add_error().
+	 * Command error count since node was initialized. If the error is retryable, multiple errors per
+	 * command may occur. This is the total reported by as_node_stats.error_count.
 	 */
 	uint64_t error_count;
 
 	/**
-	 * Command timeout count since node was initialized. Incremented once for a
-	 * terminal user-call failure. See as_node_add_terminal_result().
+	 * Command timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
+	 * multiple timeouts per command may occur. This is the total reported by as_node_stats.timeout_count.
 	 */
 	uint64_t timeout_count;
 
 	/**
 	 * Command key busy error count since node was initialized.
+	 * This is the total reported by as_node_stats.key_busy_count.
+	 * A retryable key-busy error can be counted more than once for one command.
 	 */
 	uint64_t key_busy_count;
 
@@ -247,31 +249,53 @@ typedef struct {
 
 	/**
 	 * @private
-	 * Client timeouts copied into the metrics snapshot. Also included in timeout_count.
+	 * Client timeouts copied into the metrics snapshot.
 	 * Recorded once for a sampled terminal user-call failure.
-	 * See as_node_add_terminal_result().
+	 * Not included in timeout_count. See as_node_stats.timeout_count and
+	 * as_node_add_terminal_result().
 	 */
 	uint64_t client_timeout_count;
 
 	/**
 	 * @private
-	 * Server timeouts copied into the metrics snapshot. Also included in timeout_count.
+	 * Server timeouts copied into the metrics snapshot.
 	 * Recorded once for a sampled terminal user-call failure.
-	 * See as_node_add_terminal_result().
+	 * Not included in timeout_count. See as_node_stats.timeout_count and
+	 * as_node_add_terminal_result().
 	 */
 	uint64_t server_timeout_count;
 
 	/**
 	 * @private
-	 * Record too big errors copied into the metrics snapshot. Also included in error_count.
+	 * Record too big errors copied into the metrics snapshot.
+	 * Recorded once for a sampled terminal user-call failure.
+	 * Not included in error_count. See as_node_stats.error_count.
 	 */
 	uint64_t record_too_big_count;
 
 	/**
 	 * @private
-	 * Device overload errors copied into the metrics snapshot. Also included in error_count.
+	 * Device overload errors copied into the metrics snapshot.
+	 * Recorded once for a sampled terminal user-call failure.
+	 * Not included in error_count. See as_node_stats.error_count.
 	 */
 	uint64_t device_overload_count;
+
+	/**
+	 * @private
+	 * Remaining command errors copied into the metrics snapshot.
+	 * Recorded once for a sampled terminal user-call failure.
+	 * Not included in error_count. See as_node_stats.error_count.
+	 */
+	uint64_t snapshot_error_count;
+
+	/**
+	 * @private
+	 * Key-busy errors copied into the metrics snapshot.
+	 * Recorded once for a sampled terminal user-call failure.
+	 * Not included in key_busy_count. See as_node_stats.key_busy_count.
+	 */
+	uint64_t snapshot_key_busy_count;
 
 } as_ns_metrics;
 
@@ -931,7 +955,8 @@ as_node_get_error_count(as_ns_metrics* metrics)
 }
 
 /**
- * Increment command error count once for a terminal user-call failure.
+ * Increment command error count. If the error is retryable, multiple errors per
+ * command may occur. This updates as_node_stats.error_count.
  */
 void
 as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics);
@@ -956,23 +981,24 @@ as_node_get_timeout_count(as_ns_metrics* metrics)
 }
 
 /**
- * Increment command timeout count once for this call.
- * The client records a timeout once for a terminal user-call failure.
- * See as_node_add_terminal_result().
+ * Increment command timeout count. If the timeout is retryable (ie socketTimeout),
+ * multiple timeouts per command may occur. This updates as_node_stats.timeout_count.
  */
 void
 as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * @private
- * Increment the snapshot client timeout count. Also increments timeout_count.
+ * Increment the snapshot client timeout count. Does not change timeout_count.
+ * See as_node_stats.timeout_count.
  */
 void
 as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * @private
- * Increment the snapshot server timeout count. Also increments timeout_count.
+ * Increment the snapshot server timeout count. Does not change timeout_count.
+ * See as_node_stats.timeout_count.
  */
 void
 as_node_add_server_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
@@ -994,14 +1020,16 @@ as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * @private
- * Increment the snapshot record too big count. Also increments error_count.
+ * Increment the snapshot record too big count. Does not change error_count.
+ * See as_node_stats.error_count.
  */
 void
 as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * @private
- * Increment the snapshot device overload count. Also increments error_count.
+ * Increment the snapshot device overload count. Does not change error_count.
+ * See as_node_stats.error_count.
  */
 void
 as_node_add_device_overload(as_node* node, const char* ns, as_ns_metrics* metrics);

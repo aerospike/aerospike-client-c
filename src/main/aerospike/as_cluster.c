@@ -215,6 +215,9 @@ as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes
 		as_node* node = as_vector_get_ptr(nodes_to_add, i);
 		as_log_info("Add node %s %s", node->name, as_node_get_address_string(node));
 		as_cluster_event_notify(cluster, node, AS_CLUSTER_ADD_NODE);
+		// A node that left and came back is live again. Drop its departed entry
+		// so the next leave keeps a single final sample.
+		as_metrics_departed_remove(cluster, node);
 	}
 	
 	// Create temporary nodes array.
@@ -577,6 +580,12 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	item.release_fn = (as_release_fn)release_nodes;
 	as_vector_append(cluster->gc, &item);
 }
+
+#if defined(_MSC_VER)
+__declspec(thread) int as_metrics_batch_sub_command = 0;
+#else
+__thread int as_metrics_batch_sub_command = 0;
+#endif
 
 bool
 as_cluster_sample_operational(as_cluster* cluster)
@@ -1709,6 +1718,8 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->metrics_operational_enabled = false;
 	cluster->metrics_usage_enabled = false;
 	cluster->metrics_file_writer = false;
+	cluster->metrics_nodes_departed = NULL;
+	cluster->metrics_nodes_departed_truncated = false;
 	cluster->metrics_latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
 	cluster->metrics_interval = 0;
 	cluster->metrics_latency_columns = 0;
@@ -1724,6 +1735,10 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->metrics_validation_open_failures = 0;
 	cluster->metrics_validation_tls_handshake_failures = 0;
 	cluster->metrics_validation_auth_failures = 0;
+
+	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+		cluster->command_latency[i] = NULL;
+	}
 
 	cluster->as = as;
 
@@ -1821,6 +1836,9 @@ as_cluster_destroy(as_cluster* cluster)
 		as_metrics_runtime_disable(&metrics_err, cluster);
 		pthread_mutex_unlock(&cluster->metrics_lock);
 	}
+	// Disable leaves the histograms in place for a later on-demand snapshot.
+	as_cluster_disable_command_latency(cluster);
+	as_metrics_departed_destroy(cluster);
 
 	// Shutdown thread pool.
 	int rc = as_thread_pool_destroy(&cluster->thread_pool);

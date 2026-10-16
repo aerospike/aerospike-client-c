@@ -137,7 +137,7 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * Command errors for this namespace since the node was initialized.
-	 * A retryable error can be counted more than once for one command.
+	 * Counted once when the user call fails with this outcome, not on each retry.
 	 * Remainder after the split counters below. Timeouts, key busy, record too big,
 	 * and device overload are not included.
 	 * `as_ns_metrics.error_count` still includes record too big and device overload.
@@ -146,14 +146,14 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * Client timeouts (connect, socket, or total) since the node was initialized.
-	 * A retryable timeout can be counted more than once for one command.
+	 * Counted once when the user call fails with a client timeout, not on each retry.
 	 * Not included in errors or server_timeouts.
 	 */
 	uint64_t client_timeouts;
 
 	/**
 	 * Server timeouts since the node was initialized.
-	 * A retryable timeout can be counted more than once for one command.
+	 * Counted once when the user call fails with a server timeout, not on each retry.
 	 * Not included in errors or client_timeouts.
 	 */
 	uint64_t server_timeouts;
@@ -191,10 +191,8 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * @private
-	 * Per-attempt latency histograms, one entry per `AS_LATENCY_TYPE_*`.
-	 * Same series as `as_ns_metrics.latency`. The learn-metrics file writer
-	 * prints this series, and metrics listeners read it. Filled when a
-	 * learn-metrics file writer or a metrics listener is installed.
+	 * Legacy per-attempt latency histograms, one entry per `AS_LATENCY_TYPE_*`.
+	 * Same series as `as_ns_metrics.latency`. No longer filled.
 	 * v3 command latency is `as_metrics_snapshot.command_latencies`.
 	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];
@@ -477,8 +475,10 @@ typedef struct as_metrics_snapshot_s {
 	uint32_t nodes_count;
 
 	/**
-	 * Final samples for nodes removed since the previous export. Often empty.
-	 * Replaces on_node_close for exporters. Empty for aerospike_get_metrics_snapshot().
+	 * Final samples for nodes removed since the last successful export.
+	 * One entry per node name, included on periodic export and on
+	 * aerospike_get_metrics_snapshot(). On-demand does not clear the set.
+	 * Retained when no exporter is installed.
 	 */
 	as_metrics_node_snapshot** nodes_departed;
 
@@ -486,6 +486,12 @@ typedef struct as_metrics_snapshot_s {
 	 * Number of `nodes_departed` entries.
 	 */
 	uint32_t nodes_departed_count;
+
+	/**
+	 * True when a departure was omitted because the departed-node set is at
+	 * its 256 entry cap. The log also reports that possibly more nodes departed.
+	 */
+	bool nodes_departed_truncated;
 
 	/**
 	 * Bucket unit for the latency histograms in this snapshot.
@@ -506,7 +512,8 @@ typedef struct as_metrics_snapshot_s {
 	 * v3 command latency, one entry per `AS_LATENCY_TYPE_*`.
 	 * One sample per command for total elapsed time including retries.
 	 * A retry can move the command to another node, so this series is
-	 * cluster-wide. Empty unless operational metrics are enabled.
+	 * cluster-wide. Recorded while operational metrics are enabled.
+	 * An on-demand snapshot after disable still returns the last values.
 	 * The learn-metrics file does not write this series.
 	 */
 	as_metrics_latency_snapshot command_latencies[AS_LATENCY_TYPE_MAX];
@@ -636,9 +643,11 @@ typedef struct as_metrics_policy_s {
 
 	/**
 	 * Record command-path operational metrics (latency, namespace errors and bytes,
-	 * cpu, memory) on the metrics snapshot. Enabling metrics does not turn this on.
-	 * The learn-metrics file exporter still writes those fields so existing log
-	 * readers keep working. Tier 0 pool gauges are collected whenever metrics are enabled.
+	 * cpu, memory). Off until set true. When false, commands are not timed, even
+	 * when a file exporter is installed.
+	 * Dynamic configuration metrics.enabled does not change this flag.
+	 * The legacy metrics.enable key turns it on when extended.operational.enabled
+	 * is absent.
 	 *
 	 * Default: false
 	 */
@@ -697,6 +706,14 @@ typedef struct as_metrics_policy_s {
 	 * Default: NULL
 	 */
 	as_vector* exporters;
+
+	/**
+	 * @private
+	 * True when dynamic configuration set the legacy metrics.enable key.
+	 * metrics.enabled leaves this false. Used to map that legacy switch to
+	 * operational metrics when extended.operational.enabled is absent.
+	 */
+	bool legacy_enable;
 } as_metrics_policy;
 
 //---------------------------------
@@ -843,9 +860,8 @@ as_metrics_snapshot_create(
 
 /**
  * @private
- * Learn-metrics file snapshot. Same fields as as_metrics_snapshot_create(), except
- * cpu, memory, and namespace histograms are copied whenever metrics are enabled.
- * operational_metrics_enabled still follows the policy.
+ * Learn-metrics file snapshot. Same fields as as_metrics_snapshot_create().
+ * Namespace histograms are copied only when operational metrics are enabled.
  */
 as_status
 as_metrics_snapshot_create_file(
@@ -915,8 +931,23 @@ AS_EXTERN as_status
 as_metrics_runtime_node_close(as_error* err, struct as_cluster_s* cluster, struct as_node_s* node);
 
 /**
+ * @private
+ * Drop a departed-node entry when that node rejoins. Locks cluster->metrics_lock.
+ */
+AS_EXTERN void
+as_metrics_departed_remove(struct as_cluster_s* cluster, struct as_node_s* node);
+
+/**
+ * @private
+ * Release departed-node snapshots. Called when the cluster is destroyed.
+ */
+AS_EXTERN void
+as_metrics_departed_destroy(struct as_cluster_s* cluster);
+
+/**
  * Enable periodic metrics collection and the export timer.
- * Operational and usage metrics stay off unless the policy enables them.
+ * Operational metrics follow policy->operational_enabled, which defaults to false.
+ * Usage metrics stay off unless the policy enables them.
  */
 AS_EXTERN as_status
 aerospike_enable_metrics(struct aerospike_s* as, as_error* err, const as_metrics_policy* policy);
@@ -924,8 +955,8 @@ aerospike_enable_metrics(struct aerospike_s* as, as_error* err, const as_metrics
 /**
  * On-demand metrics snapshot. Independent of the export timer and available when
  * periodic export is off. Gauges are current; counters stay at their last values.
- * nodes_departed is empty; departed nodes are attached only on periodic export.
- * The caller frees the snapshot with as_metrics_snapshot_destroy().
+ * nodes_departed is included and is not cleared. The caller frees the snapshot
+ * with as_metrics_snapshot_destroy().
  */
 AS_EXTERN as_status
 aerospike_get_metrics_snapshot(struct aerospike_s* as, as_error* err, as_metrics_snapshot** snapshot);

@@ -209,6 +209,16 @@ typedef struct as_event_executor {
 static inline void
 as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
+	// A single-key batch fallback is one sub-batch. The user batch already
+	// incremented command_count. Record batch latency for that sub-batch.
+	if (as_metrics_batch_sub_command > 0) {
+		count_command = false;
+
+		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			cmd->latency_type = AS_LATENCY_TYPE_BATCH;
+		}
+	}
+
 	// See as_command.metrics_sample_decision.
 	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
 	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);

@@ -925,11 +925,20 @@ as_node_get_error_count(as_ns_metrics* metrics)
 }
 
 /**
- * Increment command error count. If the error is retryable, multiple errors per
- * command may occur.
+ * Increment command error count once for a terminal user-call failure.
  */
 void
 as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics);
+
+/**
+ * @private
+ * Record the namespace error or timeout split for a user call that failed
+ * overall. A retry that later succeeds does not increment these counters.
+ * err->message starting with "Client timeout", or an empty timeout message,
+ * is a client timeout. Any other timeout message is a server timeout.
+ */
+void
+as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metrics, as_error* err);
 
 /**
  * Return command timeout count. The value is cumulative and not reset per metrics interval.

@@ -1507,7 +1507,9 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 	yaml->name = "metrics";
 
 	// metrics.enable remains the legacy name. metrics.enabled is the tech spec key.
+	// The legacy key maps to operational metrics when that key is absent.
 	if (strcmp(name, "enable") == 0 || strcmp(name, "enabled") == 0) {
+		policy->legacy_enable = strcmp(name, "enable") == 0;
 		return as_parse_bool(yaml, name, value, &policy->enable, AS_METRICS_ENABLE);
 	}
 
@@ -2360,6 +2362,13 @@ as_cluster_update_metrics(
 		src->latency_unit : orig->latency_unit;
 	trg->operational_enabled = as_field_is_set(bitmap, AS_METRICS_OPERATIONAL) ?
 		src->operational_enabled : orig->operational_enabled;
+
+	// Legacy metrics.enable, without extended.operational.enabled, is master
+	// plus operational. metrics.enabled does not turn operational on.
+	if (as_field_is_set(bitmap, AS_METRICS_ENABLE) && src->enable && src->legacy_enable &&
+			!as_field_is_set(bitmap, AS_METRICS_OPERATIONAL)) {
+		trg->operational_enabled = true;
+	}
 	trg->usage_enabled = as_field_is_set(bitmap, AS_METRICS_USAGE) ?
 		src->usage_enabled : orig->usage_enabled;
 	trg->sampler_range = as_field_is_set(bitmap, AS_METRICS_SAMPLER_RANGE) ?

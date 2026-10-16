@@ -190,9 +190,12 @@ typedef struct as_metrics_namespace_snapshot_s {
 	/**
 	 * @private
 	 * Namespace latency histograms, one entry per `AS_LATENCY_TYPE_*`.
-	 * A successful sampled RPC records read, write, batch, or query, including
-	 * that RPC's retries. Connection buckets are recorded when metrics are
-	 * enabled.
+	 * Read, write, batch, and query buckets record one sample per successful
+	 * RPC, including that RPC's retries, only when operational metrics are on
+	 * and the command was sampled. Connection buckets record every successful
+	 * connection open while metrics are enabled, without the operational or
+	 * sampler gate.
+	 * Same rules as as_ns_metrics.latency.
 	 * v3 command latency is `as_metrics_snapshot.command_latencies`.
 	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];

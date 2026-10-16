@@ -192,9 +192,7 @@ typedef struct as_metrics_namespace_snapshot_s {
 	 * Namespace latency histograms, one entry per `AS_LATENCY_TYPE_*`.
 	 * A successful sampled RPC records read, write, batch, or query, including
 	 * that RPC's retries. Connection buckets are recorded when metrics are
-	 * enabled. The operational connection-open series is
-	 * as_metrics_node_snapshot.conn_latency.
-	 * See as_node_add_attempt_latency() and as_node_add_conn_latency().
+	 * enabled.
 	 * v3 command latency is `as_metrics_snapshot.command_latencies`.
 	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];

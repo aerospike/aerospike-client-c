@@ -1161,6 +1161,7 @@ as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, as_metrics_node_s
 	snap->conn_open_failures += prev->conn_open_failures;
 	snap->conn_tls_handshake_failures += prev->conn_tls_handshake_failures;
 	snap->conn_auth_failures += prev->conn_auth_failures;
+	as_metrics_add_latency_buckets(&snap->conn_latency, &prev->conn_latency);
 
 	for (uint32_t i = 0; i < prev->namespace_count; i++) {
 		as_metrics_namespace_snapshot* src = &prev->namespaces[i];

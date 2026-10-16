@@ -205,7 +205,6 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->metrics_listeners.disable_listener = NULL;
 	policy->metrics_listeners.udata = NULL;
 	policy->enable = false;
-	policy->legacy_enable = false;
 	policy->metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
 	policy->exporters = NULL;
 }
@@ -1084,6 +1083,103 @@ as_metrics_snapshot_copy_departed(as_cluster* cluster, as_metrics_snapshot* snap
 	snap->nodes_departed_count = n;
 }
 
+// Buckets from a different histogram layout cannot be added, so the newer
+// final keeps its own. Moves src buckets when dst has none.
+static void
+as_metrics_add_latency_buckets(as_metrics_latency_snapshot* dst, as_metrics_latency_snapshot* src)
+{
+	if (!src->buckets) {
+		return;
+	}
+
+	if (!dst->buckets) {
+		dst->buckets = src->buckets;
+		dst->bucket_count = src->bucket_count;
+		src->buckets = NULL;
+		src->bucket_count = 0;
+		return;
+	}
+
+	if (dst->bucket_count != src->bucket_count) {
+		return;
+	}
+
+	for (uint8_t k = 0; k < dst->bucket_count; k++) {
+		dst->buckets[k] += src->buckets[k];
+	}
+}
+
+static void
+as_metrics_add_conn_counts(as_metrics_conn_snapshot* dst, const as_metrics_conn_snapshot* src)
+{
+	// in_use and in_pool are gauges. The newer final keeps its own.
+	dst->opened += src->opened;
+	dst->closed += src->closed;
+	dst->recovered += src->recovered;
+	dst->aborted += src->aborted;
+}
+
+static void
+as_metrics_add_namespace_counts(as_metrics_namespace_snapshot* dst, as_metrics_namespace_snapshot* src)
+{
+	dst->errors += src->errors;
+	dst->client_timeouts += src->client_timeouts;
+	dst->server_timeouts += src->server_timeouts;
+	dst->key_busy += src->key_busy;
+	dst->record_too_big += src->record_too_big;
+	dst->device_overload += src->device_overload;
+	dst->bytes_in += src->bytes_in;
+	dst->bytes_out += src->bytes_out;
+
+	for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
+		as_metrics_add_latency_buckets(&dst->latencies[j], &src->latencies[j]);
+	}
+}
+
+static as_metrics_namespace_snapshot*
+as_metrics_find_namespace_snapshot(as_metrics_node_snapshot* snap, const char* name)
+{
+	for (uint32_t i = 0; i < snap->namespace_count; i++) {
+		as_metrics_namespace_snapshot* ns = &snap->namespaces[i];
+
+		if (strcmp(ns->name, name) == 0) {
+			return ns;
+		}
+	}
+	return NULL;
+}
+
+// A rejoined node is a new as_node with counters at zero. Add the pending final
+// into the new final so the node keeps one entry that spans each stint.
+// Identity and gauges come from snap. Moves heap fields out of prev; the caller
+// destroys prev.
+static void
+as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, as_metrics_node_snapshot* prev)
+{
+	as_metrics_add_conn_counts(&snap->sync, &prev->sync);
+	as_metrics_add_conn_counts(&snap->async, &prev->async);
+	snap->conn_open_failures += prev->conn_open_failures;
+	snap->conn_tls_handshake_failures += prev->conn_tls_handshake_failures;
+	snap->conn_auth_failures += prev->conn_auth_failures;
+
+	for (uint32_t i = 0; i < prev->namespace_count; i++) {
+		as_metrics_namespace_snapshot* src = &prev->namespaces[i];
+		as_metrics_namespace_snapshot* dst = as_metrics_find_namespace_snapshot(snap, src->name);
+
+		if (dst) {
+			as_metrics_add_namespace_counts(dst, src);
+			continue;
+		}
+
+		// The namespace only appeared in the earlier stint. Move it over.
+		size_t size = sizeof(as_metrics_namespace_snapshot) * (snap->namespace_count + 1);
+		snap->namespaces = cf_realloc(snap->namespaces, size);
+		snap->namespaces[snap->namespace_count] = *src;
+		snap->namespace_count++;
+		memset(src, 0, sizeof(as_metrics_namespace_snapshot));
+	}
+}
+
 // Caller holds cluster->metrics_lock.
 static void
 as_metrics_departed_add(as_cluster* cluster, as_node* node)
@@ -1101,9 +1197,10 @@ as_metrics_departed_add(as_cluster* cluster, as_node* node)
 	existing = as_metrics_departed_find(departed, snap->name);
 
 	if (existing >= 0) {
-		as_metrics_node_snapshot* old = as_vector_get_ptr(departed, (uint32_t)existing);
+		as_metrics_node_snapshot* prev = as_vector_get_ptr(departed, (uint32_t)existing);
 
-		as_metrics_node_snapshot_destroy(old);
+		as_metrics_node_snapshot_merge(snap, prev);
+		as_metrics_node_snapshot_destroy(prev);
 		as_vector_set(departed, (uint32_t)existing, &snap);
 		return;
 	}
@@ -1120,32 +1217,6 @@ as_metrics_departed_add(as_cluster* cluster, as_node* node)
 	}
 
 	as_vector_append(departed, &snap);
-}
-
-void
-as_metrics_departed_remove(as_cluster* cluster, as_node* node)
-{
-	as_vector* departed;
-	int existing;
-
-	if (!cluster || !node || node->name[0] == '\0') {
-		return;
-	}
-
-	pthread_mutex_lock(&cluster->metrics_lock);
-	departed = cluster->metrics_nodes_departed;
-
-	if (departed) {
-		existing = as_metrics_departed_find(departed, node->name);
-
-		if (existing >= 0) {
-			as_metrics_node_snapshot* old = as_vector_get_ptr(departed, (uint32_t)existing);
-
-			as_metrics_node_snapshot_destroy(old);
-			as_vector_remove(departed, (uint32_t)existing);
-		}
-	}
-	pthread_mutex_unlock(&cluster->metrics_lock);
 }
 
 void
@@ -1540,8 +1611,6 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		slot.exporter = file_exporter;
 		slot.owned = true;
 		as_vector_append(rt->slots, &slot);
-		// The metrics log file is not created until the next Export.
-		// See as_metrics_file_exporter_create().
 	}
 
 	cluster->metrics_runtime = rt;

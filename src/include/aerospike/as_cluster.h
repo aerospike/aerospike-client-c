@@ -514,6 +514,7 @@ typedef struct as_cluster_s {
 	 * @private
 	 * Final samples for nodes that left, one entry per node name. Kept until a
 	 * successful export. On-demand snapshots copy this list and do not clear it.
+	 * Rejoin and repeat-departure behavior: see as_metrics_snapshot.nodes_departed.
 	 */
 	as_vector* metrics_nodes_departed;
 

@@ -67,7 +67,6 @@ typedef as_metrics_file_exporter as_metrics_writer;
  * Export after each re-enable. That Export creates
  * report_dir/metrics-YYYYMMDDHHMMSS.log and writes the header. Disable closes
  * it and does not append to that file later.
- * See as_metrics_policy.report_dir.
  * Later exports append a cluster line and one node line per nodes_departed entry.
  */
 AS_EXTERN as_status
@@ -95,8 +94,6 @@ as_metrics_writer_create(as_error* err, const as_metrics_policy* policy, as_metr
 /**
  * @deprecated
  * Listener enable callback used by as_metrics_writer_create().
- * The metrics log file is not created until the next snapshot or disable export.
- * See as_metrics_file_exporter_create().
  */
 AS_EXTERN as_status
 as_metrics_writer_enable(as_error* err, void* udata);
@@ -118,9 +115,7 @@ as_metrics_writer_node_close(as_error* err, struct as_node_s* node, void* udata)
 /**
  * @deprecated
  * Listener disable callback used by as_metrics_writer_create(). Writes a final
- * cluster line, creating the metrics log file first when it does not exist yet,
- * and destroys the writer.
- * See as_metrics_file_exporter_create().
+ * cluster line and destroys the writer.
  */
 AS_EXTERN as_status
 as_metrics_writer_disable(as_error* err, struct as_cluster_s* cluster, void* udata);

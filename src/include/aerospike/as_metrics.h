@@ -486,6 +486,8 @@ typedef struct as_metrics_snapshot_s {
 	 * Final samples for nodes that left, one entry per node name. Included in
 	 * on-demand snapshots and kept when no exporter is installed. Cleared only
 	 * after a successful periodic export.
+	 * A node that rejoins keeps its entry. If it leaves again before that
+	 * export, its counters and histogram buckets are added into the same entry.
 	 */
 	as_metrics_node_snapshot** nodes_departed;
 
@@ -571,16 +573,17 @@ typedef struct as_metrics_policy_s {
 	 * Directory path for the built-in learn-metrics file exporter.
 	 *
 	 * Dynamic configuration keys metrics.exporter and metrics.report_dir override
-	 * this policy field. metrics.exporter file installs the file exporter when
-	 * deprecated listeners are not set. An empty metrics.report_dir overrides
-	 * report_dir and installs nothing. When metrics.report_dir is absent, an empty
-	 * report_dir uses ".". An empty report_dir with no metrics.exporter key also
-	 * installs nothing. metrics.exporter none and custom do not install the file
-	 * exporter. Collection can still run with no exporter.
-	 * The metrics log file is not created until the next Export, including the
-	 * first Export after re-enable. That Export creates a new
-	 * metrics-YYYYMMDDHHMMSS.log.
-	 * Disable closes the previous log and does not append to it later.
+	 * this policy field. The file exporter is not installed when deprecated
+	 * listeners are set. Otherwise:
+	 * - metrics.report_dir set: replaces report_dir. An empty value installs no
+	 *   file exporter.
+	 * - metrics.exporter file with no metrics.report_dir: installs the file
+	 *   exporter. An empty report_dir uses ".".
+	 * - metrics.exporter none or custom: does not install the file exporter.
+	 * - No metrics.exporter key: installs the file exporter when report_dir is not
+	 *   empty and no exporters were added. Added exporters are called instead.
+	 *
+	 * Collection can still run with no exporter.
 	 * See as_metrics_file_exporter_create().
 	 *
 	 * Default: . (current directory)
@@ -717,14 +720,6 @@ typedef struct as_metrics_policy_s {
 	 * Default: NULL
 	 */
 	as_vector* exporters;
-
-	/**
-	 * @private
-	 * True when dynamic configuration set the legacy metrics.enable key.
-	 * metrics.enabled leaves this false. Used to map that legacy switch to
-	 * operational metrics when extended.operational.enabled is absent.
-	 */
-	bool legacy_enable;
 } as_metrics_policy;
 
 //---------------------------------
@@ -950,13 +945,6 @@ as_metrics_runtime_node_close(as_error* err, struct as_cluster_s* cluster, struc
 
 /**
  * @private
- * Drop a departed-node sample when that node rejoins. Locks cluster->metrics_lock.
- */
-void
-as_metrics_departed_remove(struct as_cluster_s* cluster, struct as_node_s* node);
-
-/**
- * @private
  * Release departed-node samples. Called from cluster destroy after metrics disable.
  */
 void
@@ -966,8 +954,6 @@ as_metrics_departed_destroy(struct as_cluster_s* cluster);
  * Enable periodic metrics collection and the export timer.
  * Operational metrics follow the policy and stay off by default.
  * Usage metrics stay off unless the policy enables them.
- * The metrics log file is not created until the next Export.
- * See as_metrics_policy.report_dir.
  */
 AS_EXTERN as_status
 aerospike_enable_metrics(struct aerospike_s* as, as_error* err, const as_metrics_policy* policy);

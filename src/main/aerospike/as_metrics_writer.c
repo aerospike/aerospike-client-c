@@ -354,13 +354,15 @@ as_metrics_write_node_snapshot(as_string_builder* sb, const as_metrics_node_snap
 
 		as_string_builder_append(sb, namespace_snapshot->name ? namespace_snapshot->name : "");
 		as_string_builder_append_char(sb, ',');
-		// header(3) keeps header(2)'s one errors column. It is the v2 error_count,
-		// which includes record too big and device overload.
+		// header(3) keeps header(2)'s one errors column. This is the sampled
+		// terminal series, including record too big and device overload.
+		// It is not as_node_stats.error_count. See as_node_stats.
 		as_string_builder_append_uint64(sb, namespace_snapshot->errors +
 			namespace_snapshot->record_too_big + namespace_snapshot->device_overload);
 		as_string_builder_append_char(sb, ',');
-		// header(3) keeps header(2)'s one timeouts column. It is client plus server
-		// timeouts.
+		// header(3) keeps header(2)'s one timeouts column. This is the sampled
+		// terminal client plus server timeouts. It is not as_node_stats.timeout_count.
+		// See as_node_stats.
 		as_string_builder_append_uint64(sb,
 			namespace_snapshot->client_timeouts + namespace_snapshot->server_timeouts);
 		as_string_builder_append_char(sb, ',');
@@ -535,12 +537,6 @@ as_metrics_file_exporter_create(
 	return AEROSPIKE_OK;
 }
 
-as_status
-as_metrics_file_exporter_open(as_error* err, as_metrics_exporter* exporter)
-{
-	return as_metrics_ensure_open((as_metrics_file_exporter*)exporter, err);
-}
-
 void
 as_metrics_file_exporter_destroy(as_metrics_exporter* exporter)
 {
@@ -583,13 +579,8 @@ as_metrics_writer_create(as_error* err, const as_metrics_policy* policy, as_metr
 as_status
 as_metrics_writer_enable(as_error* err, void* udata)
 {
+	as_error_reset(err);
 	as_metrics_file_exporter* mw = udata;
-	as_status status = as_metrics_ensure_open(mw, err);
-
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
 	mw->legacy_active = true;
 	return AEROSPIKE_OK;
 }
@@ -600,7 +591,7 @@ as_metrics_writer_snapshot(as_error* err, as_cluster* cluster, void* udata)
 	as_error_reset(err);
 	as_metrics_file_exporter* mw = udata;
 
-	if (!mw->legacy_active || !mw->file) {
+	if (!mw->legacy_active) {
 		return AEROSPIKE_OK;
 	}
 
@@ -656,7 +647,7 @@ as_metrics_writer_disable(as_error* err, as_cluster* cluster, void* udata)
 
 	as_status status = AEROSPIKE_OK;
 
-	if (mw->legacy_active && mw->file) {
+	if (mw->legacy_active) {
 		as_metrics_snapshot* snapshot = NULL;
 		status = as_metrics_snapshot_create_file(err, cluster, mw->labels, mw->cpu, &snapshot);
 

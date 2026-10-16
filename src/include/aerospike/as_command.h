@@ -212,7 +212,8 @@ typedef struct as_command_s {
 	// Monotonic nanoseconds from cf_getns() at the start of this command.
 	// 0 when the v3 command latency sample is not taken.
 	// Elapsed time is cf_getns() minus this value and includes retries.
-	// Existing histograms time each attempt separately.
+	// A successful command records that elapsed time as namespace latency.
+	// See as_command_add_latencies().
 	uint64_t command_begin;
 	uint64_t deadline_ms;
 	uint32_t socket_timeout;
@@ -225,15 +226,16 @@ typedef struct as_command_s {
 	uint8_t replica_index;
 	uint8_t replica_index_sc; // Used in batch only.
 	as_latency_type latency_type;
-	// Stored operational sampler decision. Reused for retries of this command.
+	// Stored operational sampler decision. Reused for retries of this command
+	// and for every node command of one user batch.
 	// False when operational metrics are off, or when the sampler skips this call.
 	// Gates the cluster command_count, the retry counter, and v3 command latency.
 	// While operational metrics are on, this is also the namespace-metrics decision.
+	// See as_cluster_sample_operational() and as_metrics_batch_sample_begin().
 	bool metrics_sample_decision;
 	// True when this command updates per-namespace histograms, bytes, and error
-	// counts. While operational metrics are on, a sampler "no" sets this false.
-	// While they are off, set only if a learn-metrics file writer or a metrics
-	// listener is installed.
+	// counts. False when operational metrics are off, or when the sampler skips
+	// this call. Namespace error counters are recorded once on terminal failure.
 	bool record_namespace_metrics;
 } as_command;
 
@@ -674,6 +676,16 @@ as_status
 as_command_send(
 	as_command* cmd, as_error* err, uint32_t comp_threshold, as_write_fn write_fn, void* udata
 	);
+
+/**
+ * @private
+ * Send command to the server.
+ * When inherit_sample is true, metrics_sampled is the user-call decision.
+ * This command does not draw again and does not increment command_count.
+ * See as_metrics_batch_sample_begin().
+ */
+as_status
+as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, bool metrics_sampled);
 
 /**
  * @private

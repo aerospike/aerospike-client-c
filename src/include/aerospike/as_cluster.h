@@ -433,8 +433,8 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * A learn-metrics file writer is installed. Namespace histograms, bytes, and
-	 * error counts are recorded for that writer when operational metrics are off.
+	 * A learn-metrics file writer is installed. Timing follows operational
+	 * metrics: commands are not timed while operational metrics are off.
 	 */
 	bool metrics_file_writer;
 
@@ -504,9 +504,24 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Metrics export runtime (thread, exporters, departed nodes). NULL when metrics are off.
+	 * Metrics export runtime (thread and exporters). NULL when metrics are off.
+	 * Departed-node samples live on the cluster so they survive disable and do
+	 * not require an exporter.
 	 */
 	struct as_metrics_runtime_s* metrics_runtime;
+
+	/**
+	 * @private
+	 * Final samples for nodes that left, one entry per node name. Kept until a
+	 * successful export. On-demand snapshots copy this list and do not clear it.
+	 */
+	as_vector* metrics_nodes_departed;
+
+	/**
+	 * @private
+	 * True when metrics_nodes_departed hit its cap and later departures were omitted.
+	 */
+	bool metrics_nodes_departed_truncated;
 
 	/**
 	 * @private
@@ -773,39 +788,52 @@ as_cluster_sample_operational(as_cluster* cluster);
 
 /**
  * @private
- * True when per-attempt namespace latency is published. The learn-metrics file
- * writer and metrics listeners read that series.
- */
-static inline bool
-as_cluster_should_record_attempt_latency(const as_cluster* cluster)
-{
-	return cluster->metrics_file_writer || cluster->metrics_listeners.snapshot_listener != NULL;
-}
-
-/**
- * @private
  * True when this command should update per-namespace histograms, bytes, and
- * error counts. When operational metrics are on, operational_sample is that
- * decision: false skips namespace metrics. When operational metrics are off,
- * there is no sampler draw, and this records only if a learn-metrics file
- * writer or a metrics listener is installed.
+ * error counts. False unless metrics and operational metrics are both on.
+ * operational_sample is the sampler decision: false skips namespace metrics.
  */
 static inline bool
 as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_sample)
 {
-	if (!cluster->metrics_enabled) {
+	if (!cluster->metrics_enabled || !cluster->metrics_operational_enabled) {
 		return false;
 	}
+	return operational_sample;
+}
 
-	if (cluster->metrics_operational_enabled) {
-		// The sampler decided. A "no" skips namespace metrics as well as the
-		// cluster command_count and retry counter.
-		return operational_sample;
-	}
+#if defined(_MSC_VER)
+#define AS_METRICS_TLS __declspec(thread)
+#else
+#define AS_METRICS_TLS __thread
+#endif
 
-	// The on-demand snapshot omits these fields while operational metrics are
-	// off. The file writer and metrics listeners still read them.
-	return as_cluster_should_record_attempt_latency(cluster);
+/**
+ * @private
+ * True while this thread is creating the one key command for a single-key
+ * batch fallback. That command records batch latency and does not increment
+ * command_count again. See as_metrics_batch_sample_begin().
+ */
+extern AS_METRICS_TLS bool as_metrics_batch_sub_command;
+
+/**
+ * @private
+ * Sampler decision for the single-key batch fallback on this thread.
+ * Meaningful while as_metrics_batch_sub_command is true.
+ * See as_command_execute_sample() and as_event_command_select_sample().
+ */
+extern AS_METRICS_TLS bool as_metrics_batch_sampled;
+
+static inline void
+as_metrics_batch_sample_begin(bool sampled)
+{
+	as_metrics_batch_sub_command = true;
+	as_metrics_batch_sampled = sampled;
+}
+
+static inline void
+as_metrics_batch_sample_end(void)
+{
+	as_metrics_batch_sub_command = false;
 }
 
 /**

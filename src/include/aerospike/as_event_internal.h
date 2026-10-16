@@ -143,9 +143,6 @@ typedef struct as_event_command {
 	cf_ll_element pipe_link;
 	
 	uint8_t* buf;
-	// Monotonic nanoseconds from cf_getns() at the start of the current attempt.
-	// Learn-metrics histograms use this clock. 0 skips that sample.
-	uint64_t attempt_begin;
 	// See as_command.command_begin.
 	uint64_t command_begin;
 	uint32_t iteration;
@@ -203,19 +200,52 @@ typedef struct as_event_executor {
 
 /**
  * @private
- * Draw the operational sampler once for this command. count_command increments
+ * Store a sampler decision on this command. count_command increments
  * cluster.command.count for a user call. Node sub-commands pass false.
+ * See as_command.metrics_sample_decision.
+ */
+static inline void
+as_event_command_apply_sample(as_event_command* cmd, bool sampled, bool count_command)
+{
+	bool count_command_now = count_command;
+
+	cmd->metrics_sample_decision = sampled;
+	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, sampled);
+
+	// A single-key batch fallback already counted the batch. Record batch latency.
+	// See as_metrics_batch_sample_begin().
+	if (as_metrics_batch_sub_command) {
+		count_command_now = false;
+
+		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+			cmd->latency_type = AS_LATENCY_TYPE_BATCH;
+		}
+	}
+
+	if (cmd->metrics_sample_decision && count_command_now) {
+		as_incr_uint64(&cmd->cluster->command_count);
+	}
+}
+
+/**
+ * @private
+ * Draw the operational sampler once for this command. A single-key batch
+ * fallback reuses the user-batch decision instead of drawing again.
+ * See as_event_command_apply_sample().
  */
 static inline void
 as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
-	// See as_command.metrics_sample_decision.
-	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
-	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
+	bool sampled;
 
-	if (cmd->metrics_sample_decision && count_command) {
-		as_incr_uint64(&cmd->cluster->command_count);
+	if (as_metrics_batch_sub_command) {
+		sampled = as_metrics_batch_sampled;
 	}
+	else {
+		sampled = as_cluster_sample_operational(cmd->cluster);
+	}
+
+	as_event_command_apply_sample(cmd, sampled, count_command);
 }
 
 //---------------------------------

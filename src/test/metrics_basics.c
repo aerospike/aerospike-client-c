@@ -991,7 +991,7 @@ TEST(metrics_snapshot_before_enable, "on-demand snapshot works while periodic ex
 	as_metrics_snapshot_destroy(metrics_snapshot);
 }
 
-TEST(metrics_enable_leaves_operational_off, "metrics.enabled does not turn on operational or usage")
+TEST(metrics_enable_leaves_operational_off, "aerospike_enable_metrics leaves operational and usage off by default")
 {
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
@@ -1057,15 +1057,21 @@ TEST(metrics_operational_namespace_latency, "operational metrics copy namespace 
 	assert_true(metrics_validation_failures_zero(first_snapshot));
 
 	uint64_t before = metrics_write_latency_total(first_snapshot);
+	uint64_t before_namespace = metrics_attempt_write_latency_total(first_snapshot);
 	assert_true(before > 0);
+	assert_true(before_namespace > 0);
 	as_metrics_snapshot_destroy(first_snapshot);
 
 	assert_int_eq(metrics_put(&err, "metrics-operational-2"), AEROSPIKE_OK);
 
 	as_metrics_snapshot* second_snapshot = NULL;
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &second_snapshot), AEROSPIKE_OK);
-	assert_true(metrics_write_latency_total(second_snapshot) > before);
+	uint64_t after = metrics_write_latency_total(second_snapshot);
+	uint64_t after_namespace = metrics_attempt_write_latency_total(second_snapshot);
 	as_metrics_snapshot_destroy(second_snapshot);
+
+	assert_true(after > before);
+	assert_true(after_namespace > before_namespace);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
@@ -1129,7 +1135,7 @@ TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on 
 	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	assert_true(command_latency > 0);
-	assert_int_eq(attempt_latency, 0);
+	assert_true(attempt_latency > 0);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
@@ -1163,22 +1169,64 @@ TEST(metrics_file_header, "report_dir installs a camelCase metrics log")
 
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.interval = 3600;
 	as_metrics_policy_set_report_dir(&policy, dir);
 
 	as_error err;
 	as_status status = metrics_enable(&policy, &err);
-	int logs = metrics_count_logs(dir);
+	int logs_before_export = metrics_count_logs(dir);
 
 	metrics_disable();
 
+	int logs = metrics_count_logs(dir);
 	char header[2048];
 	bool header_ok = metrics_read_header(dir, header, sizeof(header)) &&
 		metrics_header_ok(header, "latency(7,1)");
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(logs_before_export, 0);
 	assert_int_eq(logs, 1);
 	assert_true(header_ok);
+	as_metrics_policy_destroy(&policy);
+}
+
+TEST(metrics_file_opens_on_export, "re-enable opens a new log on the next export")
+{
+	char dir[256];
+	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.interval = 3600;
+	as_metrics_policy_set_report_dir(&policy, dir);
+
+	as_error err;
+	as_status status = metrics_enable(&policy, &err);
+	int logs_after_enable = metrics_count_logs(dir);
+
+	as_status disable_status = aerospike_disable_metrics(as, &err);
+	int logs_after_disable = metrics_count_logs(dir);
+
+	as_status reopen_status = metrics_enable(&policy, &err);
+	int logs_after_reenable = metrics_count_logs(dir);
+
+	// The log name is metrics-YYYYMMDDHHMMSS.log. Wait so the second export
+	// does not truncate the file created by the first.
+	as_sleep(1100);
+
+	as_status second_disable_status = aerospike_disable_metrics(as, &err);
+	int logs_after_second_disable = metrics_count_logs(dir);
+	metrics_remove_dir(dir);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(logs_after_enable, 0);
+	assert_int_eq(disable_status, AEROSPIKE_OK);
+	assert_int_eq(logs_after_disable, 1);
+	assert_int_eq(reopen_status, AEROSPIKE_OK);
+	assert_int_eq(logs_after_reenable, 1);
+	assert_int_eq(second_disable_status, AEROSPIKE_OK);
+	assert_int_eq(logs_after_second_disable, 2);
 	as_metrics_policy_destroy(&policy);
 }
 
@@ -1207,7 +1255,7 @@ TEST(metrics_file_header_microseconds, "file header stays latency(columns,shift)
 	as_metrics_policy_destroy(&policy);
 }
 
-TEST(metrics_file_operational_off, "file exporter writes latencies when operational metrics are off")
+TEST(metrics_file_operational_off, "file exporter omits latency and memory when operational metrics are off")
 {
 	char dir[256];
 	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
@@ -1241,10 +1289,9 @@ TEST(metrics_file_operational_off, "file exporter writes latencies when operatio
 
 	as_status disable_status = aerospike_disable_metrics(as, &err);
 	char line[65536];
-	// "test," is the namespace from metrics_put(), then the comma before errors.
 	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
-		strstr(line, "test,") && metrics_file_line_has_write_latency(line) &&
-		metrics_file_line_has_memory(line);
+		!metrics_file_line_has_write_latency(line) &&
+		!metrics_file_line_has_memory(line);
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -1606,7 +1653,7 @@ TEST(metrics_periodic_export_stops_on_disable, "disable stops the export thread 
 	cf_free(exporter);
 }
 
-TEST(metrics_invalid_report_dir, "file exporter open failure leaves metrics disabled")
+TEST(metrics_invalid_report_dir, "a bad report_dir does not open a log or fail enable")
 {
 	char parent[256];
 	assert_true(metrics_create_temp_dir_path(parent, sizeof(parent)));
@@ -1627,6 +1674,7 @@ TEST(metrics_invalid_report_dir, "file exporter open failure leaves metrics disa
 
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.interval = 3600;
 	as_metrics_policy_set_report_dir(&policy, dir);
 
 	as_error err;
@@ -1634,13 +1682,24 @@ TEST(metrics_invalid_report_dir, "file exporter open failure leaves metrics disa
 
 	as_metrics_snapshot* metrics_snapshot = NULL;
 	as_status snapshot_status = aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot);
-	bool metrics_off = metrics_snapshot && !metrics_snapshot->metrics_enabled;
+	bool metrics_on = metrics_snapshot && metrics_snapshot->metrics_enabled;
 	as_metrics_snapshot_destroy(metrics_snapshot);
+
+	as_status disable_status = aerospike_disable_metrics(as, &err);
+	as_metrics_snapshot* after = NULL;
+	as_status after_status = aerospike_get_metrics_snapshot(as, &err, &after);
+	bool metrics_off = after && !after->metrics_enabled;
+	as_metrics_snapshot_destroy(after);
+	int logs = metrics_count_logs(parent);
 	metrics_remove_dir(parent);
 
-	assert_int_eq(status, AEROSPIKE_ERR_CLIENT);
+	assert_int_eq(status, AEROSPIKE_OK);
 	assert_int_eq(snapshot_status, AEROSPIKE_OK);
+	assert_true(metrics_on);
+	assert_int_eq(disable_status, AEROSPIKE_OK);
+	assert_int_eq(after_status, AEROSPIKE_OK);
 	assert_true(metrics_off);
+	assert_int_eq(logs, 0);
 	as_metrics_policy_destroy(&policy);
 }
 
@@ -1701,13 +1760,14 @@ TEST(metrics_deprecated_listeners, "deprecated listeners still run on enable and
 	assert_int_eq(logs, 0);
 }
 
-TEST(metrics_listener_reads_attempt_latency, "a metrics listener can read per-attempt namespace latency")
+TEST(metrics_listener_reads_attempt_latency, "a metrics listener sees no namespace latency when operational metrics are off")
 {
 	metrics_listener_counts counts;
 	memset(&counts, 0, sizeof(counts));
 
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = false;
 	policy.interval = 3600;
 	as_metrics_policy_set_listeners(&policy, metrics_on_enable, metrics_on_disable,
 		metrics_on_node_close, metrics_on_snapshot, &counts);
@@ -1727,7 +1787,7 @@ TEST(metrics_listener_reads_attempt_latency, "a metrics listener can read per-at
 	as_metrics_policy_destroy(&policy);
 
 	assert_false(operational);
-	assert_true(attempt_latency > 0);
+	assert_int_eq(attempt_latency, 0);
 	assert_int_eq(command_latency, 0);
 }
 
@@ -1802,6 +1862,7 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while operational
 {
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = false;
 
 	as_error err;
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
@@ -1834,7 +1895,9 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while operational
 	as_metrics_snapshot* frozen_snapshot = NULL;
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &frozen_snapshot), AEROSPIKE_OK);
 	assert_false(frozen_snapshot->metrics_enabled);
+	assert_false(frozen_snapshot->operational_metrics_enabled);
 	assert_true(frozen_snapshot->command_count == enabled_count);
+	assert_true(metrics_write_latency_total(frozen_snapshot) > 0);
 	as_metrics_snapshot_destroy(frozen_snapshot);
 
 	as_metrics_policy_destroy(&policy);
@@ -1870,9 +1933,10 @@ TEST(metrics_operational_sampler_off, "threshold 0 records no command-path opera
 }
 
 static bool
-metrics_read_dynamic_client_config_policy(
+metrics_read_dynamic_client_config_policy_ex(
 	const char* yaml_body, as_metrics_policy* policy, bool app_report_dir_empty,
-	const char* app_report_dir, as_metrics_builtin_exporter* exporter)
+	const char* app_report_dir, as_metrics_builtin_exporter* exporter,
+	bool set_app_operational, bool app_operational)
 {
 	char dir[512];
 
@@ -1904,6 +1968,10 @@ metrics_read_dynamic_client_config_policy(
 			sizeof(config.policies.metrics.report_dir));
 	}
 
+	if (set_app_operational) {
+		config.policies.metrics.operational_enabled = app_operational;
+	}
+
 	as_config_provider_set_path(&config, path);
 
 	aerospike client;
@@ -1929,6 +1997,15 @@ metrics_read_dynamic_client_config_policy(
 	}
 	metrics_remove_dir(dir);
 	return true;
+}
+
+static bool
+metrics_read_dynamic_client_config_policy(
+	const char* yaml_body, as_metrics_policy* policy, bool app_report_dir_empty,
+	const char* app_report_dir, as_metrics_builtin_exporter* exporter)
+{
+	return metrics_read_dynamic_client_config_policy_ex(
+		yaml_body, policy, app_report_dir_empty, app_report_dir, exporter, false, false);
 }
 
 TEST(metrics_dynamic_config_export, "dynamic config sets export interval, exporter, and report file")
@@ -2122,6 +2199,36 @@ TEST(metrics_dynamic_config_usage, "metrics.extended.usage.enabled overrides the
 	assert_true(policy.usage_enabled);
 }
 
+TEST(metrics_dynamic_config_legacy_enable, "metrics.enable turns operational on when that key is absent")
+{
+	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
+	assert_true(metrics_read_dynamic_client_config_policy_ex(
+		"version: 1.2.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    enable: true\n",
+		&policy, false, NULL, &exporter, true, false));
+
+	assert_true(policy.enable);
+	assert_true(policy.operational_enabled);
+}
+
+TEST(metrics_dynamic_config_enabled_leaves_operational, "metrics.enabled does not turn operational on")
+{
+	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
+	assert_true(metrics_read_dynamic_client_config_policy_ex(
+		"version: 1.2.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    enabled: true\n",
+		&policy, false, NULL, &exporter, true, false));
+
+	assert_true(policy.enable);
+	assert_false(policy.operational_enabled);
+}
+
 /******************************************************************************
  * TEST SUITE
  *****************************************************************************/
@@ -2148,6 +2255,7 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_latency_unit_microseconds);
 	suite_add(metrics_labels);
 	suite_add(metrics_file_header);
+	suite_add(metrics_file_opens_on_export);
 	suite_add(metrics_file_header_microseconds);
 	suite_add(metrics_file_operational_off);
 	suite_add(metrics_file_keeps_usage_columns_when_usage_off);
@@ -2174,4 +2282,6 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_dynamic_config_enabled_and_operational);
 	suite_add(metrics_dynamic_config_sampler);
 	suite_add(metrics_dynamic_config_usage);
+	suite_add(metrics_dynamic_config_legacy_enable);
+	suite_add(metrics_dynamic_config_enabled_leaves_operational);
 }

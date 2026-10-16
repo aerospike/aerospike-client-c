@@ -267,6 +267,10 @@ as_metrics_open_writer(as_metrics_file_exporter* mw, as_error* err)
 		feature_schema = " feature.api[blocking,deferred,background]";
 	}
 
+	// 1024 holds this header with room to spare. The timestamp is 19 characters,
+	// latency_columns and latency_shift are uint8_t, and the feature.api suffix
+	// is 42 characters, so the line stays under 500 bytes. The size check below
+	// rejects a truncated snprintf.
 	char data[1024];
 	int rv = snprintf(data, sizeof(data), "%s header(2) cluster[name,clientType,clientVersion,appId,label[],cpu,mem,invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,eventloop[],node[]] label[name,value] eventloop[processSize,queueSize] node[name,address,port,syncConn,asyncConn,namespace[]] conn[inUse,inPool,opened,closed,recovered,aborted] namespace[name,errors,timeouts,keyBusy,bytesIn,bytesOut,latency[]] latency(%u,%u)[type[l1,l2,l3...]]%s\n",
 		now_str, mw->latency_columns, mw->latency_shift, feature_schema);

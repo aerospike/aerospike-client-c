@@ -191,9 +191,10 @@ typedef struct as_metrics_namespace_snapshot_s {
 	 * @private
 	 * Namespace latency histograms, one entry per `AS_LATENCY_TYPE_*`.
 	 * A successful sampled RPC records read, write, batch, or query, including
-	 * that RPC's retries. Connection-open time is recorded when operational
-	 * metrics are on and is not sampler-gated.
-	 * See as_node_add_attempt_latency().
+	 * that RPC's retries. Connection buckets are recorded when metrics are
+	 * enabled. The operational connection-open series is
+	 * as_metrics_node_snapshot.conn_latency.
+	 * See as_node_add_attempt_latency() and as_node_add_conn_latency().
 	 * v3 command latency is `as_metrics_snapshot.command_latencies`.
 	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];
@@ -277,6 +278,14 @@ typedef struct as_metrics_node_snapshot_s {
 	 * Number of `namespaces` entries.
 	 */
 	uint32_t namespace_count;
+
+	/**
+	 * Successful connection-open latency for this node.
+	 * Recorded when operational metrics are enabled. Not sampler-gated.
+	 * Not as_ns_metrics.latency[AS_LATENCY_TYPE_CONN].
+	 * See as_node.conn_latency. The learn-metrics file does not write this series.
+	 */
+	as_metrics_latency_snapshot conn_latency;
 } as_metrics_node_snapshot;
 
 /**
@@ -885,6 +894,8 @@ as_metrics_snapshot_destroy(as_metrics_snapshot* snapshot);
  * Copy one node's metrics. Used for nodes_departed and by the deprecated file listener.
  * Namespace counters and latency buckets are copied only when operational metrics
  * are enabled. See as_metrics_namespace_snapshot.latencies.
+ * conn_latency is copied when operational metrics are enabled.
+ * See as_metrics_node_snapshot.conn_latency.
  */
 AS_EXTERN void
 as_metrics_node_snapshot_create(struct as_node_s* node, as_metrics_node_snapshot** snapshot);
@@ -894,6 +905,8 @@ as_metrics_node_snapshot_create(struct as_node_s* node, as_metrics_node_snapshot
  * Node snapshot for the learn-metrics file. Namespace counters and latency
  * buckets are copied only when operational metrics are enabled.
  * See as_metrics_namespace_snapshot.latencies.
+ * conn_latency is copied when operational metrics are enabled. The file
+ * writer does not write it. See as_metrics_node_snapshot.conn_latency.
  */
 void
 as_metrics_node_snapshot_create_file(struct as_node_s* node, as_metrics_node_snapshot** snapshot);

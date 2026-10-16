@@ -476,8 +476,9 @@ typedef struct as_metrics_snapshot_s {
 	uint32_t nodes_count;
 
 	/**
-	 * Final samples for nodes removed since the previous export. Often empty.
-	 * Replaces on_node_close for exporters. Empty for aerospike_get_metrics_snapshot().
+	 * Final samples for nodes that left, one entry per node name. Included in
+	 * on-demand snapshots and kept when no exporter is installed. Cleared only
+	 * after a successful periodic export.
 	 */
 	as_metrics_node_snapshot** nodes_departed;
 
@@ -485,6 +486,11 @@ typedef struct as_metrics_snapshot_s {
 	 * Number of `nodes_departed` entries.
 	 */
 	uint32_t nodes_departed_count;
+
+	/**
+	 * True when the departed-node list hit its cap and later departures were omitted.
+	 */
+	bool nodes_departed_truncated;
 
 	/**
 	 * Bucket unit for the latency histograms in this snapshot.
@@ -914,6 +920,20 @@ AS_EXTERN as_status
 as_metrics_runtime_node_close(as_error* err, struct as_cluster_s* cluster, struct as_node_s* node);
 
 /**
+ * @private
+ * Drop a departed-node sample when that node rejoins. Locks cluster->metrics_lock.
+ */
+void
+as_metrics_departed_remove(struct as_cluster_s* cluster, struct as_node_s* node);
+
+/**
+ * @private
+ * Release departed-node samples. Called from cluster destroy after metrics disable.
+ */
+void
+as_metrics_departed_destroy(struct as_cluster_s* cluster);
+
+/**
  * Enable periodic metrics collection and the export timer.
  * Operational and usage metrics stay off unless the policy enables them.
  */
@@ -923,7 +943,7 @@ aerospike_enable_metrics(struct aerospike_s* as, as_error* err, const as_metrics
 /**
  * On-demand metrics snapshot. Independent of the export timer and available when
  * periodic export is off. Gauges are current; counters stay at their last values.
- * nodes_departed is empty; departed nodes are attached only on periodic export.
+ * nodes_departed is included and is not cleared by this call.
  * The caller frees the snapshot with as_metrics_snapshot_destroy().
  */
 AS_EXTERN as_status

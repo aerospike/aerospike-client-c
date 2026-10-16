@@ -1202,8 +1202,8 @@ as_metrics_departed_add(as_cluster* cluster, as_node* node)
 		as_metrics_node_snapshot* prev = as_vector_get_ptr(departed, (uint32_t)existing_node_idx);
 
 		as_metrics_node_snapshot_merge(snap, prev);
-		as_metrics_node_snapshot_destroy(prev);
 		as_vector_set(departed, (uint32_t)existing_node_idx, &snap);
+		as_metrics_node_snapshot_destroy(prev);
 		return;
 	}
 

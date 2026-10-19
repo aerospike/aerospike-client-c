@@ -362,7 +362,7 @@ struct as_metrics_runtime_s {
 
 static as_status as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool force, as_error* err);
 static void as_metrics_runtime_free(as_metrics_runtime* rt);
-static void as_metrics_snapshot_copy_departed(as_cluster* cluster, as_metrics_snapshot* snap);
+static void as_metrics_snapshot_clone_nodes_departed(const as_cluster* cluster, as_metrics_snapshot* snap);
 
 #if defined(__linux__)
 static as_status
@@ -968,7 +968,7 @@ aerospike_get_metrics_snapshot(aerospike* as, as_error* err, as_metrics_snapshot
 	as_status status = as_metrics_snapshot_create(err, cluster, labels, cpu, snapshot);
 
 	if (status == AEROSPIKE_OK) {
-		as_metrics_snapshot_copy_departed(cluster, *snapshot);
+		as_metrics_snapshot_clone_nodes_departed(cluster, *snapshot);
 	}
 	pthread_mutex_unlock(&cluster->metrics_lock);
 	return status;
@@ -976,20 +976,33 @@ aerospike_get_metrics_snapshot(aerospike* as, as_error* err, as_metrics_snapshot
 
 #define AS_METRICS_NODES_DEPARTED_MAX 256
 
-static void
-as_metrics_clone_latency_buckets(as_metrics_latency_snapshot* latency)
+// Returns a heap copy of src->buckets that the caller owns, or NULL when src
+// has none.
+static uint64_t*
+as_metrics_clone_latency_buckets(const as_metrics_latency_snapshot* src)
 {
-	uint64_t* copy = NULL;
-
-	if (latency->bucket_count == 0 || !latency->buckets) {
-		latency->buckets = NULL;
-		latency->bucket_count = 0;
-		return;
+	if (src->bucket_count == 0 || !src->buckets) {
+		return NULL;
 	}
 
-	copy = cf_malloc(sizeof(uint64_t) * latency->bucket_count);
-	memcpy(copy, latency->buckets, sizeof(uint64_t) * latency->bucket_count);
-	latency->buckets = copy;
+	size_t size = sizeof(uint64_t) * src->bucket_count;
+	uint64_t* buckets = cf_malloc(size);
+	memcpy(buckets, src->buckets, size);
+	return buckets;
+}
+
+// dst must be uninitialized. It receives its own copies of the name and buckets.
+static void
+as_metrics_copy_namespace_snapshot(
+	as_metrics_namespace_snapshot* dst, const as_metrics_namespace_snapshot* src
+	)
+{
+	*dst = *src;
+	dst->name = as_metrics_strdup_or_empty(src->name);
+
+	for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
+		dst->latencies[j].buckets = as_metrics_clone_latency_buckets(&src->latencies[j]);
+	}
 }
 
 static as_metrics_node_snapshot*
@@ -1009,17 +1022,9 @@ as_metrics_node_snapshot_clone(const as_metrics_node_snapshot* src)
 	}
 
 	dst->namespaces = cf_malloc(sizeof(as_metrics_namespace_snapshot) * src->namespace_count);
-	memcpy(dst->namespaces, src->namespaces,
-		sizeof(as_metrics_namespace_snapshot) * src->namespace_count);
 
 	for (uint32_t i = 0; i < src->namespace_count; i++) {
-		as_metrics_namespace_snapshot* ns = &dst->namespaces[i];
-
-		ns->name = as_metrics_strdup_or_empty(src->namespaces[i].name);
-
-		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			as_metrics_clone_latency_buckets(&ns->latencies[j]);
-		}
+		as_metrics_copy_namespace_snapshot(&dst->namespaces[i], &src->namespaces[i]);
 	}
 	return dst;
 }
@@ -1061,7 +1066,7 @@ as_metrics_departed_clear(as_cluster* cluster)
 }
 
 static void
-as_metrics_snapshot_copy_departed(as_cluster* cluster, as_metrics_snapshot* snap)
+as_metrics_snapshot_clone_nodes_departed(const as_cluster* cluster, as_metrics_snapshot* snap)
 {
 	as_vector* departed = cluster->metrics_nodes_departed;
 	uint32_t n;
@@ -1084,19 +1089,19 @@ as_metrics_snapshot_copy_departed(as_cluster* cluster, as_metrics_snapshot* snap
 }
 
 // Buckets from a different histogram layout cannot be added, so the newer
-// final keeps its own. Moves src buckets when dst has none.
+// final keeps its own. Copies src buckets when dst has none.
 static void
-as_metrics_add_latency_buckets(as_metrics_latency_snapshot* dst, as_metrics_latency_snapshot* src)
+as_metrics_add_latency_buckets(
+	as_metrics_latency_snapshot* dst, const as_metrics_latency_snapshot* src
+	)
 {
 	if (!src->buckets) {
 		return;
 	}
 
 	if (!dst->buckets) {
-		dst->buckets = src->buckets;
+		dst->buckets = as_metrics_clone_latency_buckets(src);
 		dst->bucket_count = src->bucket_count;
-		src->buckets = NULL;
-		src->bucket_count = 0;
 		return;
 	}
 
@@ -1120,7 +1125,9 @@ as_metrics_add_conn_counts(as_metrics_conn_snapshot* dst, const as_metrics_conn_
 }
 
 static void
-as_metrics_add_namespace_counts(as_metrics_namespace_snapshot* dst, as_metrics_namespace_snapshot* src)
+as_metrics_add_namespace_counts(
+	as_metrics_namespace_snapshot* dst, const as_metrics_namespace_snapshot* src
+	)
 {
 	dst->errors += src->errors;
 	dst->client_timeouts += src->client_timeouts;
@@ -1151,10 +1158,9 @@ as_metrics_find_namespace_snapshot(as_metrics_node_snapshot* snap, const char* n
 
 // A rejoined node is a new as_node with counters at zero. Add the pending final
 // into the new final so the node keeps one entry that spans each stint.
-// Identity and gauges come from snap. Moves heap fields out of prev; the caller
-// destroys prev.
+// Identity and gauges come from snap.
 static void
-as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, as_metrics_node_snapshot* prev)
+as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, const as_metrics_node_snapshot* prev)
 {
 	as_metrics_add_conn_counts(&snap->sync, &prev->sync);
 	as_metrics_add_conn_counts(&snap->async, &prev->async);
@@ -1164,7 +1170,7 @@ as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, as_metrics_node_s
 	as_metrics_add_latency_buckets(&snap->conn_latency, &prev->conn_latency);
 
 	for (uint32_t i = 0; i < prev->namespace_count; i++) {
-		as_metrics_namespace_snapshot* src = &prev->namespaces[i];
+		const as_metrics_namespace_snapshot* src = &prev->namespaces[i];
 		as_metrics_namespace_snapshot* dst = as_metrics_find_namespace_snapshot(snap, src->name);
 
 		if (dst) {
@@ -1172,12 +1178,10 @@ as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, as_metrics_node_s
 			continue;
 		}
 
-		// The namespace only appeared in the earlier stint. Move it over.
 		size_t size = sizeof(as_metrics_namespace_snapshot) * (snap->namespace_count + 1);
 		snap->namespaces = cf_realloc(snap->namespaces, size);
-		snap->namespaces[snap->namespace_count] = *src;
+		as_metrics_copy_namespace_snapshot(&snap->namespaces[snap->namespace_count], src);
 		snap->namespace_count++;
-		memset(src, 0, sizeof(as_metrics_namespace_snapshot));
 	}
 }
 
@@ -1186,23 +1190,21 @@ static void
 as_metrics_departed_add(as_cluster* cluster, as_node* node)
 {
 	as_metrics_node_snapshot* snap = NULL;
-	as_vector* departed;
-	int existing;
-
 	as_metrics_node_snapshot_create(node, &snap);
 
 	if (!cluster->metrics_nodes_departed) {
 		cluster->metrics_nodes_departed = as_vector_create(sizeof(as_metrics_node_snapshot*), 4);
 	}
-	departed = cluster->metrics_nodes_departed;
-	existing = as_metrics_departed_find(departed, snap->name);
 
-	if (existing >= 0) {
-		as_metrics_node_snapshot* prev = as_vector_get_ptr(departed, (uint32_t)existing);
+	as_vector* departed = cluster->metrics_nodes_departed;
+	int existing_node_idx = as_metrics_departed_find(departed, snap->name);
+
+	if (existing_node_idx >= 0) {
+		as_metrics_node_snapshot* prev = as_vector_get_ptr(departed, (uint32_t)existing_node_idx);
 
 		as_metrics_node_snapshot_merge(snap, prev);
+		as_vector_set(departed, (uint32_t)existing_node_idx, &snap);
 		as_metrics_node_snapshot_destroy(prev);
-		as_vector_set(departed, (uint32_t)existing, &snap);
 		return;
 	}
 
@@ -1313,7 +1315,7 @@ as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool forc
 		return status;
 	}
 
-	as_metrics_snapshot_copy_departed(cluster, snap);
+	as_metrics_snapshot_clone_nodes_departed(cluster, snap);
 	exported = as_metrics_export_slots(rt, snap, force);
 
 	if (exported) {

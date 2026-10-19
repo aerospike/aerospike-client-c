@@ -3549,7 +3549,7 @@ as_batch_keys_execute(
 	)
 {
 	as_cluster* cluster = as->cluster;
-	bool sampled = as_cluster_add_command_count(cluster);
+	bool sampled = as_cluster_sample_command(cluster);
 	uint32_t n_keys = batch->keys.size;
 	
 	if (n_keys == 0) {
@@ -4072,7 +4072,7 @@ as_batch_records_execute(
 
 	// The async entry point already counted this user batch.
 	if (!async_executor) {
-		sampled = as_cluster_add_command_count(cluster);
+		sampled = as_cluster_sample_command(cluster);
 	}
 
 	as_vector* list = &records->list;
@@ -4190,7 +4190,7 @@ as_batch_records_execute_async(
 	as_event_loop* event_loop, uint8_t txn_attr, bool has_write
 	)
 {
-	bool sampled = as_cluster_add_command_count(as->cluster);
+	bool sampled = as_cluster_sample_command(as->cluster);
 	// Check for empty batch.
 	if (records->list.size == 0) {
 		destroy_versions(versions);

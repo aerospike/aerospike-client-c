@@ -838,12 +838,12 @@ as_metrics_batch_sample_end(void)
 
 /**
  * @private
- * Increment command count when this user call is sampled.
- * Returns whether the call was sampled, so later retries of that same call
- * can reuse the decision.
+ * Draw the sampler once for this user call and increment command count when
+ * it is sampled. Returns the sampler decision, so node commands and retries of
+ * that same call can reuse it. See as_cluster_sample_operational().
  */
 static inline bool
-as_cluster_add_command_count(as_cluster* cluster)
+as_cluster_sample_command(as_cluster* cluster)
 {
 	if (!as_cluster_sample_operational(cluster)) {
 		return false;

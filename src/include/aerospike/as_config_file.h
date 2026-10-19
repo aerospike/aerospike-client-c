@@ -106,6 +106,10 @@ extern "C" {
 #define AS_METRICS_SAMPLER_RANGE 127
 #define AS_METRICS_SAMPLER_THRESHOLD 128
 
+// Set when the legacy metrics.enable key was read, as opposed to metrics.enabled.
+// AS_METRICS_ENABLE is set for both keys.
+#define AS_METRICS_LEGACY_ENABLE 129
+
 #define AS_BATCH_CONNECT_TIMEOUT 0
 #define AS_BATCH_SOCKET_TIMEOUT 1
 #define AS_BATCH_TOTAL_TIMEOUT 2
@@ -121,7 +125,7 @@ extern "C" {
 #define AS_BATCH_ALLOW_INLINE_SSD 12
 #define AS_BATCH_RESPOND_ALL_KEYS 13
 
-// Bits 0-128. 17 bytes covers offsets through AS_METRICS_SAMPLER_THRESHOLD.
+// Bits 0-129. 17 bytes covers offsets through AS_METRICS_LEGACY_ENABLE.
 #define AS_CONFIG_BITMAP_SIZE 17
 
 //---------------------------------

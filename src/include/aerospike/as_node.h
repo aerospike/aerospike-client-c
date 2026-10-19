@@ -223,24 +223,19 @@ typedef struct {
 	/**
 	 * Command error count for this namespace since the node was initialized.
 	 * If the error is retryable, multiple errors per command may occur.
-	 * as_node_stats.error_count is the sum of this field across the node's
-	 * namespaces. See aerospike_node_stats().
 	 */
 	uint64_t error_count;
 
 	/**
 	 * Command timeout count for this namespace since the node was initialized.
 	 * If the timeout is retryable (ie socketTimeout), multiple timeouts per
-	 * command may occur. as_node_stats.timeout_count is the sum of this field
-	 * across the node's namespaces. See aerospike_node_stats().
+	 * command may occur.
 	 */
 	uint64_t timeout_count;
 
 	/**
 	 * Command key busy error count for this namespace since the node was initialized.
 	 * A retryable key-busy error can be counted more than once for one command.
-	 * as_node_stats.key_busy_count is the sum of this field across the node's
-	 * namespaces. See aerospike_node_stats().
 	 */
 	uint64_t key_busy_count;
 
@@ -257,8 +252,7 @@ typedef struct {
 	 * @private
 	 * Client timeouts copied into the metrics snapshot.
 	 * Recorded once for a sampled terminal user-call failure.
-	 * Not included in timeout_count. See as_node_stats.timeout_count and
-	 * as_node_add_terminal_result().
+	 * Not included in timeout_count. See as_node_add_terminal_result().
 	 */
 	uint64_t client_timeout_count;
 
@@ -266,8 +260,7 @@ typedef struct {
 	 * @private
 	 * Server timeouts copied into the metrics snapshot.
 	 * Recorded once for a sampled terminal user-call failure.
-	 * Not included in timeout_count. See as_node_stats.timeout_count and
-	 * as_node_add_terminal_result().
+	 * Not included in timeout_count. See as_node_add_terminal_result().
 	 */
 	uint64_t server_timeout_count;
 
@@ -275,7 +268,7 @@ typedef struct {
 	 * @private
 	 * Record too big errors copied into the metrics snapshot.
 	 * Recorded once for a sampled terminal user-call failure.
-	 * Not included in error_count. See as_node_stats.error_count.
+	 * Not included in error_count. See as_node_add_terminal_result().
 	 */
 	uint64_t record_too_big_count;
 
@@ -283,7 +276,7 @@ typedef struct {
 	 * @private
 	 * Device overload errors copied into the metrics snapshot.
 	 * Recorded once for a sampled terminal user-call failure.
-	 * Not included in error_count. See as_node_stats.error_count.
+	 * Not included in error_count. See as_node_add_terminal_result().
 	 */
 	uint64_t device_overload_count;
 
@@ -291,7 +284,7 @@ typedef struct {
 	 * @private
 	 * Remaining command errors copied into the metrics snapshot.
 	 * Recorded once for a sampled terminal user-call failure.
-	 * Not included in error_count. See as_node_stats.error_count.
+	 * Not included in error_count. See as_node_add_terminal_result().
 	 */
 	uint64_t snapshot_error_count;
 
@@ -299,7 +292,7 @@ typedef struct {
 	 * @private
 	 * Key-busy errors copied into the metrics snapshot.
 	 * Recorded once for a sampled terminal user-call failure.
-	 * Not included in key_busy_count. See as_node_stats.key_busy_count.
+	 * Not included in key_busy_count. See as_node_add_terminal_result().
 	 */
 	uint64_t snapshot_key_busy_count;
 

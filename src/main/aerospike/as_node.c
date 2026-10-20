@@ -1714,15 +1714,6 @@ as_node_message_is_client_timeout(const char* message)
 	return strncmp(message, "Pipeline timeout", sizeof("Pipeline timeout") - 1) == 0;
 }
 
-static as_ns_metrics*
-as_node_metrics_for_count(as_node* node, const char* ns, as_ns_metrics* metrics)
-{
-	if (!metrics) {
-		metrics = as_node_prepare_metrics(node, ns);
-	}
-	return metrics;
-}
-
 void
 as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metrics, as_error* err)
 {
@@ -1732,6 +1723,7 @@ as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metric
 		return;
 	}
 
+	// Return before the lookup below, which can create namespace metrics.
 	switch (err->code) {
 	case AEROSPIKE_OK:
 	case AEROSPIKE_ERR_RECORD_NOT_FOUND:
@@ -1740,13 +1732,20 @@ as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metric
 	case AEROSPIKE_ERR_INVALID_NODE:
 		return;
 
-	case AEROSPIKE_ERR_TIMEOUT:
-		metrics = as_node_metrics_for_count(node, ns, metrics);
+	default:
+		break;
+	}
+
+	if (!metrics) {
+		metrics = as_node_prepare_metrics(node, ns);
 
 		if (!metrics) {
 			return;
 		}
+	}
 
+	switch (err->code) {
+	case AEROSPIKE_ERR_TIMEOUT:
 		// Sync client timeouts leave the message empty. Async client timeouts
 		// start with "Client timeout", or "Pipeline timeout" for a pipelined
 		// command. Any other timeout text came from the server.
@@ -1760,43 +1759,23 @@ as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metric
 		else {
 			as_incr_uint64(&metrics->client_timeout_count);
 		}
-		return;
+		break;
 
 	case AEROSPIKE_ERR_DEVICE_OVERLOAD:
-		metrics = as_node_metrics_for_count(node, ns, metrics);
-
-		if (!metrics) {
-			return;
-		}
 		as_incr_uint64(&metrics->device_overload_count);
-		return;
+		break;
 
 	case AEROSPIKE_ERR_RECORD_BUSY:
-		metrics = as_node_metrics_for_count(node, ns, metrics);
-
-		if (!metrics) {
-			return;
-		}
 		as_incr_uint64(&metrics->snapshot_key_busy_count);
-		return;
+		break;
 
 	case AEROSPIKE_ERR_RECORD_TOO_BIG:
-		metrics = as_node_metrics_for_count(node, ns, metrics);
-
-		if (!metrics) {
-			return;
-		}
 		as_incr_uint64(&metrics->record_too_big_count);
-		return;
+		break;
 
 	default:
-		metrics = as_node_metrics_for_count(node, ns, metrics);
-
-		if (!metrics) {
-			return;
-		}
 		as_incr_uint64(&metrics->snapshot_error_count);
-		return;
+		break;
 	}
 }
 

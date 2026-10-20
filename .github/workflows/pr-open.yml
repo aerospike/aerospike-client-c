@@ -15,9 +15,6 @@ permissions:
 
 on:
   pull_request:
-    branches:
-      - stage
-      - master
     types:
       - opened
       - synchronize

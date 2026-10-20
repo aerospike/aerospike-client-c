@@ -59,7 +59,10 @@ typedef as_metrics_file_exporter as_metrics_writer;
  * Destroy it after metrics are disabled. Do not destroy an exporter that enable
  * installed itself from report_dir; disable destroys that instance.
  *
- * The first Export opens report_dir/metrics-YYYYMMDDHHMMSS.log and writes the header.
+ * The metrics log file is not created until the first Export, or the first
+ * Export after each re-enable. That Export creates
+ * report_dir/metrics-YYYYMMDDHHMMSS.log and writes the header. Disable closes
+ * it and does not append to that file later.
  * Later exports append a cluster line and one node line per nodes_departed entry.
  */
 AS_EXTERN as_status
@@ -73,15 +76,6 @@ as_metrics_file_exporter_create(
  */
 AS_EXTERN void
 as_metrics_file_exporter_destroy(as_metrics_exporter* exporter);
-
-/**
- * @private
- * Open the metrics log immediately. The convenience exporter installed from
- * report_dir uses this so aerospike_enable_metrics() fails if the log cannot
- * be created. Later Export calls append cluster lines.
- */
-AS_EXTERN as_status
-as_metrics_file_exporter_open(as_error* err, as_metrics_exporter* exporter);
 
 /**
  * @deprecated

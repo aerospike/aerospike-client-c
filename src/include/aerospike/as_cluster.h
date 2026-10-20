@@ -504,9 +504,19 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Metrics export runtime (thread, exporters, departed nodes). NULL when metrics are off.
+	 * Metrics export runtime (thread and exporters). NULL when metrics are off.
+	 * Departed-node samples live on the cluster so they survive disable and do
+	 * not require an exporter.
 	 */
 	struct as_metrics_runtime_s* metrics_runtime;
+
+	/**
+	 * @private
+	 * Final samples for nodes that left, one entry per node name. Kept until a
+	 * successful export. On-demand snapshots copy this list and do not clear it.
+	 * Rejoin and repeat-departure behavior: see as_metrics_snapshot.nodes_departed.
+	 */
+	as_vector* metrics_nodes_departed;
 
 	/**
 	 * @private

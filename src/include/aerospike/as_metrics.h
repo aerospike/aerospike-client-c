@@ -476,8 +476,11 @@ typedef struct as_metrics_snapshot_s {
 	uint32_t nodes_count;
 
 	/**
-	 * Final samples for nodes removed since the previous export. Often empty.
-	 * Replaces on_node_close for exporters. Empty for aerospike_get_metrics_snapshot().
+	 * Final samples for nodes that left, one entry per node name. Included in
+	 * on-demand snapshots and kept when no exporter is installed. Cleared only
+	 * after a successful periodic export.
+	 * A node that rejoins keeps its entry. If it leaves again before that
+	 * export, its counters and histogram buckets are added into the same entry.
 	 */
 	as_metrics_node_snapshot** nodes_departed;
 
@@ -485,6 +488,13 @@ typedef struct as_metrics_snapshot_s {
 	 * Number of `nodes_departed` entries.
 	 */
 	uint32_t nodes_departed_count;
+
+	/**
+	 * True when `nodes_departed` has reached its cap of 256 entries. Nodes that
+	 * departed after that, before the next successful periodic export, may be
+	 * missing from the list.
+	 */
+	bool nodes_departed_possibly_truncated;
 
 	/**
 	 * Bucket unit for the latency histograms in this snapshot.
@@ -557,12 +567,18 @@ typedef struct as_metrics_policy_s {
 	 * Directory path for the built-in learn-metrics file exporter.
 	 *
 	 * Dynamic configuration keys metrics.exporter and metrics.report_dir override
-	 * this policy field. metrics.exporter file installs the file exporter when
-	 * deprecated listeners are not set. An empty metrics.report_dir overrides
-	 * report_dir and installs nothing. When metrics.report_dir is absent, an empty
-	 * report_dir uses ".". An empty report_dir with no metrics.exporter key also
-	 * installs nothing. metrics.exporter none and custom do not install the file
-	 * exporter. Collection can still run with no exporter.
+	 * this policy field. The file exporter is not installed when deprecated
+	 * listeners are set. Otherwise:
+	 * - metrics.report_dir set: replaces report_dir. An empty value installs no
+	 *   file exporter.
+	 * - metrics.exporter file with no metrics.report_dir: installs the file
+	 *   exporter. An empty report_dir uses ".".
+	 * - metrics.exporter none or custom: does not install the file exporter.
+	 * - No metrics.exporter key: installs the file exporter when report_dir is not
+	 *   empty and no exporters were added. Added exporters are called instead.
+	 *
+	 * Collection can still run with no exporter.
+	 * See as_metrics_file_exporter_create().
 	 *
 	 * Default: . (current directory)
 	 */
@@ -635,7 +651,10 @@ typedef struct as_metrics_policy_s {
 
 	/**
 	 * Record command-path operational metrics (latency, namespace errors and bytes,
-	 * cpu, memory) on the metrics snapshot. Enabling metrics does not turn this on.
+	 * cpu, memory) on the metrics snapshot.
+	 * Dynamic configuration metrics.enabled does not change this flag.
+	 * The legacy metrics.enable key turns it on when extended.operational.enabled
+	 * is absent.
 	 * The learn-metrics file exporter still writes those fields so existing log
 	 * readers keep working. Tier 0 pool gauges are collected whenever metrics are enabled.
 	 *
@@ -914,8 +933,16 @@ AS_EXTERN as_status
 as_metrics_runtime_node_close(as_error* err, struct as_cluster_s* cluster, struct as_node_s* node);
 
 /**
+ * @private
+ * Release departed-node samples. Called from cluster destroy after metrics disable.
+ */
+void
+as_metrics_departed_destroy(struct as_cluster_s* cluster);
+
+/**
  * Enable periodic metrics collection and the export timer.
- * Operational and usage metrics stay off unless the policy enables them.
+ * Operational metrics follow the policy and stay off by default.
+ * Usage metrics stay off unless the policy enables them.
  */
 AS_EXTERN as_status
 aerospike_enable_metrics(struct aerospike_s* as, as_error* err, const as_metrics_policy* policy);
@@ -923,7 +950,7 @@ aerospike_enable_metrics(struct aerospike_s* as, as_error* err, const as_metrics
 /**
  * On-demand metrics snapshot. Independent of the export timer and available when
  * periodic export is off. Gauges are current; counters stay at their last values.
- * nodes_departed is empty; departed nodes are attached only on periodic export.
+ * nodes_departed is included and is not cleared by this call.
  * The caller frees the snapshot with as_metrics_snapshot_destroy().
  */
 AS_EXTERN as_status

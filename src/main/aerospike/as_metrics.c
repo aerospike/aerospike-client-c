@@ -680,8 +680,8 @@ as_metrics_copy_latency(as_metrics_latency_snapshot* dst, as_latency* latency, u
 	as_latency_release(latency);
 }
 
-static void
-as_metrics_node_snapshot_create_impl(as_node* node, as_metrics_node_snapshot** snapshot)
+void
+as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapshot)
 {
 	as_metrics_node_snapshot* snap = cf_calloc(1, sizeof(as_metrics_node_snapshot));
 	snap->name = as_metrics_strdup_or_empty(node->name);
@@ -769,18 +769,6 @@ as_metrics_node_snapshot_create_impl(as_node* node, as_metrics_node_snapshot** s
 	}
 
 	*snapshot = snap;
-}
-
-void
-as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapshot)
-{
-	as_metrics_node_snapshot_create_impl(node, snapshot);
-}
-
-void
-as_metrics_node_snapshot_create_file(as_node* node, as_metrics_node_snapshot** snapshot)
-{
-	as_metrics_node_snapshot_create_impl(node, snapshot);
 }
 
 void
@@ -914,7 +902,7 @@ as_metrics_snapshot_create_impl(
 
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_metrics_node_snapshot* node_snap = NULL;
-		as_metrics_node_snapshot_create_impl(nodes->array[i], &node_snap);
+		as_metrics_node_snapshot_create(nodes->array[i], &node_snap);
 		snap->nodes[i] = node_snap;
 	}
 	as_nodes_release(nodes);

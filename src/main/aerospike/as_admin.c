@@ -278,8 +278,7 @@ as_admin_execute_node(
 	// One namespace-bytes decision for this admin command. Send and receive
 	// share it. Admin commands have no user namespace, so the bytes are stored
 	// on the empty-namespace entry.
-	bool sample = as_cluster_record_namespace_metrics(node->cluster,
-		as_cluster_sample_operational(node->cluster));
+	bool sample = as_cluster_sample_operational(node->cluster);
 	status = as_admin_send(err, &socket, node, buffer, end, 0, deadline_ms, sample);
 	
 	if (status) {
@@ -405,8 +404,7 @@ as_admin_read_list(
 		return status;
 	}
 	
-	bool sample = as_cluster_record_namespace_metrics(node->cluster,
-		as_cluster_sample_operational(node->cluster));
+	bool sample = as_cluster_sample_operational(node->cluster);
 	status = as_admin_send(err, &socket, node, command, end, 0, deadline_ms, sample);
 	
 	if (status) {
@@ -598,8 +596,7 @@ as_authenticate(
 
 	p = as_admin_write_field_bytes(p, SESSION_TOKEN, session->token, session->token_length);
 
-	bool sample = node && as_cluster_record_namespace_metrics(node->cluster,
-		as_cluster_sample_operational(node->cluster));
+	bool sample = node && as_cluster_sample_operational(node->cluster);
 	as_status status = as_admin_send(err, sock, node, buffer, p, socket_timeout, deadline_ms, sample);
 	
 	if (status) {

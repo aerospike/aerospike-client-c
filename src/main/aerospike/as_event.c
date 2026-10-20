@@ -593,7 +593,7 @@ as_event_add_success_latency(as_event_command* cmd)
 	uint64_t command_elapsed = now - cmd->command_begin;
 	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, command_elapsed);
 
-	if (!cmd->record_namespace_metrics) {
+	if (!cmd->metrics_sample_decision) {
 		return;
 	}
 
@@ -673,7 +673,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		cmd->command_begin = cf_getns();
 	}
 
-	if (cmd->record_namespace_metrics) {
+	if (cmd->metrics_sample_decision) {
 		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
 		// See as_node_rpc_latency_begin().
 		cmd->attempt_begin = cf_getns();
@@ -845,7 +845,7 @@ as_event_retry_timeout(as_event_command* cmd)
 	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 
 	if (cmd->pipe_listener) {
-		if (cmd->record_namespace_metrics) {
+		if (cmd->metrics_sample_decision) {
 			as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
 		}
 		as_pipe_timeout(cmd, true);
@@ -971,7 +971,7 @@ as_event_total_timeout(as_event_command* cmd)
 	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 
 	if (cmd->pipe_listener) {
-		if (cmd->record_namespace_metrics) {
+		if (cmd->metrics_sample_decision) {
 			as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
 		}
 		as_pipe_timeout(cmd, false);
@@ -1315,8 +1315,8 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 	}
 	// One namespace error or timeout for the failure returned to the caller.
 	// A retry that later succeeds does not get here. An unsampled call does not
-	// increment the counters. See as_command.record_namespace_metrics.
-	if (cmd->record_namespace_metrics) {
+	// increment the counters. See as_command.metrics_sample_decision.
+	if (cmd->metrics_sample_decision) {
 		as_node_add_terminal_result(cmd->node, cmd->ns, cmd->metrics, err);
 	}
 	as_event_notify_error(cmd, err);

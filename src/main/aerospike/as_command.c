@@ -698,7 +698,7 @@ as_command_add_latencies(as_command* cmd, as_node* node, as_ns_metrics* metrics,
 	uint64_t command_elapsed = now - cmd->command_begin;
 	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, command_elapsed);
 
-	if (!cmd->record_namespace_metrics) {
+	if (!cmd->metrics_sample_decision) {
 		return;
 	}
 
@@ -726,7 +726,6 @@ as_command_execute(as_command* cmd, as_error* err)
 	// command reuse it. A new sub-batch is a new command and draws again.
 	// See as_command.metrics_sample_decision.
 	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
-	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
 	// Command latency starts once and includes retries.
 	cmd->command_begin = 0;
 
@@ -773,7 +772,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		// Start of this attempt. See as_node_rpc_latency_begin().
 		uint64_t attempt_begin = 0;
 
-		if (cmd->record_namespace_metrics) {
+		if (cmd->metrics_sample_decision) {
 			metrics = as_node_prepare_metrics(node, cmd->ns);
 			attempt_begin = cf_getns();
 		}
@@ -878,7 +877,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_CLIENT:
 					as_node_add_error(node, cmd->ns, metrics);
 
-					if (cmd->record_namespace_metrics) {
+					if (cmd->metrics_sample_decision) {
 						as_node_add_terminal_result(node, cmd->ns, metrics, err);
 					}
 					as_node_close_conn_error(node, &socket, socket.pool);
@@ -898,7 +897,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_RECORD_BUSY:
 					as_node_add_key_busy(node, cmd->ns, metrics);
 
-					if (cmd->record_namespace_metrics) {
+					if (cmd->metrics_sample_decision) {
 						as_node_add_terminal_result(node, cmd->ns, metrics, err);
 					}
 					as_command_prepare_error(cmd, err);
@@ -907,7 +906,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_RECORD_TOO_BIG:
 					as_node_add_error(node, cmd->ns, metrics);
 
-					if (cmd->record_namespace_metrics) {
+					if (cmd->metrics_sample_decision) {
 						as_node_add_terminal_result(node, cmd->ns, metrics, err);
 					}
 					as_command_prepare_error(cmd, err);
@@ -916,7 +915,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				default:
 					as_node_add_error(node, cmd->ns, metrics);
 
-					if (cmd->record_namespace_metrics) {
+					if (cmd->metrics_sample_decision) {
 						as_node_add_terminal_result(node, cmd->ns, metrics, err);
 					}
 					as_command_prepare_error(cmd, err);
@@ -1005,7 +1004,7 @@ Retry:
 		// Server timeouts have a message.  Client timeouts do not have a message.
 		// Record the split before as_error_update() writes a message, which would
 		// make a client timeout look like a server timeout.
-		if (cmd->record_namespace_metrics) {
+		if (cmd->metrics_sample_decision) {
 			as_node_add_terminal_result(node, cmd->ns, NULL, err);
 		}
 		const char* type = is_server_timeout(err)? "Server" : "Client";
@@ -1014,7 +1013,7 @@ Retry:
 			type, cmd->policy->socket_timeout, cmd->policy->total_timeout, cmd->iteration,
 			as_node_get_address_string(node));
 	}
-	else if (cmd->record_namespace_metrics) {
+	else if (cmd->metrics_sample_decision) {
 		as_node_add_terminal_result(node, cmd->ns, NULL, err);
 	}
 

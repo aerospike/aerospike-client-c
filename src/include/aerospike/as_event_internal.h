@@ -173,8 +173,6 @@ typedef struct as_event_command {
 	as_latency_type latency_type;
 	// See as_command.metrics_sample_decision.
 	bool metrics_sample_decision;
-	// See as_command.record_namespace_metrics.
-	bool record_namespace_metrics;
 } as_event_command;
 
 typedef struct {
@@ -211,7 +209,6 @@ as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
 	// See as_command.metrics_sample_decision.
 	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
-	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
 
 	if (cmd->metrics_sample_decision && count_command) {
 		as_incr_uint64(&cmd->cluster->command_count);

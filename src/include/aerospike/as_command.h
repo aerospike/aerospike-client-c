@@ -229,13 +229,10 @@ typedef struct as_command_s {
 	as_latency_type latency_type;
 	// Stored operational sampler decision. Reused for retries of this command.
 	// False when operational metrics are off, or when the sampler skips this call.
-	// Gates the cluster command_count, the retry counter, and v3 command latency.
-	// While operational metrics are on, this is also the namespace-metrics decision.
+	// Gates the cluster command_count, the retry counter, v3 command latency, and
+	// per-namespace histograms, bytes, and error counts. Namespace error counters
+	// are recorded once on terminal failure.
 	bool metrics_sample_decision;
-	// True when this command updates per-namespace histograms, bytes, and error
-	// counts. False when operational metrics are off, or when the sampler skips
-	// this call. Namespace error counters are recorded once on terminal failure.
-	bool record_namespace_metrics;
 } as_command;
 
 /**

@@ -570,6 +570,7 @@ as_node_create_connection(
 	// turned on during connection setup.
 	// Namespace conn buckets follow metrics_enabled. See as_ns_metrics.latency.
 	// The operational series is node->conn_latency. See as_node_add_conn_latency().
+	// The async path is as_event_add_conn_latency().
 	bool record_conn_buckets = node->cluster->metrics_enabled;
 	bool record_conn_open = node->cluster->metrics_operational_enabled;
 	uint64_t begin = 0;

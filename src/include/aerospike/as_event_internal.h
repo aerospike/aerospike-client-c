@@ -22,6 +22,7 @@
 #include <aerospike/as_queue.h>
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
+#include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_ll.h>
 #include <pthread.h>
 
@@ -148,6 +149,9 @@ typedef struct as_event_command {
 	// Monotonic nanoseconds at the start of this attempt. Set only when this
 	// command records namespace metrics. See as_node_rpc_latency_begin().
 	uint64_t attempt_begin;
+	// Monotonic nanoseconds when this command started opening a new connection.
+	// 0 when no connection-open latency is recorded. See as_event_conn_begin().
+	uint64_t conn_begin;
 	uint32_t iteration;
 	uint32_t command_sent_counter;
 	uint32_t write_offset;
@@ -212,6 +216,22 @@ as_event_command_select_sample(as_event_command* cmd, bool count_command)
 
 	if (cmd->metrics_sample_decision && count_command) {
 		as_incr_uint64(&cmd->cluster->command_count);
+	}
+}
+
+/**
+ * @private
+ * Start the connection-open clock before an async connect. Same gates as the
+ * sync path in as_node_create_connection(). Not sampler-gated.
+ * See as_ns_metrics.latency and as_node.conn_latency.
+ */
+static inline void
+as_event_conn_begin(as_event_command* cmd)
+{
+	cmd->conn_begin = 0;
+
+	if (cmd->cluster->metrics_enabled || cmd->cluster->metrics_operational_enabled) {
+		cmd->conn_begin = cf_getns();
 	}
 }
 

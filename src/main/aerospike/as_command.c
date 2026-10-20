@@ -685,24 +685,19 @@ as_command_prepare_error(as_command* cmd, as_error* err)
 }
 
 static void
-as_command_add_latencies(as_command* cmd, as_node* node, as_ns_metrics* metrics)
+as_command_add_latencies(as_command* cmd, as_node* node, as_ns_metrics* metrics, uint64_t attempt_begin)
 {
-	uint64_t now;
-	uint64_t elapsed;
-
 	if (cmd->latency_type == AS_LATENCY_TYPE_NONE || cmd->command_begin == 0) {
 		return;
 	}
 
-	now = cf_getns();
-	elapsed = now - cmd->command_begin;
+	uint64_t now = cf_getns();
 
 	// Elapsed time from the first attempt, including retries.
 	// The cluster sample has no node. A retry can move to another node.
-	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, elapsed);
+	uint64_t command_elapsed = now - cmd->command_begin;
+	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, command_elapsed);
 
-	// Namespace latency is this successful RPC, including its retries.
-	// See as_metrics_namespace_snapshot.latencies.
 	if (!cmd->record_namespace_metrics) {
 		return;
 	}
@@ -710,7 +705,10 @@ as_command_add_latencies(as_command* cmd, as_node* node, as_ns_metrics* metrics)
 	if (!metrics) {
 		metrics = as_node_prepare_metrics(node, cmd->ns);
 	}
-	as_node_add_attempt_latency(metrics, cmd->latency_type, elapsed);
+
+	// Namespace latency is this successful RPC. See as_node_rpc_latency_begin().
+	uint64_t rpc_begin = as_node_rpc_latency_begin(cmd->latency_type, cmd->command_begin, attempt_begin);
+	as_node_add_attempt_latency(metrics, cmd->latency_type, now - rpc_begin);
 }
 
 as_status
@@ -772,9 +770,12 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		as_ns_metrics* metrics = NULL;
+		// Start of this attempt. See as_node_rpc_latency_begin().
+		uint64_t attempt_begin = 0;
 
 		if (cmd->record_namespace_metrics) {
 			metrics = as_node_prepare_metrics(node, cmd->ns);
+			attempt_begin = cf_getns();
 		}
 
 		as_socket socket;
@@ -831,7 +832,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		if (status == AEROSPIKE_OK) {
-			as_command_add_latencies(cmd, node, metrics);
+			as_command_add_latencies(cmd, node, metrics, attempt_begin);
 
 			// Reset error code if retry had occurred.
 			if (cmd->iteration > 0) {
@@ -890,7 +891,7 @@ as_command_execute(as_command* cmd, as_error* err)
 				case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 					// Do not increment error count on record not found.
 					// Add latency metrics instead.
-					as_command_add_latencies(cmd, node, metrics);
+					as_command_add_latencies(cmd, node, metrics, attempt_begin);
 					as_command_prepare_error(cmd, err);
 					break;
 

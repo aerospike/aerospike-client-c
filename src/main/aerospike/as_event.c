@@ -870,9 +870,7 @@ as_event_retry_timeout(as_event_command* cmd)
 	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 
 	if (cmd->pipe_listener) {
-		if (cmd->metrics_sample_decision) {
-			as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
-		}
+		// A terminal timeout is counted in as_event_error_callback().
 		as_pipe_timeout(cmd, true);
 		return;
 	}
@@ -996,9 +994,7 @@ as_event_total_timeout(as_event_command* cmd)
 	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 
 	if (cmd->pipe_listener) {
-		if (cmd->metrics_sample_decision) {
-			as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
-		}
+		// See as_event_retry_timeout().
 		as_pipe_timeout(cmd, false);
 		return;
 	}

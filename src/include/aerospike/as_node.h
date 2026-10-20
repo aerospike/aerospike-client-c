@@ -1003,8 +1003,10 @@ as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics);
  * @private
  * Record the namespace error or timeout split for a user call that failed
  * overall. A retry that later succeeds does not increment these counters.
- * err->message starting with "Client timeout", or an empty timeout message,
- * is a client timeout. Any other timeout message is a server timeout.
+ * err->message starting with "Client timeout" or "Pipeline timeout", or an
+ * empty timeout message, is a client timeout. Any other timeout message is a
+ * server timeout. These counters do not change as_node_stats.error_count or
+ * as_node_stats.timeout_count. See the AEROSPIKE_ERR_TIMEOUT case.
  */
 void
 as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metrics, as_error* err);
@@ -1028,22 +1030,6 @@ void
 as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
- * @private
- * Increment the snapshot client timeout count. Does not change timeout_count.
- * See as_node_stats.timeout_count.
- */
-void
-as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
-
-/**
- * @private
- * Increment the snapshot server timeout count. Does not change timeout_count.
- * See as_node_stats.timeout_count.
- */
-void
-as_node_add_server_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
-
-/**
  * Return command key busy error count. The value is cumulative and not reset per metrics interval.
  */
 static inline uint64_t
@@ -1057,22 +1043,6 @@ as_node_get_key_busy_count(as_ns_metrics* metrics)
  */
 void
 as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics);
-
-/**
- * @private
- * Increment the snapshot record too big count. Does not change error_count.
- * See as_node_stats.error_count.
- */
-void
-as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics);
-
-/**
- * @private
- * Increment the snapshot device overload count. Does not change error_count.
- * See as_node_stats.error_count.
- */
-void
-as_node_add_device_overload(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * @private

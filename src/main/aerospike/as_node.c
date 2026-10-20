@@ -1741,6 +1741,12 @@ as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metric
 		return;
 
 	case AEROSPIKE_ERR_TIMEOUT:
+		metrics = as_node_metrics_for_count(node, ns, metrics);
+
+		if (!metrics) {
+			return;
+		}
+
 		// Sync client timeouts leave the message empty. Async client timeouts
 		// start with "Client timeout", or "Pipeline timeout" for a pipelined
 		// command. Any other timeout text came from the server.
@@ -1749,15 +1755,20 @@ as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metric
 			!as_node_message_is_client_timeout(err->message);
 
 		if (server_timeout) {
-			as_node_add_server_timeout(node, ns, metrics);
+			as_incr_uint64(&metrics->server_timeout_count);
 		}
 		else {
-			as_node_add_client_timeout(node, ns, metrics);
+			as_incr_uint64(&metrics->client_timeout_count);
 		}
 		return;
 
 	case AEROSPIKE_ERR_DEVICE_OVERLOAD:
-		as_node_add_device_overload(node, ns, metrics);
+		metrics = as_node_metrics_for_count(node, ns, metrics);
+
+		if (!metrics) {
+			return;
+		}
+		as_incr_uint64(&metrics->device_overload_count);
 		return;
 
 	case AEROSPIKE_ERR_RECORD_BUSY:
@@ -1770,7 +1781,12 @@ as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metric
 		return;
 
 	case AEROSPIKE_ERR_RECORD_TOO_BIG:
-		as_node_add_record_too_big(node, ns, metrics);
+		metrics = as_node_metrics_for_count(node, ns, metrics);
+
+		if (!metrics) {
+			return;
+		}
+		as_incr_uint64(&metrics->record_too_big_count);
 		return;
 
 	default:
@@ -1799,28 +1815,6 @@ as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
 }
 
 void
-as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
-{
-	metrics = as_node_metrics_for_count(node, ns, metrics);
-
-	if (!metrics) {
-		return;
-	}
-	as_incr_uint64(&metrics->client_timeout_count);
-}
-
-void
-as_node_add_server_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
-{
-	metrics = as_node_metrics_for_count(node, ns, metrics);
-
-	if (!metrics) {
-		return;
-	}
-	as_incr_uint64(&metrics->server_timeout_count);
-}
-
-void
 as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics)
 {
 	// Key busy counts are always on. If metrics not enabled, still increment count.
@@ -1832,28 +1826,6 @@ as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics)
 		}
 	}
 	as_incr_uint64(&metrics->key_busy_count);
-}
-
-void
-as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics)
-{
-	metrics = as_node_metrics_for_count(node, ns, metrics);
-
-	if (!metrics) {
-		return;
-	}
-	as_incr_uint64(&metrics->record_too_big_count);
-}
-
-void
-as_node_add_device_overload(as_node* node, const char* ns, as_ns_metrics* metrics)
-{
-	metrics = as_node_metrics_for_count(node, ns, metrics);
-
-	if (!metrics) {
-		return;
-	}
-	as_incr_uint64(&metrics->device_overload_count);
 }
 
 static as_status

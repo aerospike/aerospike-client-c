@@ -1701,19 +1701,6 @@ as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics)
 }
 
 static bool
-as_node_message_starts_with(const char* message, const char* prefix)
-{
-	while (*prefix != '\0') {
-		if (*message != *prefix) {
-			return false;
-		}
-		message++;
-		prefix++;
-	}
-	return true;
-}
-
-static bool
 as_node_message_is_client_timeout(const char* message)
 {
 	if (!message) {
@@ -1721,10 +1708,10 @@ as_node_message_is_client_timeout(const char* message)
 	}
 
 	// See as_event_retry_timeout(), as_event_total_timeout(), and as_pipe_timeout().
-	if (as_node_message_starts_with(message, "Client timeout")) {
+	if (strncmp(message, "Client timeout", sizeof("Client timeout") - 1) == 0) {
 		return true;
 	}
-	return as_node_message_starts_with(message, "Pipeline timeout");
+	return strncmp(message, "Pipeline timeout", sizeof("Pipeline timeout") - 1) == 0;
 }
 
 static as_ns_metrics*

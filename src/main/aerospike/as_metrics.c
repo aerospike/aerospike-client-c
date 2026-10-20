@@ -820,11 +820,10 @@ as_metrics_snapshot_create_impl(
 {
 	*snapshot = NULL;
 	bool operational = cluster->metrics_enabled && cluster->metrics_operational_enabled;
-	bool should_read_cpu_mem = operational;
 	uint32_t cpu_usage = 0;
 	uint64_t mem = 0;
 
-	if (should_read_cpu_mem) {
+	if (operational) {
 		as_status status = as_metrics_read_cpu_mem(err, cpu, &cpu_usage, &mem);
 
 		if (status != AEROSPIKE_OK) {

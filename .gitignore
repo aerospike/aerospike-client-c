@@ -83,3 +83,5 @@ packages
 packages/repositories.config
 CLAUDE.md
 .idea
+
+.vscode

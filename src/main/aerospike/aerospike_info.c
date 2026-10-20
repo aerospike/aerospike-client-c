@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -47,6 +47,15 @@ aerospike_info_node(
 
 	uint64_t deadline = as_socket_deadline(policy->timeout);
 	return as_info_command_node(err, node, (char*)req, policy->send_as_is, deadline, res);
+}
+
+as_status
+aerospike_info_node_async(
+	aerospike* as, as_error* err, as_policy_info* policy, as_node* node, const char* req,
+	as_async_info_listener listener, void* udata, as_event_loop* event_loop
+	)
+{
+	return as_info_command_node_async(as, err, policy, node, req, listener, udata, event_loop);
 }
 
 as_status

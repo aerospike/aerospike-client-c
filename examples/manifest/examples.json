@@ -501,7 +501,7 @@
         "ttl_support": false,
         "enterprise": false,
         "strong_consistency": false,
-        "min_server_version": "8.1.3",
+        "min_server_version": "8.2.0",
         "udf": false,
         "secondary_index": false
       },
@@ -533,7 +533,7 @@
         "ttl_support": false,
         "enterprise": false,
         "strong_consistency": false,
-        "min_server_version": "8.1.3",
+        "min_server_version": "8.2.0",
         "udf": false,
         "secondary_index": false
       },

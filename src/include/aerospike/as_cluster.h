@@ -427,6 +427,31 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Command-path operational metrics. Off unless the metrics policy enables them.
+	 */
+	bool metrics_operational_enabled;
+
+	/**
+	 * @private
+	 * Client-wide usage counters. Off unless the metrics policy sets usage_enabled.
+	 */
+	bool metrics_usage_enabled;
+
+	/**
+	 * @private
+	 * A learn-metrics file writer is installed. Namespace histograms, bytes, and
+	 * error counts are recorded for that writer when operational metrics are off.
+	 */
+	bool metrics_file_writer;
+
+	/**
+	 * @private
+	 * Histogram bucket unit. This is set using as_metrics_policy.
+	 */
+	as_metrics_latency_unit metrics_latency_unit;
+
+	/**
+	 * @private
 	 * Number of elapsed time range buckets in latency histograms. This is set using as_policy_metrics.
 	 */
 	uint8_t metrics_latency_columns;
@@ -450,23 +475,54 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Number of cluster tend iterations between metrics notification events. One tend iteration
-	 * is defined as as_config.tender_interval (default 1 second) plus the time to tend all
-	 * nodes. This is set using as_policy_metrics.
+	 * v3 command latency. One sample per command for total elapsed time
+	 * including retries, across nodes. Allocated only while operational
+	 * metrics are enabled.
 	 */
-	uint32_t metrics_interval;
+	as_latency* command_latency[AS_LATENCY_TYPE_MAX];
 
 	/**
 	 * @private
-	 * Listeners that handles metrics notification events. The default listener implementation
-	 * writes the metrics snapshot to a file which will later be read and forwarded to
-	 * OpenTelemetry by a separate offline application.
-	 *
-	 * The listener could be overridden to send the metrics snapshot directly to OpenTelemetry.
-	 * 
+	 * Operational sampler modulus. >= 1. Read with as_load_uint32().
+	 */
+	uint32_t metrics_sampler_range;
+
+	/**
+	 * @private
+	 * Operational sampler threshold, 0 through range. 0 records no command-path
+	 * operational metrics. Read with as_load_uint32().
+	 */
+	uint32_t metrics_sampler_threshold;
+
+	/**
+	 * @private
+	 * Milliseconds between metrics exports. Set from as_metrics_policy.export_interval,
+	 * or from interval * as_config.tender_interval when export_interval is empty.
+	 */
+	uint64_t metrics_interval;
+
+	/**
+	 * @private
+	 * Deprecated four-callback metrics listener. Exporters are preferred.
 	 * This is set using as_policy_metrics.
 	 */
 	as_metrics_listeners metrics_listeners;
+
+	/**
+	 * @private
+	 * Metrics export runtime (thread and exporters). NULL when metrics are off.
+	 * Departed-node samples live on the cluster so they survive disable and do
+	 * not require an exporter.
+	 */
+	struct as_metrics_runtime_s* metrics_runtime;
+
+	/**
+	 * @private
+	 * Final samples for nodes that left, one entry per node name. Kept until a
+	 * successful export. On-demand snapshots copy this list and do not clear it.
+	 * Rejoin and repeat-departure behavior: see as_metrics_snapshot.nodes_departed.
+	 */
+	as_vector* metrics_nodes_departed;
 
 	/**
 	 * @private
@@ -483,9 +539,48 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * feature.api.blocking. Cumulative public synchronous API calls.
+	 */
+	uint64_t metrics_api_blocking;
+
+	/**
+	 * @private
+	 * feature.api.deferred. Cumulative public asynchronous API calls.
+	 */
+	uint64_t metrics_api_deferred;
+
+	/**
+	 * @private
+	 * feature.api.background. Cumulative public background scan and query calls.
+	 */
+	uint64_t metrics_api_background;
+
+	/**
+	 * @private
 	 * Delay queue timeout count. The value is cumulative and not reset per metrics interval.
 	 */
 	uint64_t delay_queue_timeout_count;
+
+	/**
+	 * @private
+	 * cluster.validation.open.failure. Pre-node connect failures, including TLS and auth.
+	 * Recorded only when operational metrics are enabled.
+	 */
+	uint32_t metrics_validation_open_failures;
+
+	/**
+	 * @private
+	 * cluster.validation.tls.handshake.failure. Also included in metrics_validation_open_failures.
+	 * Recorded only when operational metrics are enabled.
+	 */
+	uint32_t metrics_validation_tls_handshake_failures;
+
+	/**
+	 * @private
+	 * cluster.validation.auth.failure. Also included in metrics_validation_open_failures.
+	 * Recorded only when operational metrics are enabled.
+	 */
+	uint32_t metrics_validation_auth_failures;
 
 	/**
 	 * @private
@@ -662,14 +757,88 @@ as_cluster_disable_metrics(as_error* err, as_cluster* cluster);
 
 /**
  * @private
- * Increment command count when metrics are enabled.
+ * Allocate or reset cluster command latency histograms when operational
+ * metrics are on. Release them when operational metrics are off.
  */
-static inline void
+void
+as_cluster_enable_command_latency(as_cluster* cluster, const as_metrics_policy* policy);
+
+/**
+ * @private
+ * Release cluster command latency histograms. In-flight samples keep the
+ * histogram alive until they finish.
+ */
+void
+as_cluster_disable_command_latency(as_cluster* cluster);
+
+/**
+ * @private
+ * Record one v3 command latency sample. elapsed_nanos includes retries.
+ * No-op when operational command histograms are not allocated.
+ */
+void
+as_cluster_add_command_latency(as_cluster* cluster, as_latency_type latency_type, uint64_t elapsed_nanos);
+
+/**
+ * @private
+ * True when this draw should record command-path operational metrics.
+ * One call is one decision. Draw before the retry loop and reuse the result.
+ */
+bool
+as_cluster_sample_operational(as_cluster* cluster);
+
+/**
+ * @private
+ * True when per-attempt namespace latency is published. The learn-metrics file
+ * writer and metrics listeners read that series.
+ */
+static inline bool
+as_cluster_should_record_attempt_latency(const as_cluster* cluster)
+{
+	return cluster->metrics_file_writer || cluster->metrics_listeners.snapshot_listener != NULL;
+}
+
+/**
+ * @private
+ * True when this command should update per-namespace histograms, bytes, and
+ * error counts. When operational metrics are on, operational_sample is that
+ * decision: false skips namespace metrics. When operational metrics are off,
+ * there is no sampler draw, and this records only if a learn-metrics file
+ * writer or a metrics listener is installed.
+ */
+static inline bool
+as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_sample)
+{
+	if (!cluster->metrics_enabled) {
+		return false;
+	}
+
+	if (cluster->metrics_operational_enabled) {
+		// The sampler decided. A "no" skips namespace metrics as well as the
+		// cluster command_count and retry counter.
+		return operational_sample;
+	}
+
+	// The on-demand snapshot omits these fields while operational metrics are
+	// off. The file writer and metrics listeners still read them.
+	return as_cluster_should_record_attempt_latency(cluster);
+}
+
+/**
+ * @private
+ * Increment command count when this user call is sampled.
+ * Returns whether the call was sampled, so later retries of that same call
+ * can reuse the decision.
+ */
+static inline bool
 as_cluster_add_command_count(as_cluster* cluster)
 {
-	if (cluster->metrics_enabled) {
-		as_incr_uint64(&cluster->command_count);
+	if (!as_cluster_sample_operational(cluster)) {
+		return false;
 	}
+
+	as_incr_uint64(&cluster->command_count);
+	return true;
 }
 
 /**
@@ -731,6 +900,44 @@ static inline void
 as_cluster_add_delay_queue_timeout(as_cluster* cluster)
 {
 	as_incr_uint64(&cluster->delay_queue_timeout_count);
+}
+
+/**
+ * @private
+ * Record cluster.validation.open.failure when operational metrics are enabled.
+ */
+static inline void
+as_cluster_add_validation_open_failure(as_cluster* cluster)
+{
+	if (cluster->metrics_operational_enabled) {
+		as_incr_uint32(&cluster->metrics_validation_open_failures);
+	}
+}
+
+/**
+ * @private
+ * Record cluster.validation.tls.handshake.failure. Also counts as open.failure.
+ */
+static inline void
+as_cluster_add_validation_tls_handshake_failure(as_cluster* cluster)
+{
+	if (cluster->metrics_operational_enabled) {
+		as_incr_uint32(&cluster->metrics_validation_tls_handshake_failures);
+		as_incr_uint32(&cluster->metrics_validation_open_failures);
+	}
+}
+
+/**
+ * @private
+ * Record cluster.validation.auth.failure. Also counts as open.failure.
+ */
+static inline void
+as_cluster_add_validation_auth_failure(as_cluster* cluster)
+{
+	if (cluster->metrics_operational_enabled) {
+		as_incr_uint32(&cluster->metrics_validation_auth_failures);
+		as_incr_uint32(&cluster->metrics_validation_open_failures);
+	}
 }
 
 /**

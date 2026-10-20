@@ -24,9 +24,9 @@
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
-#include <aerospike/as_metrics_writer.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_peers.h>
+#include <aerospike/as_random.h>
 #include <aerospike/as_shm_cluster.h>
 #include <aerospike/as_socket.h>
 #include <aerospike/as_string.h>
@@ -597,82 +597,71 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	as_vector_append(cluster->gc, &item);
 }
 
+bool
+as_cluster_sample_operational(as_cluster* cluster)
+{
+	if (!cluster->metrics_enabled || !cluster->metrics_operational_enabled) {
+		return false;
+	}
+
+	uint32_t threshold = as_load_uint32(&cluster->metrics_sampler_threshold);
+
+	if (threshold == 0) {
+		return false;
+	}
+
+	uint32_t range = as_load_uint32(&cluster->metrics_sampler_range);
+
+	// range 1 and threshold 1, the default, records every command.
+	if (range <= 1 || threshold >= range) {
+		return true;
+	}
+
+	uint32_t draw = as_random_get_uint32();
+	return (draw % range) < threshold;
+}
+
 as_status
 as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_policy* policy)
 {
-	bool custom_listener = policy->metrics_listeners.enable_listener != NULL;
-
-	if (custom_listener) {
-		// Ensure all listeners and user data has been defined.
-		if (! (policy->metrics_listeners.enable_listener && policy->metrics_listeners.snapshot_listener &&
-			   policy->metrics_listeners.node_close_listener &&  policy->metrics_listeners.disable_listener &&
-			   policy->metrics_listeners.udata)) {
-			return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "All metrics listeners and udata must be defined");
-		}
-	}
-
-	as_status status = AEROSPIKE_OK;
-
-	if (cluster->metrics_enabled) {
-		cluster->metrics_enabled = false;
-		status = cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
-
-		if (status != AEROSPIKE_OK) {
-			// Disabling old metrics should not prevent new metrics from being created.
-			// Log error and continue processing.
-			as_log_warn("Metrics disable error: %s %s", as_error_string(status), err->message);
-		}
-	}
-
-	as_error_reset(err);
-
-	if (custom_listener) {
-		// Copy listeners from policy.
-		cluster->metrics_listeners = policy->metrics_listeners;
-	}
-	else {
-		// Create default metrics writer and set cluster llsteners.
-		status = as_metrics_writer_create(err, policy, &cluster->metrics_listeners);
-		
-		if (status != AEROSPIKE_OK) {
-			return status;
-		}
-	}
-
-	cluster->metrics_interval = policy->interval;
-	cluster->metrics_latency_columns = policy->latency_columns;
-	cluster->metrics_latency_shift = policy->latency_shift;
-
-	as_nodes* nodes = as_nodes_reserve(cluster);
-	
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		as_node* node = nodes->array[i];
-		as_node_enable_metrics(node, policy);
-	}
-	as_nodes_release(nodes);
-
-	status = cluster->metrics_listeners.enable_listener(err, cluster->metrics_listeners.udata);
-	
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
-	cluster->metrics_enabled = true;
-	return status;
+	return as_metrics_runtime_enable(err, cluster, policy);
 }
 
 as_status
 as_cluster_disable_metrics(as_error* err, as_cluster* cluster)
 {
-	as_status status = AEROSPIKE_OK;
-	as_error_reset(err);
+	return as_metrics_runtime_disable(err, cluster);
+}
 
-	if (cluster->metrics_enabled) {
-		cluster->metrics_enabled = false;
-		status = cluster->metrics_listeners.disable_listener(err, cluster, cluster->metrics_listeners.udata);
+void
+as_cluster_enable_command_latency(as_cluster* cluster, const as_metrics_policy* policy)
+{
+	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+		if (policy->operational_enabled) {
+			as_latency_gc_init(cluster, &cluster->command_latency[i], policy);
+		}
+		else {
+			as_latency_gc_publish(cluster, &cluster->command_latency[i], NULL);
+		}
+	}
+}
+
+void
+as_cluster_disable_command_latency(as_cluster* cluster)
+{
+	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+		as_latency_gc_publish(cluster, &cluster->command_latency[i], NULL);
+	}
+}
+
+void
+as_cluster_add_command_latency(as_cluster* cluster, as_latency_type latency_type, uint64_t elapsed_nanos)
+{
+	if (!cluster) {
+		return;
 	}
 
-	return status;
+	as_latency_add(cluster->command_latency[latency_type], elapsed_nanos);
 }
 
 static void
@@ -691,7 +680,7 @@ as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_t
 		pthread_mutex_lock(&cluster->metrics_lock);
 
 		if (cluster->metrics_enabled) {
-			status = cluster->metrics_listeners.node_close_listener(&err, node, node->cluster->metrics_listeners.udata);
+			status = as_metrics_runtime_node_close(&err, cluster, node);
 		}
 		pthread_mutex_unlock(&cluster->metrics_lock);
 		
@@ -834,22 +823,9 @@ as_cluster_manage(as_cluster* cluster)
 
 	as_cluster_tend_recover_queue(cluster);
 
-	// Call metrics listener every metrics_interval when enabled.
+	// Periodic metrics export runs on the metrics thread, not during tend.
 	as_status status = AEROSPIKE_OK;
 	as_error err;
-	
-	pthread_mutex_lock(&cluster->metrics_lock);
-
-	if (cluster->metrics_enabled && cluster->tend_count % cluster->metrics_interval == 0) {
-		status = cluster->metrics_listeners.snapshot_listener(&err, cluster, cluster->metrics_listeners.udata);
-	}
-	pthread_mutex_unlock(&cluster->metrics_lock);
-
-	if (status != AEROSPIKE_OK) {
-		// Metrics failures should not interrupt cluster tend.
-		// Log warning and continue processing.
-		as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
-	}
 
 	const char* path = cluster->as->config.config_provider.path;
 	uint32_t config_interval = cluster->config_interval / cluster->tend_interval;
@@ -1749,12 +1725,25 @@ as_cluster_create(aerospike* as, as_error* err)
 
 	// Initialize metrics fields
 	cluster->metrics_enabled = false;
+	cluster->metrics_operational_enabled = false;
+	cluster->metrics_usage_enabled = false;
+	cluster->metrics_file_writer = false;
+	cluster->metrics_nodes_departed = NULL;
+	cluster->metrics_latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
 	cluster->metrics_interval = 0;
 	cluster->metrics_latency_columns = 0;
 	cluster->metrics_latency_shift = 0;
+	cluster->metrics_sampler_range = 1;
+	cluster->metrics_sampler_threshold = 1;
 	cluster->command_count = 0;
+	cluster->metrics_api_blocking = 0;
+	cluster->metrics_api_deferred = 0;
+	cluster->metrics_api_background = 0;
 	cluster->retry_count = 0;
 	cluster->delay_queue_timeout_count = 0;
+	cluster->metrics_validation_open_failures = 0;
+	cluster->metrics_validation_tls_handshake_failures = 0;
+	cluster->metrics_validation_auth_failures = 0;
 
 	cluster->as = as;
 
@@ -1846,6 +1835,14 @@ as_cluster_destroy(as_cluster* cluster)
 		pthread_mutex_unlock(&cluster->tend_lock);
 	}
 
+	if (cluster->metrics_runtime || cluster->metrics_enabled) {
+		as_error metrics_err;
+		pthread_mutex_lock(&cluster->metrics_lock);
+		as_metrics_runtime_disable(&metrics_err, cluster);
+		pthread_mutex_unlock(&cluster->metrics_lock);
+	}
+	as_metrics_departed_destroy(cluster);
+
 	// Shutdown thread pool.
 	int rc = as_thread_pool_destroy(&cluster->thread_pool);
 	
@@ -1858,8 +1855,12 @@ as_cluster_destroy(as_cluster* cluster)
 	as_vector_destroy(cluster->gc);
 		
 	// Flush and destroy the timeout recovery queue.
+	// Pending recover entries still own their sockets; abort closes them
+	// (SSL_free) before freeing the recover record. Destroy alone would
+	// orphan the SSL object.
 	as_conn_recover* cr;
 	while (as_queue_mt_pop(&cluster->recover_queue, &cr, AS_QUEUE_NOWAIT)) {
+		as_conn_recover_abort(cr);
 		as_conn_recover_destroy(cr);
 	}
 	as_queue_mt_destroy(&cluster->recover_queue);

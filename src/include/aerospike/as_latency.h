@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -38,6 +38,14 @@ typedef uint8_t as_latency_type;
 #define AS_LATENCY_TYPE_MAX 5
 
 /**
+ * Histogram bucket unit. Default is milliseconds, matching learn-metrics.
+ */
+typedef enum as_metrics_latency_unit_e {
+	AS_METRICS_LATENCY_MILLISECONDS = 0,
+	AS_METRICS_LATENCY_MICROSECONDS = 1
+} as_metrics_latency_unit;
+
+/**
  * Latency histogram for a command group.
  * Latency histogram counts are cumulative and not reset on each metrics snapshot interval
  */
@@ -45,6 +53,7 @@ typedef struct as_latency_s {
 	uint32_t ref_count;
 	uint8_t shift;
 	uint8_t size;
+	as_metrics_latency_unit unit;
 	uint64_t buckets[];
 } as_latency;
 
@@ -89,6 +98,39 @@ as_latency_get_bucket(as_latency* latency, uint32_t index)
  */
 AS_EXTERN char*
 as_latency_type_to_string(as_latency_type type);
+
+struct as_cluster_s;
+struct as_metrics_policy_s;
+
+/**
+ * @private
+ * Allocate a zeroed latency histogram. The caller owns the initial reference.
+ */
+as_latency*
+as_latency_create(uint8_t columns, uint8_t shift, as_metrics_latency_unit unit);
+
+/**
+ * @private
+ * Add one elapsed sample. No-op when latency is NULL.
+ */
+void
+as_latency_add(as_latency* latency, uint64_t elapsed_nanos);
+
+/**
+ * @private
+ * Publish slot and garbage-collect the previous histogram on cluster.
+ */
+void
+as_latency_gc_publish(struct as_cluster_s* cluster, as_latency** slot, as_latency* latency_new);
+
+/**
+ * @private
+ * Reset slot to the policy shape. See as_latency_gc_publish() when the histogram is replaced.
+ */
+void
+as_latency_gc_init(
+	struct as_cluster_s* cluster, as_latency** slot, const struct as_metrics_policy_s* policy
+	);
 
 #ifdef __cplusplus
 } // end extern "C"

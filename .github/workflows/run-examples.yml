@@ -122,7 +122,7 @@ jobs:
 
       - name: Start Aerospike server
         id: setup-aerospike
-        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@a9e883e43e0d4679ff1a250ea1ef577332a81722 # v3.8.0
+        uses: aerospike/shared-workflows/.github/actions/setup-aerospike-server@b4b1e9dc89314a2d542f9d6fe0ee150ad06f9860 # v5.0.0
         with:
           oidc-provider: ${{ vars.JFROG_OIDC_PROVIDER }}
           oidc-audience: ${{ vars.JFROG_OIDC_AUDIENCE }}

@@ -26,6 +26,7 @@
 #include <aerospike/as_error.h>
 #include <aerospike/as_exp.h>
 #include <aerospike/as_log_macros.h>
+#include <aerospike/as_metrics_internal.h>
 #include <aerospike/as_module.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
@@ -48,6 +49,20 @@
 //---------------------------------
 
 extern bool as_op_is_write[];
+
+// Skip feature.api. aerospike_query_foreach() and aerospike_query_async() already
+// incremented it, then convert the caller's as_query into an as_scan and call these.
+as_status
+aerospike_scan_foreach_internal(
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan,
+	aerospike_scan_foreach_callback callback, void* udata
+	);
+
+as_status
+aerospike_scan_async_internal(
+	aerospike* as, as_error* err, const as_policy_scan* policy, as_scan* scan, uint64_t* scan_id,
+	as_async_scan_listener listener, void* udata, as_event_loop* event_loop
+	);
 
 //---------------------------------
 // Types
@@ -1393,7 +1408,7 @@ as_query_command_execute_old(as_query_task* task)
 	cmd.policy = policy;
 	cmd.node = task->node;
 	cmd.key = NULL;       // Not referenced when node set.
-	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	// Must use global namespace due to reference equality logic in as_node_find_namespace().
 	cmd.ns = as_partition_tables_get_ns(task->cluster, task->query->ns);
 	cmd.partition = NULL; // Not referenced when node set.
 	cmd.parse_results_fn = as_query_parse_records;
@@ -1749,7 +1764,7 @@ as_query_partitions(
 	as_cluster* cluster, as_error* err, const as_policy_query* policy, const as_query* query,
 	as_partition_tracker* pt, aerospike_query_foreach_callback callback, void* udata)
 {
-	as_cluster_add_command_count(cluster);
+	bool sampled = as_cluster_add_command_count(cluster);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -1764,7 +1779,7 @@ as_query_partitions(
 
 		uint32_t n_nodes = pt->node_parts.size;
 
-		if (pt->iteration > 1) {
+		if (pt->iteration > 1 && sampled) {
 			as_cluster_add_retries(cluster, n_nodes);
 		}
 
@@ -1882,7 +1897,7 @@ as_query_partition_execute_async(
 	as_event_executor* ee = &qe->executor;
 	uint32_t n_nodes = pt->node_parts.size;
 
-	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	// Must use global namespace due to reference equality logic in as_node_find_namespace().
 	const char*	global_ns = as_partition_tables_get_ns(qe->cluster, qe->executor.ns);
 
 	for (uint32_t i = 0; i < n_nodes; i++) {
@@ -2012,6 +2027,7 @@ as_query_partition_execute_async(
 		cmd->ubuf = NULL;
 		cmd->ubuf_size = 0;
 		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
+		as_event_command_select_sample(cmd, false);
 		ee->commands[i] = cmd;
 	}
 
@@ -2050,7 +2066,7 @@ as_query_partition_async(
 	as_event_loop* event_loop
 	)
 {
-	as_cluster_add_command_count(cluster);
+	bool sampled = as_cluster_add_command_count(cluster);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, query->ns, err);
 
@@ -2124,6 +2140,7 @@ as_query_partition_async(
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
+	ee->metrics_sample_decision = sampled;
 
 	return as_query_partition_execute_async(qe, pt, err);
 }
@@ -2170,7 +2187,11 @@ as_query_partition_retry_async(as_async_query_executor* qe_old, as_error* err)
 	ee->queued = 0;
 	ee->notify = true;
 	ee->valid = true;
-	as_cluster_add_retry(qe->cluster);
+	ee->metrics_sample_decision = ee_old->metrics_sample_decision;
+
+	if (ee->metrics_sample_decision) {
+		as_cluster_add_retry(qe->cluster);
+	}
 
 	return as_query_partition_execute_async(qe, qe->pt, err);
 }
@@ -2268,6 +2289,17 @@ aerospike_query_foreach(
 	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
 	aerospike_query_foreach_callback callback, void* udata)
 {
+	as_metrics_add_api_blocking(as);
+	return aerospike_query_foreach_internal(as, err, policy, query, callback, udata);
+}
+
+// Skips feature.api.blocking. The public function increments it. The Node.js client
+// calls this and then increments deferred. See as_metrics_internal.h.
+as_status
+aerospike_query_foreach_internal(
+	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
+	aerospike_query_foreach_callback callback, void* udata)
+{
 	if (query->ops) {
 		if (query->apply.function[0]) {
 			return as_error_update(err, AEROSPIKE_ERR_PARAM,
@@ -2341,7 +2373,7 @@ aerospike_query_foreach(
 		as_scan scan;
 		convert_query_to_scan(policy, query, &scan_policy, &scan);
 
-		return aerospike_scan_foreach(as, err, &scan_policy, &scan, callback, udata);
+		return aerospike_scan_foreach_internal(as, err, &scan_policy, &scan, callback, udata);
 	}
 
 	as_nodes* nodes;
@@ -2445,6 +2477,8 @@ aerospike_query_partitions(
 	as_partition_filter* pf, aerospike_query_foreach_callback callback, void* udata
 	)
 {
+	as_metrics_add_api_blocking(as);
+
 	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");
@@ -2504,6 +2538,8 @@ aerospike_query_async(
 	aerospike* as, as_error* err, const as_policy_query* policy, as_query* query,
 	as_async_query_record_listener listener, void* udata, as_event_loop* event_loop)
 {
+	as_metrics_add_api_deferred(as);
+
 	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 			"Async aggregation or background queries are not supported");
@@ -2573,7 +2609,7 @@ aerospike_query_async(
 		as_scan scan;
 		convert_query_to_scan(policy, query, &scan_policy, &scan);
 
-		return aerospike_scan_async(as, err, &scan_policy, &scan, NULL, listener, udata, event_loop);
+		return aerospike_scan_async_internal(as, err, &scan_policy, &scan, NULL, listener, udata, event_loop);
 	}
 
 	uint64_t task_id = as_random_get_uint64();
@@ -2640,7 +2676,7 @@ aerospike_query_async(
 	// read to reuse buffer.
 	size_t s = (sizeof(as_async_query_command) + size + AS_AUTHENTICATION_MAX_SIZE + 8191) & ~8191;
 
-	// Must use global namespace due to reference equality logic in as_node_add_latency().
+	// Must use global namespace due to reference equality logic in as_node_find_namespace().
 	const char* global_ns = as_partition_tables_get_ns(cluster, query->ns);
 
 	// Create all query commands.
@@ -2677,6 +2713,7 @@ aerospike_query_async(
 		cmd->ubuf = NULL;
 		cmd->ubuf_size = 0;
 		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
+		as_event_command_select_sample(cmd, false);
 		memcpy(cmd->buf, cmd_buf, size);
 		exec->commands[i] = cmd;
 	}
@@ -2717,6 +2754,8 @@ aerospike_query_partitions_async(
 	as_event_loop* event_loop
 	)
 {
+	as_metrics_add_api_deferred(as);
+
 	if (query->apply.function[0] || as_operations_has_write(query->ops)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"Aggregation or background queries cannot query by partition");
@@ -2896,6 +2935,8 @@ aerospike_query_background(
 	aerospike* as, as_error* err, const as_policy_write* policy,
 	const as_query* query, uint64_t* query_id)
 {
+	as_metrics_add_api_background(as);
+
 	as_error_reset(err);
 	
 	as_policy_write merged;
@@ -2962,6 +3003,16 @@ aerospike_query_background(
 
 	as_cluster_release_all_nodes(nodes);
 	return status;
+}
+
+as_status
+aerospike_query_info(
+	aerospike* as, as_error* err, const as_policy_info* policy,
+	const as_query* query, uint64_t query_id, as_job_info* info
+	)
+{
+	const char* module = (query->where.size > 0)? "query" : "scan";
+	return aerospike_job_info(as, err, policy, module, query_id, false, info);
 }
 
 uint32_t

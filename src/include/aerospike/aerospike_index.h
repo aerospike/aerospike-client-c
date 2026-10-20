@@ -79,10 +79,10 @@ typedef enum as_index_type_s {
  */
 typedef enum as_index_datatype_s {
 	AS_INDEX_STRING,
-	AS_INDEX_INTEGER, // For use with server versions 8.1.3+. Use AS_INDEX_NUMERIC for server versions prior to 8.1.3.
+	AS_INDEX_INTEGER, // For use with server versions 8.2.0+. Use AS_INDEX_NUMERIC for server versions prior to 8.2.0.
 	AS_INDEX_GEO2DSPHERE,
 	AS_INDEX_BLOB, // Requires server version 7.0+.
-	AS_INDEX_NUMERIC, // For use with server versions prior to 8.1.3. Use AS_INDEX_INTEGER for server versions 8.1.3+.
+	AS_INDEX_NUMERIC, // For use with server versions prior to 8.2.0. Use AS_INDEX_INTEGER for server versions 8.2.0+.
 } as_index_datatype;
 
 /*

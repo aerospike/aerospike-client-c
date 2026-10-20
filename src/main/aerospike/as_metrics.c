@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -16,11 +16,46 @@
  */
 #include <aerospike/as_metrics.h>
 #include <aerospike/aerospike.h>
+#include <aerospike/aerospike_stats.h>
+#include <aerospike/as_address.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_config_file.h>
 #include <aerospike/as_event.h>
+#include <aerospike/as_log_macros.h>
+#include <aerospike/as_metrics_internal.h>
+#include <aerospike/as_metrics_writer.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_string_builder.h>
+#include <aerospike/as_thread.h>
+#include <aerospike/version.h>
+
+#include <citrusleaf/alloc.h>
+#include <citrusleaf/cf_clock.h>
+
+#include <errno.h>
+#include <limits.h>
+#include <stdint.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#if defined(__linux__)
+#include <sys/sysinfo.h>
+#include <unistd.h>
+#endif
+
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#include <unistd.h>
+#endif
+
+#if defined(_MSC_VER)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <Psapi.h>
+#endif
 
 //---------------------------------
 // Static Functions
@@ -48,9 +83,37 @@ as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_
 			cfg->enable : src->enable;
 
 		mrg->metrics_listeners = src->metrics_listeners;
-		as_strncpy(mrg->report_dir, src->report_dir, sizeof(mrg->report_dir));
-		mrg->report_size_limit = src->report_size_limit;
+		mrg->exporters = src->exporters;
+		as_strncpy(mrg->report_dir,
+			as_field_is_set(bitmap, AS_METRICS_REPORT_DIR) ? cfg->report_dir : src->report_dir,
+			sizeof(mrg->report_dir));
+		mrg->report_size_limit = as_field_is_set(bitmap, AS_METRICS_REPORT_SIZE_LIMIT) ?
+			cfg->report_size_limit : src->report_size_limit;
 		mrg->interval = src->interval;
+		as_strncpy(mrg->export_interval,
+			as_field_is_set(bitmap, AS_METRICS_EXPORT_INTERVAL) ?
+				cfg->export_interval : src->export_interval,
+			sizeof(mrg->export_interval));
+
+		// metrics.exporter file overrides an application report_dir that is empty
+		// only when metrics.report_dir is absent. An explicit "" stays empty.
+		if (as_field_is_set(bitmap, AS_METRICS_EXPORTER) &&
+				!as_field_is_set(bitmap, AS_METRICS_REPORT_DIR) &&
+				cfg->metrics_exporter == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+				mrg->report_dir[0] == '\0') {
+			as_strncpy(mrg->report_dir, ".", sizeof(mrg->report_dir));
+		}
+
+		mrg->latency_unit = as_field_is_set(bitmap, AS_METRICS_LATENCY_UNIT) ?
+			cfg->latency_unit : src->latency_unit;
+		mrg->operational_enabled = as_field_is_set(bitmap, AS_METRICS_OPERATIONAL) ?
+			cfg->operational_enabled : src->operational_enabled;
+		mrg->usage_enabled = as_field_is_set(bitmap, AS_METRICS_USAGE) ?
+			cfg->usage_enabled : src->usage_enabled;
+		mrg->sampler_range = as_field_is_set(bitmap, AS_METRICS_SAMPLER_RANGE) ?
+			cfg->sampler_range : src->sampler_range;
+		mrg->sampler_threshold = as_field_is_set(bitmap, AS_METRICS_SAMPLER_THRESHOLD) ?
+			cfg->sampler_threshold : src->sampler_threshold;
 		return mrg;
 	}
 	else {
@@ -106,6 +169,21 @@ aerospike_disable_metrics(aerospike* as, as_error* err)
 	return status;
 }
 
+as_status
+as_metrics_policy_set_sampler_probability(as_error* err, as_metrics_policy* policy, double probability)
+{
+	// NaN fails both comparisons, so it is rejected with the out-of-range values.
+	if (!(probability >= 0.0 && probability <= 1.0)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid metrics sampler probability: must be from 0 through 1");
+	}
+
+	as_error_reset(err);
+	policy->sampler_range = 1000000;
+	policy->sampler_threshold = (uint32_t)(probability * 1000000.0 + 0.5);
+	return AEROSPIKE_OK;
+}
+
 void
 as_metrics_policy_init(as_metrics_policy* policy)
 {
@@ -113,20 +191,34 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->report_size_limit = 0;
 	as_strncpy(policy->report_dir, ".", sizeof(policy->report_dir));
 	policy->interval = 30;
+	policy->export_interval[0] = '\0';
 	policy->latency_columns = 7;
 	policy->latency_shift = 1;
+	policy->latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
+	policy->operational_enabled = false;
+	policy->usage_enabled = false;
+	policy->sampler_range = 1;
+	policy->sampler_threshold = 1;
 	policy->metrics_listeners.enable_listener = NULL;
 	policy->metrics_listeners.snapshot_listener = NULL;
 	policy->metrics_listeners.node_close_listener = NULL;
 	policy->metrics_listeners.disable_listener = NULL;
 	policy->metrics_listeners.udata = NULL;
 	policy->enable = false;
+	policy->metrics_exporter = AS_METRICS_BUILTIN_EXPORTER_FILE;
+	policy->exporters = NULL;
 }
 
 void
 as_metrics_policy_destroy(as_metrics_policy* policy)
 {
 	as_metrics_policy_destroy_labels(policy);
+
+	if (policy->exporters) {
+		// Exporter objects are owned by the application.
+		as_vector_destroy(policy->exporters);
+		policy->exporters = NULL;
+	}
 }
 
 void
@@ -226,4 +318,1414 @@ as_metrics_policy_add_label(as_metrics_policy* policy, const char* name, const c
 	label.value = cf_strdup(value);
 
 	as_vector_append(policy->labels, &label);
+}
+
+//---------------------------------
+// Snapshot and export runtime
+//---------------------------------
+
+#define AS_METRICS_EXPORTER_MAX_FAILURES 3
+#define AS_METRICS_EXPORTER_SUSPEND_CYCLES 3
+
+extern char* aerospike_client_language;
+
+typedef struct as_metrics_exporter_slot_s {
+	as_metrics_exporter* exporter;
+	uint32_t consecutive_failures;
+	uint32_t suspend_remaining;
+	bool owned;
+} as_metrics_exporter_slot;
+
+#if defined(_MSC_VER)
+struct as_metrics_cpu_state_s {
+	FILETIME prev_process_times_kernel;
+	FILETIME prev_system_times_kernel;
+	FILETIME prev_process_times_user;
+	FILETIME prev_system_times_user;
+	HANDLE process;
+	DWORD pid;
+};
+#endif
+
+typedef struct as_metrics_runtime_s as_metrics_runtime;
+
+struct as_metrics_runtime_s {
+	as_cluster* cluster;
+	as_vector* slots;
+	as_vector* labels;
+	as_metrics_cpu_state* cpu;
+	pthread_t thread;
+	pthread_mutex_t lock;
+	pthread_cond_t cond;
+	bool thread_running;
+};
+
+static as_status as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool force, as_error* err);
+static void as_metrics_runtime_free(as_metrics_runtime* rt);
+static void as_metrics_snapshot_clone_nodes_departed(const as_cluster* cluster, as_metrics_snapshot* snap);
+
+#if defined(__linux__)
+static as_status
+as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cpu_usage, uint64_t* mem)
+{
+	(void)state;
+	FILE* proc_stat = fopen("/proc/self/stat", "r");
+
+	if (!proc_stat) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating memory and CPU usage");
+	}
+
+	uint64_t utime, stime;
+	long long unsigned int starttime;
+	int64_t rss;
+	int matched = fscanf(proc_stat,
+		"%*d %*s %*s %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %lu %lu %*d %*d %*d %*d %*d %*d %llu %*u %ld",
+		&utime, &stime, &starttime, &rss);
+
+	fclose(proc_stat);
+
+	if (matched == 0) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating memory and CPU usage");
+	}
+
+	// rss is resident pages, not VmSize. cluster.memory.bytes is that RSS in bytes.
+	long page_size = sysconf(_SC_PAGE_SIZE);
+
+	if (rss < 0 || page_size <= 0) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating memory usage");
+	}
+
+	double mem_bytes = (double)rss * (double)page_size;
+	float u_time_sec = utime / sysconf(_SC_CLK_TCK);
+	float s_time_sec = stime / sysconf(_SC_CLK_TCK);
+	float start_time_sec = starttime / sysconf(_SC_CLK_TCK);
+
+	struct sysinfo info;
+
+	if (sysinfo(&info) != 0) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating CPU usage");
+	}
+
+	double cpu_usage_d = (u_time_sec + s_time_sec) / (info.uptime - start_time_sec) * 100;
+	cpu_usage_d = cpu_usage_d + 0.5 - (cpu_usage_d < 0);
+	*cpu_usage = (uint32_t)cpu_usage_d;
+	*mem = (uint64_t)mem_bytes;
+	return AEROSPIKE_OK;
+}
+#elif defined(__APPLE__)
+static double
+as_metrics_process_mem_usage(void)
+{
+	struct task_basic_info t_info;
+	mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT;
+
+	if (KERN_SUCCESS != task_info(mach_task_self(), TASK_BASIC_INFO, (task_info_t)&t_info, &t_info_count)) {
+		return -1.0;
+	}
+	return t_info.resident_size;
+}
+
+static double
+as_metrics_process_cpu_load(void)
+{
+	pid_t pid = getpid();
+	as_string_builder sb;
+	as_string_builder_inita(&sb, 128, false);
+	as_string_builder_append(&sb, "ps -p ");
+	as_string_builder_append_int(&sb, pid);
+	as_string_builder_append(&sb, " -o %cpu");
+
+	FILE* file = popen(sb.data, "r");
+
+	if (!file) {
+		return -1.0;
+	}
+
+	char cpu_holder[5];
+	char cpu_percent[6];
+
+	if (!fgets(cpu_holder, sizeof(cpu_holder), file)) {
+		pclose(file);
+		return 0.0;
+	}
+
+	if (!fgets(cpu_percent, sizeof(cpu_percent), file)) {
+		pclose(file);
+		return 0.0;
+	}
+
+	pclose(file);
+	return atof(cpu_percent);
+}
+
+static as_status
+as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cpu_usage, uint64_t* mem)
+{
+	(void)state;
+	double cpu_usage_d = as_metrics_process_cpu_load();
+	double mem_d = as_metrics_process_mem_usage();
+
+	if (cpu_usage_d < 0) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating CPU usage");
+	}
+
+	if (mem_d < 0) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating memory usage");
+	}
+
+	*cpu_usage = (uint32_t)(cpu_usage_d + 0.5);
+	*mem = (uint64_t)(mem_d + 0.5);
+	return AEROSPIKE_OK;
+}
+#elif defined(_MSC_VER)
+static ULONGLONG
+as_metrics_filetime_difference(FILETIME* prev_kernel, FILETIME* prev_user, FILETIME* cur_kernel, FILETIME* cur_user)
+{
+	LARGE_INTEGER prev_kernel_time;
+	prev_kernel_time.LowPart = prev_kernel->dwLowDateTime;
+	prev_kernel_time.HighPart = prev_kernel->dwHighDateTime;
+
+	LARGE_INTEGER prev_user_time;
+	prev_user_time.LowPart = prev_user->dwLowDateTime;
+	prev_user_time.HighPart = prev_user->dwHighDateTime;
+
+	LARGE_INTEGER cur_kernel_time;
+	cur_kernel_time.LowPart = cur_kernel->dwLowDateTime;
+	cur_kernel_time.HighPart = cur_kernel->dwHighDateTime;
+
+	LARGE_INTEGER cur_user_time;
+	cur_user_time.LowPart = cur_user->dwLowDateTime;
+	cur_user_time.HighPart = cur_user->dwHighDateTime;
+
+	return (cur_kernel_time.QuadPart - prev_kernel_time.QuadPart) +
+		(cur_user_time.QuadPart - prev_user_time.QuadPart);
+}
+
+static as_status
+as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cpu_usage, uint64_t* mem)
+{
+	if (!state || !state->process) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating CPU usage");
+	}
+
+	FILETIME dummy;
+	FILETIME process_times_kernel, process_times_user, system_times_kernel, system_times_user;
+
+	if (GetProcessTimes(state->process, &dummy, &dummy, &process_times_kernel, &process_times_user) == 0) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating CPU usage");
+	}
+
+	if (GetSystemTimes(0, &system_times_kernel, &system_times_user) == 0) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating CPU usage");
+	}
+
+	ULONGLONG proc = as_metrics_filetime_difference(&state->prev_process_times_kernel, &state->prev_process_times_user,
+		&process_times_kernel, &process_times_user);
+	ULONGLONG system = as_metrics_filetime_difference(&state->prev_system_times_kernel, &state->prev_system_times_user,
+		&system_times_kernel, &system_times_user);
+	double usage = 0.0;
+
+	if (system != 0) {
+		usage = 100.0 * (proc / (double)system);
+	}
+
+	state->prev_process_times_kernel = process_times_kernel;
+	state->prev_process_times_user = process_times_user;
+	state->prev_system_times_kernel = system_times_kernel;
+	state->prev_system_times_user = system_times_user;
+	usage = usage + 0.5 - (usage < 0);
+	*cpu_usage = (uint32_t)usage;
+
+	PROCESS_MEMORY_COUNTERS mem_counter;
+	GetProcessMemoryInfo(GetCurrentProcess(), &mem_counter, sizeof(mem_counter));
+	*mem = (uint64_t)mem_counter.WorkingSetSize;
+	return AEROSPIKE_OK;
+}
+#else
+static as_status
+as_metrics_read_cpu_mem(as_error* err, as_metrics_cpu_state* state, uint32_t* cpu_usage, uint64_t* mem)
+{
+	(void)state;
+	(void)cpu_usage;
+	(void)mem;
+	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Error calculating memory and CPU usage");
+}
+#endif
+
+as_metrics_cpu_state*
+as_metrics_cpu_state_create(void)
+{
+#if defined(_MSC_VER)
+	as_metrics_cpu_state* state = cf_calloc(1, sizeof(as_metrics_cpu_state));
+	state->pid = GetCurrentProcessId();
+	state->process = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, state->pid);
+
+	if (state->process != NULL) {
+		FILETIME dummy;
+		GetProcessTimes(state->process, &dummy, &dummy, &state->prev_process_times_kernel, &state->prev_process_times_user);
+		GetSystemTimes(0, &state->prev_system_times_kernel, &state->prev_system_times_user);
+	}
+	return state;
+#else
+	// Linux and macOS read CPU and memory directly. They do not keep samples between snapshots.
+	return NULL;
+#endif
+}
+
+void
+as_metrics_cpu_state_destroy(as_metrics_cpu_state* state)
+{
+	if (!state) {
+		return;
+	}
+#if defined(_MSC_VER)
+	if (state->process) {
+		CloseHandle(state->process);
+	}
+#endif
+	cf_free(state);
+}
+
+static char*
+as_metrics_strdup_or_empty(const char* value)
+{
+	return cf_strdup(value ? value : "");
+}
+
+static void
+as_metrics_conn_from_stats(as_metrics_conn_snapshot* dst, const as_conn_stats* src)
+{
+	dst->in_use = src->in_use;
+	dst->in_pool = src->in_pool;
+	dst->opened = src->opened;
+	dst->closed = src->closed;
+	dst->recovered = src->recovered;
+	dst->aborted = src->aborted;
+}
+
+static struct tm*
+as_metrics_localtime(const time_t* now, struct tm* out)
+{
+#if defined(_MSC_VER)
+	return localtime_s(out, now) == 0 ? out : NULL;
+#else
+	return localtime_r(now, out);
+#endif
+}
+
+void
+as_metrics_timestamp(char* str, size_t str_size)
+{
+	time_t now = time(NULL);
+	struct tm storage;
+	struct tm* local = as_metrics_localtime(&now, &storage);
+
+	if (!local) {
+		snprintf(str, str_size, "0000-00-00 00:00:00");
+		return;
+	}
+
+	snprintf(str, str_size,
+		"%4d-%02d-%02d %02d:%02d:%02d",
+		1900 + local->tm_year, local->tm_mon + 1, local->tm_mday,
+		local->tm_hour, local->tm_min, local->tm_sec);
+}
+
+void
+as_metrics_node_snapshot_destroy(as_metrics_node_snapshot* snapshot)
+{
+	if (!snapshot) {
+		return;
+	}
+
+	cf_free(snapshot->name);
+	cf_free(snapshot->address);
+
+	if (snapshot->namespaces) {
+		for (uint32_t i = 0; i < snapshot->namespace_count; i++) {
+			as_metrics_namespace_snapshot* ns = &snapshot->namespaces[i];
+			cf_free(ns->name);
+
+			for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
+				cf_free(ns->latencies[j].buckets);
+			}
+		}
+		cf_free(snapshot->namespaces);
+	}
+	cf_free(snapshot);
+}
+
+static void
+as_metrics_copy_latency(as_metrics_latency_snapshot* dst, as_latency* latency, uint8_t type)
+{
+	dst->type = type;
+
+	if (!latency) {
+		return;
+	}
+
+	latency = as_latency_reserve(latency);
+	uint8_t size = latency->size;
+
+	if (size > 0) {
+		uint64_t* buckets = cf_malloc(sizeof(uint64_t) * size);
+
+		for (uint8_t k = 0; k < size; k++) {
+			buckets[k] = as_latency_get_bucket(latency, k);
+		}
+		dst->buckets = buckets;
+		dst->bucket_count = size;
+	}
+	as_latency_release(latency);
+}
+
+static void
+as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics_node_snapshot** snapshot)
+{
+	as_metrics_node_snapshot* snap = cf_calloc(1, sizeof(as_metrics_node_snapshot));
+	snap->name = as_metrics_strdup_or_empty(node->name);
+
+	as_address* address = as_node_get_address(node);
+	struct sockaddr* addr = (struct sockaddr*)&address->addr;
+	char address_name[AS_IP_ADDRESS_SIZE];
+	as_address_short_name(addr, address_name, sizeof(address_name));
+	snap->address = as_metrics_strdup_or_empty(address_name);
+	snap->port = as_address_port(addr);
+
+	as_conn_stats sync_stats;
+	as_conn_stats async_stats;
+	as_conn_stats_init(&sync_stats);
+	as_conn_stats_init(&async_stats);
+
+	uint32_t max = node->cluster->conn_pools_per_node;
+
+	for (uint32_t i = 0; i < max; i++) {
+		as_conn_pool* pool = &node->sync_conn_pools[i];
+
+		pthread_mutex_lock(&pool->lock);
+		uint32_t in_pool = as_queue_size(&pool->queue);
+		uint32_t total = pool->queue.total;
+		pthread_mutex_unlock(&pool->lock);
+
+		sync_stats.in_pool += in_pool;
+		sync_stats.in_use += total - in_pool;
+	}
+	sync_stats.opened = as_node_get_sync_conns_opened(node);
+	sync_stats.closed = as_node_get_sync_conns_closed(node);
+	sync_stats.recovered = as_node_get_sync_conns_recovered(node);
+	sync_stats.aborted = as_node_get_sync_conns_aborted(node);
+	as_metrics_conn_from_stats(&snap->sync, &sync_stats);
+
+	for (uint32_t i = 0; i < as_event_loop_size; i++) {
+		as_conn_stats_sum(&async_stats, &node->async_conn_pools[i]);
+	}
+	as_metrics_conn_from_stats(&snap->async, &async_stats);
+
+	if (node->cluster->metrics_operational_enabled) {
+		snap->conn_open_failures = as_load_uint32(&node->conn_open_failures);
+		snap->conn_tls_handshake_failures = as_load_uint32(&node->conn_tls_handshake_failures);
+		snap->conn_auth_failures = as_load_uint32(&node->conn_auth_failures);
+	}
+
+	uint8_t ns_max = 0;
+	// The file log and metrics listeners read per-attempt namespace histograms.
+	// Keep them when operational metrics are off so those readers are not broken.
+	bool should_copy_attempt_latencies = file_fields || node->cluster->metrics_listeners.snapshot_listener != NULL;
+	bool should_copy_namespace_metrics = node->cluster->metrics_enabled &&
+		(node->cluster->metrics_operational_enabled || should_copy_attempt_latencies);
+
+	if (should_copy_namespace_metrics) {
+		ns_max = node->metrics_size;
+	}
+
+	if (ns_max > 0) {
+		snap->namespaces = cf_calloc(ns_max, sizeof(as_metrics_namespace_snapshot));
+	}
+
+	for (uint8_t i = 0; i < ns_max; i++) {
+		as_ns_metrics* metrics = node->metrics[i];
+
+		if (!metrics) {
+			continue;
+		}
+
+		as_metrics_namespace_snapshot* ns = &snap->namespaces[snap->namespace_count];
+		ns->name = as_metrics_strdup_or_empty(metrics->ns);
+		ns->record_too_big = as_load_uint64(&metrics->record_too_big_count);
+		ns->device_overload = as_load_uint64(&metrics->device_overload_count);
+		ns->errors = as_node_get_error_count(metrics) - ns->record_too_big - ns->device_overload;
+		ns->client_timeouts = as_load_uint64(&metrics->client_timeout_count);
+		ns->server_timeouts = as_load_uint64(&metrics->server_timeout_count);
+		ns->key_busy = as_node_get_key_busy_count(metrics);
+		ns->bytes_in = as_node_get_bytes_in(metrics);
+		ns->bytes_out = as_node_get_bytes_out(metrics);
+
+		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
+			if (should_copy_attempt_latencies) {
+				as_metrics_copy_latency(&ns->latencies[j], metrics->latency[j], j);
+			}
+		}
+		snap->namespace_count++;
+	}
+
+	*snapshot = snap;
+}
+
+void
+as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapshot)
+{
+	as_metrics_node_snapshot_create_impl(node, false, snapshot);
+}
+
+void
+as_metrics_node_snapshot_create_file(as_node* node, as_metrics_node_snapshot** snapshot)
+{
+	as_metrics_node_snapshot_create_impl(node, true, snapshot);
+}
+
+void
+as_metrics_snapshot_destroy(as_metrics_snapshot* snapshot)
+{
+	if (!snapshot) {
+		return;
+	}
+
+	cf_free(snapshot->cluster_name);
+	cf_free(snapshot->client_type);
+	cf_free(snapshot->client_version);
+	cf_free(snapshot->app_id);
+
+	if (snapshot->labels) {
+		for (uint32_t i = 0; i < snapshot->label_count; i++) {
+			cf_free(snapshot->labels[i].name);
+			cf_free(snapshot->labels[i].value);
+		}
+		cf_free(snapshot->labels);
+	}
+
+	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+		cf_free(snapshot->command_latencies[i].buckets);
+	}
+
+	cf_free(snapshot->event_loops);
+
+	if (snapshot->nodes) {
+		for (uint32_t i = 0; i < snapshot->nodes_count; i++) {
+			as_metrics_node_snapshot_destroy(snapshot->nodes[i]);
+		}
+		cf_free(snapshot->nodes);
+	}
+
+	if (snapshot->nodes_departed) {
+		for (uint32_t i = 0; i < snapshot->nodes_departed_count; i++) {
+			as_metrics_node_snapshot_destroy(snapshot->nodes_departed[i]);
+		}
+		cf_free(snapshot->nodes_departed);
+	}
+	cf_free(snapshot);
+}
+
+static as_status
+as_metrics_snapshot_create_impl(
+	as_error* err, as_cluster* cluster, as_vector* labels, as_metrics_cpu_state* cpu,
+	bool file_fields, as_metrics_snapshot** snapshot
+	)
+{
+	*snapshot = NULL;
+	bool operational = cluster->metrics_enabled && cluster->metrics_operational_enabled;
+	bool should_read_cpu_mem = cluster->metrics_enabled &&
+		(cluster->metrics_operational_enabled || file_fields);
+	uint32_t cpu_usage = 0;
+	uint64_t mem = 0;
+
+	if (should_read_cpu_mem) {
+		as_status status = as_metrics_read_cpu_mem(err, cpu, &cpu_usage, &mem);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
+	as_metrics_snapshot* snap = cf_calloc(1, sizeof(as_metrics_snapshot));
+	as_metrics_timestamp(snap->timestamp, sizeof(snap->timestamp));
+	snap->metrics_enabled = cluster->metrics_enabled;
+	snap->operational_metrics_enabled = operational;
+	snap->usage_metrics_enabled = cluster->metrics_enabled && cluster->metrics_usage_enabled;
+	snap->cluster_name = as_metrics_strdup_or_empty(cluster->cluster_name);
+	snap->client_type = as_metrics_strdup_or_empty(aerospike_client_language);
+	snap->client_version = as_metrics_strdup_or_empty(aerospike_client_version);
+	snap->app_id = as_metrics_strdup_or_empty(cluster->app_id);
+	snap->cpu = cpu_usage;
+	snap->mem = mem;
+	snap->invalid_node_count = cluster->invalid_node_count;
+
+	if (operational) {
+		snap->validation_open_failures = as_load_uint32(&cluster->metrics_validation_open_failures);
+		snap->validation_tls_handshake_failures =
+			as_load_uint32(&cluster->metrics_validation_tls_handshake_failures);
+		snap->validation_auth_failures = as_load_uint32(&cluster->metrics_validation_auth_failures);
+	}
+	snap->recover_queue_size = as_cluster_recover_queue_size(cluster);
+	snap->delay_queue_timeout_count = as_cluster_get_delay_queue_timeout_count(cluster);
+	snap->command_count = as_cluster_get_command_count(cluster);
+	snap->retry_count = as_cluster_get_retry_count(cluster);
+	snap->api_blocking = as_load_uint64(&cluster->metrics_api_blocking);
+	snap->api_deferred = as_load_uint64(&cluster->metrics_api_deferred);
+	snap->api_background = as_load_uint64(&cluster->metrics_api_background);
+	snap->latency_unit = cluster->metrics_latency_unit;
+	snap->latency_columns = cluster->metrics_latency_columns;
+	snap->latency_shift = cluster->metrics_latency_shift;
+
+	// Command latency spans retries, which can change nodes, so it is copied
+	// once for the cluster. The learn-metrics file does not write this series.
+	if (operational && !file_fields) {
+		for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
+			as_metrics_copy_latency(&snap->command_latencies[i], cluster->command_latency[i], i);
+		}
+	}
+
+	if (labels && labels->size > 0) {
+		snap->labels = cf_calloc(labels->size, sizeof(as_metrics_label));
+		snap->label_count = labels->size;
+
+		for (uint32_t i = 0; i < labels->size; i++) {
+			as_metrics_label* label = as_vector_get(labels, i);
+			snap->labels[i].name = as_metrics_strdup_or_empty(label->name);
+			snap->labels[i].value = as_metrics_strdup_or_empty(label->value);
+		}
+	}
+
+	if (as_event_loop_size > 0) {
+		snap->event_loops = cf_calloc(as_event_loop_size, sizeof(as_metrics_event_loop_snapshot));
+		snap->event_loop_count = as_event_loop_size;
+
+		for (uint32_t i = 0; i < as_event_loop_size; i++) {
+			as_event_loop* loop = &as_event_loops[i];
+			snap->event_loops[i].process_size = as_event_loop_get_process_size(loop);
+			snap->event_loops[i].queue_size = as_event_loop_get_queue_size(loop);
+		}
+	}
+
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	snap->nodes_count = nodes->size;
+
+	if (nodes->size > 0) {
+		snap->nodes = cf_calloc(nodes->size, sizeof(as_metrics_node_snapshot*));
+	}
+
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_metrics_node_snapshot* node_snap = NULL;
+		as_metrics_node_snapshot_create_impl(nodes->array[i], file_fields, &node_snap);
+		snap->nodes[i] = node_snap;
+	}
+	as_nodes_release(nodes);
+	*snapshot = snap;
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_metrics_snapshot_create(
+	as_error* err, as_cluster* cluster, as_vector* labels, as_metrics_cpu_state* cpu,
+	as_metrics_snapshot** snapshot
+	)
+{
+	return as_metrics_snapshot_create_impl(err, cluster, labels, cpu, false, snapshot);
+}
+
+as_status
+as_metrics_snapshot_create_file(
+	as_error* err, as_cluster* cluster, as_vector* labels, as_metrics_cpu_state* cpu,
+	as_metrics_snapshot** snapshot
+	)
+{
+	return as_metrics_snapshot_create_impl(err, cluster, labels, cpu, true, snapshot);
+}
+
+as_status
+aerospike_get_metrics_snapshot(aerospike* as, as_error* err, as_metrics_snapshot** snapshot)
+{
+	as_error_reset(err);
+
+	if (!as || !as->cluster) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster not initialized");
+	}
+
+	as_cluster* cluster = as->cluster;
+	pthread_mutex_lock(&cluster->metrics_lock);
+
+	as_metrics_runtime* rt = cluster->metrics_runtime;
+	as_vector* labels = NULL;
+	as_metrics_cpu_state* cpu = NULL;
+
+	if (rt) {
+		labels = rt->labels;
+		cpu = rt->cpu;
+	}
+	else {
+		as_config* config = aerospike_load_config(as);
+		labels = config->policies.metrics.labels;
+	}
+
+	as_status status = as_metrics_snapshot_create(err, cluster, labels, cpu, snapshot);
+
+	if (status == AEROSPIKE_OK) {
+		as_metrics_snapshot_clone_nodes_departed(cluster, *snapshot);
+	}
+	pthread_mutex_unlock(&cluster->metrics_lock);
+	return status;
+}
+
+#define AS_METRICS_NODES_DEPARTED_MAX 256
+
+// Returns a heap copy of src->buckets that the caller owns, or NULL when src
+// has none.
+static uint64_t*
+as_metrics_clone_latency_buckets(const as_metrics_latency_snapshot* src)
+{
+	if (src->bucket_count == 0 || !src->buckets) {
+		return NULL;
+	}
+
+	size_t size = sizeof(uint64_t) * src->bucket_count;
+	uint64_t* buckets = cf_malloc(size);
+	memcpy(buckets, src->buckets, size);
+	return buckets;
+}
+
+// dst must be uninitialized. It receives its own copies of the name and buckets.
+static void
+as_metrics_copy_namespace_snapshot(
+	as_metrics_namespace_snapshot* dst, const as_metrics_namespace_snapshot* src
+	)
+{
+	*dst = *src;
+	dst->name = as_metrics_strdup_or_empty(src->name);
+
+	for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
+		dst->latencies[j].buckets = as_metrics_clone_latency_buckets(&src->latencies[j]);
+	}
+}
+
+static as_metrics_node_snapshot*
+as_metrics_node_snapshot_clone(const as_metrics_node_snapshot* src)
+{
+	as_metrics_node_snapshot* dst = cf_malloc(sizeof(as_metrics_node_snapshot));
+
+	memcpy(dst, src, sizeof(as_metrics_node_snapshot));
+	dst->name = as_metrics_strdup_or_empty(src->name);
+	dst->address = as_metrics_strdup_or_empty(src->address);
+	dst->namespaces = NULL;
+
+	if (src->namespace_count == 0 || !src->namespaces) {
+		dst->namespace_count = 0;
+		return dst;
+	}
+
+	dst->namespaces = cf_malloc(sizeof(as_metrics_namespace_snapshot) * src->namespace_count);
+
+	for (uint32_t i = 0; i < src->namespace_count; i++) {
+		as_metrics_copy_namespace_snapshot(&dst->namespaces[i], &src->namespaces[i]);
+	}
+	return dst;
+}
+
+static int
+as_metrics_departed_find(as_vector* departed, const char* name)
+{
+	if (!departed || !name) {
+		return -1;
+	}
+
+	for (uint32_t i = 0; i < departed->size; i++) {
+		as_metrics_node_snapshot* snap = as_vector_get_ptr(departed, i);
+
+		if (snap && snap->name && strcmp(snap->name, name) == 0) {
+			return (int)i;
+		}
+	}
+	return -1;
+}
+
+static void
+as_metrics_departed_clear(as_cluster* cluster)
+{
+	as_vector* departed = cluster->metrics_nodes_departed;
+
+	if (!departed) {
+		return;
+	}
+
+	for (uint32_t i = 0; i < departed->size; i++) {
+		as_metrics_node_snapshot* snap = as_vector_get_ptr(departed, i);
+
+		as_metrics_node_snapshot_destroy(snap);
+	}
+	as_vector_clear(departed);
+}
+
+static void
+as_metrics_snapshot_clone_nodes_departed(const as_cluster* cluster, as_metrics_snapshot* snap)
+{
+	as_vector* departed = cluster->metrics_nodes_departed;
+
+	if (!departed || departed->size == 0) {
+		return;
+	}
+
+	uint32_t n = departed->size;
+	snap->nodes_departed_possibly_truncated = n >= AS_METRICS_NODES_DEPARTED_MAX;
+	snap->nodes_departed = cf_malloc(sizeof(as_metrics_node_snapshot*) * n);
+
+	for (uint32_t i = 0; i < n; i++) {
+		as_metrics_node_snapshot* src = as_vector_get_ptr(departed, i);
+
+		snap->nodes_departed[i] = as_metrics_node_snapshot_clone(src);
+	}
+	snap->nodes_departed_count = n;
+}
+
+// Buckets from a different histogram layout cannot be added, so the newer
+// final keeps its own. Copies src buckets when dst has none.
+static void
+as_metrics_add_latency_buckets(
+	as_metrics_latency_snapshot* dst, const as_metrics_latency_snapshot* src
+	)
+{
+	if (!src->buckets) {
+		return;
+	}
+
+	if (!dst->buckets) {
+		dst->buckets = as_metrics_clone_latency_buckets(src);
+		dst->bucket_count = src->bucket_count;
+		return;
+	}
+
+	if (dst->bucket_count != src->bucket_count) {
+		return;
+	}
+
+	for (uint8_t k = 0; k < dst->bucket_count; k++) {
+		dst->buckets[k] += src->buckets[k];
+	}
+}
+
+static void
+as_metrics_add_conn_counts(as_metrics_conn_snapshot* dst, const as_metrics_conn_snapshot* src)
+{
+	// in_use and in_pool are gauges. The newer final keeps its own.
+	dst->opened += src->opened;
+	dst->closed += src->closed;
+	dst->recovered += src->recovered;
+	dst->aborted += src->aborted;
+}
+
+static void
+as_metrics_add_namespace_counts(
+	as_metrics_namespace_snapshot* dst, const as_metrics_namespace_snapshot* src
+	)
+{
+	dst->errors += src->errors;
+	dst->client_timeouts += src->client_timeouts;
+	dst->server_timeouts += src->server_timeouts;
+	dst->key_busy += src->key_busy;
+	dst->record_too_big += src->record_too_big;
+	dst->device_overload += src->device_overload;
+	dst->bytes_in += src->bytes_in;
+	dst->bytes_out += src->bytes_out;
+
+	for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
+		as_metrics_add_latency_buckets(&dst->latencies[j], &src->latencies[j]);
+	}
+}
+
+static as_metrics_namespace_snapshot*
+as_metrics_find_namespace_snapshot(as_metrics_node_snapshot* snap, const char* name)
+{
+	for (uint32_t i = 0; i < snap->namespace_count; i++) {
+		as_metrics_namespace_snapshot* ns = &snap->namespaces[i];
+
+		if (strcmp(ns->name, name) == 0) {
+			return ns;
+		}
+	}
+	return NULL;
+}
+
+// A rejoined node is a new as_node with counters at zero. Add the pending final
+// into the new final so the node keeps one entry that spans each stint.
+// Identity and gauges come from snap.
+static void
+as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, const as_metrics_node_snapshot* prev)
+{
+	as_metrics_add_conn_counts(&snap->sync, &prev->sync);
+	as_metrics_add_conn_counts(&snap->async, &prev->async);
+	snap->conn_open_failures += prev->conn_open_failures;
+	snap->conn_tls_handshake_failures += prev->conn_tls_handshake_failures;
+	snap->conn_auth_failures += prev->conn_auth_failures;
+
+	for (uint32_t i = 0; i < prev->namespace_count; i++) {
+		const as_metrics_namespace_snapshot* src = &prev->namespaces[i];
+		as_metrics_namespace_snapshot* dst = as_metrics_find_namespace_snapshot(snap, src->name);
+
+		if (dst) {
+			as_metrics_add_namespace_counts(dst, src);
+			continue;
+		}
+
+		size_t size = sizeof(as_metrics_namespace_snapshot) * (snap->namespace_count + 1);
+		snap->namespaces = cf_realloc(snap->namespaces, size);
+		as_metrics_copy_namespace_snapshot(&snap->namespaces[snap->namespace_count], src);
+		snap->namespace_count++;
+	}
+}
+
+// Caller holds cluster->metrics_lock.
+static void
+as_metrics_departed_add(as_cluster* cluster, as_node* node)
+{
+	as_metrics_node_snapshot* snap = NULL;
+	as_metrics_node_snapshot_create(node, &snap);
+
+	if (!cluster->metrics_nodes_departed) {
+		cluster->metrics_nodes_departed = as_vector_create(sizeof(as_metrics_node_snapshot*), 4);
+	}
+
+	as_vector* departed = cluster->metrics_nodes_departed;
+	int existing_node_idx = as_metrics_departed_find(departed, snap->name);
+
+	if (existing_node_idx >= 0) {
+		as_metrics_node_snapshot* prev = as_vector_get_ptr(departed, (uint32_t)existing_node_idx);
+
+		as_metrics_node_snapshot_merge(snap, prev);
+		as_vector_set(departed, (uint32_t)existing_node_idx, &snap);
+		as_metrics_node_snapshot_destroy(prev);
+		return;
+	}
+
+	if (departed->size >= AS_METRICS_NODES_DEPARTED_MAX) {
+		as_log_warn(
+			"Metrics nodes_departed is full (%u entries); dropping final metrics for departed node %s",
+			AS_METRICS_NODES_DEPARTED_MAX, snap->name);
+		as_metrics_node_snapshot_destroy(snap);
+		return;
+	}
+
+	as_vector_append(departed, &snap);
+}
+
+void
+as_metrics_departed_destroy(as_cluster* cluster)
+{
+	if (!cluster || !cluster->metrics_nodes_departed) {
+		return;
+	}
+
+	as_metrics_departed_clear(cluster);
+	as_vector_destroy(cluster->metrics_nodes_departed);
+	cluster->metrics_nodes_departed = NULL;
+}
+
+static bool
+as_metrics_export_slots(as_metrics_runtime* rt, const as_metrics_snapshot* snap, bool force)
+{
+	bool any_ok = false;
+
+	for (uint32_t i = 0; i < rt->slots->size; i++) {
+		as_metrics_exporter_slot* slot = as_vector_get(rt->slots, i);
+
+		if (!force && slot->suspend_remaining > 0) {
+			slot->suspend_remaining--;
+			continue;
+		}
+
+		as_error err;
+		as_error_reset(&err);
+		as_status status = AEROSPIKE_ERR_CLIENT;
+
+		if (slot->exporter && slot->exporter->export_fn) {
+			status = slot->exporter->export_fn(slot->exporter, &err, snap);
+		}
+		else {
+			as_error_set_message(&err, AEROSPIKE_ERR_CLIENT, "Metrics exporter is missing an export function");
+		}
+
+		if (status != AEROSPIKE_OK) {
+			as_log_warn("Metrics exporter error: %s %s", as_error_string(status), err.message);
+			slot->consecutive_failures++;
+
+			if (slot->consecutive_failures >= AS_METRICS_EXPORTER_MAX_FAILURES) {
+				slot->suspend_remaining = AS_METRICS_EXPORTER_SUSPEND_CYCLES;
+				slot->consecutive_failures = 0;
+				as_log_warn("Metrics exporter suspended after %u consecutive failures",
+					AS_METRICS_EXPORTER_MAX_FAILURES);
+			}
+		}
+		else {
+			slot->consecutive_failures = 0;
+			slot->suspend_remaining = 0;
+			any_ok = true;
+		}
+	}
+	return any_ok;
+}
+
+static bool
+as_metrics_runtime_has_file_exporter(as_metrics_runtime* rt)
+{
+	if (!rt->slots) {
+		return false;
+	}
+
+	for (uint32_t i = 0; i < rt->slots->size; i++) {
+		as_metrics_exporter_slot* slot = as_vector_get(rt->slots, i);
+
+		if (as_metrics_exporter_is_file(slot->exporter)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static as_status
+as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool force, as_error* err)
+{
+	as_metrics_snapshot* snap = NULL;
+	bool exported = false;
+	// One snapshot is shared by every exporter. When the file exporter is present,
+	// include the learn-metrics fields even if operational metrics are off.
+	as_status status;
+
+	if (as_metrics_runtime_has_file_exporter(rt)) {
+		status = as_metrics_snapshot_create_file(err, cluster, rt->labels, rt->cpu, &snap);
+	}
+	else {
+		status = as_metrics_snapshot_create(err, cluster, rt->labels, rt->cpu, &snap);
+	}
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	as_metrics_snapshot_clone_nodes_departed(cluster, snap);
+	exported = as_metrics_export_slots(rt, snap, force);
+
+	if (exported) {
+		as_metrics_departed_clear(cluster);
+	}
+	as_metrics_snapshot_destroy(snap);
+	return AEROSPIKE_OK;
+}
+
+static void
+as_metrics_runtime_notify(as_cluster* cluster)
+{
+	pthread_mutex_lock(&cluster->metrics_lock);
+
+	as_metrics_runtime* rt = cluster->metrics_runtime;
+
+	// Disable clears thread_running before it joins this thread. Skip that interval
+	// so the final export is the one written while metrics are still enabled.
+	if (!cluster->metrics_enabled || !rt || !rt->thread_running) {
+		pthread_mutex_unlock(&cluster->metrics_lock);
+		return;
+	}
+
+	as_error err;
+
+	if (rt->slots->size > 0) {
+		as_status status = as_metrics_runtime_export(cluster, rt, false, &err);
+
+		if (status != AEROSPIKE_OK) {
+			as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
+		}
+	}
+
+	if (cluster->metrics_listeners.snapshot_listener) {
+		as_error_reset(&err);
+		as_status status = cluster->metrics_listeners.snapshot_listener(
+			&err, cluster, cluster->metrics_listeners.udata);
+
+		if (status != AEROSPIKE_OK) {
+			as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
+		}
+	}
+	pthread_mutex_unlock(&cluster->metrics_lock);
+}
+
+static void*
+as_metrics_thread(void* udata)
+{
+	as_metrics_runtime* rt = udata;
+	as_cluster* cluster = rt->cluster;
+	as_thread_set_name("metrics");
+
+	pthread_mutex_lock(&rt->lock);
+
+	while (rt->thread_running) {
+		uint64_t interval_ms = cluster->metrics_interval;
+
+		if (interval_ms == 0) {
+			interval_ms = 30000;
+		}
+
+		if (interval_ms > INT_MAX) {
+			interval_ms = INT_MAX;
+		}
+
+		struct timespec delta;
+		struct timespec abstime;
+		cf_clock_set_timespec_ms((int)interval_ms, &delta);
+		cf_clock_current_add(&delta, &abstime);
+
+		int rc = pthread_cond_timedwait(&rt->cond, &rt->lock, &abstime);
+
+		if (!rt->thread_running) {
+			break;
+		}
+
+		if (rc == ETIMEDOUT) {
+			pthread_mutex_unlock(&rt->lock);
+			as_metrics_runtime_notify(cluster);
+			pthread_mutex_lock(&rt->lock);
+		}
+	}
+
+	pthread_mutex_unlock(&rt->lock);
+	return NULL;
+}
+
+static void
+as_metrics_runtime_free(as_metrics_runtime* rt)
+{
+	if (!rt) {
+		return;
+	}
+
+	if (rt->slots) {
+		for (uint32_t i = 0; i < rt->slots->size; i++) {
+			as_metrics_exporter_slot* slot = as_vector_get(rt->slots, i);
+
+			if (slot->owned && slot->exporter) {
+				as_metrics_file_exporter_destroy(slot->exporter);
+			}
+		}
+		as_vector_destroy(rt->slots);
+	}
+
+	as_metrics_labels_destroy(rt->labels);
+	as_metrics_cpu_state_destroy(rt->cpu);
+	pthread_cond_destroy(&rt->cond);
+	pthread_mutex_destroy(&rt->lock);
+	cf_free(rt);
+}
+
+static bool
+as_metrics_listeners_defined(const as_metrics_listeners* listeners)
+{
+	return listeners->enable_listener && listeners->snapshot_listener &&
+		listeners->node_close_listener && listeners->disable_listener && listeners->udata;
+}
+
+static void
+as_metrics_add_api(as_cluster* cluster, uint64_t* counter)
+{
+	if (cluster->metrics_enabled && cluster->metrics_usage_enabled) {
+		as_incr_uint64(counter);
+	}
+}
+
+void
+as_metrics_add_api_blocking(aerospike* as)
+{
+	as_cluster* cluster = as ? as->cluster : NULL;
+
+	if (cluster) {
+		as_metrics_add_api(cluster, &cluster->metrics_api_blocking);
+	}
+}
+
+void
+as_metrics_add_api_deferred(aerospike* as)
+{
+	as_cluster* cluster = as ? as->cluster : NULL;
+
+	if (cluster) {
+		as_metrics_add_api(cluster, &cluster->metrics_api_deferred);
+	}
+}
+
+void
+as_metrics_add_api_background(aerospike* as)
+{
+	as_cluster* cluster = as ? as->cluster : NULL;
+
+	if (cluster) {
+		as_metrics_add_api(cluster, &cluster->metrics_api_background);
+	}
+}
+
+bool
+as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms)
+{
+	if (!interval || interval[0] == '\0') {
+		*ms = 0;
+		return true;
+	}
+
+	errno = 0;
+	char* end = NULL;
+	unsigned long long magnitude = strtoull(interval, &end, 10);
+
+	if (end == interval || errno != 0) {
+		return false;
+	}
+
+	uint64_t scale;
+
+	if (*end == '\0' || strcmp(end, "s") == 0) {
+		scale = 1000;
+	}
+	else if (strcmp(end, "ms") == 0) {
+		scale = 1;
+	}
+	else if (strcmp(end, "m") == 0) {
+		scale = 60000;
+	}
+	else if (strcmp(end, "h") == 0) {
+		scale = 3600000;
+	}
+	else {
+		return false;
+	}
+
+	if (magnitude == 0 || magnitude > UINT64_MAX / scale) {
+		return false;
+	}
+
+	*ms = magnitude * scale;
+	return true;
+}
+
+as_status
+as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_policy* policy)
+{
+	bool custom_listener = policy->metrics_listeners.enable_listener != NULL;
+
+	if (custom_listener && !as_metrics_listeners_defined(&policy->metrics_listeners)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "All metrics listeners and udata must be defined");
+	}
+
+	uint64_t interval_ms = 0;
+
+	if (!as_metrics_export_interval_to_ms(policy->export_interval, &interval_ms)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid metrics export_interval");
+	}
+
+	if (policy->sampler_range < 1 || policy->sampler_threshold > policy->sampler_range) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid metrics sampler: range must be >= 1 and threshold must be <= range");
+	}
+
+	uint32_t tend_ms = cluster->tend_interval;
+
+	// An empty export_interval leaves interval_ms at 0. Fall back to the
+	// deprecated policy->interval, which counts tend intervals.
+	if (interval_ms == 0) {
+		if (policy->interval == 0 || tend_ms == 0) {
+			interval_ms = 30000;
+		}
+		else {
+			interval_ms = (uint64_t)policy->interval * tend_ms;
+		}
+	}
+
+	if (cluster->metrics_enabled || cluster->metrics_runtime) {
+		as_status status = as_metrics_runtime_disable(err, cluster);
+
+		if (status != AEROSPIKE_OK) {
+			as_log_warn("Metrics disable error: %s %s", as_error_string(status), err->message);
+			as_error_reset(err);
+		}
+	}
+
+	cluster->metrics_interval = interval_ms;
+	cluster->metrics_latency_columns = policy->latency_columns;
+	cluster->metrics_latency_shift = policy->latency_shift;
+	cluster->metrics_latency_unit = policy->latency_unit;
+	cluster->metrics_operational_enabled = policy->operational_enabled;
+	cluster->metrics_usage_enabled = policy->usage_enabled;
+	as_store_uint32(&cluster->metrics_sampler_range, policy->sampler_range);
+	as_store_uint32(&cluster->metrics_sampler_threshold, policy->sampler_threshold);
+	cluster->metrics_listeners = policy->metrics_listeners;
+
+	as_metrics_runtime* rt = cf_calloc(1, sizeof(as_metrics_runtime));
+	rt->cluster = cluster;
+	rt->slots = as_vector_create(sizeof(as_metrics_exporter_slot), 2);
+	rt->labels = as_metrics_labels_copy(policy->labels);
+	rt->cpu = as_metrics_cpu_state_create();
+	pthread_mutex_init(&rt->lock, NULL);
+	pthread_cond_init(&rt->cond, NULL);
+
+	// metrics.exporter is dynamic configuration only. Without that key, added
+	// exporters are called and the file writer is used when nothing else exports.
+	as_metrics_builtin_exporter mode = AS_METRICS_BUILTIN_EXPORTER_FILE;
+	aerospike* owner = cluster->as;
+	bool dynamic_exporter = owner && owner->config_bitmap &&
+		as_field_is_set(owner->config_bitmap, AS_METRICS_EXPORTER);
+
+	if (dynamic_exporter) {
+		mode = owner->config.policies.metrics.metrics_exporter;
+	}
+	else if (policy->exporters && policy->exporters->size > 0) {
+		mode = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;
+	}
+
+	if (mode == AS_METRICS_BUILTIN_EXPORTER_CUSTOM && policy->exporters) {
+		for (uint32_t i = 0; i < policy->exporters->size; i++) {
+			as_metrics_exporter_slot slot;
+			memset(&slot, 0, sizeof(slot));
+			slot.exporter = as_vector_get_ptr(policy->exporters, i);
+			slot.owned = false;
+			as_vector_append(rt->slots, &slot);
+		}
+	}
+
+	if (mode == AS_METRICS_BUILTIN_EXPORTER_FILE &&
+			!custom_listener && policy->report_dir[0] != '\0') {
+		as_metrics_exporter* file_exporter = NULL;
+		as_status status = as_metrics_file_exporter_create(err, policy, &file_exporter);
+
+		if (status != AEROSPIKE_OK) {
+			as_metrics_runtime_free(rt);
+			return status;
+		}
+
+		as_metrics_exporter_slot slot;
+		memset(&slot, 0, sizeof(slot));
+		slot.exporter = file_exporter;
+		slot.owned = true;
+		as_vector_append(rt->slots, &slot);
+	}
+
+	cluster->metrics_runtime = rt;
+
+	as_nodes* nodes = as_nodes_reserve(cluster);
+
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node_enable_metrics(nodes->array[i], policy);
+	}
+	as_nodes_release(nodes);
+	as_cluster_enable_command_latency(cluster, policy);
+
+	if (custom_listener) {
+		as_status status = cluster->metrics_listeners.enable_listener(err, cluster->metrics_listeners.udata);
+
+		if (status != AEROSPIKE_OK) {
+			as_cluster_disable_command_latency(cluster);
+			as_metrics_runtime_free(rt);
+			cluster->metrics_runtime = NULL;
+			memset(&cluster->metrics_listeners, 0, sizeof(cluster->metrics_listeners));
+			return status;
+		}
+	}
+
+	cluster->metrics_file_writer = as_metrics_runtime_has_file_exporter(rt) ||
+		cluster->metrics_listeners.snapshot_listener == as_metrics_writer_snapshot;
+	cluster->metrics_enabled = true;
+
+	if (rt->slots->size > 0 || cluster->metrics_listeners.snapshot_listener) {
+		pthread_mutex_lock(&rt->lock);
+
+		if (pthread_create(&rt->thread, NULL, as_metrics_thread, rt) != 0) {
+			pthread_mutex_unlock(&rt->lock);
+			cluster->metrics_enabled = false;
+			cluster->metrics_file_writer = false;
+			as_cluster_disable_command_latency(cluster);
+			as_status status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
+				"Failed to create metrics thread: %s", strerror(errno));
+
+			if (cluster->metrics_listeners.disable_listener) {
+				as_error listener_err;
+				cluster->metrics_listeners.disable_listener(
+					&listener_err, cluster, cluster->metrics_listeners.udata);
+			}
+			as_metrics_runtime_free(rt);
+			cluster->metrics_runtime = NULL;
+			memset(&cluster->metrics_listeners, 0, sizeof(cluster->metrics_listeners));
+			return status;
+		}
+
+		// Hold the lock until the flag is set so the new thread cannot observe it false and exit.
+		rt->thread_running = true;
+		pthread_mutex_unlock(&rt->lock);
+	}
+
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_metrics_runtime_disable(as_error* err, as_cluster* cluster)
+{
+	as_metrics_runtime* rt = cluster->metrics_runtime;
+	bool was_enabled = cluster->metrics_enabled;
+
+	if (rt && rt->thread_running) {
+		pthread_mutex_lock(&rt->lock);
+		rt->thread_running = false;
+		pthread_cond_signal(&rt->cond);
+		pthread_mutex_unlock(&rt->lock);
+
+		pthread_mutex_unlock(&cluster->metrics_lock);
+		pthread_join(rt->thread, NULL);
+		pthread_mutex_lock(&cluster->metrics_lock);
+	}
+
+	as_error_reset(err);
+	as_status status = AEROSPIKE_OK;
+	as_error export_err;
+	as_error_reset(&export_err);
+
+	if (rt && rt->slots && rt->slots->size > 0) {
+		status = as_metrics_runtime_export(cluster, rt, true, &export_err);
+	}
+
+	if (was_enabled && cluster->metrics_listeners.disable_listener) {
+		as_error listener_err;
+		as_error_reset(&listener_err);
+		as_status listener_status = cluster->metrics_listeners.disable_listener(
+			&listener_err, cluster, cluster->metrics_listeners.udata);
+
+		if (status == AEROSPIKE_OK) {
+			status = listener_status;
+			export_err = listener_err;
+		}
+	}
+
+	if (status != AEROSPIKE_OK) {
+		*err = export_err;
+	}
+
+	cluster->metrics_enabled = false;
+	cluster->metrics_file_writer = false;
+	as_cluster_disable_command_latency(cluster);
+
+	if (rt) {
+		as_metrics_runtime_free(rt);
+		cluster->metrics_runtime = NULL;
+	}
+	memset(&cluster->metrics_listeners, 0, sizeof(cluster->metrics_listeners));
+	return status;
+}
+
+as_status
+as_metrics_runtime_node_close(as_error* err, as_cluster* cluster, as_node* node)
+{
+	as_metrics_departed_add(cluster, node);
+
+	if (cluster->metrics_listeners.node_close_listener) {
+		return cluster->metrics_listeners.node_close_listener(
+			err, node, cluster->metrics_listeners.udata);
+	}
+	return AEROSPIKE_OK;
 }

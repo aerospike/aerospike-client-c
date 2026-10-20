@@ -12,17 +12,14 @@ run-name: >-
 #   4. Run announce-release.yml to tag the merge-base commit and start release work
 
 permissions:
-  contents: write  # commit and push version bump
+  contents: write       # push version-bump branch
+  pull-requests: write  # open PR into target branch
 
 on:
   workflow_dispatch:
     inputs:
       version:
         description: 'Jfrog Release Bundle version (e.g. 7.5.0 or 7.5.0-rc1)'
-        required: true
-        type: string
-      branch:
-        description: 'Branch to bump release on'
         required: true
         type: string
       dry-run:
@@ -41,7 +38,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       TARGET_VERSION: ${{ inputs.version }}
-      TARGET_BRANCH:  ${{ inputs.branch }}
+      TARGET_BRANCH:  ${{ github.ref_name }}
       IS_DRY_RUN: ${{ inputs.dry-run && 'true' || 'false' }}
 
     steps:
@@ -72,7 +69,7 @@ jobs:
             ./pkg/set_version "$TARGET_VERSION"
           fi
 
-      - name: Commit version bump
+      - name: Commit version bump and open PR
         if: ${{ env.IS_DRY_RUN != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -83,11 +80,25 @@ jobs:
           git add -A
           if git diff --cached --quiet; then
             echo "No changes to commit — version already at $TARGET_VERSION"
-          else
-            git commit -m "update version to $TARGET_VERSION"
-            git push origin "$TARGET_BRANCH"
-            echo "Committed and pushed to $TARGET_BRANCH"
+            exit 0
           fi
+
+          # Push to a separate branch so the protected target branch is not touched directly.
+          BUMP_BRANCH="bump-version/${TARGET_VERSION}"
+          git checkout -b "$BUMP_BRANCH"
+          git commit -m "update version to $TARGET_VERSION"
+          git push origin "$BUMP_BRANCH"
+          echo "Pushed to $BUMP_BRANCH"
+
+          # Open a draft PR into the target branch for review before merging.
+          PR_URL=$(gh pr create \
+            --base  "$TARGET_BRANCH" \
+            --head  "$BUMP_BRANCH" \
+            --title "update version to $TARGET_VERSION" \
+            --body  "Automated version bump to \`$TARGET_VERSION\`. Review and merge before running \`push-to-stage.yml\`." \
+            --draft)
+          echo "PR opened: $PR_URL"
+          echo "PR_URL=$PR_URL" >> "$GITHUB_ENV"
 
       - name: Summary
         run: |
@@ -99,14 +110,16 @@ jobs:
             echo "| Version | \`$TARGET_VERSION\` |"
             echo "| Branch  | \`$TARGET_BRANCH\` |"
             echo "| Dry run | \`$IS_DRY_RUN\` |"
+            echo "| Base commit | \`$(git rev-parse --short HEAD)\` |"
             echo ""
             if [ "$IS_DRY_RUN" = "true" ]; then
               echo "> **Dry run** — no commits were made."
             else
-              echo "- Pushed to \`$TARGET_BRANCH\`."
-              echo "- **Next:** manually run \`push-to-stage.yml\` (C Client Build & Release) on \`$TARGET_BRANCH\` with \`dry-run: false\` to build the release bundle."
+              echo "- Opened draft PR: [bump-version/\`$TARGET_VERSION\` → \`$TARGET_BRANCH\`]($PR_URL)."
+              echo "- Branch \`bump-version/$TARGET_VERSION\` branched off from \`$TARGET_BRANCH\` @ \`$(git rev-parse --short HEAD)\`."
+              echo "- **Next:** review and merge the PR, then manually run \`push-to-stage.yml\` (C Client Build & Release) on \`$TARGET_BRANCH\` with \`dry-run: false\`."
               echo ""
-              echo "_Then open a PR from \`$TARGET_BRANCH\` to \`master\`._"
-              echo "_When the PR is merged, run \`announce-release.yml\` to tag the commit and start release work._"
+              echo "_After the release build, open a PR from \`$TARGET_BRANCH\` to \`master\`._"
+              echo "_When merged, run \`announce-release.yml\` to tag the commit and draft the GitHub release._"
             fi
           } >> "$GITHUB_STEP_SUMMARY"

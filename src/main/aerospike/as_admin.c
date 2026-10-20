@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -211,7 +211,7 @@ as_admin_write_whitelist(uint8_t** p, as_error* err, const char** whitelist, int
 static as_status
 as_admin_send(
 	as_error* err, as_socket* sock, as_node* node, uint8_t* buffer, uint8_t* end,
-	uint32_t socket_timeout, uint64_t deadline_ms
+	uint32_t socket_timeout, uint64_t deadline_ms, bool sample
 	)
 {
 	uint64_t len = end - buffer;
@@ -220,7 +220,7 @@ as_admin_send(
 	
 	as_status status = as_socket_write_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
 
-	if (status == AEROSPIKE_OK && node && node->cluster->metrics_enabled) {
+	if (status == AEROSPIKE_OK && sample && node) {
 		as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);
 
 		if (metrics) {
@@ -233,13 +233,13 @@ as_admin_send(
 static inline as_status
 as_admin_receive(
 	as_error* err, as_socket* sock, as_node* node, uint8_t* buffer, uint64_t len,
-	uint32_t socket_timeout, uint64_t deadline_ms, as_socket_context* ctx
+	uint32_t socket_timeout, uint64_t deadline_ms, as_socket_context* ctx, bool sample
 	)
 {
 	as_status status = as_socket_read_deadline(err, sock, node, buffer, len, socket_timeout,
 		deadline_ms, ctx);
 
-	if (status == AEROSPIKE_OK && node && node->cluster->metrics_enabled) {
+	if (status == AEROSPIKE_OK && sample && node) {
 		as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);
 
 		if (metrics) {
@@ -275,14 +275,19 @@ as_admin_execute_node(
 		return status;
 	}
 
-	status = as_admin_send(err, &socket, node, buffer, end, 0, deadline_ms);
+	// One namespace-bytes decision for this admin command. Send and receive
+	// share it. Admin commands have no user namespace, so the bytes are stored
+	// on the empty-namespace entry.
+	bool sample = as_cluster_record_namespace_metrics(node->cluster,
+		as_cluster_sample_operational(node->cluster));
+	status = as_admin_send(err, &socket, node, buffer, end, 0, deadline_ms, sample);
 	
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
 		return status;
 	}
 
-	status = as_admin_receive(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms, NULL);
+	status = as_admin_receive(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms, NULL, sample);
 
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
@@ -318,7 +323,7 @@ as_admin_execute(
 static as_status
 as_admin_read_blocks(
 	as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, as_admin_parse_fn parse_fn,
-	as_vector* list
+	as_vector* list, bool sample
 	)
 {
 	as_status status = AEROSPIKE_OK;
@@ -328,7 +333,7 @@ as_admin_read_blocks(
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_admin_receive(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0, deadline_ms, NULL);
+		status = as_admin_receive(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0, deadline_ms, NULL, sample);
 
 		if (status) {
 			break;
@@ -351,7 +356,7 @@ as_admin_read_blocks(
 			}
 			
 			// Read remaining message bytes in group
-			status = as_admin_receive(err, sock, node, buf, size, 0, deadline_ms, NULL);
+			status = as_admin_receive(err, sock, node, buf, size, 0, deadline_ms, NULL, sample);
 
 			if (status) {
 				break;
@@ -400,7 +405,9 @@ as_admin_read_list(
 		return status;
 	}
 	
-	status = as_admin_send(err, &socket, node, command, end, 0, deadline_ms);
+	bool sample = as_cluster_record_namespace_metrics(node->cluster,
+		as_cluster_sample_operational(node->cluster));
+	status = as_admin_send(err, &socket, node, command, end, 0, deadline_ms, sample);
 	
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
@@ -408,7 +415,7 @@ as_admin_read_list(
 		return status;
 	}
 	
-	status = as_admin_read_blocks(err, &socket, node, deadline_ms, parse_fn, list);
+	status = as_admin_read_blocks(err, &socket, node, deadline_ms, parse_fn, list, sample);
 
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
@@ -459,13 +466,13 @@ as_cluster_login(
 		p = as_admin_write_field_string(p, CLEAR_PASSWORD, cluster->password);
 	}
 
-	as_status status = as_admin_send(err, sock, NULL, buffer, p, 0, deadline_ms);
+	as_status status = as_admin_send(err, sock, NULL, buffer, p, 0, deadline_ms, false);
 
 	if (status) {
 		return status;
 	}
 
-	status = as_admin_receive(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms, NULL);
+	status = as_admin_receive(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms, NULL, false);
 
 	if (status) {
 		return status;
@@ -498,7 +505,7 @@ as_cluster_login(
 	}
 
 	// Read remaining message bytes in group
-	status = as_admin_receive(err, sock, NULL, buffer, receive_size, 0, deadline_ms, NULL);
+	status = as_admin_receive(err, sock, NULL, buffer, receive_size, 0, deadline_ms, NULL, false);
 
 	if (status) {
 		return status;
@@ -591,13 +598,15 @@ as_authenticate(
 
 	p = as_admin_write_field_bytes(p, SESSION_TOKEN, session->token, session->token_length);
 
-	as_status status = as_admin_send(err, sock, node, buffer, p, socket_timeout, deadline_ms);
+	bool sample = node && as_cluster_record_namespace_metrics(node->cluster,
+		as_cluster_sample_operational(node->cluster));
+	as_status status = as_admin_send(err, sock, node, buffer, p, socket_timeout, deadline_ms, sample);
 	
 	if (status) {
 		return status;
 	}
 
-	status = as_admin_receive(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms, ctx);
+	status = as_admin_receive(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms, ctx, sample);
 
 	if (status) {
 		return status;

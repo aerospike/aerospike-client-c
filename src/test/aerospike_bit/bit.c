@@ -62,7 +62,7 @@ server_supports_bit_b64_encode(void)
 		return false;
 	}
 
-	bool supported = as_version_compare(&node->version, &as_server_version_8_1_3) >= 0;
+	bool supported = as_version_compare(&node->version, &as_server_version_8_2_0) >= 0;
 	as_node_release(node);
 	return supported;
 }
@@ -1707,7 +1707,7 @@ TEST(bit_filter_call_modify_set_int_sub, "Bit filter call modify set int sub")
 TEST(bit_b64_encode, "Bit B64 Encode")
 {
 	if (! server_supports_bit_b64_encode()) {
-		info("skipping bit b64 encode; requires server >= 8.1.3");
+		info("skipping bit b64 encode; requires server >= 8.2.0");
 		return;
 	}
 

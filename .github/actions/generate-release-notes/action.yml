@@ -54,22 +54,24 @@ runs:
 
         git() { command git -C "$REPO_PATH" "$@"; }
 
+        # Writes an empty ### section — bullets filled in manually.
         print_section() {
           printf '### %s\n\n' "$1"
         }
 
-        build_changelog_link() {
-          local from_tag="$1" to_ref="$2" label="$3"
-          local compare_base="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare"
-          echo "[${label}](${compare_base}/${from_tag}...${to_ref})"
+        # Formats each non-merge commit as "* <description>. [TICKET]"
+        # Ticket is extracted from the subject and placed on the right.
+        commit_scaffold() {
+          git log "$1" --pretty=format:"%s" --no-merges \
+            | python3 "$GITHUB_ACTION_PATH/format_commits.py"
         }
+
+        # ── Resolve release reference ────────────────────────────────────────────
 
         using_tag=false
         release_ref="$TARGET_SHA"
 
-        if [[ "$DRY_RUN" == "true" ]]; then
-          : # Preview: tag may not exist yet; git range uses TARGET_SHA.
-        else
+        if [[ "$DRY_RUN" != "true" ]]; then
           if ! git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
             echo "::error::Release tag ${VERSION} not found. push-tag must run before generating release notes."
             exit 1
@@ -82,6 +84,8 @@ runs:
           using_tag=true
           release_ref="$VERSION"
         fi
+
+        # ── Resolve previous tag and commit range ────────────────────────────────
 
         prev_tag=$(git describe --tags --abbrev=0 "${release_ref}^" 2>/dev/null || true)
         if [[ -z "$prev_tag" ]]; then
@@ -98,12 +102,12 @@ runs:
 
         if [[ "$using_tag" == "true" ]]; then
           changelog_label="${prev_tag}...${VERSION}"
-          changelog_to_ref="$VERSION"
         else
           changelog_label="${prev_tag}...${TARGET_SHA:0:7}"
-          changelog_to_ref="$TARGET_SHA"
         fi
-        changelog_link=$(build_changelog_link "$prev_tag" "$changelog_to_ref" "$changelog_label")
+        changelog_link="[${changelog_label}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/compare/${changelog_label})"
+
+        # ── Write release notes ──────────────────────────────────────────────────
 
         release_date=$(date -u +"%B %d, %Y" | sed 's/ 0/ /')
 
@@ -120,13 +124,22 @@ runs:
           print_section "Improvements"
           print_section "Bug Fixes"
           print_section "Maintenance"
+
           echo "**Full Changelog**: ${changelog_link}"
+          echo ""
+          echo "---"
+          echo ""
+          echo "### Commits since \`${prev_tag}\` *(move into sections above, then delete this block)*"
+          echo ""
+          commit_scaffold "$range"
+
         } > "$OUTPUT_PATH"
 
-        echo "Release notes scaffold (${commit_count} commits in ${range}, sections empty for manual edit):"
-        if [[ "$using_tag" == "true" ]]; then
-          echo "Validated release tag ${VERSION} at ${TARGET_SHA}"
-        fi
+        # ── Summary ──────────────────────────────────────────────────────────────
+
+        echo "Release notes scaffold written (${commit_count} commits in ${range}):"
+        [[ "$using_tag" == "true" ]] && echo "  Tag ${VERSION} validated at ${TARGET_SHA}"
         cat "$OUTPUT_PATH"
-        echo "prev-tag=${prev_tag}" >> "$GITHUB_OUTPUT"
+
+        echo "prev-tag=${prev_tag}"              >> "$GITHUB_OUTPUT"
         echo "release-notes-path=${OUTPUT_PATH}" >> "$GITHUB_OUTPUT"

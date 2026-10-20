@@ -69,7 +69,9 @@
 #define AS_SUB_NONE                                        0
 
 //------------------------------------------------------------
-// Subcodes paired with AEROSPIKE_ERR_PARAM (AS_ERR_PARAMETER)
+// Subcodes paired with AEROSPIKE_ERR_REQUEST_INVALID (server
+// AS_ERR_PARAMETER, status 4). AS_SUB_PARAM_* names follow proto.h;
+// not client-side AEROSPIKE_ERR_PARAM (-2).
 //------------------------------------------------------------
 
 /**
@@ -103,10 +105,37 @@
 #define AS_SUB_PARAM_BIN_COUNT_TOO_LARGE                   5
 
 /**
+ * String modify op received invalid parameters (empty pad string, negative
+ * repeat count, negative pad target length, etc.).
+ * App use: validate pad/repeat arguments locally before sending.
+ */
+#define AS_SUB_PARAM_STRING_OP_PARAMS_INVALID              6
+
+/**
  * String op CTX envelope is malformed (SERVER-1483 nested shape).
  * App use: verify the client emits `[0xFF, ctx_list, [sub_op, args...]]`.
  */
 #define AS_SUB_PARAM_STRING_CTX_MALFORMED                  8
+
+/**
+ * String overwrite resolved index is outside the string bounds.
+ * App use: refresh strlen and recompute the index before retrying.
+ */
+#define AS_SUB_PARAM_STRING_INDEX_OUT_OF_BOUNDS            9
+
+/**
+ * String regex argument is invalid (non-ICU idiom or ICU compile failure at
+ * parse). The server deliberately uses the same subcode value for ICU compile
+ * failures and guided non-ICU rejections.
+ * App use: validate regex patterns against the ICU dialect before sending.
+ */
+#define AS_SUB_PARAM_STRING_REGEX_INVALID                  10
+
+/**
+ * Ill-formed UTF-8 in a string op argument.
+ * App use: validate application-supplied strings before packing the request.
+ */
+#define AS_SUB_PARAM_STRING_UTF8_INVALID                   11
 
 //----------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_CLUSTER (AS_ERR_UNAVAILABLE)

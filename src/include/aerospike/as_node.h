@@ -239,9 +239,36 @@ typedef struct {
 	uint64_t key_busy_count;
 
 	/**
-	 * Latency histograms.
+	 * Latency histograms. One sample per successful attempt.
+	 * The learn-metrics file and snapshot `latencies` use this series.
 	 */
 	as_latency* latency[AS_LATENCY_TYPE_MAX];
+
+	/**
+	 * @private
+	 * Client timeouts copied into the metrics snapshot. Also included in timeout_count.
+	 * A retryable timeout can be counted more than once for one command.
+	 */
+	uint64_t client_timeout_count;
+
+	/**
+	 * @private
+	 * Server timeouts copied into the metrics snapshot. Also included in timeout_count.
+	 * A retryable timeout can be counted more than once for one command.
+	 */
+	uint64_t server_timeout_count;
+
+	/**
+	 * @private
+	 * Record too big errors copied into the metrics snapshot. Also included in error_count.
+	 */
+	uint64_t record_too_big_count;
+
+	/**
+	 * @private
+	 * Device overload errors copied into the metrics snapshot. Also included in error_count.
+	 */
+	uint64_t device_overload_count;
 
 } as_ns_metrics;
 
@@ -371,6 +398,26 @@ typedef struct as_node_s {
 	 * Total sync connections aborted after connection drain failed when a socket read timeout occurs.
 	 */
 	uint32_t sync_conns_aborted;
+
+	/**
+	 * TCP connect failures plus TLS and auth failures on this node.
+	 * Operational metric connection.open.failure. TLS and auth each increment this too.
+	 * Not recorded unless operational metrics are enabled.
+	 */
+	uint32_t conn_open_failures;
+
+	/**
+	 * TLS handshake failures after TCP connect succeeded.
+	 * Operational metric connection.tls.handshake.failure.
+	 * Also included in conn_open_failures.
+	 */
+	uint32_t conn_tls_handshake_failures;
+
+	/**
+	 * Authentication or login failures. Operational metric connection.auth.failure.
+	 * Also included in conn_open_failures.
+	 */
+	uint32_t conn_auth_failures;
 
 	/**
 	 * Error count for this node's error_rate_window.
@@ -723,6 +770,29 @@ as_node_incr_sync_conns_aborted(as_node* node)
 
 /**
  * @private
+ * Record connection.open.failure when operational metrics are enabled.
+ */
+void
+as_node_add_conn_open_failure(as_node* node);
+
+/**
+ * @private
+ * Record connection.tls.handshake.failure when operational metrics are enabled.
+ * Also records connection.open.failure.
+ */
+void
+as_node_add_conn_tls_handshake_failure(as_node* node);
+
+/**
+ * @private
+ * Record connection.auth.failure when operational metrics are enabled.
+ * Also records connection.open.failure.
+ */
+void
+as_node_add_conn_auth_failure(as_node* node);
+
+/**
+ * @private
  * Put connection back into pool.
  *
  * Answers true if successful; false if not.
@@ -796,10 +866,10 @@ as_node_prepare_metrics(as_node* node, const char* ns);
 
 /**
  * @private
- * Record latency of type latency_type for node
+ * Record one per-attempt latency sample in the learn-metrics histogram.
  */
 void
-as_node_add_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos);
+as_node_add_attempt_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos);
 
 struct as_metrics_policy_s;
 
@@ -879,6 +949,20 @@ void
 as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
+ * @private
+ * Increment the snapshot client timeout count. Also increments timeout_count.
+ */
+void
+as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
+
+/**
+ * @private
+ * Increment the snapshot server timeout count. Also increments timeout_count.
+ */
+void
+as_node_add_server_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
+
+/**
  * Return command key busy error count. The value is cumulative and not reset per metrics interval.
  */
 static inline uint64_t
@@ -892,6 +976,20 @@ as_node_get_key_busy_count(as_ns_metrics* metrics)
  */
 void
 as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics);
+
+/**
+ * @private
+ * Increment the snapshot record too big count. Also increments error_count.
+ */
+void
+as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics);
+
+/**
+ * @private
+ * Increment the snapshot device overload count. Also increments error_count.
+ */
+void
+as_node_add_device_overload(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * @private

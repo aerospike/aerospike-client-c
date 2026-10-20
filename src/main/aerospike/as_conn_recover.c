@@ -72,7 +72,7 @@ as_conn_recover_parse_proto(as_conn_recover* self, uint8_t* buf)
 	return true;
 }
 
-static void
+void
 as_conn_recover_abort(as_conn_recover* self)
 {
 	as_node_incr_sync_conns_aborted(self->node);

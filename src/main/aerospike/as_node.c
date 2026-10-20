@@ -41,9 +41,6 @@
 // Replicas take ~2K per namespace, so this will cover most deployments:
 #define INFO_STACK_BUF_SIZE (16 * 1024)
 
-// Number of nanoseconds per millisecond
-#define NS_TO_MS 1000000
-
 //---------------------------------
 // Globals
 //---------------------------------
@@ -212,6 +209,9 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->sync_conns_closed = 0;
 	node->sync_conns_recovered = 0;
 	node->sync_conns_aborted = 0;
+	node->conn_open_failures = 0;
+	node->conn_tls_handshake_failures = 0;
+	node->conn_auth_failures = 0;
 	node->conn_iter = 0;
 
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;
@@ -415,13 +415,51 @@ as_node_set_hostname(as_node* node, const char* hostname)
 	node->hostname = cf_strndup(hostname, AS_HOSTNAME_SIZE);
 }
 
+void
+as_node_add_conn_open_failure(as_node* node)
+{
+	if (node->cluster->metrics_operational_enabled) {
+		as_incr_uint32(&node->conn_open_failures);
+	}
+}
+
+void
+as_node_add_conn_tls_handshake_failure(as_node* node)
+{
+	if (node->cluster->metrics_operational_enabled) {
+		as_incr_uint32(&node->conn_tls_handshake_failures);
+		as_incr_uint32(&node->conn_open_failures);
+	}
+}
+
+void
+as_node_add_conn_auth_failure(as_node* node)
+{
+	if (node->cluster->metrics_operational_enabled) {
+		as_incr_uint32(&node->conn_auth_failures);
+		as_incr_uint32(&node->conn_open_failures);
+	}
+}
+
+static void
+as_node_record_connect_failure(as_node* node, as_socket* sock)
+{
+	if (sock->tls_handshake_failed) {
+		as_node_add_conn_tls_handshake_failure(node);
+	}
+	else {
+		as_node_add_conn_open_failure(node);
+	}
+}
+
 static int
-as_node_try_connections(as_socket* sock, as_address* addresses, int i, int max, uint64_t deadline_ms)
+as_node_try_connections(as_node* node, as_socket* sock, as_address* addresses, int i, int max, uint64_t deadline_ms)
 {
 	while (i < max) {
 		if (as_socket_start_connect(sock, (struct sockaddr*)&addresses[i].addr, deadline_ms)) {
 			return i;
 		}
+		as_node_record_connect_failure(node, sock);
 		i++;
 	}
 	return -1;
@@ -435,6 +473,7 @@ as_node_try_family_connections(as_node* node, int family, int begin, int end, in
 	int rv = as_socket_create(sock, family, ctx, node->tls_name);
 	
 	if (rv < 0) {
+		as_node_add_conn_open_failure(node);
 		return rv;
 	}
 	
@@ -446,17 +485,18 @@ as_node_try_family_connections(as_node* node, int family, int begin, int end, in
 		if (as_socket_start_connect(sock, (struct sockaddr*)&primary->addr, deadline_ms)) {
 			return index;
 		}
+		as_node_record_connect_failure(node, sock);
 		
 		// Start from current index + 1 to end.
-		rv = as_node_try_connections(sock, addresses, index + 1, end, deadline_ms);
+		rv = as_node_try_connections(node, sock, addresses, index + 1, end, deadline_ms);
 
 		if (rv < 0) {
 			// Start from begin to index.
-			rv = as_node_try_connections(sock, addresses, begin, index, deadline_ms);
+			rv = as_node_try_connections(node, sock, addresses, begin, index, deadline_ms);
 		}
 	}
 	else {
-		rv = as_node_try_connections(sock, addresses, begin, end, deadline_ms);
+		rv = as_node_try_connections(node, sock, addresses, begin, end, deadline_ms);
 	}
 	
 	if (rv < 0) {
@@ -547,6 +587,7 @@ as_node_create_connection(
 			as_session_release(session);
 
 			if (status) {
+				as_node_add_conn_auth_failure(node);
 				as_node_signal_login(node);
 
 				if (!(ctx && ctx->in_recovery)) {
@@ -560,7 +601,7 @@ as_node_create_connection(
 	if (metrics_enabled) {
 		uint64_t elapsed = cf_getns() - begin;
 		as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
-		as_node_add_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);
+		as_node_add_attempt_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);
 	}
 	return AEROSPIKE_OK;
 }
@@ -801,6 +842,7 @@ as_node_login(as_error* err, as_node* node, as_socket* sock)
 	as_status status = as_cluster_login(cluster, err, sock, deadline_ms, &node_info);
 
 	if (status) {
+		as_node_add_conn_auth_failure(node);
 		as_store_uint8(&node->perform_login, 1);
 		as_error_append(err, as_node_get_address_string(node));
 		return status;
@@ -919,8 +961,8 @@ as_node_get_tend_connection(as_error* err, as_node* node)
 				status = as_authenticate(cluster, err, &sock, node, node->session, 0, deadline_ms, NULL);
 
 				if (status != AEROSPIKE_OK) {
-					// Authentication failed.
-					// Must login again to get new session token.
+					// Authentication failed. Count it, then login again for a new session token.
+					as_node_add_conn_auth_failure(node);
 					status = as_node_login(err, node, &sock);
 
 					if (status != AEROSPIKE_OK) {
@@ -971,7 +1013,12 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 		return 0;
 	}
 	
-	as_ns_metrics* metrics = (node->cluster->metrics_enabled)? as_node_prepare_metrics(node, NULL) : NULL;
+	bool sample = as_cluster_sample_operational(node->cluster);
+	as_ns_metrics* metrics = NULL;
+
+	if (as_cluster_record_namespace_metrics(node->cluster, sample)) {
+		metrics = as_node_prepare_metrics(node, NULL);
+	}
 
 	if (metrics) {
 		as_node_add_bytes_out(metrics, write_size);
@@ -1468,16 +1515,6 @@ as_node_parse_racks(as_cluster* cluster, as_error* err, as_node* node, char* buf
 	return AEROSPIKE_OK;
 }
 
-/**
- * Use non-inline function for garbarge collector function pointer reference.
- * Forward to inlined release.
- */
-static inline void
-release_latency(as_latency* latency)
-{
-	as_latency_release(latency);
-}
-
 void
 as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 {
@@ -1488,32 +1525,8 @@ as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 	for (uint8_t i = 0; i < max; i++) {
 		as_ns_metrics* metrics = array[i];
 
-		// Initialize latency buckets.
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			as_latency* latency = metrics->latency[j];
-
-			if (policy->latency_columns == latency->size && policy->latency_shift == latency->shift) {
-				// Initialize existing latency histogram.
-				for (uint8_t k = 0; k < latency->size; k++) {
-					as_store_uint64(&latency->buckets[k], 0);
-				}
-			}
-			else {
-				// Create new latency histogram.
-				as_latency* latency_old = latency;
-				latency = cf_calloc(1, sizeof(as_latency) + (sizeof(uint64_t) * policy->latency_columns));
-				latency->ref_count = 1;
-				latency->shift = policy->latency_shift;
-				latency->size = policy->latency_columns;
-
-				as_store_ptr_rls((void**)&metrics->latency[j], latency);
-
-				// Put old latency on garbage collector stack.
-				as_gc_item item;
-				item.data = latency_old;
-				item.release_fn = (as_release_fn)release_latency;
-				as_vector_append(node->cluster->gc, &item);
-			}
+			as_latency_gc_init(node->cluster, &metrics->latency[j], policy);
 		}
 	}
 }
@@ -1555,32 +1568,26 @@ as_node_append_metrics(as_node* node, const char* ns)
 	as_ns_metrics* metrics = as_node_find_namespace(node, ns);
 
 	if (!metrics) {
-		metrics = cf_malloc(sizeof(as_ns_metrics));
+		metrics = cf_calloc(1, sizeof(as_ns_metrics));
 		metrics->ns = ns;
-		metrics->bytes_in = 0;
-		metrics->bytes_out = 0;
-		metrics->error_count = 0;
-		metrics->timeout_count = 0;
-		metrics->key_busy_count = 0;
 
 		uint8_t latency_columns;
 		uint8_t latency_shift;
+		as_metrics_latency_unit latency_unit;
 
 		if (cluster->metrics_enabled) {
 			latency_columns = cluster->metrics_latency_columns;
 			latency_shift = cluster->metrics_latency_shift;
+			latency_unit = cluster->metrics_latency_unit;
 		}
 		else {
 			latency_columns = 1;
 			latency_shift = 1;
+			latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
 		}
 
 		for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
-			as_latency* latency = cf_calloc(1, sizeof(as_latency) + (sizeof(uint64_t) * latency_columns));
-			latency->ref_count = 1;
-			latency->shift = latency_shift;
-			latency->size = latency_columns;
-			metrics->latency[i] = latency;
+			metrics->latency[i] = as_latency_create(latency_columns, latency_shift, latency_unit);
 		}
 		node->metrics[node->metrics_size++] = metrics;
 	}
@@ -1604,42 +1611,14 @@ as_node_prepare_metrics(as_node* node, const char* ns)
 	return metrics;
 }
 
-static inline uint8_t
-as_latency_get_index(as_latency* latency, uint64_t elapsed)
-{
-	uint64_t limit = 1;
-	uint8_t last_bucket = latency->size - 1;
-
-	for (uint8_t i = 0; i < last_bucket; i++) {
-		if (elapsed <= limit) {
-			return i;
-		}
-		limit <<= latency->shift;
-	}
-	return last_bucket;
-}
-
 void
-as_node_add_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos)
+as_node_add_attempt_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos)
 {
 	if (!metrics) {
 		return;
 	}
 
-	// Convert nanoseconds to milliseconds.
-	uint64_t elapsed = elapsed_nanos / NS_TO_MS;
-
-	// Round up elapsed to nearest millisecond.
-	if ((elapsed_nanos - (elapsed * NS_TO_MS)) > 0) {
-		elapsed++;
-	}
-
-	as_latency* latency = as_latency_reserve(metrics->latency[latency_type]);
-
-	uint8_t index = as_latency_get_index(latency, elapsed);
-	as_incr_uint64(&latency->buckets[index]);
-
-	as_latency_release(latency);
+	as_latency_add(metrics->latency[latency_type], elapsed_nanos);
 }
 
 void
@@ -1670,6 +1649,39 @@ as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
 	as_incr_uint64(&metrics->timeout_count);
 }
 
+static as_ns_metrics*
+as_node_metrics_for_count(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	if (!metrics) {
+		metrics = as_node_prepare_metrics(node, ns);
+	}
+	return metrics;
+}
+
+void
+as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	metrics = as_node_metrics_for_count(node, ns, metrics);
+
+	if (!metrics) {
+		return;
+	}
+	as_incr_uint64(&metrics->timeout_count);
+	as_incr_uint64(&metrics->client_timeout_count);
+}
+
+void
+as_node_add_server_timeout(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	metrics = as_node_metrics_for_count(node, ns, metrics);
+
+	if (!metrics) {
+		return;
+	}
+	as_incr_uint64(&metrics->timeout_count);
+	as_incr_uint64(&metrics->server_timeout_count);
+}
+
 void
 as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics)
 {
@@ -1682,6 +1694,30 @@ as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics)
 		}
 	}
 	as_incr_uint64(&metrics->key_busy_count);
+}
+
+void
+as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	metrics = as_node_metrics_for_count(node, ns, metrics);
+
+	if (!metrics) {
+		return;
+	}
+	as_incr_uint64(&metrics->error_count);
+	as_incr_uint64(&metrics->record_too_big_count);
+}
+
+void
+as_node_add_device_overload(as_node* node, const char* ns, as_ns_metrics* metrics)
+{
+	metrics = as_node_metrics_for_count(node, ns, metrics);
+
+	if (!metrics) {
+		return;
+	}
+	as_incr_uint64(&metrics->error_count);
+	as_incr_uint64(&metrics->device_overload_count);
 }
 
 static as_status

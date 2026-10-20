@@ -1,0 +1,19 @@
+name: Rebuild macOS Distribution Tarballs
+description: >
+  Rewrites each *_mac_*.tgz so embedded .pkg files are the Apple-signed
+  copies from the artifact directory (pkg/package archives unsigned pkgs).
+
+inputs:
+  artifact-dir:
+    description: Directory containing signed .pkg files and *_mac_*.tgz archives
+    required: false
+    default: signed-artifacts
+
+runs:
+  using: composite
+  steps:
+    - name: Rebuild *_mac_*.tgz with signed packages
+      shell: bash
+      run: |
+        bash "${{ github.action_path }}/rebuild.sh" \
+          "${{ inputs.artifact-dir }}"

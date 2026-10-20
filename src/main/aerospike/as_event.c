@@ -603,9 +603,8 @@ as_event_add_success_latency(as_event_command* cmd)
 		metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
 	}
 
-	uint64_t rpc_begin = as_node_rpc_latency_begin(cmd->latency_type, cmd->command_begin,
-		cmd->attempt_begin);
-	as_node_add_attempt_latency(metrics, cmd->latency_type, now - rpc_begin);
+	uint64_t attempt_elapsed = now - cmd->attempt_begin;
+	as_node_add_attempt_latency(metrics, cmd->latency_type, attempt_elapsed);
 }
 
 bool
@@ -675,7 +674,7 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 
 	if (cmd->metrics_sample_decision) {
 		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
-		// See as_node_rpc_latency_begin().
+		// See as_event_command.attempt_begin.
 		cmd->attempt_begin = cf_getns();
 	}
 

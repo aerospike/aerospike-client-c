@@ -706,9 +706,10 @@ as_command_add_latencies(as_command* cmd, as_node* node, as_ns_metrics* metrics,
 		metrics = as_node_prepare_metrics(node, cmd->ns);
 	}
 
-	// Namespace latency is this successful RPC. See as_node_rpc_latency_begin().
-	uint64_t rpc_begin = as_node_rpc_latency_begin(cmd->latency_type, cmd->command_begin, attempt_begin);
-	as_node_add_attempt_latency(metrics, cmd->latency_type, now - rpc_begin);
+	// Namespace latency is this successful RPC. A retry is a new RPC.
+	// See as_metrics_namespace_snapshot.latencies.
+	uint64_t attempt_elapsed = now - attempt_begin;
+	as_node_add_attempt_latency(metrics, cmd->latency_type, attempt_elapsed);
 }
 
 as_status
@@ -769,7 +770,7 @@ as_command_execute(as_command* cmd, as_error* err)
 		}
 
 		as_ns_metrics* metrics = NULL;
-		// Start of this attempt. See as_node_rpc_latency_begin().
+		// Start of this attempt. See as_command_add_latencies().
 		uint64_t attempt_begin = 0;
 
 		if (cmd->metrics_sample_decision) {

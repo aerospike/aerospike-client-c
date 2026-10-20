@@ -213,8 +213,8 @@ typedef struct as_command_s {
 	// 0 when the v3 command latency sample is not taken.
 	// Elapsed time is cf_getns() minus this value and includes retries.
 	// A successful command records that elapsed time as v3 command latency.
-	// Namespace latency starts here only for a batch sub-batch.
-	// See as_node_rpc_latency_begin().
+	// Namespace latency starts at each attempt instead.
+	// See as_command_add_latencies().
 	uint64_t command_begin;
 	uint64_t deadline_ms;
 	uint32_t socket_timeout;

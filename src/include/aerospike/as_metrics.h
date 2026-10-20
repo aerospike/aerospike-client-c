@@ -191,10 +191,10 @@ typedef struct as_metrics_namespace_snapshot_s {
 	 * Namespace latency histograms, one entry per `AS_LATENCY_TYPE_*`.
 	 * Read, write, batch, and query buckets record one sample per successful
 	 * RPC, only when operational metrics are on and the command was sampled.
-	 * A retry is a new RPC, so the sample starts at the attempt that succeeded.
-	 * A batch sub-batch re-sent to its node is one RPC that includes the
-	 * re-sends. Connection buckets record every successful connection open
-	 * while metrics are enabled, without the operational or sampler gate.
+	 * A retry, including a batch sub-batch re-sent to its node, is a new RPC,
+	 * so the sample starts at the attempt that succeeded. Connection buckets
+	 * record every successful connection open while metrics are enabled,
+	 * without the operational or sampler gate.
 	 * Same rules as as_ns_metrics.latency.
 	 * v3 command latency is `as_metrics_snapshot.command_latencies`.
 	 */

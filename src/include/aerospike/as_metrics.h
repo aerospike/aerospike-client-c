@@ -188,7 +188,6 @@ typedef struct as_metrics_namespace_snapshot_s {
 	uint64_t bytes_out;
 
 	/**
-	 * @private
 	 * Namespace latency histograms, one entry per `AS_LATENCY_TYPE_*`.
 	 * Read, write, batch, and query buckets record one sample per successful
 	 * RPC, including that RPC's retries, only when operational metrics are on

@@ -577,6 +577,7 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 		as_event_timer_stop(cmd);
 		as_event_timer_once(cmd, cmd->connect_timeout);
 	}
+	as_event_conn_begin(cmd);
 	as_event_connect(cmd, pool);
 }
 
@@ -608,9 +609,33 @@ as_event_add_success_latency(as_event_command* cmd)
 	as_node_add_attempt_latency(metrics, cmd->latency_type, now - rpc_begin);
 }
 
+static void
+as_event_add_conn_latency(as_event_command* cmd)
+{
+	if (cmd->conn_begin == 0) {
+		return;
+	}
+
+	uint64_t elapsed = cf_getns() - cmd->conn_begin;
+	cmd->conn_begin = 0;
+
+	// Same histograms and gates as as_node_create_connection().
+	if (cmd->cluster->metrics_enabled) {
+		as_ns_metrics* metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
+		as_node_add_attempt_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);
+	}
+
+	if (cmd->cluster->metrics_operational_enabled) {
+		as_node_add_conn_latency(cmd->node, elapsed);
+	}
+}
+
 bool
 as_event_connection_complete(as_event_command* cmd)
 {
+	// Connect, TLS, and authentication are done. See as_event_conn_begin().
+	as_event_add_conn_latency(cmd);
+
 	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
 		as_event_connector_success(cmd);
 		return true;
@@ -845,9 +870,7 @@ as_event_retry_timeout(as_event_command* cmd)
 	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 
 	if (cmd->pipe_listener) {
-		if (cmd->metrics_sample_decision) {
-			as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
-		}
+		// A terminal timeout is counted in as_event_error_callback().
 		as_pipe_timeout(cmd, true);
 		return;
 	}
@@ -971,9 +994,7 @@ as_event_total_timeout(as_event_command* cmd)
 	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 
 	if (cmd->pipe_listener) {
-		if (cmd->metrics_sample_decision) {
-			as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
-		}
+		// See as_event_retry_timeout().
 		as_pipe_timeout(cmd, false);
 		return;
 	}

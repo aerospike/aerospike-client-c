@@ -28,6 +28,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_metrics.h>
 #include <aerospike/as_metrics_internal.h>
+#include <aerospike/as_monitor.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
@@ -51,6 +52,8 @@
  *****************************************************************************/
 
 extern aerospike* as;
+extern char g_host[];
+extern int g_port;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -724,7 +727,7 @@ metrics_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
 }
 
 static uint64_t
-metrics_attempt_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
+metrics_namespace_latency_total(const as_metrics_snapshot* metrics_snapshot, as_latency_type latency_type)
 {
 	uint64_t total = 0;
 
@@ -738,12 +741,32 @@ metrics_attempt_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
 				continue;
 			}
 
-			as_metrics_latency_snapshot* latency_snapshot =
-				&namespace_snapshot->latencies[AS_LATENCY_TYPE_WRITE];
+			as_metrics_latency_snapshot* latency_snapshot = &namespace_snapshot->latencies[latency_type];
 
 			for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
 				total += latency_snapshot->buckets[k];
 			}
+		}
+	}
+	return total;
+}
+
+static uint64_t
+metrics_attempt_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
+{
+	return metrics_namespace_latency_total(metrics_snapshot, AS_LATENCY_TYPE_WRITE);
+}
+
+static uint64_t
+metrics_node_conn_latency_total(const as_metrics_snapshot* metrics_snapshot)
+{
+	uint64_t total = 0;
+
+	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
+		as_metrics_latency_snapshot* latency_snapshot = &metrics_snapshot->nodes[i]->conn_latency;
+
+		for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
+			total += latency_snapshot->buckets[k];
 		}
 	}
 	return total;
@@ -1111,6 +1134,86 @@ TEST(metrics_disable_exports_operational_latencies, "disable exports the final n
 	assert_true(mem > 0);
 	assert_true(write_latency > 0);
 	assert_true(metrics_off);
+}
+
+static void
+metrics_async_get_listener(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+{
+	as_monitor_notify(udata);
+}
+
+TEST(metrics_async_conn_latency, "an async connection open records connection latency")
+{
+	if (as_event_loop_size == 0) {
+		info("Skip because no event loops are running");
+		return;
+	}
+
+	if (as->config.tls.enable) {
+		info("Skip because the second client does not copy the TLS settings");
+		return;
+	}
+
+	// A new client has no async connections, so its first async command opens one.
+	// Tend and info connections have no namespace, so only that open is recorded
+	// on the "test" namespace.
+	as_config config;
+	as_config_init(&config);
+	as_config_add_hosts(&config, g_host, (uint16_t)g_port);
+	as_config_set_user(&config, as->config.user, as->config.password);
+	config.use_services_alternate = as->config.use_services_alternate;
+	config.auth_mode = as->config.auth_mode;
+
+	aerospike* client = aerospike_new(&config);
+	as_error err;
+	as_status status = aerospike_connect(client, &err);
+
+	if (status != AEROSPIKE_OK) {
+		aerospike_destroy(client);
+		assert_int_eq(status, AEROSPIKE_OK);
+	}
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = true;
+	as_status enable_status = aerospike_enable_metrics(client, &err, &policy);
+
+	as_key key;
+	as_key_init_str(&key, "test", "metrics", "metrics-async-conn");
+
+	as_monitor monitor;
+	as_monitor_init(&monitor);
+	as_monitor_begin(&monitor);
+	as_status get_status = aerospike_key_get_async(client, &err, NULL, &key,
+		metrics_async_get_listener, &monitor, NULL, NULL);
+
+	if (get_status == AEROSPIKE_OK) {
+		as_monitor_wait(&monitor);
+	}
+	as_monitor_destroy(&monitor);
+
+	as_metrics_snapshot* metrics_snapshot = NULL;
+	as_status snapshot_status = aerospike_get_metrics_snapshot(client, &err, &metrics_snapshot);
+	uint64_t namespace_conn = 0;
+	uint64_t node_conn = 0;
+
+	if (snapshot_status == AEROSPIKE_OK) {
+		namespace_conn = metrics_namespace_latency_total(metrics_snapshot, AS_LATENCY_TYPE_CONN);
+		node_conn = metrics_node_conn_latency_total(metrics_snapshot);
+		as_metrics_snapshot_destroy(metrics_snapshot);
+	}
+
+	as_key_destroy(&key);
+	aerospike_disable_metrics(client, &err);
+	as_metrics_policy_destroy(&policy);
+	aerospike_close(client, &err);
+	aerospike_destroy(client);
+
+	assert_int_eq(enable_status, AEROSPIKE_OK);
+	assert_int_eq(get_status, AEROSPIKE_OK);
+	assert_int_eq(snapshot_status, AEROSPIKE_OK);
+	assert_true(namespace_conn > 0);
+	assert_true(node_conn > 0);
 }
 
 TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on the snapshot")
@@ -2252,6 +2355,7 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_enable_leaves_operational_off);
 	suite_add(metrics_operational_namespace_latency);
 	suite_add(metrics_disable_exports_operational_latencies);
+	suite_add(metrics_async_conn_latency);
 	suite_add(metrics_latency_unit_microseconds);
 	suite_add(metrics_labels);
 	suite_add(metrics_file_header);

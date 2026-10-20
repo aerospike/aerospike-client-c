@@ -570,6 +570,7 @@ as_node_create_connection(
 	// turned on during connection setup.
 	// Namespace conn buckets follow metrics_enabled. See as_ns_metrics.latency.
 	// The operational series is node->conn_latency. See as_node_add_conn_latency().
+	// The async path is as_event_add_conn_latency().
 	bool record_conn_buckets = node->cluster->metrics_enabled;
 	bool record_conn_open = node->cluster->metrics_operational_enabled;
 	uint64_t begin = 0;
@@ -1700,14 +1701,8 @@ as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics)
 }
 
 static bool
-as_node_message_is_client_timeout(const char* message)
+as_node_message_starts_with(const char* message, const char* prefix)
 {
-	const char* prefix = "Client timeout";
-
-	if (!message) {
-		return false;
-	}
-
 	while (*prefix != '\0') {
 		if (*message != *prefix) {
 			return false;
@@ -1716,6 +1711,20 @@ as_node_message_is_client_timeout(const char* message)
 		prefix++;
 	}
 	return true;
+}
+
+static bool
+as_node_message_is_client_timeout(const char* message)
+{
+	if (!message) {
+		return false;
+	}
+
+	// See as_event_retry_timeout(), as_event_total_timeout(), and as_pipe_timeout().
+	if (as_node_message_starts_with(message, "Client timeout")) {
+		return true;
+	}
+	return as_node_message_starts_with(message, "Pipeline timeout");
 }
 
 static as_ns_metrics*
@@ -1746,7 +1755,8 @@ as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metric
 
 	case AEROSPIKE_ERR_TIMEOUT:
 		// Sync client timeouts leave the message empty. Async client timeouts
-		// start with "Client timeout". Any other timeout text came from the server.
+		// start with "Client timeout", or "Pipeline timeout" for a pipelined
+		// command. Any other timeout text came from the server.
 		// These snapshot counters do not change as_node_stats.timeout_count.
 		server_timeout = err->message[0] != '\0' &&
 			!as_node_message_is_client_timeout(err->message);

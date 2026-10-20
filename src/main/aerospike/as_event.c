@@ -583,30 +583,29 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 static inline void
 as_event_add_success_latency(as_event_command* cmd)
 {
-	uint64_t now;
-	uint64_t elapsed;
-	as_ns_metrics* metrics;
-
 	if (cmd->latency_type == AS_LATENCY_TYPE_NONE || cmd->command_begin == 0) {
 		return;
 	}
 
-	now = cf_getns();
-	elapsed = now - cmd->command_begin;
+	uint64_t now = cf_getns();
 
 	// See as_command_add_latencies().
-	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, elapsed);
+	uint64_t command_elapsed = now - cmd->command_begin;
+	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, command_elapsed);
 
 	if (!cmd->record_namespace_metrics) {
 		return;
 	}
 
-	metrics = cmd->metrics;
+	as_ns_metrics* metrics = cmd->metrics;
 
 	if (!metrics) {
 		metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
 	}
-	as_node_add_attempt_latency(metrics, cmd->latency_type, elapsed);
+
+	uint64_t rpc_begin = as_node_rpc_latency_begin(cmd->latency_type, cmd->command_begin,
+		cmd->attempt_begin);
+	as_node_add_attempt_latency(metrics, cmd->latency_type, now - rpc_begin);
 }
 
 bool
@@ -668,14 +667,16 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_node_reserve(cmd->node);
 	}
 
-	if (cmd->record_namespace_metrics) {
-		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
-	}
-
 	// Command latency starts on the first attempt and includes retries.
 	if (cmd->metrics_sample_decision && cmd->command_begin == 0 &&
 			cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 		cmd->command_begin = cf_getns();
+	}
+
+	if (cmd->record_namespace_metrics) {
+		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
+		// See as_node_rpc_latency_begin().
+		cmd->attempt_begin = cf_getns();
 	}
 
 	if (! as_node_valid_error_rate(cmd->node)) {

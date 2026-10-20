@@ -145,6 +145,9 @@ typedef struct as_event_command {
 	uint8_t* buf;
 	// See as_command.command_begin.
 	uint64_t command_begin;
+	// Monotonic nanoseconds at the start of this attempt. Set only when this
+	// command records namespace metrics. See as_node_rpc_latency_begin().
+	uint64_t attempt_begin;
 	uint32_t iteration;
 	uint32_t command_sent_counter;
 	uint32_t write_offset;

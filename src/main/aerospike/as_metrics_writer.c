@@ -618,7 +618,7 @@ as_metrics_writer_node_close(as_error* err, as_node* node, void* udata)
 	}
 
 	as_metrics_node_snapshot* snapshot = NULL;
-	as_metrics_node_snapshot_create_file(node, &snapshot);
+	as_metrics_node_snapshot_create(node, &snapshot);
 
 	char now_str[128];
 	as_metrics_timestamp(now_str, sizeof(now_str));

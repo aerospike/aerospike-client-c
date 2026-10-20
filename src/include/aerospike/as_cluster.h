@@ -781,21 +781,6 @@ as_cluster_add_command_latency(as_cluster* cluster, as_latency_type latency_type
 bool
 as_cluster_sample_operational(as_cluster* cluster);
 
-/**
- * @private
- * True when this command should update per-namespace histograms, bytes, and
- * error counts. False unless metrics and operational metrics are both on.
- * operational_sample is the sampler decision: false skips namespace metrics.
- */
-static inline bool
-as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_sample)
-{
-	if (!cluster->metrics_enabled || !cluster->metrics_operational_enabled) {
-		return false;
-	}
-	return operational_sample;
-}
-
 #if defined(_MSC_VER)
 #define AS_METRICS_TLS __declspec(thread)
 #else

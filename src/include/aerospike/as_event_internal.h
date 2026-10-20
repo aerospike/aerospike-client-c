@@ -173,8 +173,6 @@ typedef struct as_event_command {
 	as_latency_type latency_type;
 	// See as_command.metrics_sample_decision.
 	bool metrics_sample_decision;
-	// See as_command.record_namespace_metrics.
-	bool record_namespace_metrics;
 } as_event_command;
 
 typedef struct {
@@ -213,7 +211,6 @@ as_event_command_apply_sample(as_event_command* cmd, bool sampled, bool count_co
 	bool count_command_now = count_command;
 
 	cmd->metrics_sample_decision = sampled;
-	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, sampled);
 
 	// A single-key batch fallback already counted the batch. Record batch latency.
 	// See as_metrics_batch_sample_begin().

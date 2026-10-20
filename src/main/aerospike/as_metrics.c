@@ -731,12 +731,11 @@ as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapsh
 	}
 
 	uint8_t ns_max = 0;
+
 	// Disable leaves metrics_operational_enabled set so an on-demand snapshot
 	// still shows the last namespace counters and latency buckets.
 	// See as_metrics_namespace_snapshot.latencies.
-	bool should_copy_namespace_metrics = node->cluster->metrics_operational_enabled;
-
-	if (should_copy_namespace_metrics) {
+	if (node->cluster->metrics_operational_enabled) {
 		ns_max = node->metrics_size;
 	}
 

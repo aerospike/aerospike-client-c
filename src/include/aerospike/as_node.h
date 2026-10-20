@@ -242,11 +242,11 @@ typedef struct {
 	/**
 	 * Latency histograms. Read, write, batch, and query buckets record one
 	 * sample per successful RPC, only when operational metrics are on and the
-	 * command was sampled. A retry, including a batch sub-batch re-sent to its
-	 * node, is a new RPC, so the sample starts at the attempt that succeeded.
-	 * Connection buckets (AS_LATENCY_TYPE_CONN) record every successful
-	 * connection open while metrics are enabled, without the operational or
-	 * sampler gate.
+	 * command was sampled. A retry is a new RPC, so the sample starts at the
+	 * attempt that succeeded. A batch sub-batch re-sent to its node is one RPC
+	 * that includes the re-sends. Connection buckets (AS_LATENCY_TYPE_CONN)
+	 * record every successful connection open while metrics are enabled,
+	 * without the operational or sampler gate.
 	 * Same rules as as_metrics_namespace_snapshot.latencies.
 	 */
 	as_latency* latency[AS_LATENCY_TYPE_MAX];
@@ -911,6 +911,22 @@ as_node_prepare_metrics(as_node* node, const char* ns);
  */
 void
 as_node_add_attempt_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos);
+
+/**
+ * @private
+ * Start time of a namespace latency sample. A retry is a new RPC, so the sample
+ * starts at the attempt that succeeded. A batch sub-batch re-sent to its node is
+ * one RPC, so its sample starts at the first send and includes the re-sends.
+ * See as_metrics_namespace_snapshot.latencies.
+ */
+static inline uint64_t
+as_node_rpc_latency_begin(as_latency_type latency_type, uint64_t command_begin, uint64_t attempt_begin)
+{
+	if (latency_type == AS_LATENCY_TYPE_BATCH) {
+		return command_begin;
+	}
+	return attempt_begin;
+}
 
 /**
  * @private

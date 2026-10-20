@@ -244,9 +244,9 @@ typedef struct {
 	 * sample per successful RPC, only when operational metrics are on and the
 	 * command was sampled. A retry is a new RPC, so the sample starts at the
 	 * attempt that succeeded. A batch sub-batch re-sent to its node is one RPC
-	 * that includes the re-sends. Connection
-	 * buckets (AS_LATENCY_TYPE_CONN) record every successful connection open
-	 * while metrics are enabled, without the operational or sampler gate.
+	 * that includes the re-sends. Connection buckets (AS_LATENCY_TYPE_CONN)
+	 * record every successful connection open while metrics are enabled,
+	 * without the operational or sampler gate.
 	 * Same rules as as_metrics_namespace_snapshot.latencies.
 	 */
 	as_latency* latency[AS_LATENCY_TYPE_MAX];

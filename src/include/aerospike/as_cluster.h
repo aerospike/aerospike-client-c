@@ -421,7 +421,8 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Command-path operational metrics. Off unless the metrics policy enables them.
+	 * Command-path operational metrics. Resolved from
+	 * as_metrics_policy.operational_enabled when metrics are enabled.
 	 */
 	bool metrics_operational_enabled;
 
@@ -737,10 +738,12 @@ as_partition_shm_get_node(
 
 /**
  * @private
- * Enable the collection of metrics
+ * Enable the collection of metrics. See as_metrics_runtime_enable().
  */
 as_status
-as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_policy* policy);
+as_cluster_enable_metrics(
+	as_error* err, as_cluster* cluster, const as_metrics_policy* policy, bool operational
+	);
 
 /**
  * @private

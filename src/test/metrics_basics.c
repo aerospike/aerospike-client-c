@@ -876,12 +876,12 @@ metrics_suite_cleanup(atf_suite* suite)
  * TEST CASES
  *****************************************************************************/
 
-TEST(metrics_policy_defaults, "metrics policy defaults leave operational and usage off")
+TEST(metrics_policy_defaults, "metrics policy defaults leave operational unset and usage off")
 {
 	as_metrics_policy policy;
 	as_metrics_policy_init(&policy);
 
-	assert_false(policy.operational_enabled);
+	assert_int_eq(policy.operational_enabled, AS_METRICS_OPERATIONAL_UNSET);
 	assert_false(policy.usage_enabled);
 	assert_int_eq(policy.sampler_range, 1);
 	assert_int_eq(policy.sampler_threshold, 1);
@@ -1014,7 +1014,7 @@ TEST(metrics_snapshot_before_enable, "on-demand snapshot works while periodic ex
 	as_metrics_snapshot_destroy(metrics_snapshot);
 }
 
-TEST(metrics_enable_leaves_operational_off, "aerospike_enable_metrics leaves operational and usage off by default")
+TEST(metrics_enable_turns_operational_on, "aerospike_enable_metrics turns unset operational on and leaves usage off")
 {
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
@@ -1027,22 +1027,23 @@ TEST(metrics_enable_leaves_operational_off, "aerospike_enable_metrics leaves ope
 	uint64_t command_count = before_snapshot->command_count;
 	as_metrics_snapshot_destroy(before_snapshot);
 
-	assert_int_eq(metrics_put(&err, "metrics-master-only"), AEROSPIKE_OK);
+	assert_int_eq(metrics_put(&err, "metrics-default-operational"), AEROSPIKE_OK);
 
 	as_metrics_snapshot* metrics_snapshot = NULL;
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
 	assert_true(metrics_snapshot->metrics_enabled);
-	assert_false(metrics_snapshot->operational_metrics_enabled);
+	assert_true(metrics_snapshot->operational_metrics_enabled);
 	assert_false(metrics_snapshot->usage_metrics_enabled);
 	assert_int_eq(metrics_snapshot->latency_columns, 7);
 	assert_int_eq(metrics_snapshot->latency_shift, 1);
 	assert_int_eq(metrics_snapshot->latency_unit, AS_METRICS_LATENCY_MILLISECONDS);
-	assert_int_eq(metrics_snapshot->cpu, 0);
-	assert_int_eq((int64_t)metrics_snapshot->mem, 0);
-	assert_true(metrics_namespaces_empty(metrics_snapshot));
+	assert_true(metrics_snapshot->mem > 0);
+	assert_true(metrics_test_namespace_ok(metrics_snapshot, 7));
+	assert_true(metrics_snapshot->command_count > command_count);
 	assert_true(metrics_conn_failures_zero(metrics_snapshot));
 	assert_true(metrics_validation_failures_zero(metrics_snapshot));
 	assert_true(metrics_nodes_ok(metrics_snapshot));
+	uint64_t enabled_count = metrics_snapshot->command_count;
 	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	metrics_disable();
@@ -1052,8 +1053,7 @@ TEST(metrics_enable_leaves_operational_off, "aerospike_enable_metrics leaves ope
 	assert_false(metrics_snapshot->metrics_enabled);
 	assert_false(metrics_snapshot->operational_metrics_enabled);
 	assert_true(metrics_nodes_ok(metrics_snapshot));
-	// command.count is operational and sampler-gated, so this put does not move it.
-	assert_true(metrics_snapshot->command_count == command_count);
+	assert_true(metrics_snapshot->command_count == enabled_count);
 	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	as_metrics_policy_destroy(&policy);
@@ -1063,7 +1063,7 @@ TEST(metrics_operational_namespace_latency, "operational metrics copy namespace 
 {
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
-	policy.operational_enabled = true;
+	policy.operational_enabled = AS_METRICS_OPERATIONAL_ON;
 
 	as_error err;
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
@@ -1106,7 +1106,7 @@ TEST(metrics_disable_exports_operational_latencies, "disable exports the final n
 
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
-	policy.operational_enabled = true;
+	policy.operational_enabled = AS_METRICS_OPERATIONAL_ON;
 	// Keep the interval thread from exporting before disable.
 	policy.interval = 3600;
 	as_metrics_policy_add_exporter(&policy, &exporter->base);
@@ -1175,7 +1175,7 @@ TEST(metrics_async_conn_latency, "an async connection open records connection la
 
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
-	policy.operational_enabled = true;
+	policy.operational_enabled = AS_METRICS_OPERATIONAL_ON;
 	as_status enable_status = aerospike_enable_metrics(client, &err, &policy);
 
 	as_key key;
@@ -1220,7 +1220,7 @@ TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on 
 {
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
-	policy.operational_enabled = true;
+	policy.operational_enabled = AS_METRICS_OPERATIONAL_ON;
 	policy.latency_unit = AS_METRICS_LATENCY_MICROSECONDS;
 
 	as_error err;
@@ -1365,7 +1365,7 @@ TEST(metrics_file_operational_off, "file exporter omits latency and memory when 
 
 	as_metrics_policy policy;
 	as_metrics_policy_init(&policy);
-	policy.operational_enabled = false;
+	policy.operational_enabled = AS_METRICS_OPERATIONAL_OFF;
 	// Keep the interval thread from exporting before disable.
 	policy.interval = 3600;
 	as_metrics_policy_set_report_dir(&policy, dir);
@@ -1870,7 +1870,7 @@ TEST(metrics_listener_reads_attempt_latency, "a metrics listener sees no namespa
 
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
-	policy.operational_enabled = false;
+	policy.operational_enabled = AS_METRICS_OPERATIONAL_OFF;
 	policy.interval = 3600;
 	as_metrics_policy_set_listeners(&policy, metrics_on_enable, metrics_on_disable,
 		metrics_on_node_close, metrics_on_snapshot, &counts);
@@ -1965,7 +1965,7 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while operational
 {
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
-	policy.operational_enabled = false;
+	policy.operational_enabled = AS_METRICS_OPERATIONAL_OFF;
 
 	as_error err;
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
@@ -1982,7 +1982,7 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while operational
 	assert_true(idle_snapshot->command_count == count);
 	as_metrics_snapshot_destroy(idle_snapshot);
 
-	policy.operational_enabled = true;
+	policy.operational_enabled = AS_METRICS_OPERATIONAL_ON;
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
 	assert_int_eq(metrics_put(&err, "metrics-command-count"), AEROSPIKE_OK);
 
@@ -2010,7 +2010,7 @@ TEST(metrics_operational_sampler_off, "threshold 0 records no command-path opera
 {
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
-	policy.operational_enabled = true;
+	policy.operational_enabled = AS_METRICS_OPERATIONAL_ON;
 	policy.sampler_threshold = 0;
 
 	as_error err;
@@ -2039,7 +2039,7 @@ static bool
 metrics_read_dynamic_client_config_policy_ex(
 	const char* yaml_body, as_metrics_policy* policy, bool app_report_dir_empty,
 	const char* app_report_dir, as_metrics_builtin_exporter* exporter,
-	bool set_app_operational, bool app_operational)
+	as_metrics_operational app_operational, bool* operational)
 {
 	char dir[512];
 
@@ -2071,10 +2071,7 @@ metrics_read_dynamic_client_config_policy_ex(
 			sizeof(config.policies.metrics.report_dir));
 	}
 
-	if (set_app_operational) {
-		config.policies.metrics.operational_enabled = app_operational;
-	}
-
+	config.policies.metrics.operational_enabled = app_operational;
 	as_config_provider_set_path(&config, path);
 
 	aerospike client;
@@ -2087,6 +2084,8 @@ metrics_read_dynamic_client_config_policy_ex(
 	policy->labels = NULL;
 	policy->exporters = NULL;
 	*exporter = client.config.policies.metrics.metrics_exporter;
+	*operational = as_config_file_metrics_operational(
+		&client.config.policies.metrics, client.config_bitmap);
 
 	// This client is never connected. With event loops running, aerospike_destroy()
 	// does not free it. So, free these allocations directly.
@@ -2107,8 +2106,10 @@ metrics_read_dynamic_client_config_policy(
 	const char* yaml_body, as_metrics_policy* policy, bool app_report_dir_empty,
 	const char* app_report_dir, as_metrics_builtin_exporter* exporter)
 {
+	bool operational;
 	return metrics_read_dynamic_client_config_policy_ex(
-		yaml_body, policy, app_report_dir_empty, app_report_dir, exporter, false, false);
+		yaml_body, policy, app_report_dir_empty, app_report_dir, exporter,
+		AS_METRICS_OPERATIONAL_UNSET, &operational);
 }
 
 TEST(metrics_dynamic_config_export, "dynamic config sets export interval, exporter, and report file")
@@ -2242,7 +2243,7 @@ TEST(metrics_dynamic_config_enabled_and_operational, "metrics.enabled and extend
 		&policy, false, NULL, &exporter));
 
 	assert_true(policy.enable);
-	assert_true(policy.operational_enabled);
+	assert_int_eq(policy.operational_enabled, AS_METRICS_OPERATIONAL_ON);
 	assert_false(policy.usage_enabled);
 	assert_int_eq(policy.latency_unit, AS_METRICS_LATENCY_MICROSECONDS);
 	assert_int_eq(policy.latency_columns, 5);
@@ -2298,38 +2299,52 @@ TEST(metrics_dynamic_config_usage, "metrics.extended.usage.enabled overrides the
 		&policy, false, NULL, &exporter));
 
 	assert_false(policy.enable);
-	assert_false(policy.operational_enabled);
+	assert_int_eq(policy.operational_enabled, AS_METRICS_OPERATIONAL_UNSET);
 	assert_true(policy.usage_enabled);
 }
 
-TEST(metrics_dynamic_config_legacy_enable, "metrics.enable turns operational on when that key is absent")
+TEST(metrics_dynamic_config_legacy_enable, "metrics.enable turns unset operational on and honors an explicit value")
 {
-	as_metrics_policy policy;
-	as_metrics_builtin_exporter exporter;
-	assert_true(metrics_read_dynamic_client_config_policy_ex(
+	const char* yaml_body =
 		"version: 1.2.0\n"
 		"dynamic:\n"
 		"  metrics:\n"
-		"    enable: true\n",
-		&policy, false, NULL, &exporter, true, false));
+		"    enable: true\n";
+	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
+	bool operational = false;
+	assert_true(metrics_read_dynamic_client_config_policy_ex(
+		yaml_body, &policy, false, NULL, &exporter, AS_METRICS_OPERATIONAL_UNSET, &operational));
 
 	assert_true(policy.enable);
-	assert_true(policy.operational_enabled);
+	assert_int_eq(policy.operational_enabled, AS_METRICS_OPERATIONAL_UNSET);
+	assert_true(operational);
+
+	assert_true(metrics_read_dynamic_client_config_policy_ex(
+		yaml_body, &policy, false, NULL, &exporter, AS_METRICS_OPERATIONAL_OFF, &operational));
+	assert_false(operational);
 }
 
-TEST(metrics_dynamic_config_enabled_leaves_operational, "metrics.enabled does not turn operational on")
+TEST(metrics_dynamic_config_enabled_leaves_operational, "metrics.enabled leaves unset operational off and honors an explicit value")
 {
-	as_metrics_policy policy;
-	as_metrics_builtin_exporter exporter;
-	assert_true(metrics_read_dynamic_client_config_policy_ex(
+	const char* yaml_body =
 		"version: 1.2.0\n"
 		"dynamic:\n"
 		"  metrics:\n"
-		"    enabled: true\n",
-		&policy, false, NULL, &exporter, true, false));
+		"    enabled: true\n";
+	as_metrics_policy policy;
+	as_metrics_builtin_exporter exporter;
+	bool operational = true;
+	assert_true(metrics_read_dynamic_client_config_policy_ex(
+		yaml_body, &policy, false, NULL, &exporter, AS_METRICS_OPERATIONAL_UNSET, &operational));
 
 	assert_true(policy.enable);
-	assert_false(policy.operational_enabled);
+	assert_int_eq(policy.operational_enabled, AS_METRICS_OPERATIONAL_UNSET);
+	assert_false(operational);
+
+	assert_true(metrics_read_dynamic_client_config_policy_ex(
+		yaml_body, &policy, false, NULL, &exporter, AS_METRICS_OPERATIONAL_ON, &operational));
+	assert_true(operational);
 }
 
 /******************************************************************************
@@ -2352,7 +2367,7 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_snapshot_without_cluster);
 	suite_add(metrics_snapshot_before_enable);
 	suite_add(metrics_export_interval);
-	suite_add(metrics_enable_leaves_operational_off);
+	suite_add(metrics_enable_turns_operational_on);
 	suite_add(metrics_operational_namespace_latency);
 	suite_add(metrics_disable_exports_operational_latencies);
 	suite_add(metrics_async_conn_latency);

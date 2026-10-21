@@ -143,7 +143,9 @@ aerospike_enable_metrics(aerospike* as, as_error* err, const as_metrics_policy* 
 	as_metrics_policy merged;
 	policy = as_metrics_policy_merge(as, policy, &merged);
 
-	as_status status = as_cluster_enable_metrics(err, cluster, policy);
+	// See as_metrics_policy.operational_enabled.
+	bool operational = policy->operational_enabled != AS_METRICS_OPERATIONAL_OFF;
+	as_status status = as_cluster_enable_metrics(err, cluster, policy, operational);
 
 	pthread_mutex_unlock(&cluster->metrics_lock);
 	return status;
@@ -195,7 +197,7 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->latency_columns = 7;
 	policy->latency_shift = 1;
 	policy->latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
-	policy->operational_enabled = false;
+	policy->operational_enabled = AS_METRICS_OPERATIONAL_UNSET;
 	policy->usage_enabled = false;
 	policy->sampler_range = 1;
 	policy->sampler_threshold = 1;
@@ -1495,7 +1497,9 @@ as_metrics_export_interval_to_ms(const char* interval, uint64_t* ms)
 }
 
 as_status
-as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_policy* policy)
+as_metrics_runtime_enable(
+	as_error* err, as_cluster* cluster, const as_metrics_policy* policy, bool operational
+	)
 {
 	bool custom_listener = policy->metrics_listeners.enable_listener != NULL;
 
@@ -1540,7 +1544,7 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	cluster->metrics_latency_columns = policy->latency_columns;
 	cluster->metrics_latency_shift = policy->latency_shift;
 	cluster->metrics_latency_unit = policy->latency_unit;
-	cluster->metrics_operational_enabled = policy->operational_enabled;
+	cluster->metrics_operational_enabled = operational;
 	cluster->metrics_usage_enabled = policy->usage_enabled;
 	as_store_uint32(&cluster->metrics_sampler_range, policy->sampler_range);
 	as_store_uint32(&cluster->metrics_sampler_threshold, policy->sampler_threshold);

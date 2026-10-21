@@ -168,6 +168,24 @@ as_field_is_set(uint8_t* bitmap, uint32_t offset)
 	return bitmap[offset >> 3] & (1 << (offset & 7));
 }
 
+/**
+ * Resolve as_metrics_policy.operational_enabled when dynamic configuration
+ * enables metrics. Unset is off only when metrics.enabled, rather than the
+ * legacy metrics.enable key, set the enable flag.
+ */
+static inline bool
+as_config_file_metrics_operational(const as_metrics_policy* policy, uint8_t* bitmap)
+{
+	if (policy->operational_enabled != AS_METRICS_OPERATIONAL_UNSET) {
+		return policy->operational_enabled == AS_METRICS_OPERATIONAL_ON;
+	}
+
+	if (!bitmap || !as_field_is_set(bitmap, AS_METRICS_ENABLE)) {
+		return true;
+	}
+	return as_field_is_set(bitmap, AS_METRICS_LEGACY_ENABLE);
+}
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

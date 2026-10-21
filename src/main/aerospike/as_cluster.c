@@ -603,9 +603,11 @@ as_cluster_sample_operational(as_cluster* cluster)
 }
 
 as_status
-as_cluster_enable_metrics(as_error* err, as_cluster* cluster, const as_metrics_policy* policy)
+as_cluster_enable_metrics(
+	as_error* err, as_cluster* cluster, const as_metrics_policy* policy, bool operational
+	)
 {
-	return as_metrics_runtime_enable(err, cluster, policy);
+	return as_metrics_runtime_enable(err, cluster, policy, operational);
 }
 
 as_status
@@ -618,7 +620,7 @@ void
 as_cluster_enable_command_latency(as_cluster* cluster, const as_metrics_policy* policy)
 {
 	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
-		if (policy->operational_enabled) {
+		if (cluster->metrics_operational_enabled) {
 			as_latency_gc_init(cluster, &cluster->command_latency[i], policy);
 		}
 		else {

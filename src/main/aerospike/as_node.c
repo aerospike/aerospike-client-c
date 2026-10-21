@@ -1549,7 +1549,7 @@ as_node_enable_metrics(as_node* node, const as_metrics_policy* policy)
 
 	// See as_node.conn_latency. Cleared when operational metrics are off so a
 	// later enable starts a new histogram.
-	if (policy->operational_enabled) {
+	if (node->cluster->metrics_operational_enabled) {
 		as_latency_gc_init(node->cluster, &node->conn_latency, policy);
 	}
 	else {

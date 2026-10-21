@@ -1318,30 +1318,6 @@ as_parse_latency_unit(as_yaml* yaml, const char* name, const char* value, as_met
 }
 
 static bool
-as_parse_metrics_operational(as_yaml* yaml, const char* name, const char* value, as_metrics_policy* policy)
-{
-	bool enabled;
-
-	if (!parse_bool(yaml, name, value, &enabled)) {
-		return false;
-	}
-
-	as_metrics_operational operational = AS_METRICS_OPERATIONAL_OFF;
-
-	if (enabled) {
-		operational = AS_METRICS_OPERATIONAL_ON;
-	}
-
-	if (policy->operational_enabled != operational) {
-		as_log_info("Set %s.%s = %s", yaml->name, name, value);
-		policy->operational_enabled = operational;
-	}
-
-	as_field_set(yaml->bitmap, AS_METRICS_OPERATIONAL);
-	return true;
-}
-
-static bool
 as_parse_sampler_field(as_yaml* yaml, const char* name, as_metrics_policy* policy)
 {
 	if (yaml->event.type == YAML_MAPPING_START_EVENT) {
@@ -1419,7 +1395,7 @@ as_parse_operational_field(as_yaml* yaml, const char* name, as_metrics_policy* p
 	yaml->name = "metrics.extended.operational";
 
 	if (strcmp(name, "enabled") == 0) {
-		rv = as_parse_metrics_operational(yaml, name, value, policy);
+		rv = as_parse_bool(yaml, name, value, &policy->operational_enabled, AS_METRICS_OPERATIONAL);
 	}
 	else if (strcmp(name, "latency_unit") == 0) {
 		rv = as_parse_latency_unit(yaml, name, value, policy);
@@ -1531,8 +1507,8 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 	yaml->name = "metrics";
 
 	// metrics.enable remains the legacy name. metrics.enabled is the tech spec key.
-	// The legacy key turns operational metrics on when they are unset.
-	// See as_config_file_metrics_operational().
+	// The legacy key maps to operational metrics when that key is absent.
+	// See as_cluster_update_metrics().
 	if (strcmp(name, "enable") == 0) {
 		as_field_set(yaml->bitmap, AS_METRICS_LEGACY_ENABLE);
 		return as_parse_bool(yaml, name, value, &policy->enable, AS_METRICS_ENABLE);
@@ -2391,6 +2367,13 @@ as_cluster_update_metrics(
 		src->latency_unit : orig->latency_unit;
 	trg->operational_enabled = as_field_is_set(bitmap, AS_METRICS_OPERATIONAL) ?
 		src->operational_enabled : orig->operational_enabled;
+
+	// Legacy metrics.enable, without extended.operational.enabled, is master
+	// plus operational. metrics.enabled does not turn operational on.
+	if (as_field_is_set(bitmap, AS_METRICS_LEGACY_ENABLE) && src->enable &&
+			!as_field_is_set(bitmap, AS_METRICS_OPERATIONAL)) {
+		trg->operational_enabled = true;
+	}
 	trg->usage_enabled = as_field_is_set(bitmap, AS_METRICS_USAGE) ?
 		src->usage_enabled : orig->usage_enabled;
 	trg->sampler_range = as_field_is_set(bitmap, AS_METRICS_SAMPLER_RANGE) ?
@@ -2447,8 +2430,6 @@ as_cluster_update_metrics(
 	as_status status = AEROSPIKE_OK;
 
 	if (trg->enable) {
-		bool operational = as_config_file_metrics_operational(trg, bitmap);
-
 		// Restart the metrics thread when an export setting changed. Latency
 		// bucket layout is stored on the cluster, so compare that separately.
 		bool export_changed = strcmp(trg->export_interval, prev_export_interval) != 0 ||
@@ -2458,7 +2439,7 @@ as_cluster_update_metrics(
 		bool latency_changed = cluster->metrics_latency_columns != trg->latency_columns ||
 			cluster->metrics_latency_shift != trg->latency_shift ||
 			cluster->metrics_latency_unit != trg->latency_unit;
-		bool tier_changed = cluster->metrics_operational_enabled != operational ||
+		bool tier_changed = cluster->metrics_operational_enabled != trg->operational_enabled ||
 			cluster->metrics_usage_enabled != trg->usage_enabled;
 
 		if (!cluster->metrics_enabled || export_changed || latency_changed || tier_changed) {
@@ -2473,7 +2454,7 @@ as_cluster_update_metrics(
 
 		if (enable_metrics) {
 			as_log_info("Enable metrics");
-			status = as_cluster_enable_metrics(err, cluster, trg, operational);
+			status = as_cluster_enable_metrics(err, cluster, trg);
 		}
 	}
 	else {
@@ -2642,6 +2623,14 @@ as_config_file_init(aerospike* as, as_error* err)
 
 	as_config* config = &as->config;
 	as_status status = as_config_file_read(as, config, as->config_bitmap, true, err);
+
+	if (status == AEROSPIKE_OK &&
+			as_field_is_set(as->config_bitmap, AS_METRICS_LEGACY_ENABLE) &&
+			config->policies.metrics.enable &&
+			!as_field_is_set(as->config_bitmap, AS_METRICS_OPERATIONAL)) {
+		// Same mapping as as_cluster_update_metrics(). The first read has no cluster yet.
+		config->policies.metrics.operational_enabled = true;
+	}
 
 	if (status != AEROSPIKE_OK) {
 		// Destroy heap allocated fields if changed before update fails.

@@ -302,8 +302,8 @@ typedef struct as_metrics_event_loop_snapshot_s {
  * Valid only for the duration of the export call. Copy fields that must be retained.
  * Counters and histogram buckets are cumulative. Gauges are the values at build time.
  *
- * `as_metrics_policy.operational_enabled` controls the operational blocks, and
- * `as_metrics_policy.usage_enabled` controls the usage blocks.
+ * Enabling metrics does not turn on operational or usage metrics. Set
+ * `as_metrics_policy.operational_enabled` or `usage_enabled` for those blocks.
  * The metrics file header uses camelCase field names. See usage_metrics_enabled
  * for blockingCount, deferredCount, and backgroundCount.
  *
@@ -553,27 +553,6 @@ typedef struct as_metrics_exporter_s {
 typedef struct as_metrics_cpu_state_s as_metrics_cpu_state;
 
 /**
- * Value of as_metrics_policy.operational_enabled.
- */
-typedef enum as_metrics_operational_e {
-	/**
-	 * Not set. Resolved when metrics are enabled.
-	 * See as_metrics_policy.operational_enabled.
-	 */
-	AS_METRICS_OPERATIONAL_UNSET = 0,
-
-	/**
-	 * Do not record operational metrics.
-	 */
-	AS_METRICS_OPERATIONAL_OFF,
-
-	/**
-	 * Record operational metrics.
-	 */
-	AS_METRICS_OPERATIONAL_ON
-} as_metrics_operational;
-
-/**
  * Client periodic metrics configuration.
  */
 typedef struct as_metrics_policy_s {
@@ -681,20 +660,15 @@ typedef struct as_metrics_policy_s {
 
 	/**
 	 * Record command-path operational metrics (latency, namespace errors and bytes,
-	 * cpu, memory) on the metrics snapshot. When off, commands are not timed.
+	 * cpu, memory) on the metrics snapshot. When false, commands are not timed.
+	 * Dynamic configuration metrics.enabled does not change this flag.
+	 * The legacy metrics.enable key turns it on when extended.operational.enabled
+	 * is absent.
 	 * Tier 0 pool gauges are collected whenever metrics are enabled.
 	 *
-	 * AS_METRICS_OPERATIONAL_ON and AS_METRICS_OPERATIONAL_OFF are always honored.
-	 * AS_METRICS_OPERATIONAL_UNSET depends on what enables metrics:
-	 * - aerospike_enable_metrics(): on.
-	 * - Dynamic configuration legacy metrics.enable: on.
-	 * - Dynamic configuration metrics.enabled: off.
-	 *
-	 * Dynamic configuration extended.operational.enabled replaces this value.
-	 *
-	 * Default: AS_METRICS_OPERATIONAL_UNSET
+	 * Default: false
 	 */
-	as_metrics_operational operational_enabled;
+	bool operational_enabled;
 
 	/**
 	 * Record client-wide feature usage counters. Off until explicitly enabled.
@@ -941,13 +915,10 @@ as_metrics_node_snapshot_destroy(as_metrics_node_snapshot* snapshot);
 /**
  * @private
  * Install exporters, keep deprecated listeners, and start the metrics thread.
- * Called with cluster->metrics_lock held. operational is
- * policy->operational_enabled with AS_METRICS_OPERATIONAL_UNSET resolved by the caller.
+ * Called with cluster->metrics_lock held.
  */
 AS_EXTERN as_status
-as_metrics_runtime_enable(
-	as_error* err, struct as_cluster_s* cluster, const as_metrics_policy* policy, bool operational
-	);
+as_metrics_runtime_enable(as_error* err, struct as_cluster_s* cluster, const as_metrics_policy* policy);
 
 /**
  * @private
@@ -974,8 +945,8 @@ as_metrics_departed_destroy(struct as_cluster_s* cluster);
 
 /**
  * Enable periodic metrics collection and the export timer.
- * Operational metrics are on unless policy->operational_enabled is
- * AS_METRICS_OPERATIONAL_OFF. Usage metrics stay off unless the policy enables them.
+ * Operational metrics follow the policy and stay off by default.
+ * Usage metrics stay off unless the policy enables them.
  */
 AS_EXTERN as_status
 aerospike_enable_metrics(struct aerospike_s* as, as_error* err, const as_metrics_policy* policy);

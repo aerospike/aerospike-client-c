@@ -640,6 +640,7 @@ as_metrics_node_snapshot_destroy(as_metrics_node_snapshot* snapshot)
 
 	cf_free(snapshot->name);
 	cf_free(snapshot->address);
+	cf_free(snapshot->conn_latency.buckets);
 
 	if (snapshot->namespaces) {
 		for (uint32_t i = 0; i < snapshot->namespace_count; i++) {
@@ -725,6 +726,8 @@ as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapsh
 		snap->conn_open_failures = as_load_uint32(&node->conn_open_failures);
 		snap->conn_tls_handshake_failures = as_load_uint32(&node->conn_tls_handshake_failures);
 		snap->conn_auth_failures = as_load_uint32(&node->conn_auth_failures);
+		// See as_metrics_node_snapshot.conn_latency.
+		as_metrics_copy_latency(&snap->conn_latency, node->conn_latency, AS_LATENCY_TYPE_CONN);
 	}
 
 	uint8_t ns_max = 0;
@@ -997,6 +1000,7 @@ as_metrics_node_snapshot_clone(const as_metrics_node_snapshot* src)
 	dst->name = as_metrics_strdup_or_empty(src->name);
 	dst->address = as_metrics_strdup_or_empty(src->address);
 	dst->namespaces = NULL;
+	dst->conn_latency.buckets = as_metrics_clone_latency_buckets(&src->conn_latency);
 
 	if (src->namespace_count == 0 || !src->namespaces) {
 		dst->namespace_count = 0;
@@ -1145,6 +1149,7 @@ as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, const as_metrics_
 	snap->conn_open_failures += prev->conn_open_failures;
 	snap->conn_tls_handshake_failures += prev->conn_tls_handshake_failures;
 	snap->conn_auth_failures += prev->conn_auth_failures;
+	as_metrics_add_latency_buckets(&snap->conn_latency, &prev->conn_latency);
 
 	for (uint32_t i = 0; i < prev->namespace_count; i++) {
 		const as_metrics_namespace_snapshot* src = &prev->namespaces[i];

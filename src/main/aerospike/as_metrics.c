@@ -61,6 +61,60 @@
 // Static Functions
 //---------------------------------
 
+static as_metrics_builtin_exporter
+as_metrics_exporter_mode(aerospike* as, const as_metrics_policy* policy)
+{
+	// metrics.exporter is dynamic configuration only. Without that key, added
+	// exporters are called and the file writer is used when nothing else exports.
+	// The file writer needs a report_dir.
+	as_metrics_builtin_exporter mode = AS_METRICS_BUILTIN_EXPORTER_FILE;
+
+	if (as && as->config_bitmap && as_field_is_set(as->config_bitmap, AS_METRICS_EXPORTER)) {
+		mode = as->config.policies.metrics.metrics_exporter;
+	}
+	else if (policy->exporters && policy->exporters->size > 0) {
+		mode = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;
+	}
+
+	if (mode == AS_METRICS_BUILTIN_EXPORTER_FILE && policy->report_dir[0] == '\0') {
+		return AS_METRICS_BUILTIN_EXPORTER_NONE;
+	}
+	return mode;
+}
+
+static bool
+as_metrics_operational_resolve(aerospike* as, const as_metrics_policy* policy)
+{
+	uint8_t* bitmap = as->config_bitmap;
+
+	// Dynamic configuration that sets the operational key or enables metrics
+	// decides. Same mapping as as_cluster_update_metrics().
+	if (bitmap) {
+		if (as_field_is_set(bitmap, AS_METRICS_OPERATIONAL)) {
+			return policy->operational_enabled;
+		}
+
+		if (as_field_is_set(bitmap, AS_METRICS_LEGACY_ENABLE)) {
+			return true;
+		}
+
+		if (as_field_is_set(bitmap, AS_METRICS_ENABLE)) {
+			return policy->operational_enabled;
+		}
+	}
+
+	// The learn-metrics file and deprecated listeners read the operational
+	// fields, so they keep operational metrics on.
+	if (policy->metrics_listeners.enable_listener) {
+		return true;
+	}
+
+	if (as_metrics_exporter_mode(as, policy) == AS_METRICS_BUILTIN_EXPORTER_FILE) {
+		return true;
+	}
+	return policy->operational_enabled;
+}
+
 static const as_metrics_policy*
 as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_policy* mrg)
 {
@@ -143,7 +197,10 @@ aerospike_enable_metrics(aerospike* as, as_error* err, const as_metrics_policy* 
 	as_metrics_policy merged;
 	policy = as_metrics_policy_merge(as, policy, &merged);
 
-	as_status status = as_cluster_enable_metrics(err, cluster, policy);
+	as_metrics_policy resolved = *policy;
+	resolved.operational_enabled = as_metrics_operational_resolve(as, policy);
+
+	as_status status = as_cluster_enable_metrics(err, cluster, &resolved);
 
 	pthread_mutex_unlock(&cluster->metrics_lock);
 	return status;
@@ -1554,19 +1611,7 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	pthread_mutex_init(&rt->lock, NULL);
 	pthread_cond_init(&rt->cond, NULL);
 
-	// metrics.exporter is dynamic configuration only. Without that key, added
-	// exporters are called and the file writer is used when nothing else exports.
-	as_metrics_builtin_exporter mode = AS_METRICS_BUILTIN_EXPORTER_FILE;
-	aerospike* owner = cluster->as;
-	bool dynamic_exporter = owner && owner->config_bitmap &&
-		as_field_is_set(owner->config_bitmap, AS_METRICS_EXPORTER);
-
-	if (dynamic_exporter) {
-		mode = owner->config.policies.metrics.metrics_exporter;
-	}
-	else if (policy->exporters && policy->exporters->size > 0) {
-		mode = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;
-	}
+	as_metrics_builtin_exporter mode = as_metrics_exporter_mode(cluster->as, policy);
 
 	if (mode == AS_METRICS_BUILTIN_EXPORTER_CUSTOM && policy->exporters) {
 		for (uint32_t i = 0; i < policy->exporters->size; i++) {
@@ -1578,8 +1623,7 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		}
 	}
 
-	if (mode == AS_METRICS_BUILTIN_EXPORTER_FILE &&
-			!custom_listener && policy->report_dir[0] != '\0') {
+	if (mode == AS_METRICS_BUILTIN_EXPORTER_FILE && !custom_listener) {
 		as_metrics_exporter* file_exporter = NULL;
 		as_status status = as_metrics_file_exporter_create(err, policy, &file_exporter);
 

@@ -35,7 +35,8 @@ extern "C" {
  * namespace counters, and namespace latency are written when operational
  * metrics are enabled. Namespace RPC latency is filled for a successful
  * sampled RPC. Namespace connection buckets are recorded when metrics are
- * enabled. See as_ns_metrics.latency.
+ * enabled. See as_ns_metrics.latency. The operational connection-open series
+ * is as_metrics_node_snapshot.conn_latency and is not written.
  * Cluster command latency is not written.
  * blockingCount, deferredCount, and backgroundCount follow commandCount on
  * the cluster line. They are feature.api.blocking, feature.api.deferred, and

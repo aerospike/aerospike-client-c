@@ -561,21 +561,18 @@ as_node_create_socket(
 
 static as_status
 as_node_create_connection(
-	as_error* err, as_node* node, const char* ns, uint32_t socket_timeout, uint64_t deadline_ms,
-	as_conn_pool* pool, as_socket* sock, as_socket_context* ctx
+	as_error* err, as_node* node, uint32_t socket_timeout, uint64_t deadline_ms, as_conn_pool* pool,
+	as_socket* sock, as_socket_context* ctx
 	)
 {
-	// Snapshot both flags so the begin timestamp and the recording below use
-	// one view. Re-reading a flag could leave begin at 0 if that flag is
-	// turned on during connection setup.
-	// Namespace conn buckets follow metrics_enabled. See as_ns_metrics.latency.
-	// The operational series is node->conn_latency. See as_node_add_conn_latency().
+	// Snapshot the flag so the begin timestamp and the recording below use one
+	// view. Re-reading the flag could leave begin at 0 if operational metrics
+	// are turned on during connection setup. See as_node_add_conn_latency().
 	// The async path is as_event_add_conn_latency().
-	bool record_conn_buckets = node->cluster->metrics_enabled;
 	bool record_conn_open = node->cluster->metrics_operational_enabled;
 	uint64_t begin = 0;
 
-	if (record_conn_buckets || record_conn_open) {
+	if (record_conn_open) {
 		begin = cf_getns();
 	}
 	
@@ -609,17 +606,9 @@ as_node_create_connection(
 		}
 	}
 
-	if (record_conn_buckets || record_conn_open) {
+	if (record_conn_open) {
 		uint64_t elapsed = cf_getns() - begin;
-
-		if (record_conn_buckets) {
-			as_ns_metrics* metrics = as_node_prepare_metrics(node, ns);
-			as_node_add_attempt_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);
-		}
-
-		if (record_conn_open) {
-			as_node_add_conn_latency(node, elapsed);
-		}
+		as_node_add_conn_latency(node, elapsed);
 	}
 	return AEROSPIKE_OK;
 }
@@ -634,7 +623,7 @@ as_node_create_connections(as_node* node, as_conn_pool* pool, uint32_t timeout_m
 	// Create sync connections.
 	while (count > 0) {
 		uint64_t deadline_ms = as_socket_deadline(timeout_ms);
-		status = as_node_create_connection(&err, node, NULL, 0, deadline_ms, pool, &sock, NULL);
+		status = as_node_create_connection(&err, node, 0, deadline_ms, pool, &sock, NULL);
 
 		if (status != AEROSPIKE_OK) {
 			as_log_debug("Failed to create min connections: %d %s", err.code, err.message);
@@ -667,7 +656,7 @@ as_node_authenticate_connection(as_cluster* cluster, uint64_t deadline_ms)
 
 	as_socket sock;
 	as_error err;
-	as_status status = as_node_create_connection(&err, node, NULL, 0, deadline_ms, NULL, &sock, NULL);
+	as_status status = as_node_create_connection(&err, node, 0, deadline_ms, NULL, &sock, NULL);
 
 	if (status == AEROSPIKE_OK) {
 		as_node_close_socket(node, &sock);
@@ -735,19 +724,18 @@ as_node_get_connection(
 					uint64_t start = cf_getms();
 					uint64_t deadline = start + connect_timeout;
 
-					status = as_node_create_connection(err, node, cmd->ns, connect_timeout, deadline, pool, sock,
-						ctx);
+					status = as_node_create_connection(err, node, connect_timeout, deadline, pool, sock, ctx);
 
 					// Add connection creation time to command deadline.
 					cmd->deadline_ms += (cf_getms() - start);
 				}
 				else {
-					status = as_node_create_connection(err, node, cmd->ns, cmd->socket_timeout, deadline_ms, pool,
-						sock, ctx);
+					status = as_node_create_connection(err, node, cmd->socket_timeout, deadline_ms, pool, sock,
+						ctx);
 				}
 			}
 			else {
-				status = as_node_create_connection(err, node, NULL, 0, deadline_ms, pool, sock, ctx);
+				status = as_node_create_connection(err, node, 0, deadline_ms, pool, sock, ctx);
 			}
 
 			if (status != AEROSPIKE_OK) {

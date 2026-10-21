@@ -254,16 +254,16 @@ as_event_command_select_sample(as_event_command* cmd, bool count_command)
 
 /**
  * @private
- * Start the connection-open clock before an async connect. Same gates as the
+ * Start the connection-open clock before an async connect. Same gate as the
  * sync path in as_node_create_connection(). Not sampler-gated.
- * See as_ns_metrics.latency and as_node.conn_latency.
+ * See as_node.conn_latency.
  */
 static inline void
 as_event_conn_begin(as_event_command* cmd)
 {
 	cmd->conn_begin = 0;
 
-	if (cmd->cluster->metrics_enabled || cmd->cluster->metrics_operational_enabled) {
+	if (cmd->cluster->metrics_operational_enabled) {
 		cmd->conn_begin = cf_getns();
 	}
 }

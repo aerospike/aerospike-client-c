@@ -244,10 +244,8 @@ typedef struct {
 	 * sample per successful RPC, only when operational metrics are on and the
 	 * command was sampled. A retry is a new RPC, so the sample starts at the
 	 * attempt that succeeded. A batch sub-batch re-sent to its node is one RPC
-	 * that includes the re-sends. Connection buckets (AS_LATENCY_TYPE_CONN)
-	 * record every successful connection open while metrics are enabled,
-	 * without the operational or sampler gate.
-	 * Same rules as as_metrics_namespace_snapshot.latencies.
+	 * that includes the re-sends. Connection-open latency is per node in
+	 * as_node.conn_latency. Same rules as as_metrics_namespace_snapshot.latencies.
 	 */
 	as_latency* latency[AS_LATENCY_TYPE_MAX];
 
@@ -527,7 +525,6 @@ typedef struct as_node_s {
 	 * @private
 	 * Successful connection-open latency for this node.
 	 * Recorded when operational metrics are enabled. Not sampler-gated.
-	 * Not the namespace histogram latency[AS_LATENCY_TYPE_CONN].
 	 * See as_metrics_node_snapshot.conn_latency.
 	 */
 	as_latency* conn_latency;
@@ -904,9 +901,8 @@ as_node_prepare_metrics(as_node* node, const char* ns);
 
 /**
  * @private
- * Record one latency sample in the namespace histogram.
- * Used for a successful RPC and for the existing connection buckets.
- * The operational connection-open series is as_node_add_conn_latency().
+ * Record one latency sample for a successful RPC in the namespace histogram.
+ * Connection-open latency is as_node_add_conn_latency().
  * See as_metrics_namespace_snapshot.latencies.
  */
 void
@@ -932,7 +928,7 @@ as_node_rpc_latency_begin(as_latency_type latency_type, uint64_t command_begin, 
  * @private
  * Record one successful connection open on the node.
  * Operational and not sampler-gated.
- * See as_node.conn_latency and as_ns_metrics.latency.
+ * See as_node.conn_latency.
  */
 void
 as_node_add_conn_latency(as_node* node, uint64_t elapsed_nanos);

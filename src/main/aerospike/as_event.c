@@ -619,12 +619,7 @@ as_event_add_conn_latency(as_event_command* cmd)
 	uint64_t elapsed = cf_getns() - cmd->conn_begin;
 	cmd->conn_begin = 0;
 
-	// Same histograms and gates as as_node_create_connection().
-	if (cmd->cluster->metrics_enabled) {
-		as_ns_metrics* metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
-		as_node_add_attempt_latency(metrics, AS_LATENCY_TYPE_CONN, elapsed);
-	}
-
+	// Same histogram and gate as as_node_create_connection().
 	if (cmd->cluster->metrics_operational_enabled) {
 		as_node_add_conn_latency(cmd->node, elapsed);
 	}

@@ -193,9 +193,8 @@ typedef struct as_metrics_namespace_snapshot_s {
 	 * RPC, only when operational metrics are on and the command was sampled.
 	 * A retry is a new RPC, so the sample starts at the attempt that succeeded.
 	 * A batch sub-batch re-sent to its node is one RPC that includes the
-	 * re-sends. Connection buckets record every successful connection open
-	 * while metrics are enabled, without the operational or sampler gate.
-	 * Same rules as as_ns_metrics.latency.
+	 * re-sends. Connection-open latency is per node in
+	 * as_metrics_node_snapshot.conn_latency. Same rules as as_ns_metrics.latency.
 	 * v3 command latency is `as_metrics_snapshot.command_latencies`.
 	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];
@@ -283,8 +282,8 @@ typedef struct as_metrics_node_snapshot_s {
 	/**
 	 * Successful connection-open latency for this node.
 	 * Recorded when operational metrics are enabled. Not sampler-gated.
-	 * Not as_ns_metrics.latency[AS_LATENCY_TYPE_CONN].
-	 * See as_node.conn_latency. The learn-metrics file does not write this series.
+	 * The type is AS_LATENCY_TYPE_CONN. See as_node.conn_latency.
+	 * The learn-metrics file does not write this series.
 	 */
 	as_metrics_latency_snapshot conn_latency;
 } as_metrics_node_snapshot;

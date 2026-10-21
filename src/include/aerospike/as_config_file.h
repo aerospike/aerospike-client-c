@@ -169,23 +169,9 @@ as_field_is_set(uint8_t* bitmap, uint32_t offset)
 }
 
 /**
- * Return true if operational metrics should be recorded when metrics are started
- * from as_config.policies.metrics.enable instead of aerospike_enable_metrics().
- * That happens in aerospike_connect() and on a dynamic configuration reload.
- *
- * policy is the effective metrics policy. bitmap marks the keys set by the
- * configuration file, and is NULL when no file is used.
- *
- * - AS_METRICS_OPERATIONAL_ON or AS_METRICS_OPERATIONAL_OFF: that value. It is
- *   extended.operational.enabled when the file sets it, otherwise the
- *   application value.
- * - AS_METRICS_OPERATIONAL_UNSET with metrics.enabled and no legacy
- *   metrics.enable key: false.
- * - AS_METRICS_OPERATIONAL_UNSET otherwise: true. This covers the legacy
- *   metrics.enable key, and an enable flag that no file key set.
- *
- * aerospike_enable_metrics() does not call this. It resolves unset to true in
- * every case. See as_metrics_policy.operational_enabled.
+ * Resolve as_metrics_policy.operational_enabled when dynamic configuration
+ * enables metrics. Unset is off only when metrics.enabled, rather than the
+ * legacy metrics.enable key, set the enable flag.
  */
 static inline bool
 as_config_file_metrics_operational(const as_metrics_policy* policy, uint8_t* bitmap)

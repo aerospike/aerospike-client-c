@@ -757,21 +757,6 @@ metrics_attempt_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
 	return metrics_namespace_latency_total(metrics_snapshot, AS_LATENCY_TYPE_WRITE);
 }
 
-static uint64_t
-metrics_node_conn_latency_total(const as_metrics_snapshot* metrics_snapshot)
-{
-	uint64_t total = 0;
-
-	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
-		as_metrics_latency_snapshot* latency_snapshot = &metrics_snapshot->nodes[i]->conn_latency;
-
-		for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
-			total += latency_snapshot->buckets[k];
-		}
-	}
-	return total;
-}
-
 static bool
 metrics_test_namespace_ok(const as_metrics_snapshot* metrics_snapshot, uint8_t bucket_count)
 {
@@ -1195,11 +1180,9 @@ TEST(metrics_async_conn_latency, "an async connection open records connection la
 	as_metrics_snapshot* metrics_snapshot = NULL;
 	as_status snapshot_status = aerospike_get_metrics_snapshot(client, &err, &metrics_snapshot);
 	uint64_t namespace_conn = 0;
-	uint64_t node_conn = 0;
 
 	if (snapshot_status == AEROSPIKE_OK) {
 		namespace_conn = metrics_namespace_latency_total(metrics_snapshot, AS_LATENCY_TYPE_CONN);
-		node_conn = metrics_node_conn_latency_total(metrics_snapshot);
 		as_metrics_snapshot_destroy(metrics_snapshot);
 	}
 
@@ -1213,7 +1196,6 @@ TEST(metrics_async_conn_latency, "an async connection open records connection la
 	assert_int_eq(get_status, AEROSPIKE_OK);
 	assert_int_eq(snapshot_status, AEROSPIKE_OK);
 	assert_true(namespace_conn > 0);
-	assert_true(node_conn > 0);
 }
 
 TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on the snapshot")

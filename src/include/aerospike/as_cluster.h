@@ -421,7 +421,7 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Command-path operational metrics. Off unless the metrics policy enables them.
+	 * Command-path operational metrics. See as_metrics_policy.operational_enabled.
 	 */
 	bool metrics_operational_enabled;
 

@@ -301,8 +301,9 @@ typedef struct as_metrics_event_loop_snapshot_s {
  * Valid only for the duration of the export call. Copy fields that must be retained.
  * Counters and histogram buckets are cumulative. Gauges are the values at build time.
  *
- * Enabling metrics does not turn on operational or usage metrics. Set
- * `as_metrics_policy.operational_enabled` or `usage_enabled` for those blocks.
+ * Enabling metrics does not turn on usage metrics. Set `as_metrics_policy.usage_enabled`
+ * for that block. See `as_metrics_policy.operational_enabled` for when operational
+ * metrics are on.
  * The metrics file header uses camelCase field names. See usage_metrics_enabled
  * for blockingCount, deferredCount, and backgroundCount.
  *
@@ -660,10 +661,16 @@ typedef struct as_metrics_policy_s {
 	/**
 	 * Record command-path operational metrics (latency, namespace errors and bytes,
 	 * cpu, memory) on the metrics snapshot. When false, commands are not timed.
-	 * Dynamic configuration metrics.enabled does not change this flag.
-	 * The legacy metrics.enable key turns it on when extended.operational.enabled
-	 * is absent.
 	 * Tier 0 pool gauges are collected whenever metrics are enabled.
+	 *
+	 * Dynamic configuration extended.operational.enabled always overrides this
+	 * flag. Otherwise:
+	 * - The legacy metrics.enable key turns it on.
+	 * - metrics.enabled leaves this flag as set.
+	 * - When dynamic configuration does not enable metrics, aerospike_enable_metrics()
+	 *   turns it on if the built-in learn-metrics file exporter or deprecated
+	 *   listeners are used, and leaves it as set for added exporters or an empty
+	 *   report_dir.
 	 *
 	 * Default: false
 	 */
@@ -944,7 +951,8 @@ as_metrics_departed_destroy(struct as_cluster_s* cluster);
 
 /**
  * Enable periodic metrics collection and the export timer.
- * Operational metrics follow the policy and stay off by default.
+ * Operational metrics are on with the learn-metrics file exporter or deprecated
+ * listeners, and otherwise follow the policy. See as_metrics_policy.operational_enabled.
  * Usage metrics stay off unless the policy enables them.
  */
 AS_EXTERN as_status

@@ -22,6 +22,7 @@
 #include <aerospike/as_queue.h>
 #include <aerospike/as_proto.h>
 #include <aerospike/as_socket.h>
+#include <citrusleaf/cf_clock.h>
 #include <citrusleaf/cf_ll.h>
 #include <pthread.h>
 
@@ -143,11 +144,14 @@ typedef struct as_event_command {
 	cf_ll_element pipe_link;
 	
 	uint8_t* buf;
-	// Monotonic nanoseconds from cf_getns() at the start of the current attempt.
-	// Learn-metrics histograms use this clock. 0 skips that sample.
-	uint64_t attempt_begin;
 	// See as_command.command_begin.
 	uint64_t command_begin;
+	// Monotonic nanoseconds at the start of this attempt. Set only when this
+	// command records namespace metrics. See as_node_rpc_latency_begin().
+	uint64_t attempt_begin;
+	// Monotonic nanoseconds when this command started opening a new connection.
+	// 0 when no connection-open latency is recorded. See as_event_conn_begin().
+	uint64_t conn_begin;
 	uint32_t iteration;
 	uint32_t command_sent_counter;
 	uint32_t write_offset;
@@ -173,8 +177,6 @@ typedef struct as_event_command {
 	as_latency_type latency_type;
 	// See as_command.metrics_sample_decision.
 	bool metrics_sample_decision;
-	// See as_command.record_namespace_metrics.
-	bool record_namespace_metrics;
 } as_event_command;
 
 typedef struct {
@@ -211,10 +213,25 @@ as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
 	// See as_command.metrics_sample_decision.
 	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
-	cmd->record_namespace_metrics = as_cluster_record_namespace_metrics(cmd->cluster, cmd->metrics_sample_decision);
 
 	if (cmd->metrics_sample_decision && count_command) {
 		as_incr_uint64(&cmd->cluster->command_count);
+	}
+}
+
+/**
+ * @private
+ * Start the connection-open clock before an async connect. Same gate as the
+ * sync path in as_node_create_connection(). Not sampler-gated.
+ * See as_node.conn_latency.
+ */
+static inline void
+as_event_conn_begin(as_event_command* cmd)
+{
+	cmd->conn_begin = 0;
+
+	if (cmd->cluster->metrics_operational_enabled) {
+		cmd->conn_begin = cf_getns();
 	}
 }
 

@@ -61,6 +61,60 @@
 // Static Functions
 //---------------------------------
 
+static as_metrics_builtin_exporter
+as_metrics_exporter_mode(aerospike* as, const as_metrics_policy* policy)
+{
+	// metrics.exporter is dynamic configuration only. Without that key, added
+	// exporters are called and the file writer is used when nothing else exports.
+	// The file writer needs a report_dir.
+	as_metrics_builtin_exporter mode = AS_METRICS_BUILTIN_EXPORTER_FILE;
+
+	if (as && as->config_bitmap && as_field_is_set(as->config_bitmap, AS_METRICS_EXPORTER)) {
+		mode = as->config.policies.metrics.metrics_exporter;
+	}
+	else if (policy->exporters && policy->exporters->size > 0) {
+		mode = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;
+	}
+
+	if (mode == AS_METRICS_BUILTIN_EXPORTER_FILE && policy->report_dir[0] == '\0') {
+		return AS_METRICS_BUILTIN_EXPORTER_NONE;
+	}
+	return mode;
+}
+
+static bool
+as_metrics_operational_resolve(aerospike* as, const as_metrics_policy* policy)
+{
+	uint8_t* bitmap = as->config_bitmap;
+
+	// Dynamic configuration that sets the operational key or enables metrics
+	// decides. Same mapping as as_cluster_update_metrics().
+	if (bitmap) {
+		if (as_field_is_set(bitmap, AS_METRICS_OPERATIONAL)) {
+			return policy->operational_enabled;
+		}
+
+		if (as_field_is_set(bitmap, AS_METRICS_LEGACY_ENABLE)) {
+			return true;
+		}
+
+		if (as_field_is_set(bitmap, AS_METRICS_ENABLE)) {
+			return policy->operational_enabled;
+		}
+	}
+
+	// The learn-metrics file and deprecated listeners read the operational
+	// fields, so they keep operational metrics on.
+	if (policy->metrics_listeners.enable_listener) {
+		return true;
+	}
+
+	if (as_metrics_exporter_mode(as, policy) == AS_METRICS_BUILTIN_EXPORTER_FILE) {
+		return true;
+	}
+	return policy->operational_enabled;
+}
+
 static const as_metrics_policy*
 as_metrics_policy_merge(aerospike* as, const as_metrics_policy* src, as_metrics_policy* mrg)
 {
@@ -143,7 +197,10 @@ aerospike_enable_metrics(aerospike* as, as_error* err, const as_metrics_policy* 
 	as_metrics_policy merged;
 	policy = as_metrics_policy_merge(as, policy, &merged);
 
-	as_status status = as_cluster_enable_metrics(err, cluster, policy);
+	as_metrics_policy resolved = *policy;
+	resolved.operational_enabled = as_metrics_operational_resolve(as, policy);
+
+	as_status status = as_cluster_enable_metrics(err, cluster, &resolved);
 
 	pthread_mutex_unlock(&cluster->metrics_lock);
 	return status;
@@ -640,6 +697,7 @@ as_metrics_node_snapshot_destroy(as_metrics_node_snapshot* snapshot)
 
 	cf_free(snapshot->name);
 	cf_free(snapshot->address);
+	cf_free(snapshot->conn_latency.buckets);
 
 	if (snapshot->namespaces) {
 		for (uint32_t i = 0; i < snapshot->namespace_count; i++) {
@@ -679,8 +737,8 @@ as_metrics_copy_latency(as_metrics_latency_snapshot* dst, as_latency* latency, u
 	as_latency_release(latency);
 }
 
-static void
-as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics_node_snapshot** snapshot)
+void
+as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapshot)
 {
 	as_metrics_node_snapshot* snap = cf_calloc(1, sizeof(as_metrics_node_snapshot));
 	snap->name = as_metrics_strdup_or_empty(node->name);
@@ -725,16 +783,16 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 		snap->conn_open_failures = as_load_uint32(&node->conn_open_failures);
 		snap->conn_tls_handshake_failures = as_load_uint32(&node->conn_tls_handshake_failures);
 		snap->conn_auth_failures = as_load_uint32(&node->conn_auth_failures);
+		// See as_metrics_node_snapshot.conn_latency.
+		as_metrics_copy_latency(&snap->conn_latency, node->conn_latency, AS_LATENCY_TYPE_CONN);
 	}
 
 	uint8_t ns_max = 0;
-	// The file log and metrics listeners read per-attempt namespace histograms.
-	// Keep them when operational metrics are off so those readers are not broken.
-	bool should_copy_attempt_latencies = file_fields || node->cluster->metrics_listeners.snapshot_listener != NULL;
-	bool should_copy_namespace_metrics = node->cluster->metrics_enabled &&
-		(node->cluster->metrics_operational_enabled || should_copy_attempt_latencies);
 
-	if (should_copy_namespace_metrics) {
+	// Disable leaves metrics_operational_enabled set so an on-demand snapshot
+	// still shows the last namespace counters and latency buckets.
+	// See as_metrics_namespace_snapshot.latencies.
+	if (node->cluster->metrics_operational_enabled) {
 		ns_max = node->metrics_size;
 	}
 
@@ -753,34 +811,20 @@ as_metrics_node_snapshot_create_impl(as_node* node, bool file_fields, as_metrics
 		ns->name = as_metrics_strdup_or_empty(metrics->ns);
 		ns->record_too_big = as_load_uint64(&metrics->record_too_big_count);
 		ns->device_overload = as_load_uint64(&metrics->device_overload_count);
-		ns->errors = as_node_get_error_count(metrics) - ns->record_too_big - ns->device_overload;
+		ns->errors = as_load_uint64(&metrics->snapshot_error_count);
 		ns->client_timeouts = as_load_uint64(&metrics->client_timeout_count);
 		ns->server_timeouts = as_load_uint64(&metrics->server_timeout_count);
-		ns->key_busy = as_node_get_key_busy_count(metrics);
+		ns->key_busy = as_load_uint64(&metrics->snapshot_key_busy_count);
 		ns->bytes_in = as_node_get_bytes_in(metrics);
 		ns->bytes_out = as_node_get_bytes_out(metrics);
 
 		for (uint8_t j = 0; j < AS_LATENCY_TYPE_MAX; j++) {
-			if (should_copy_attempt_latencies) {
-				as_metrics_copy_latency(&ns->latencies[j], metrics->latency[j], j);
-			}
+			as_metrics_copy_latency(&ns->latencies[j], metrics->latency[j], j);
 		}
 		snap->namespace_count++;
 	}
 
 	*snapshot = snap;
-}
-
-void
-as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapshot)
-{
-	as_metrics_node_snapshot_create_impl(node, false, snapshot);
-}
-
-void
-as_metrics_node_snapshot_create_file(as_node* node, as_metrics_node_snapshot** snapshot)
-{
-	as_metrics_node_snapshot_create_impl(node, true, snapshot);
 }
 
 void
@@ -833,12 +877,10 @@ as_metrics_snapshot_create_impl(
 {
 	*snapshot = NULL;
 	bool operational = cluster->metrics_enabled && cluster->metrics_operational_enabled;
-	bool should_read_cpu_mem = cluster->metrics_enabled &&
-		(cluster->metrics_operational_enabled || file_fields);
 	uint32_t cpu_usage = 0;
 	uint64_t mem = 0;
 
-	if (should_read_cpu_mem) {
+	if (operational) {
 		as_status status = as_metrics_read_cpu_mem(err, cpu, &cpu_usage, &mem);
 
 		if (status != AEROSPIKE_OK) {
@@ -878,7 +920,7 @@ as_metrics_snapshot_create_impl(
 
 	// Command latency spans retries, which can change nodes, so it is copied
 	// once for the cluster. The learn-metrics file does not write this series.
-	if (operational && !file_fields) {
+	if (cluster->metrics_operational_enabled && !file_fields) {
 		for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
 			as_metrics_copy_latency(&snap->command_latencies[i], cluster->command_latency[i], i);
 		}
@@ -915,7 +957,7 @@ as_metrics_snapshot_create_impl(
 
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_metrics_node_snapshot* node_snap = NULL;
-		as_metrics_node_snapshot_create_impl(nodes->array[i], file_fields, &node_snap);
+		as_metrics_node_snapshot_create(nodes->array[i], &node_snap);
 		snap->nodes[i] = node_snap;
 	}
 	as_nodes_release(nodes);
@@ -1015,6 +1057,7 @@ as_metrics_node_snapshot_clone(const as_metrics_node_snapshot* src)
 	dst->name = as_metrics_strdup_or_empty(src->name);
 	dst->address = as_metrics_strdup_or_empty(src->address);
 	dst->namespaces = NULL;
+	dst->conn_latency.buckets = as_metrics_clone_latency_buckets(&src->conn_latency);
 
 	if (src->namespace_count == 0 || !src->namespaces) {
 		dst->namespace_count = 0;
@@ -1163,6 +1206,7 @@ as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, const as_metrics_
 	snap->conn_open_failures += prev->conn_open_failures;
 	snap->conn_tls_handshake_failures += prev->conn_tls_handshake_failures;
 	snap->conn_auth_failures += prev->conn_auth_failures;
+	as_metrics_add_latency_buckets(&snap->conn_latency, &prev->conn_latency);
 
 	for (uint32_t i = 0; i < prev->namespace_count; i++) {
 		const as_metrics_namespace_snapshot* src = &prev->namespaces[i];
@@ -1567,19 +1611,7 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 	pthread_mutex_init(&rt->lock, NULL);
 	pthread_cond_init(&rt->cond, NULL);
 
-	// metrics.exporter is dynamic configuration only. Without that key, added
-	// exporters are called and the file writer is used when nothing else exports.
-	as_metrics_builtin_exporter mode = AS_METRICS_BUILTIN_EXPORTER_FILE;
-	aerospike* owner = cluster->as;
-	bool dynamic_exporter = owner && owner->config_bitmap &&
-		as_field_is_set(owner->config_bitmap, AS_METRICS_EXPORTER);
-
-	if (dynamic_exporter) {
-		mode = owner->config.policies.metrics.metrics_exporter;
-	}
-	else if (policy->exporters && policy->exporters->size > 0) {
-		mode = AS_METRICS_BUILTIN_EXPORTER_CUSTOM;
-	}
+	as_metrics_builtin_exporter mode = as_metrics_exporter_mode(cluster->as, policy);
 
 	if (mode == AS_METRICS_BUILTIN_EXPORTER_CUSTOM && policy->exporters) {
 		for (uint32_t i = 0; i < policy->exporters->size; i++) {
@@ -1591,8 +1623,7 @@ as_metrics_runtime_enable(as_error* err, as_cluster* cluster, const as_metrics_p
 		}
 	}
 
-	if (mode == AS_METRICS_BUILTIN_EXPORTER_FILE &&
-			!custom_listener && policy->report_dir[0] != '\0') {
+	if (mode == AS_METRICS_BUILTIN_EXPORTER_FILE && !custom_listener) {
 		as_metrics_exporter* file_exporter = NULL;
 		as_status status = as_metrics_file_exporter_create(err, policy, &file_exporter);
 
@@ -1708,7 +1739,6 @@ as_metrics_runtime_disable(as_error* err, as_cluster* cluster)
 
 	cluster->metrics_enabled = false;
 	cluster->metrics_file_writer = false;
-	as_cluster_disable_command_latency(cluster);
 
 	if (rt) {
 		as_metrics_runtime_free(rt);

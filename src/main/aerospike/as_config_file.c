@@ -2370,6 +2370,7 @@ as_cluster_update_metrics(
 
 	// Legacy metrics.enable, without extended.operational.enabled, is master
 	// plus operational. metrics.enabled does not turn operational on.
+	// aerospike_enable_metrics() applies the same mapping.
 	if (as_field_is_set(bitmap, AS_METRICS_LEGACY_ENABLE) && src->enable &&
 			!as_field_is_set(bitmap, AS_METRICS_OPERATIONAL)) {
 		trg->operational_enabled = true;

@@ -222,53 +222,81 @@ typedef struct {
 	uint64_t bytes_out;
 
 	/**
-	 * Command error count since node was initialized. If the error is retryable, multiple errors per
-	 * command may occur.
+	 * Command error count for this namespace since the node was initialized.
+	 * If the error is retryable, multiple errors per command may occur.
 	 */
 	uint64_t error_count;
 
 	/**
-	 * Command timeout count since node was initialized. If the timeout is retryable (ie socketTimeout),
-	 * multiple timeouts per command may occur.
+	 * Command timeout count for this namespace since the node was initialized.
+	 * If the timeout is retryable (ie socketTimeout), multiple timeouts per
+	 * command may occur.
 	 */
 	uint64_t timeout_count;
 
 	/**
-	 * Command key busy error count since node was initialized.
+	 * Command key busy error count for this namespace since the node was initialized.
+	 * A retryable key-busy error can be counted more than once for one command.
 	 */
 	uint64_t key_busy_count;
 
 	/**
-	 * Latency histograms. One sample per successful attempt.
-	 * The learn-metrics file and snapshot `latencies` use this series.
+	 * Latency histograms. Read, write, batch, and query buckets record one
+	 * sample per successful RPC, only when operational metrics are on and the
+	 * command was sampled. A retry is a new RPC, so the sample starts at the
+	 * attempt that succeeded. A batch sub-batch re-sent to its node is one RPC
+	 * that includes the re-sends. Connection-open latency is per node in
+	 * as_node.conn_latency. Same rules as as_metrics_namespace_snapshot.latencies.
 	 */
 	as_latency* latency[AS_LATENCY_TYPE_MAX];
 
 	/**
 	 * @private
-	 * Client timeouts copied into the metrics snapshot. Also included in timeout_count.
-	 * A retryable timeout can be counted more than once for one command.
+	 * Client timeouts copied into the metrics snapshot.
+	 * Recorded once for a sampled terminal user-call failure.
+	 * Not included in timeout_count. See as_node_add_terminal_result().
 	 */
 	uint64_t client_timeout_count;
 
 	/**
 	 * @private
-	 * Server timeouts copied into the metrics snapshot. Also included in timeout_count.
-	 * A retryable timeout can be counted more than once for one command.
+	 * Server timeouts copied into the metrics snapshot.
+	 * Recorded once for a sampled terminal user-call failure.
+	 * Not included in timeout_count. See as_node_add_terminal_result().
 	 */
 	uint64_t server_timeout_count;
 
 	/**
 	 * @private
-	 * Record too big errors copied into the metrics snapshot. Also included in error_count.
+	 * Record too big errors copied into the metrics snapshot.
+	 * Recorded once for a sampled terminal user-call failure.
+	 * Not included in error_count. See as_node_add_terminal_result().
 	 */
 	uint64_t record_too_big_count;
 
 	/**
 	 * @private
-	 * Device overload errors copied into the metrics snapshot. Also included in error_count.
+	 * Device overload errors copied into the metrics snapshot.
+	 * Recorded once for a sampled terminal user-call failure.
+	 * Not included in error_count. See as_node_add_terminal_result().
 	 */
 	uint64_t device_overload_count;
+
+	/**
+	 * @private
+	 * Remaining command errors copied into the metrics snapshot.
+	 * Recorded once for a sampled terminal user-call failure.
+	 * Not included in error_count. See as_node_add_terminal_result().
+	 */
+	uint64_t snapshot_error_count;
+
+	/**
+	 * @private
+	 * Key-busy errors copied into the metrics snapshot.
+	 * Recorded once for a sampled terminal user-call failure.
+	 * Not included in key_busy_count. See as_node_add_terminal_result().
+	 */
+	uint64_t snapshot_key_busy_count;
 
 } as_ns_metrics;
 
@@ -493,6 +521,14 @@ typedef struct as_node_s {
 	 * Should user-agent-set info command be retried.
 	 */
 	bool retry_user_agent;
+
+	/**
+	 * @private
+	 * Successful connection-open latency for this node.
+	 * Recorded when operational metrics are enabled. Not sampler-gated.
+	 * See as_metrics_node_snapshot.conn_latency.
+	 */
+	as_latency* conn_latency;
 
 } as_node;
 
@@ -866,10 +902,37 @@ as_node_prepare_metrics(as_node* node, const char* ns);
 
 /**
  * @private
- * Record one per-attempt latency sample in the learn-metrics histogram.
+ * Record one latency sample for a successful RPC in the namespace histogram.
+ * Connection-open latency is as_node_add_conn_latency().
+ * See as_metrics_namespace_snapshot.latencies.
  */
 void
 as_node_add_attempt_latency(as_ns_metrics* metrics, as_latency_type latency_type, uint64_t elapsed_nanos);
+
+/**
+ * @private
+ * Start time of a namespace latency sample. A retry is a new RPC, so the sample
+ * starts at the attempt that succeeded. A batch sub-batch re-sent to its node is
+ * one RPC, so its sample starts at the first send and includes the re-sends.
+ * See as_metrics_namespace_snapshot.latencies.
+ */
+static inline uint64_t
+as_node_rpc_latency_begin(as_latency_type latency_type, uint64_t command_begin, uint64_t attempt_begin)
+{
+	if (latency_type == AS_LATENCY_TYPE_BATCH) {
+		return command_begin;
+	}
+	return attempt_begin;
+}
+
+/**
+ * @private
+ * Record one successful connection open on the node.
+ * Operational and not sampler-gated.
+ * See as_node.conn_latency.
+ */
+void
+as_node_add_conn_latency(as_node* node, uint64_t elapsed_nanos);
 
 struct as_metrics_policy_s;
 
@@ -926,11 +989,24 @@ as_node_get_error_count(as_ns_metrics* metrics)
 }
 
 /**
- * Increment command error count. If the error is retryable, multiple errors per
- * command may occur.
+ * Increment this namespace's command error count. If the error is retryable,
+ * multiple errors per command may occur. aerospike_node_stats() adds this
+ * count into as_node_stats.error_count. See as_ns_metrics.error_count.
  */
 void
 as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics);
+
+/**
+ * @private
+ * Record the namespace error or timeout split for a user call that failed
+ * overall. A retry that later succeeds does not increment these counters.
+ * err->message starting with "Client timeout" or "Pipeline timeout", or an
+ * empty timeout message, is a client timeout. Any other timeout message is a
+ * server timeout. These counters do not change as_node_stats.error_count or
+ * as_node_stats.timeout_count. See the AEROSPIKE_ERR_TIMEOUT case.
+ */
+void
+as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metrics, as_error* err);
 
 /**
  * Return command timeout count. The value is cumulative and not reset per metrics interval.
@@ -942,25 +1018,13 @@ as_node_get_timeout_count(as_ns_metrics* metrics)
 }
 
 /**
- * Increment command timeout count. If the timeout is retryable (ie socketTimeout),
- * multiple timeouts per command may occur.
+ * Increment this namespace's command timeout count. If the timeout is retryable
+ * (ie socketTimeout), multiple timeouts per command may occur.
+ * aerospike_node_stats() adds this count into as_node_stats.timeout_count.
+ * See as_ns_metrics.timeout_count.
  */
 void
 as_node_add_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
-
-/**
- * @private
- * Increment the snapshot client timeout count. Also increments timeout_count.
- */
-void
-as_node_add_client_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
-
-/**
- * @private
- * Increment the snapshot server timeout count. Also increments timeout_count.
- */
-void
-as_node_add_server_timeout(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * Return command key busy error count. The value is cumulative and not reset per metrics interval.
@@ -976,20 +1040,6 @@ as_node_get_key_busy_count(as_ns_metrics* metrics)
  */
 void
 as_node_add_key_busy(as_node* node, const char* ns, as_ns_metrics* metrics);
-
-/**
- * @private
- * Increment the snapshot record too big count. Also increments error_count.
- */
-void
-as_node_add_record_too_big(as_node* node, const char* ns, as_ns_metrics* metrics);
-
-/**
- * @private
- * Increment the snapshot device overload count. Also increments error_count.
- */
-void
-as_node_add_device_overload(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * @private

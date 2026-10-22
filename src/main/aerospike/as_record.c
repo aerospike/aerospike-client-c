@@ -452,16 +452,23 @@ as_record_get_bytes(const as_record* rec, const char* name)
 }
 
 as_vector_value*
-as_record_get_vector(const as_record* rec, const char* name)
+as_record_get_vector(as_error* err, const as_record* rec, const char* name)
 {
-	as_bytes* bytes = as_bytes_fromval((as_val*) as_record_get(rec, name));
+	as_val* val = (as_val*)as_record_get(rec, name);
 
-	if (! bytes || bytes->type != AS_BYTES_VECTOR) {
+	if (! val) {
+		as_error_update(err, AEROSPIKE_ERR_BIN_NOT_FOUND, "bin '%s' not found", name);
 		return NULL;
 	}
 
-	as_error err;
-	return as_vector_value_from_bytes(&err, bytes);
+	as_bytes* bytes = as_bytes_fromval(val);
+
+	if (! bytes || bytes->type != AS_BYTES_VECTOR) {
+		as_error_update(err, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, "bin '%s' is not a vector",
+			name);
+		return NULL;
+	}
+	return as_vector_value_from_bytes(err, bytes);
 }
 
 as_list*

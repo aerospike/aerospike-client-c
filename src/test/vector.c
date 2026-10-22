@@ -87,7 +87,8 @@ vector_async_get_callback(as_error* err, as_record* rec, void* udata, as_event_l
 	assert_success_async(&data->monitor, err, data->result);
 
 	assert_async(&data->monitor, rec);
-	as_vector_value* vec = as_record_get_vector(rec, "v");
+	as_error vec_err;
+	as_vector_value* vec = as_record_get_vector(&vec_err, rec, "v");
 	assert_async(&data->monitor, vec);
 
 	if (vec) {
@@ -818,10 +819,10 @@ TEST(vector_native_bin_roundtrip, "set/get vector bins of every element type rou
 	status = aerospike_key_get(as, &err, NULL, &key, &out);
 	assert_int_eq(status, AEROSPIKE_OK);
 
-	as_vector_value* r16 = as_record_get_vector(out, "f16");
-	as_vector_value* r32i = as_record_get_vector(out, "i32");
-	as_vector_value* r32f = as_record_get_vector(out, "f32");
-	as_vector_value* r64 = as_record_get_vector(out, "f64");
+	as_vector_value* r16 = as_record_get_vector(&err, out, "f16");
+	as_vector_value* r32i = as_record_get_vector(&err, out, "i32");
+	as_vector_value* r32f = as_record_get_vector(&err, out, "f32");
+	as_vector_value* r64 = as_record_get_vector(&err, out, "f64");
 	assert_not_null(r16);
 	assert_not_null(r32i);
 	assert_not_null(r32f);
@@ -881,9 +882,9 @@ TEST(vector_special_float_bits_server, "special float bit patterns survive the s
 	as_record* out = NULL;
 	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
 
-	as_vector_value* r32 = as_record_get_vector(out, "f32");
-	as_vector_value* r64 = as_record_get_vector(out, "f64");
-	as_vector_value* r16 = as_record_get_vector(out, "f16");
+	as_vector_value* r32 = as_record_get_vector(&err, out, "f32");
+	as_vector_value* r64 = as_record_get_vector(&err, out, "f64");
+	as_vector_value* r16 = as_record_get_vector(&err, out, "f16");
 	assert_not_null(r32);
 	assert_not_null(r64);
 	assert_not_null(r16);
@@ -939,7 +940,7 @@ TEST(vector_single_dimension_server, "a single-dimension vector round-trips thro
 	as_record* out = NULL;
 	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
 
-	as_vector_value* r = as_record_get_vector(out, "v");
+	as_vector_value* r = as_record_get_vector(&err, out, "v");
 	assert_not_null(r);
 	assert_int_eq(r->dimensions, 1);
 	assert(as_vector_value_get_float32(r)[0] == 42.5f);
@@ -979,7 +980,7 @@ TEST(vector_large_crossing_16bit_server, "a large vector crossing the 16-bit msg
 	as_record* out = NULL;
 	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
 
-	as_vector_value* r = as_record_get_vector(out, "v");
+	as_vector_value* r = as_record_get_vector(&err, out, "v");
 	assert_not_null(r);
 	assert_int_eq(r->dimensions, dims);
 	const double* elems = as_vector_value_get_float64(r);
@@ -1018,7 +1019,7 @@ TEST(vector_max_dimensions_server, "a vector at the server dimension limit round
 
 	as_record* out = NULL;
 	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
-	as_vector_value* result = as_record_get_vector(out, "v");
+	as_vector_value* result = as_record_get_vector(&err, out, "v");
 	assert_not_null(result);
 	assert_int_eq(result->dimensions, dims);
 	assert(as_vector_value_get_float64(result)[0] == -1.0);
@@ -1049,7 +1050,9 @@ TEST(vector_absent_bin_null, "an absent vector bin reads back as NULL, not an em
 	as_record* out = NULL;
 	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
 
-	assert_null(as_record_get_vector(out, "missing"));
+	assert_null(as_record_get_vector(&err, out, "missing"));
+	assert_int_eq(err.code, AEROSPIKE_ERR_BIN_NOT_FOUND);
+	assert_string_eq(err.message, "bin 'missing' not found");
 	assert_int_eq(as_record_get_int64(out, "scalar", -1), 42);
 
 	as_record_destroy(out);
@@ -1084,7 +1087,7 @@ TEST(vector_overwrite_replaces_type_dims, "overwriting a vector bin fully replac
 	as_record* out = NULL;
 	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
 
-	as_vector_value* r = as_record_get_vector(out, "v");
+	as_vector_value* r = as_record_get_vector(&err, out, "v");
 	assert_not_null(r);
 	assert_int_eq(r->element_type, AS_VECTOR_ELEMENT_TYPE_INT32);
 	assert_int_eq(r->dimensions, 2);
@@ -1124,7 +1127,9 @@ TEST(vector_scalar_churn, "a vector bin can be replaced by a scalar and back")
 
 	as_record* mid = NULL;
 	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &mid), AEROSPIKE_OK);
-	assert_null(as_record_get_vector(mid, "b"));
+	assert_null(as_record_get_vector(&err, mid, "b"));
+	assert_int_eq(err.code, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE);
+	assert_string_eq(err.message, "bin 'b' is not a vector");
 	assert_int_eq(as_record_get_int64(mid, "b", -1), 123);
 	as_record_destroy(mid);
 
@@ -1136,7 +1141,7 @@ TEST(vector_scalar_churn, "a vector bin can be replaced by a scalar and back")
 
 	as_record* out = NULL;
 	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
-	as_vector_value* r = as_record_get_vector(out, "b");
+	as_vector_value* r = as_record_get_vector(&err, out, "b");
 	assert_not_null(r);
 	assert_int_eq(r->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT64);
 	assert_int_eq(r->dimensions, 3);
@@ -1173,10 +1178,11 @@ TEST(vector_selective_read_server, "a selective read returns only the requested 
 	as_status status = aerospike_key_select(as, &err, NULL, &key, bins, &out);
 	assert_int_eq(status, AEROSPIKE_OK);
 
-	as_vector_value* r = as_record_get_vector(out, "wanted");
+	as_vector_value* r = as_record_get_vector(&err, out, "wanted");
 	assert_not_null(r);
 	assert_int_eq(r->dimensions, 2);
-	assert_null(as_record_get_vector(out, "other"));
+	assert_null(as_record_get_vector(&err, out, "other"));
+	assert_int_eq(err.code, AEROSPIKE_ERR_BIN_NOT_FOUND);
 
 	as_vector_value_destroy(r);
 	as_record_destroy(out);
@@ -1305,8 +1311,8 @@ TEST(vector_batch_read_server, "a batch read returns records that contain vector
 	assert_int_eq(br1->result, AEROSPIKE_OK);
 	assert_int_eq(br2->result, AEROSPIKE_OK);
 
-	as_vector_value* rv1 = as_record_get_vector(&br1->record, "embedding");
-	as_vector_value* rv2 = as_record_get_vector(&br2->record, "embedding");
+	as_vector_value* rv1 = as_record_get_vector(&err, &br1->record, "embedding");
+	as_vector_value* rv2 = as_record_get_vector(&err, &br2->record, "embedding");
 	assert_not_null(rv1);
 	assert_not_null(rv2);
 	assert_int_eq(rv1->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);

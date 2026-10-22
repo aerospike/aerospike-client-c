@@ -18,13 +18,14 @@
 
 #include <aerospike/as_bin.h>
 #include <aerospike/as_bytes.h>
+#include <aerospike/as_error.h>
+#include <aerospike/as_geojson.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_rec.h>
 #include <aerospike/as_string.h>
-#include <aerospike/as_geojson.h>
 #include <aerospike/as_util.h>
 #include <aerospike/as_val.h>
 #include <aerospike/as_vector_value.h>
@@ -924,22 +925,24 @@ as_record_get_bytes(const as_record* rec, const char* name);
  * release it with as_vector_value_destroy().
  *
  * @code
- * as_vector_value* vec = as_record_get_vector(rec, "embedding");
+ * as_error err;
+ * as_vector_value* vec = as_record_get_vector(&err, rec, "embedding");
  * // ... use vec ...
  * as_vector_value_destroy(vec);
  * @endcode
  *
+ * @param err		Error detail, set when NULL is returned.
  * @param rec		The record containing the bin.
  * @param name		The name of the bin.
  *
- * @return a new vector if the bin exists and holds a vector, otherwise NULL.
- * To learn why a vector bin can't be decoded, call as_vector_value_from_bytes()
- * on as_record_get_bytes().
+ * @return a new vector, or NULL with `err` set to AEROSPIKE_ERR_BIN_NOT_FOUND
+ * if the bin doesn't exist, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE if it doesn't
+ * hold a vector, or AEROSPIKE_ERR_PARAM if the vector is malformed.
  *
  * @relates as_record
  */
 AS_EXTERN as_vector_value*
-as_record_get_vector(const as_record* rec, const char* name);
+as_record_get_vector(as_error* err, const as_record* rec, const char* name);
 
 /**
  * Get specified bin's value as an as_list.

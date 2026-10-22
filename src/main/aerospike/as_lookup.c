@@ -338,8 +338,8 @@ as_lookup_node(
 
 	as_string_builder sb;
 	as_string_builder_inita(&sb, 256, false);
-	as_string_builder_append(&sb, "node\npartition-generation\nbuild\nfeatures\n");
-	uint32_t args = 4;
+	as_string_builder_append(&sb, "node\npartition-generation\nbuild\n");
+	uint32_t args = 3;
 
 	if (cluster->cluster_name) {
 		as_string_builder_append(&sb, "cluster-name\n");
@@ -421,10 +421,6 @@ as_lookup_node(
 		return AEROSPIKE_ERR_CLIENT;
 	}
 
-	// Process server feature names.
-	nv = as_vector_get(&values, args++);
-	const char* feature_names = nv->value;
-
 	// Process features.
 	uint32_t features = 0;
 	as_version pscan = {4,9,0,3};
@@ -465,7 +461,9 @@ as_lookup_node(
 		features |= AS_FEATURES_HAS_QUERY_OPS_PROJECTION_EXT;
 	}
 
-	if (feature_names && strstr(feature_names, "query-order-by")) {
+	as_version order_by = {8,2,1,0};
+
+	if (as_version_compare(&node_info->version, &order_by) >= 0) {
 		features |= AS_FEATURES_ORDER_BY;
 	}
 

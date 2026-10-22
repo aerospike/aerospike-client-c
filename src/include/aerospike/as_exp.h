@@ -669,7 +669,7 @@ as_exp_destroy_base64(char* base64)
 /**
  * Create expression that returns the distance between a stored vector bin and a
  * query vector as a 64 bit float, using the given distance metric. The query
- * vector must contain the complete serialized vector wire value (8-byte header
+ * vector must contain the complete serialized vector wire value (6-byte header
  * followed by little-endian elements). Its element type and dimension count
  * must match the stored vector. Incompatible vectors evaluate to NIL.
  *

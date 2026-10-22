@@ -16,10 +16,8 @@
  */
 #pragma once
 
-#include <aerospike/as_std.h>
 #include <aerospike/as_bytes.h>
-#include <aerospike/as_list.h>
-#include <aerospike/as_map.h>
+#include <aerospike/as_std.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,15 +28,15 @@ extern "C" {
 //---------------------------------
 
 /**
- * Current vector wire format version.
+ * Vector wire format version. The server accepts only this version.
  */
 #define AS_VECTOR_VALUE_VERSION 1
 
 /**
  * Size in bytes of the fixed vector header (version + element_type +
- * dimensions + reserved).
+ * dimensions).
  */
-#define AS_VECTOR_VALUE_HEADER_SIZE 8
+#define AS_VECTOR_VALUE_HEADER_SIZE 6
 
 /**
  * Maximum size in bytes of a vector element array.
@@ -106,8 +104,7 @@ typedef enum as_vector_distance_metric_e {
  * 0       1             version       The version of the vector format.
  * 1       1             element_type  Enum identifying the element type (see as_vector_element_type).
  * 2       4             dimensions    Number of dimensions (elements) in the vector.
- * 6       2             reserved      Reserved for future use & padding (8-byte alignment).
- * 8       variable      data          Contiguous array of elements.
+ * 6       variable      data          Contiguous array of elements, little-endian.
  * ~~~~~~~~~~
  *
  * Create with one of the as_vector_value_new_*() functions and destroy with
@@ -117,6 +114,10 @@ typedef enum as_vector_distance_metric_e {
  * value. Convert to/from an as_bytes tagged AS_BYTES_VECTOR using
  * as_vector_value_to_bytes()/as_vector_value_to_bytes_new() and
  * as_vector_value_from_bytes().
+ *
+ * A vector can only be stored as a top-level bin value. The server rejects a
+ * write that puts a vector in a list or map, at any depth, with
+ * AEROSPIKE_ERR_PARAM.
  */
 typedef struct as_vector_value_s {
 	/**
@@ -300,58 +301,28 @@ as_vector_value_to_bytes(const as_vector_value* vec, as_bytes* bytes);
 /**
  * Serialize this vector into a newly heap allocated as_bytes tagged with
  * AS_BYTES_VECTOR. Unlike as_vector_value_to_bytes(), the result is itself an
- * as_val, so it can be appended directly to a collection (as_arraylist,
- * as_hashmap, ...) to nest a vector in a list or map bin. A plain as_bytes
- * would default to AS_BYTES_BLOB and lose the vector tag.
+ * as_val, so it can be passed where an as_val is expected, such as a UDF
+ * argument list.
  *
  * ~~~~~~~~~~{.c}
  * as_vector_value* vec = as_vector_value_new_float32(data, 128);
  *
- * as_arraylist list;
- * as_arraylist_init(&list, 1, 0);
- * as_arraylist_append(&list, (as_val*)as_vector_value_to_bytes_new(vec));
+ * as_arraylist args;
+ * as_arraylist_init(&args, 1, 0);
+ * as_arraylist_append(&args, (as_val*)as_vector_value_to_bytes_new(vec));
  *
  * as_vector_value_destroy(vec);
  * ~~~~~~~~~~
  *
  * @param vec		Vector to serialize.
  *
- * @return New as_bytes on success, or NULL on allocation failure. Destroy
- *		   with as_bytes_destroy(), or let the owning collection do so.
+ * @return New as_bytes on success, or NULL if `vec` is invalid. Destroy with
+ *		   as_bytes_destroy(), or let the owning collection do so.
  *
  * @relatesalso as_vector_value
  */
 AS_EXTERN as_bytes*
 as_vector_value_to_bytes_new(const as_vector_value* vec);
-
-/**
- * Serialize and append a vector to a list.
- *
- * The list owns the serialized value on success. `vec` remains caller-owned.
- *
- * @return true on success, or false if an argument is invalid, serialization
- *		   fails, or the list cannot append the value.
- *
- * @relatesalso as_vector_value
- */
-AS_EXTERN bool
-as_vector_value_append_to_list(as_list* list, const as_vector_value* vec);
-
-/**
- * Serialize and set a vector value in a map.
- *
- * On success, ownership of `key` follows as_map_set(), and the map owns the
- * serialized vector value. `vec` remains caller-owned.
- *
- * @return true on success, or false if an argument is invalid, serialization
- *		   fails, or the map cannot set the value.
- *
- * @relatesalso as_vector_value
- */
-AS_EXTERN bool
-as_vector_value_set_in_map(
-	as_map* map, const as_val* key, const as_vector_value* vec
-	);
 
 /**
  * Deserialize a vector from the wire format at the given buffer offset. The
@@ -364,8 +335,10 @@ as_vector_value_set_in_map(
  *					AS_VECTOR_VALUE_HEADER_SIZE).
  *
  * @return New as_vector_value on success, or NULL if `buffer` is malformed
- *		   (too short, unknown element type, or dimensions exceeding
- *		   `length`). Destroy with as_vector_value_destroy().
+ *		   (too short, a version other than AS_VECTOR_VALUE_VERSION, unknown
+ *		   element type, no dimensions, too many dimensions for the element
+ *		   type, or dimensions exceeding `length`). Destroy with
+ *		   as_vector_value_destroy().
  *
  * @relatesalso as_vector_value
  */
@@ -444,7 +417,7 @@ as_vector_value_get_float64(const as_vector_value* vec)
 }
 
 /**
- * Return a pointer to the vector's contiguous element array (without the 8-byte
+ * Return a pointer to the vector's contiguous element array (without the
  * header) and its size in bytes.
  *
  * The returned pointer is owned by `vec` and valid for its lifetime. The bytes

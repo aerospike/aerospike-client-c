@@ -24,10 +24,10 @@
 //---------------------------------
 
 static as_vector_value*
-as_vector_value_alloc(as_vector_element_type element_type, uint8_t version, uint32_t count, uint32_t elem_size)
+as_vector_value_alloc(as_vector_element_type element_type, uint32_t count, uint32_t elem_size)
 {
 	as_vector_value* vec = (as_vector_value*)cf_malloc(sizeof(as_vector_value));
-	vec->version = version;
+	vec->version = AS_VECTOR_VALUE_VERSION;
 	vec->element_type = element_type;
 	vec->dimensions = count;
 	vec->free_data = true;
@@ -55,7 +55,7 @@ as_vector_value_new(as_vector_element_type element_type, uint32_t count, const v
 		return NULL;
 	}
 
-	as_vector_value* vec = as_vector_value_alloc(element_type, AS_VECTOR_VALUE_VERSION, count, elem_size);
+	as_vector_value* vec = as_vector_value_alloc(element_type, count, elem_size);
 	memcpy(vec->data, data, (size_t)count * elem_size);
 	return vec;
 }
@@ -130,9 +130,6 @@ as_vector_value_write(const as_vector_value* vec, uint8_t* buffer, uint32_t offs
 	uint32_t dims_le = cf_swap_to_le32(vec->dimensions);
 	memcpy(&buffer[pos], &dims_le, sizeof(dims_le));
 	pos += sizeof(dims_le);
-
-	buffer[pos++] = 0; // reserved
-	buffer[pos++] = 0; // reserved
 
 	uint32_t i;
 
@@ -220,46 +217,6 @@ as_vector_value_to_bytes_new(const as_vector_value* vec)
 	return bytes;
 }
 
-bool
-as_vector_value_append_to_list(as_list* list, const as_vector_value* vec)
-{
-	if (list == NULL) {
-		return false;
-	}
-
-	as_bytes* bytes = as_vector_value_to_bytes_new(vec);
-
-	if (bytes == NULL) {
-		return false;
-	}
-
-	if (as_list_append(list, (as_val*)bytes) != 0) {
-		as_bytes_destroy(bytes);
-		return false;
-	}
-	return true;
-}
-
-bool
-as_vector_value_set_in_map(as_map* map, const as_val* key, const as_vector_value* vec)
-{
-	if (map == NULL || key == NULL) {
-		return false;
-	}
-
-	as_bytes* bytes = as_vector_value_to_bytes_new(vec);
-
-	if (bytes == NULL) {
-		return false;
-	}
-
-	if (as_map_set(map, key, (as_val*)bytes) != 0) {
-		as_bytes_destroy(bytes);
-		return false;
-	}
-	return true;
-}
-
 as_vector_value*
 as_vector_value_from(const uint8_t* buffer, uint32_t offset, uint32_t length)
 {
@@ -271,6 +228,11 @@ as_vector_value_from(const uint8_t* buffer, uint32_t offset, uint32_t length)
 
 	// Vector wire format is little-endian to match the server.
 	uint8_t version = buffer[pos++];
+
+	if (version != AS_VECTOR_VALUE_VERSION) {
+		return NULL;
+	}
+
 	as_vector_element_type element_type = (as_vector_element_type)buffer[pos++];
 
 	uint32_t elem_size = as_vector_element_type_size(element_type);
@@ -284,8 +246,6 @@ as_vector_value_from(const uint8_t* buffer, uint32_t offset, uint32_t length)
 	pos += sizeof(dims_le);
 	uint32_t dimensions = cf_swap_from_le32(dims_le);
 
-	pos += 2; // skip reserved bytes
-
 	if (dimensions == 0 ||
 		dimensions > as_vector_element_type_max_dimensions(element_type)) {
 		return NULL;
@@ -297,7 +257,7 @@ as_vector_value_from(const uint8_t* buffer, uint32_t offset, uint32_t length)
 		return NULL;
 	}
 
-	as_vector_value* vec = as_vector_value_alloc(element_type, version, dimensions, elem_size);
+	as_vector_value* vec = as_vector_value_alloc(element_type, dimensions, elem_size);
 
 	uint32_t i;
 

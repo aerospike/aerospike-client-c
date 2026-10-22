@@ -27,15 +27,13 @@
 #include <aerospike/as_exp.h>
 #include <aerospike/as_exp_operations.h>
 #include <aerospike/as_hashmap.h>
-#include <aerospike/as_list_operations.h>
-#include <aerospike/as_map_operations.h>
 #if AS_EVENT_LIB_DEFINED
 #include <aerospike/as_monitor.h>
 #endif
+#include <aerospike/as_msgpack.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_query.h>
 #include <aerospike/as_record.h>
-#include <aerospike/as_msgpack.h>
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_vector_value.h>
@@ -162,9 +160,14 @@ TEST(vector_header, "as_vector_value serializes the fixed header")
 	memcpy(&dims, &buf[2], sizeof(dims));
 	assert_int_eq(cf_swap_from_le32(dims), 4);
 
-	// Reserved bytes must be zero.
-	assert_int_eq(buf[6], 0);
-	assert_int_eq(buf[7], 0);
+	// The elements follow the 6-byte header directly.
+	assert_int_eq(written, 6 + 4 * sizeof(float));
+
+	uint32_t bits;
+	memcpy(&bits, &buf[6], sizeof(bits));
+	union { float f; uint32_t u; } conv;
+	conv.u = cf_swap_from_le32(bits);
+	assert(conv.f == data[0]);
 
 	as_vector_value_destroy(vec);
 }
@@ -478,20 +481,19 @@ TEST(vector_from_limits, "as_vector_value_from rejects empty and oversized vecto
 	assert_null(as_vector_value_from(buf, 0, sizeof(buf)));
 }
 
-TEST(vector_from_unknown_version, "as_vector_value_from preserves a future wire version")
+TEST(vector_from_unknown_version, "as_vector_value_from rejects a version other than 1")
 {
 	float data[2] = {1.0f, 2.0f};
 	as_vector_value* vec = as_vector_value_new_float32(data, 2);
 	uint8_t buf[64];
 	uint32_t size = as_vector_value_write(vec, buf, 0);
+
 	buf[0] = AS_VECTOR_VALUE_VERSION + 1;
+	assert_null(as_vector_value_from(buf, 0, size));
 
-	as_vector_value* out = as_vector_value_from(buf, 0, size);
-	assert_not_null(out);
-	assert_int_eq(out->version, AS_VECTOR_VALUE_VERSION + 1);
-	assert(as_vector_value_get_float32(out)[1] == data[1]);
+	buf[0] = 0;
+	assert_null(as_vector_value_from(buf, 0, size));
 
-	as_vector_value_destroy(out);
 	as_vector_value_destroy(vec);
 }
 
@@ -513,102 +515,42 @@ TEST(vector_to_bytes_new, "as_vector_value_to_bytes_new produces a heap AS_BYTES
 	as_vector_value_destroy(vec);
 }
 
-TEST(vector_nested_in_list, "vector nested in a list round-trips through msgpack")
+TEST(vector_msgpack_keeps_subtype, "a vector keeps AS_BYTES_VECTOR and its element type through msgpack")
 {
-	float data[3] = {1.5f, -2.25f, 3.14159f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 3);
-
-	as_arraylist list;
-	as_arraylist_init(&list, 2, 0);
-	as_arraylist_append_str(&list, "label");
-	assert_true(as_vector_value_append_to_list((as_list*)&list, vec));
+	int32_t data[3] = {-5, 0, 12345};
+	as_vector_value* vec = as_vector_value_new_int32(data, 3);
+	as_bytes* bytes = as_vector_value_to_bytes_new(vec);
+	assert_not_null(bytes);
 
 	as_serializer ser;
 	as_msgpack_init(&ser);
 
 	as_buffer buffer;
 	as_buffer_init(&buffer);
-	assert_int_eq(as_serializer_serialize(&ser, (as_val*)&list, &buffer), 0);
+	assert_int_eq(as_serializer_serialize(&ser, (as_val*)bytes, &buffer), 0);
 
 	as_val* out = NULL;
 	assert_int_eq(as_serializer_deserialize(&ser, &buffer, &out), 0);
 	assert_not_null(out);
-	assert_int_eq(as_val_type(out), AS_LIST);
+	assert_int_eq(as_val_type(out), AS_BYTES);
+	assert_int_eq(((as_bytes*)out)->type, AS_BYTES_VECTOR);
 
-	as_arraylist* olist = (as_arraylist*)out;
-	assert_int_eq(as_arraylist_size(olist), 2);
+	as_vector_value* rvec = as_vector_value_from_bytes((as_bytes*)out);
+	assert_not_null(rvec);
+	assert_int_eq(rvec->element_type, AS_VECTOR_ELEMENT_TYPE_INT32);
+	assert_int_eq(rvec->dimensions, 3);
 
-	as_val* el = as_arraylist_get(olist, 1);
-	assert_int_eq(as_val_type(el), AS_BYTES);
-	assert_vector_bytes_eq_float32(__result__, (as_bytes*)el, data, 3);
+	const int32_t* elems = as_vector_value_get_int32(rvec);
+	assert_not_null(elems);
+	for (uint32_t i = 0; i < 3; i++) {
+		assert_int_eq(elems[i], data[i]);
+	}
 
+	as_vector_value_destroy(rvec);
 	as_val_destroy(out);
 	as_buffer_destroy(&buffer);
 	as_serializer_destroy(&ser);
-	as_arraylist_destroy(&list);
-	as_vector_value_destroy(vec);
-}
-
-TEST(vector_nested_in_map, "vector nested in a map round-trips through msgpack")
-{
-	float data[2] = {9.0f, -0.5f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 2);
-
-	as_hashmap map;
-	as_hashmap_init(&map, 1);
-	assert_true(as_vector_value_set_in_map((as_map*)&map, (as_val*)as_string_new_strdup("k"), vec));
-
-	as_serializer ser;
-	as_msgpack_init(&ser);
-
-	as_buffer buffer;
-	as_buffer_init(&buffer);
-	assert_int_eq(as_serializer_serialize(&ser, (as_val*)&map, &buffer), 0);
-
-	as_val* out = NULL;
-	assert_int_eq(as_serializer_deserialize(&ser, &buffer, &out), 0);
-	assert_not_null(out);
-	assert_int_eq(as_val_type(out), AS_MAP);
-
-	as_string key;
-	as_string_init(&key, "k", false);
-	as_val* el = as_map_get((as_map*)out, (as_val*)&key);
-	as_string_destroy(&key);
-
-	assert_not_null(el);
-	assert_int_eq(as_val_type(el), AS_BYTES);
-	assert_vector_bytes_eq_float32(__result__, (as_bytes*)el, data, 2);
-
-	as_val_destroy(out);
-	as_buffer_destroy(&buffer);
-	as_serializer_destroy(&ser);
-	as_hashmap_destroy(&map);
-	as_vector_value_destroy(vec);
-}
-
-TEST(vector_collection_helpers, "vector collection helpers own wrappers and reject invalid arguments")
-{
-	float data[2] = {1.0f, 2.0f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 2);
-	assert_not_null(vec);
-
-	assert_false(as_vector_value_append_to_list(NULL, vec));
-
-	as_arraylist list;
-	as_arraylist_init(&list, 0, 0);
-	assert_false(as_vector_value_append_to_list((as_list*)&list, vec));
-	as_arraylist_destroy(&list);
-
-	assert_false(as_vector_value_set_in_map(NULL, NULL, vec));
-
-	as_hashmap map;
-	as_hashmap_init(&map, 1);
-	as_double invalid_key;
-	as_double_init(&invalid_key, 1.0);
-	assert_false(as_vector_value_set_in_map((as_map*)&map, (as_val*)&invalid_key, vec));
-	as_double_destroy(&invalid_key);
-	as_hashmap_destroy(&map);
-
+	as_bytes_destroy(bytes);
 	as_vector_value_destroy(vec);
 }
 
@@ -770,152 +712,6 @@ TEST(vector_serialization_rejects_invalid_vectors, "serialization rejects vector
 	assert_null(as_vector_value_to_bytes_new(vec));
 
 	as_vector_value_destroy(vec);
-}
-
-TEST(vector_nested_int32_in_list, "nested int32 vector preserves element type through msgpack")
-{
-	int32_t data[3] = {-5, 0, 12345};
-	as_vector_value* vec = as_vector_value_new_int32(data, 3);
-
-	as_arraylist list;
-	as_arraylist_init(&list, 1, 0);
-	assert_true(as_vector_value_append_to_list((as_list*)&list, vec));
-
-	as_serializer ser;
-	as_msgpack_init(&ser);
-
-	as_buffer buffer;
-	as_buffer_init(&buffer);
-	assert_int_eq(as_serializer_serialize(&ser, (as_val*)&list, &buffer), 0);
-
-	as_val* out = NULL;
-	assert_int_eq(as_serializer_deserialize(&ser, &buffer, &out), 0);
-	assert_not_null(out);
-	assert_int_eq(as_val_type(out), AS_LIST);
-
-	as_val* el = as_arraylist_get((as_arraylist*)out, 0);
-	assert_int_eq(as_val_type(el), AS_BYTES);
-	assert_int_eq(((as_bytes*)el)->type, AS_BYTES_VECTOR);
-
-	as_vector_value* rvec = as_vector_value_from_bytes((as_bytes*)el);
-	assert_not_null(rvec);
-	assert_int_eq(rvec->element_type, AS_VECTOR_ELEMENT_TYPE_INT32);
-	assert_int_eq(rvec->dimensions, 3);
-
-	const int32_t* elems = as_vector_value_get_int32(rvec);
-	assert_not_null(elems);
-	for (uint32_t i = 0; i < 3; i++) {
-		assert_int_eq(elems[i], data[i]);
-	}
-
-	as_vector_value_destroy(rvec);
-	as_val_destroy(out);
-	as_buffer_destroy(&buffer);
-	as_serializer_destroy(&ser);
-	as_arraylist_destroy(&list);
-	as_vector_value_destroy(vec);
-}
-
-TEST(vector_server_roundtrip, "vectors round-trip through the server with native bin and collection helpers")
-{
-	uint16_t float16_data[] = {0x3C00, 0xC000};
-	int32_t int32_data[] = {-1, 0, 1};
-	float float32_data[] = {1.5f, -2.25f};
-	double float64_data[] = {3.14159265358979, -0.5};
-
-	as_vector_value* float16 = as_vector_value_new_float16(float16_data, 2);
-	as_vector_value* int32 = as_vector_value_new_int32(int32_data, 3);
-	as_vector_value* float32 = as_vector_value_new_float32(float32_data, 2);
-	as_vector_value* float64 = as_vector_value_new_float64(float64_data, 2);
-	assert_not_null(float16);
-	assert_not_null(int32);
-	assert_not_null(float32);
-	assert_not_null(float64);
-
-	as_arraylist list;
-	as_arraylist_init(&list, 1, 0);
-	assert_true(as_vector_value_append_to_list((as_list*)&list, float32));
-
-	as_hashmap map;
-	as_hashmap_init(&map, 1);
-	assert_true(as_vector_value_set_in_map((as_map*)&map, (as_val*)as_string_new_strdup("v"), float64));
-
-	as_key key;
-	as_key_init_int64(&key, NAMESPACE, SET, 1);
-
-	as_error err;
-	as_error_reset(&err);
-	as_status status = aerospike_key_remove(as, &err, NULL, &key);
-	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
-
-	as_record record;
-	as_record_inita(&record, 6);
-	assert_true(as_record_set_vector(&record, "float16", float16));
-	assert_true(as_record_set_vector(&record, "int32", int32));
-	assert_true(as_record_set_vector(&record, "float32", float32));
-	assert_true(as_record_set_vector(&record, "float64", float64));
-	assert_true(as_record_set_list(&record, "list", (as_list*)&list));
-	assert_true(as_record_set_map(&record, "map", (as_map*)&map));
-
-	status = aerospike_key_put(as, &err, NULL, &key, &record);
-	assert_int_eq(status, AEROSPIKE_OK);
-	as_record_destroy(&record);
-
-	as_record* result = NULL;
-	status = aerospike_key_get(as, &err, NULL, &key, &result);
-	assert_int_eq(status, AEROSPIKE_OK);
-
-	as_vector_value* result_float16 = as_record_get_vector(result, "float16");
-	as_vector_value* result_int32 = as_record_get_vector(result, "int32");
-	as_vector_value* result_float32 = as_record_get_vector(result, "float32");
-	as_vector_value* result_float64 = as_record_get_vector(result, "float64");
-	assert_not_null(result_float16);
-	assert_not_null(result_int32);
-	assert_not_null(result_float32);
-	assert_not_null(result_float64);
-	assert_int_eq(result_float16->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT16);
-	assert_int_eq(result_int32->element_type, AS_VECTOR_ELEMENT_TYPE_INT32);
-	assert_int_eq(result_float32->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
-	assert_int_eq(result_float64->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT64);
-	assert_int_eq(as_vector_value_get_float16(result_float16)[0], float16_data[0]);
-	assert_int_eq(as_vector_value_get_int32(result_int32)[0], int32_data[0]);
-	assert(as_vector_value_get_float32(result_float32)[0] == float32_data[0]);
-	assert(as_vector_value_get_float64(result_float64)[0] == float64_data[0]);
-
-	as_list* result_list = as_record_get_list(result, "list");
-	assert_not_null(result_list);
-	as_bytes* list_bytes = (as_bytes*)as_list_get(result_list, 0);
-	assert_not_null(list_bytes);
-	assert_int_eq(list_bytes->type, AS_BYTES_VECTOR);
-	as_vector_value* list_vector = as_vector_value_from_bytes(list_bytes);
-	assert_not_null(list_vector);
-	assert_int_eq(list_vector->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
-	assert(as_vector_value_get_float32(list_vector)[1] == float32_data[1]);
-
-	as_string map_key;
-	as_string_init(&map_key, "v", false);
-	as_map* result_map = as_record_get_map(result, "map");
-	assert_not_null(result_map);
-	as_bytes* map_bytes = (as_bytes*)as_map_get(result_map, (as_val*)&map_key);
-	assert_not_null(map_bytes);
-	assert_int_eq(map_bytes->type, AS_BYTES_VECTOR);
-	as_vector_value* map_vector = as_vector_value_from_bytes(map_bytes);
-	assert_not_null(map_vector);
-	assert_int_eq(map_vector->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT64);
-	assert(as_vector_value_get_float64(map_vector)[1] == float64_data[1]);
-
-	as_vector_value_destroy(map_vector);
-	as_vector_value_destroy(list_vector);
-	as_vector_value_destroy(result_float64);
-	as_vector_value_destroy(result_float32);
-	as_vector_value_destroy(result_int32);
-	as_vector_value_destroy(result_float16);
-	as_record_destroy(result);
-	as_key_destroy(&key);
-	as_vector_value_destroy(float64);
-	as_vector_value_destroy(float32);
-	as_vector_value_destroy(int32);
-	as_vector_value_destroy(float16);
 }
 
 //---------------------------------
@@ -1099,7 +895,7 @@ TEST(vector_single_dimension_server, "a single-dimension vector round-trips thro
 
 TEST(vector_large_crossing_16bit_server, "a large vector crossing the 16-bit msgpack length boundary round-trips")
 {
-	// 9000 f64 => 8 + 9000*8 = 72008 bytes, past 65535.
+	// 9000 f64 => 6 + 9000*8 = 72006 bytes, past 65535.
 	uint32_t dims = 9000;
 	double* data = (double*)malloc(sizeof(double) * dims);
 	for (uint32_t i = 0; i < dims; i++) {
@@ -1368,12 +1164,10 @@ TEST(vector_operate_write_read, "as_operations_add_write_vector writes a vector 
 	as_vector_value_destroy(vec);
 }
 
-TEST(vector_cdt_read_server, "list and map operations return vectors with their particle tag")
+TEST(vector_in_collection_rejected_server, "the server rejects a vector in a list or a map")
 {
-	float list_data[2] = {1.0f, 2.0f};
-	int32_t map_data[3] = {-1, 0, 1};
-	as_vector_value* list_vec = as_vector_value_new_float32(list_data, 2);
-	as_vector_value* map_vec = as_vector_value_new_int32(map_data, 3);
+	float data[2] = {1.0f, 2.0f};
+	as_vector_value* vec = as_vector_value_new_float32(data, 2);
 
 	remove_key(23);
 
@@ -1382,55 +1176,32 @@ TEST(vector_cdt_read_server, "list and map operations return vectors with their 
 
 	as_arraylist list;
 	as_arraylist_init(&list, 1, 0);
-	assert_true(as_vector_value_append_to_list((as_list*)&list, list_vec));
+	as_bytes* list_vec = as_vector_value_to_bytes_new(vec);
+	assert_not_null(list_vec);
+	as_arraylist_append(&list, (as_val*)list_vec);
+
+	as_record list_rec;
+	as_record_inita(&list_rec, 1);
+	assert_true(as_record_set_list(&list_rec, "list", (as_list*)&list));
+
+	as_error err;
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &list_rec), AEROSPIKE_ERR_REQUEST_INVALID);
+	as_record_destroy(&list_rec);
 
 	as_hashmap map;
 	as_hashmap_init(&map, 1);
-	assert_true(as_vector_value_set_in_map((as_map*)&map, (as_val*)as_string_new_strdup("v"), map_vec));
+	as_bytes* map_vec = as_vector_value_to_bytes_new(vec);
+	assert_not_null(map_vec);
+	as_hashmap_set(&map, (as_val*)as_string_new_strdup("v"), (as_val*)map_vec);
 
-	as_record record;
-	as_record_inita(&record, 2);
-	assert_true(as_record_set_list(&record, "list", (as_list*)&list));
-	assert_true(as_record_set_map(&record, "map", (as_map*)&map));
+	as_record map_rec;
+	as_record_inita(&map_rec, 1);
+	assert_true(as_record_set_map(&map_rec, "map", (as_map*)&map));
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &map_rec), AEROSPIKE_ERR_REQUEST_INVALID);
+	as_record_destroy(&map_rec);
 
-	as_error err;
-	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &record), AEROSPIKE_OK);
-	as_record_destroy(&record);
-
-	as_operations list_ops;
-	as_operations_inita(&list_ops, 1);
-	assert_true(as_operations_list_get(&list_ops, "list", NULL, 0));
-
-	as_record* list_result = NULL;
-	assert_int_eq(aerospike_key_operate(as, &err, NULL, &key, &list_ops, &list_result), AEROSPIKE_OK);
-	as_bytes* list_bytes = as_record_get_bytes(list_result, "list");
-	assert_vector_bytes_eq_float32(__result__, list_bytes, list_data, 2);
-	as_record_destroy(list_result);
-	as_operations_destroy(&list_ops);
-
-	as_operations map_ops;
-	as_operations_inita(&map_ops, 1);
-	assert_true(as_operations_map_get_by_key(&map_ops, "map", NULL,
-		(as_val*)as_string_new_strdup("v"), AS_MAP_RETURN_VALUE));
-
-	as_record* map_result = NULL;
-	assert_int_eq(aerospike_key_operate(as, &err, NULL, &key, &map_ops, &map_result), AEROSPIKE_OK);
-	as_bytes* map_bytes = as_record_get_bytes(map_result, "map");
-	assert_not_null(map_bytes);
-	assert_int_eq(map_bytes->type, AS_BYTES_VECTOR);
-	as_vector_value* decoded = as_vector_value_from_bytes(map_bytes);
-	assert_not_null(decoded);
-	assert_int_eq(decoded->element_type, AS_VECTOR_ELEMENT_TYPE_INT32);
-	assert_int_eq(decoded->dimensions, 3);
-	assert_int_eq(as_vector_value_get_int32(decoded)[0], map_data[0]);
-	assert_int_eq(as_vector_value_get_int32(decoded)[2], map_data[2]);
-
-	as_vector_value_destroy(decoded);
-	as_record_destroy(map_result);
-	as_operations_destroy(&map_ops);
 	as_key_destroy(&key);
-	as_vector_value_destroy(list_vec);
-	as_vector_value_destroy(map_vec);
+	as_vector_value_destroy(vec);
 }
 
 #if AS_EVENT_LIB_DEFINED
@@ -1817,9 +1588,7 @@ SUITE(vector, "as_vector_value serialization")
 	suite_add(vector_from_limits);
 	suite_add(vector_from_unknown_version);
 	suite_add(vector_to_bytes_new);
-	suite_add(vector_nested_in_list);
-	suite_add(vector_nested_in_map);
-	suite_add(vector_collection_helpers);
+	suite_add(vector_msgpack_keeps_subtype);
 	suite_add(vector_element_type_size);
 	suite_add(vector_getter_type_safety);
 	suite_add(vector_null_safety);
@@ -1828,8 +1597,6 @@ SUITE(vector, "as_vector_value serialization")
 	suite_add(vector_from_overflow);
 	suite_add(vector_constructor_limits);
 	suite_add(vector_serialization_rejects_invalid_vectors);
-	suite_add(vector_nested_int32_in_list);
-	suite_add(vector_server_roundtrip);
 	suite_add(vector_native_bin_roundtrip);
 	suite_add(vector_special_float_bits_server);
 	suite_add(vector_single_dimension_server);
@@ -1840,7 +1607,7 @@ SUITE(vector, "as_vector_value serialization")
 	suite_add(vector_scalar_churn);
 	suite_add(vector_selective_read_server);
 	suite_add(vector_operate_write_read);
-	suite_add(vector_cdt_read_server);
+	suite_add(vector_in_collection_rejected_server);
 #if AS_EVENT_LIB_DEFINED
 	suite_add(vector_async_roundtrip);
 #endif

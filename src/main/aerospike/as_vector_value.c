@@ -47,11 +47,42 @@ as_vector_value_is_valid(const as_vector_value* vec)
 		vec->dimensions <= as_vector_element_type_max_dimensions(vec->element_type);
 }
 
-static as_vector_value*
-as_vector_value_new(as_vector_element_type element_type, uint32_t count, const void* data, uint32_t elem_size)
+// Error messages match the server's vector validation messages where one exists.
+static bool
+as_vector_value_check_dimensions(
+	as_error* err, as_vector_element_type element_type, uint32_t dimensions
+	)
 {
-	if (data == NULL || count == 0 ||
-			count > as_vector_element_type_max_dimensions(element_type)) {
+	if (dimensions == 0) {
+		as_error_set_message(err, AEROSPIKE_ERR_PARAM, "vector: must have at least 1 dimension");
+		return false;
+	}
+
+	uint32_t max_dimensions = as_vector_element_type_max_dimensions(element_type);
+
+	if (dimensions > max_dimensions) {
+		as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"vector: %u dimensions exceed max %u for element type %u", dimensions,
+			max_dimensions, (uint32_t)element_type);
+		return false;
+	}
+	return true;
+}
+
+static as_vector_value*
+as_vector_value_new(
+	as_error* err, as_vector_element_type element_type, uint32_t count, const void* data,
+	uint32_t elem_size
+	)
+{
+	as_error_reset(err);
+
+	if (data == NULL) {
+		as_error_set_message(err, AEROSPIKE_ERR_PARAM, "vector: data is NULL");
+		return NULL;
+	}
+
+	if (! as_vector_value_check_dimensions(err, element_type, count)) {
 		return NULL;
 	}
 
@@ -65,27 +96,27 @@ as_vector_value_new(as_vector_element_type element_type, uint32_t count, const v
 //---------------------------------
 
 as_vector_value*
-as_vector_value_new_float16(const uint16_t* data, uint32_t count)
+as_vector_value_new_float16(as_error* err, const uint16_t* data, uint32_t count)
 {
-	return as_vector_value_new(AS_VECTOR_ELEMENT_TYPE_FLOAT16, count, data, sizeof(uint16_t));
+	return as_vector_value_new(err, AS_VECTOR_ELEMENT_TYPE_FLOAT16, count, data, sizeof(uint16_t));
 }
 
 as_vector_value*
-as_vector_value_new_int32(const int32_t* data, uint32_t count)
+as_vector_value_new_int32(as_error* err, const int32_t* data, uint32_t count)
 {
-	return as_vector_value_new(AS_VECTOR_ELEMENT_TYPE_INT32, count, data, sizeof(int32_t));
+	return as_vector_value_new(err, AS_VECTOR_ELEMENT_TYPE_INT32, count, data, sizeof(int32_t));
 }
 
 as_vector_value*
-as_vector_value_new_float32(const float* data, uint32_t count)
+as_vector_value_new_float32(as_error* err, const float* data, uint32_t count)
 {
-	return as_vector_value_new(AS_VECTOR_ELEMENT_TYPE_FLOAT32, count, data, sizeof(float));
+	return as_vector_value_new(err, AS_VECTOR_ELEMENT_TYPE_FLOAT32, count, data, sizeof(float));
 }
 
 as_vector_value*
-as_vector_value_new_float64(const double* data, uint32_t count)
+as_vector_value_new_float64(as_error* err, const double* data, uint32_t count)
 {
-	return as_vector_value_new(AS_VECTOR_ELEMENT_TYPE_FLOAT64, count, data, sizeof(double));
+	return as_vector_value_new(err, AS_VECTOR_ELEMENT_TYPE_FLOAT64, count, data, sizeof(double));
 }
 
 void
@@ -218,9 +249,19 @@ as_vector_value_to_bytes_new(const as_vector_value* vec)
 }
 
 as_vector_value*
-as_vector_value_from(const uint8_t* buffer, uint32_t offset, uint32_t length)
+as_vector_value_from(as_error* err, const uint8_t* buffer, uint32_t offset, uint32_t length)
 {
-	if (buffer == NULL || length < AS_VECTOR_VALUE_HEADER_SIZE) {
+	as_error_reset(err);
+
+	if (buffer == NULL) {
+		as_error_set_message(err, AEROSPIKE_ERR_PARAM, "vector: buffer is NULL");
+		return NULL;
+	}
+
+	if (length < AS_VECTOR_VALUE_HEADER_SIZE) {
+		as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"vector: value size %u smaller than %u-byte header", length,
+			AS_VECTOR_VALUE_HEADER_SIZE);
 		return NULL;
 	}
 
@@ -230,14 +271,18 @@ as_vector_value_from(const uint8_t* buffer, uint32_t offset, uint32_t length)
 	uint8_t version = buffer[pos++];
 
 	if (version != AS_VECTOR_VALUE_VERSION) {
+		as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"vector: unsupported format version %u (expected %u)", (uint32_t)version,
+			AS_VECTOR_VALUE_VERSION);
 		return NULL;
 	}
 
 	as_vector_element_type element_type = (as_vector_element_type)buffer[pos++];
-
 	uint32_t elem_size = as_vector_element_type_size(element_type);
+
 	if (elem_size == 0) {
-		// Unknown/unsupported element type.
+		as_error_update(err, AEROSPIKE_ERR_PARAM, "vector: invalid element type %u",
+			(uint32_t)element_type);
 		return NULL;
 	}
 
@@ -246,14 +291,16 @@ as_vector_value_from(const uint8_t* buffer, uint32_t offset, uint32_t length)
 	pos += sizeof(dims_le);
 	uint32_t dimensions = cf_swap_from_le32(dims_le);
 
-	if (dimensions == 0 ||
-		dimensions > as_vector_element_type_max_dimensions(element_type)) {
+	if (! as_vector_value_check_dimensions(err, element_type, dimensions)) {
 		return NULL;
 	}
 
-	uint32_t data_size = dimensions * elem_size;
+	uint32_t expected_size = AS_VECTOR_VALUE_HEADER_SIZE + dimensions * elem_size;
 
-	if (length < AS_VECTOR_VALUE_HEADER_SIZE + data_size) {
+	if (length < expected_size) {
+		as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"vector: value size %u does not match %u (%u dimensions of %u bytes, little-endian)",
+			length, expected_size, dimensions, elem_size);
 		return NULL;
 	}
 
@@ -311,10 +358,11 @@ as_vector_value_from(const uint8_t* buffer, uint32_t offset, uint32_t length)
 }
 
 as_vector_value*
-as_vector_value_from_bytes(const as_bytes* bytes)
+as_vector_value_from_bytes(as_error* err, const as_bytes* bytes)
 {
 	if (bytes == NULL) {
+		as_error_set_message(err, AEROSPIKE_ERR_PARAM, "vector: bytes is NULL");
 		return NULL;
 	}
-	return as_vector_value_from(bytes->value, 0, bytes->size);
+	return as_vector_value_from(err, bytes->value, 0, bytes->size);
 }

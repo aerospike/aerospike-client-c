@@ -17,6 +17,7 @@
 #pragma once
 
 #include <aerospike/as_bytes.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_std.h>
 
 #ifdef __cplusplus
@@ -157,61 +158,65 @@ typedef struct as_vector_value_s {
  * elements. Since C has no native float16 type, each element is passed as
  * its raw 16-bit bit pattern. The data array is copied.
  *
+ * @param err		Error detail, set when NULL is returned.
  * @param data		Array of raw float16 bit patterns.
  * @param count		Number of elements in `data`.
  *
- * @return New vector, or NULL if `data` is NULL or `count` is outside the
- *		   server's supported range.
+ * @return New vector, or NULL with `err` set to AEROSPIKE_ERR_PARAM if `data`
+ *		   is NULL or `count` is outside the server's supported range.
  *
  * @relatesalso as_vector_value
  */
 AS_EXTERN as_vector_value*
-as_vector_value_new_float16(const uint16_t* data, uint32_t count);
+as_vector_value_new_float16(as_error* err, const uint16_t* data, uint32_t count);
 
 /**
  * Create a heap allocated vector of int32 elements. The data array is
  * copied.
  *
+ * @param err		Error detail, set when NULL is returned.
  * @param data		Array of int32 elements.
  * @param count		Number of elements in `data`.
  *
- * @return New vector, or NULL if `data` is NULL or `count` is outside the
- *		   server's supported range.
+ * @return New vector, or NULL with `err` set to AEROSPIKE_ERR_PARAM if `data`
+ *		   is NULL or `count` is outside the server's supported range.
  *
  * @relatesalso as_vector_value
  */
 AS_EXTERN as_vector_value*
-as_vector_value_new_int32(const int32_t* data, uint32_t count);
+as_vector_value_new_int32(as_error* err, const int32_t* data, uint32_t count);
 
 /**
  * Create a heap allocated vector of float (fp32) elements. The data array is
  * copied.
  *
+ * @param err		Error detail, set when NULL is returned.
  * @param data		Array of float elements.
  * @param count		Number of elements in `data`.
  *
- * @return New vector, or NULL if `data` is NULL or `count` is outside the
- *		   server's supported range.
+ * @return New vector, or NULL with `err` set to AEROSPIKE_ERR_PARAM if `data`
+ *		   is NULL or `count` is outside the server's supported range.
  *
  * @relatesalso as_vector_value
  */
 AS_EXTERN as_vector_value*
-as_vector_value_new_float32(const float* data, uint32_t count);
+as_vector_value_new_float32(as_error* err, const float* data, uint32_t count);
 
 /**
  * Create a heap allocated vector of double (fp64) elements. The data array
  * is copied.
  *
+ * @param err		Error detail, set when NULL is returned.
  * @param data		Array of double elements.
  * @param count		Number of elements in `data`.
  *
- * @return New vector, or NULL if `data` is NULL or `count` is outside the
- *		   server's supported range.
+ * @return New vector, or NULL with `err` set to AEROSPIKE_ERR_PARAM if `data`
+ *		   is NULL or `count` is outside the server's supported range.
  *
  * @relatesalso as_vector_value
  */
 AS_EXTERN as_vector_value*
-as_vector_value_new_float64(const double* data, uint32_t count);
+as_vector_value_new_float64(as_error* err, const double* data, uint32_t count);
 
 /**
  * Destroy a heap allocated as_vector_value and release its resources.
@@ -279,7 +284,8 @@ as_vector_value_write(const as_vector_value* vec, uint8_t* buffer, uint32_t offs
  * is true). Destroy `bytes` via as_bytes_destroy() independently of `vec`.
  *
  * ~~~~~~~~~~{.c}
- * as_vector_value* vec = as_vector_value_new_float32(data, 128);
+ * as_error err;
+ * as_vector_value* vec = as_vector_value_new_float32(&err, data, 128);
  *
  * as_bytes bytes;
  * as_vector_value_to_bytes(vec, &bytes);
@@ -305,7 +311,8 @@ as_vector_value_to_bytes(const as_vector_value* vec, as_bytes* bytes);
  * argument list.
  *
  * ~~~~~~~~~~{.c}
- * as_vector_value* vec = as_vector_value_new_float32(data, 128);
+ * as_error err;
+ * as_vector_value* vec = as_vector_value_new_float32(&err, data, 128);
  *
  * as_arraylist args;
  * as_arraylist_init(&args, 1, 0);
@@ -329,12 +336,14 @@ as_vector_value_to_bytes_new(const as_vector_value* vec);
  * returned as_vector_value owns its own copy of the element data, converted
  * from little-endian wire format to host byte order.
  *
+ * @param err		Error detail, set when NULL is returned.
  * @param buffer	Buffer containing the vector wire format.
  * @param offset	Offset into `buffer` where the vector starts.
  * @param length	Number of bytes available starting at `offset` (at least
  *					AS_VECTOR_VALUE_HEADER_SIZE).
  *
- * @return New as_vector_value on success, or NULL if `buffer` is malformed
+ * @return New as_vector_value on success, or NULL with `err` set to
+ *		   AEROSPIKE_ERR_PARAM if `buffer` is malformed
  *		   (too short, a version other than AS_VECTOR_VALUE_VERSION, unknown
  *		   element type, no dimensions, too many dimensions for the element
  *		   type, or dimensions exceeding `length`). Destroy with
@@ -343,7 +352,7 @@ as_vector_value_to_bytes_new(const as_vector_value* vec);
  * @relatesalso as_vector_value
  */
 AS_EXTERN as_vector_value*
-as_vector_value_from(const uint8_t* buffer, uint32_t offset, uint32_t length);
+as_vector_value_from(as_error* err, const uint8_t* buffer, uint32_t offset, uint32_t length);
 
 /**
  * Deserialize a vector from an as_bytes instance, the inverse of
@@ -353,20 +362,23 @@ as_vector_value_from(const uint8_t* buffer, uint32_t offset, uint32_t length);
  *
  * ~~~~~~~~~~{.c}
  * as_bytes* bytes = as_record_get_bytes(rec, "embedding");
- * as_vector_value* vec = as_vector_value_from_bytes(bytes);
+ * as_error err;
+ * as_vector_value* vec = as_vector_value_from_bytes(&err, bytes);
  * // ... use vec ...
  * as_vector_value_destroy(vec);
  * ~~~~~~~~~~
  *
+ * @param err		Error detail, set when NULL is returned.
  * @param bytes		Serialized vector.
  *
- * @return New as_vector_value on success, or NULL if `bytes` is NULL or does
- *		   not contain a valid vector. Destroy with as_vector_value_destroy().
+ * @return New as_vector_value on success, or NULL with `err` set to
+ *		   AEROSPIKE_ERR_PARAM if `bytes` is NULL or does not contain a valid
+ *		   vector. Destroy with as_vector_value_destroy().
  *
  * @relatesalso as_vector_value
  */
 AS_EXTERN as_vector_value*
-as_vector_value_from_bytes(const as_bytes* bytes);
+as_vector_value_from_bytes(as_error* err, const as_bytes* bytes);
 
 /**
  * Return the vector's data as a float16 array, or NULL if element_type is not

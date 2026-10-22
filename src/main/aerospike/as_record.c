@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -459,7 +459,9 @@ as_record_get_vector(const as_record* rec, const char* name)
 	if (! bytes || bytes->type != AS_BYTES_VECTOR) {
 		return NULL;
 	}
-	return as_vector_value_from_bytes(bytes);
+
+	as_error err;
+	return as_vector_value_from_bytes(&err, bytes);
 }
 
 as_list*

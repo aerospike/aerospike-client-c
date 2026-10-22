@@ -674,7 +674,8 @@ as_exp_destroy_base64(char* base64)
  * must match the stored vector. Incompatible vectors evaluate to NIL.
  *
  * @code
- * as_vector_value* q = as_vector_value_new_float32(data, 128);
+ * as_error err;
+ * as_vector_value* q = as_vector_value_new_float32(&err, data, 128);
  * as_bytes qbytes;
  * as_vector_value_to_bytes(q, &qbytes);
  * as_exp_build(expression,

@@ -171,24 +171,29 @@ insert_records(aerospike* p_as)
 			vals[d] = (float)i;
 		}
 
-		as_vector_value* vec = as_vector_value_new_float32(vals, DIM);
+		as_error err;
+		as_vector_value* vec = as_vector_value_new_float32(&err, vals, DIM);
+
+		if (! vec) {
+			LOG("as_vector_value_new_float32() returned %d - %s", err.code, err.message);
+			return false;
+		}
 
 		as_record rec;
 		as_record_inita(&rec, 2);
 		as_record_set_int64(&rec, ID_BIN, (int64_t)i);
 
-		if (! vec || ! as_record_set_vector(&rec, VEC_BIN, vec)) {
-			LOG("failed to create vector for record %u", i);
-			as_vector_value_destroy(vec);
+		bool set = as_record_set_vector(&rec, VEC_BIN, vec);
+		as_vector_value_destroy(vec);
+
+		if (! set) {
+			LOG("failed to set the vector bin for record %u", i);
 			as_record_destroy(&rec);
 			return false;
 		}
-		as_vector_value_destroy(vec);
 
 		as_key key;
 		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
-
-		as_error err;
 
 		if (aerospike_key_put(p_as, &err, NULL, &key, &rec) != AEROSPIKE_OK) {
 			LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
@@ -209,10 +214,15 @@ static as_status
 query_knn(aerospike* p_as, as_error* err, as_vector_distance_metric metric, as_order direction,
 		const float* query_vec, const char* label)
 {
-	as_vector_value* qvec = as_vector_value_new_float32(query_vec, DIM);
+	as_vector_value* qvec = as_vector_value_new_float32(err, query_vec, DIM);
+
+	if (! qvec) {
+		return err->code;
+	}
+
 	as_bytes qbytes;
 
-	if (! qvec || ! as_vector_value_to_bytes(qvec, &qbytes)) {
+	if (! as_vector_value_to_bytes(qvec, &qbytes)) {
 		as_vector_value_destroy(qvec);
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 				"Failed to serialize query vector");

@@ -59,7 +59,8 @@ assert_vector_bytes_eq_float32(atf_test_result* __result__, as_bytes* bytes, con
 	assert_not_null(bytes);
 	assert_int_eq(bytes->type, AS_BYTES_VECTOR);
 
-	as_vector_value* vec = as_vector_value_from_bytes(bytes);
+	as_error err;
+	as_vector_value* vec = as_vector_value_from_bytes(&err, bytes);
 	assert_not_null(vec);
 	assert_int_eq(vec->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
 	assert_int_eq(vec->dimensions, count);
@@ -128,10 +129,11 @@ TEST(vector_wire_size, "as_vector_value wire size per element type")
 	float f32[3] = {0, 0, 0};
 	double f64[3] = {0, 0, 0};
 
-	as_vector_value* v16 = as_vector_value_new_float16(f16, 3);
-	as_vector_value* v32i = as_vector_value_new_int32(i32, 3);
-	as_vector_value* v32f = as_vector_value_new_float32(f32, 3);
-	as_vector_value* v64 = as_vector_value_new_float64(f64, 3);
+	as_error err;
+	as_vector_value* v16 = as_vector_value_new_float16(&err, f16, 3);
+	as_vector_value* v32i = as_vector_value_new_int32(&err, i32, 3);
+	as_vector_value* v32f = as_vector_value_new_float32(&err, f32, 3);
+	as_vector_value* v64 = as_vector_value_new_float64(&err, f64, 3);
 
 	assert_int_eq(as_vector_value_get_wire_size(v16), AS_VECTOR_VALUE_HEADER_SIZE + 3 * 2);
 	assert_int_eq(as_vector_value_get_wire_size(v32i), AS_VECTOR_VALUE_HEADER_SIZE + 3 * 4);
@@ -147,7 +149,8 @@ TEST(vector_wire_size, "as_vector_value wire size per element type")
 TEST(vector_header, "as_vector_value serializes the fixed header")
 {
 	float data[4] = {1.5f, -2.25f, 0.0f, 100.0f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 4);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 4);
 
 	uint8_t buf[64];
 	uint32_t written = as_vector_value_write(vec, buf, 0);
@@ -175,7 +178,8 @@ TEST(vector_header, "as_vector_value serializes the fixed header")
 TEST(vector_float32_roundtrip, "as_vector_value float32 data round-trips")
 {
 	float data[4] = {1.5f, -2.25f, 0.0f, 100.0f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 4);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 4);
 
 	uint8_t buf[64];
 	as_vector_value_write(vec, buf, 0);
@@ -196,7 +200,8 @@ TEST(vector_float32_roundtrip, "as_vector_value float32 data round-trips")
 TEST(vector_int32_roundtrip, "as_vector_value int32 data round-trips")
 {
 	int32_t data[4] = {0, -1, 2147483647, -2147483648};
-	as_vector_value* vec = as_vector_value_new_int32(data, 4);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_int32(&err, data, 4);
 
 	uint8_t buf[64];
 	as_vector_value_write(vec, buf, 0);
@@ -215,7 +220,8 @@ TEST(vector_int32_roundtrip, "as_vector_value int32 data round-trips")
 TEST(vector_float64_roundtrip, "as_vector_value float64 data round-trips")
 {
 	double data[3] = {3.14159265358979, -0.5, 1e300};
-	as_vector_value* vec = as_vector_value_new_float64(data, 3);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float64(&err, data, 3);
 
 	uint8_t buf[64];
 	as_vector_value_write(vec, buf, 0);
@@ -235,7 +241,8 @@ TEST(vector_float64_roundtrip, "as_vector_value float64 data round-trips")
 TEST(vector_float16_roundtrip, "as_vector_value float16 raw bit patterns round-trip")
 {
 	uint16_t data[3] = {0x3C00, 0xC000, 0x0000}; // 1.0, -2.0, 0.0 as IEEE 754 half
-	as_vector_value* vec = as_vector_value_new_float16(data, 3);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float16(&err, data, 3);
 
 	uint8_t buf[64];
 	as_vector_value_write(vec, buf, 0);
@@ -254,7 +261,8 @@ TEST(vector_float16_roundtrip, "as_vector_value float16 raw bit patterns round-t
 TEST(vector_write_offset, "as_vector_value_write honors a non-zero offset")
 {
 	float data[2] = {1.0f, 2.0f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 2);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 2);
 
 	uint32_t size = as_vector_value_get_wire_size(vec);
 	uint8_t buf[64];
@@ -279,7 +287,8 @@ TEST(vector_write_offset, "as_vector_value_write honors a non-zero offset")
 TEST(vector_to_bytes, "as_vector_value_to_bytes produces AS_BYTES_VECTOR")
 {
 	float data[4] = {1.5f, -2.25f, 0.0f, 100.0f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 4);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 4);
 
 	uint32_t size = as_vector_value_get_wire_size(vec);
 	uint8_t expected[64];
@@ -299,12 +308,13 @@ TEST(vector_to_bytes, "as_vector_value_to_bytes produces AS_BYTES_VECTOR")
 TEST(vector_from_float32, "as_vector_value_from deserializes float32 elements")
 {
 	float data[4] = {1.5f, -2.25f, 0.0f, 100.0f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 4);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 4);
 
 	uint8_t buf[64];
 	uint32_t size = as_vector_value_write(vec, buf, 0);
 
-	as_vector_value* out = as_vector_value_from(buf, 0, size);
+	as_vector_value* out = as_vector_value_from(&err, buf, 0, size);
 	assert_not_null(out);
 	assert_int_eq(out->version, AS_VECTOR_VALUE_VERSION);
 	assert_int_eq(out->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
@@ -328,12 +338,13 @@ TEST(vector_from_float32, "as_vector_value_from deserializes float32 elements")
 TEST(vector_from_int32, "as_vector_value_from deserializes int32 elements")
 {
 	int32_t data[4] = {0, -1, 2147483647, -2147483648};
-	as_vector_value* vec = as_vector_value_new_int32(data, 4);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_int32(&err, data, 4);
 
 	uint8_t buf[64];
 	uint32_t size = as_vector_value_write(vec, buf, 0);
 
-	as_vector_value* out = as_vector_value_from(buf, 0, size);
+	as_vector_value* out = as_vector_value_from(&err, buf, 0, size);
 	assert_not_null(out);
 	assert_int_eq(out->element_type, AS_VECTOR_ELEMENT_TYPE_INT32);
 	assert_int_eq(out->dimensions, 4);
@@ -351,12 +362,13 @@ TEST(vector_from_int32, "as_vector_value_from deserializes int32 elements")
 TEST(vector_from_float64, "as_vector_value_from deserializes float64 elements")
 {
 	double data[3] = {3.14159265358979, -0.5, 1e300};
-	as_vector_value* vec = as_vector_value_new_float64(data, 3);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float64(&err, data, 3);
 
 	uint8_t buf[64];
 	uint32_t size = as_vector_value_write(vec, buf, 0);
 
-	as_vector_value* out = as_vector_value_from(buf, 0, size);
+	as_vector_value* out = as_vector_value_from(&err, buf, 0, size);
 	assert_not_null(out);
 	assert_int_eq(out->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT64);
 	assert_int_eq(out->dimensions, 3);
@@ -374,12 +386,13 @@ TEST(vector_from_float64, "as_vector_value_from deserializes float64 elements")
 TEST(vector_from_float16, "as_vector_value_from deserializes float16 raw bit patterns")
 {
 	uint16_t data[3] = {0x3C00, 0xC000, 0x0000}; // 1.0, -2.0, 0.0 as IEEE 754 half
-	as_vector_value* vec = as_vector_value_new_float16(data, 3);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float16(&err, data, 3);
 
 	uint8_t buf[64];
 	uint32_t size = as_vector_value_write(vec, buf, 0);
 
-	as_vector_value* out = as_vector_value_from(buf, 0, size);
+	as_vector_value* out = as_vector_value_from(&err, buf, 0, size);
 	assert_not_null(out);
 	assert_int_eq(out->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT16);
 	assert_int_eq(out->dimensions, 3);
@@ -397,14 +410,15 @@ TEST(vector_from_float16, "as_vector_value_from deserializes float16 raw bit pat
 TEST(vector_from_offset, "as_vector_value_from honors a non-zero offset")
 {
 	float data[2] = {1.0f, 2.0f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 2);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 2);
 
 	const uint32_t offset = 5;
 	uint8_t buf[64];
 	memset(buf, 0xAB, sizeof(buf));
 	uint32_t size = as_vector_value_write(vec, buf, offset);
 
-	as_vector_value* out = as_vector_value_from(buf, offset, size);
+	as_vector_value* out = as_vector_value_from(&err, buf, offset, size);
 	assert_not_null(out);
 	assert_int_eq(out->dimensions, 2);
 
@@ -420,13 +434,14 @@ TEST(vector_from_offset, "as_vector_value_from honors a non-zero offset")
 TEST(vector_from_bytes_roundtrip, "as_vector_value_from_bytes round-trips as_vector_value_to_bytes")
 {
 	float data[4] = {1.5f, -2.25f, 0.0f, 100.0f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 4);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 4);
 
 	as_bytes bytes;
 	assert(as_vector_value_to_bytes(vec, &bytes));
 	assert_int_eq(as_bytes_get_type(&bytes), AS_BYTES_VECTOR);
 
-	as_vector_value* out = as_vector_value_from_bytes(&bytes);
+	as_vector_value* out = as_vector_value_from_bytes(&err, &bytes);
 	assert_not_null(out);
 	assert_int_eq(out->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
 	assert_int_eq(out->dimensions, 4);
@@ -446,23 +461,33 @@ TEST(vector_from_invalid, "as_vector_value_from rejects malformed buffers")
 {
 	uint8_t buf[64];
 	memset(buf, 0, sizeof(buf));
+	as_error err;
 
 	// Length shorter than the fixed header.
-	assert_null(as_vector_value_from(buf, 0, AS_VECTOR_VALUE_HEADER_SIZE - 1));
+	assert_null(as_vector_value_from(&err, buf, 0, AS_VECTOR_VALUE_HEADER_SIZE - 1));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: value size 5 smaller than 6-byte header");
 
 	// NULL buffer.
-	assert_null(as_vector_value_from(NULL, 0, 32));
+	assert_null(as_vector_value_from(&err, NULL, 0, 32));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: buffer is NULL");
 
 	// Unknown element type.
 	buf[0] = AS_VECTOR_VALUE_VERSION;
 	buf[1] = 0x7F; // not a valid as_vector_element_type
-	assert_null(as_vector_value_from(buf, 0, sizeof(buf)));
+	assert_null(as_vector_value_from(&err, buf, 0, sizeof(buf)));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: invalid element type 127");
 
 	// Valid type but dimensions exceed the available length.
 	float data[2] = {1.0f, 2.0f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 2);
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 2);
 	uint32_t size = as_vector_value_write(vec, buf, 0);
-	assert_null(as_vector_value_from(buf, 0, size - 1));
+	assert_null(as_vector_value_from(&err, buf, 0, size - 1));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message,
+		"vector: value size 13 does not match 14 (2 dimensions of 4 bytes, little-endian)");
 	as_vector_value_destroy(vec);
 }
 
@@ -471,28 +496,37 @@ TEST(vector_from_limits, "as_vector_value_from rejects empty and oversized vecto
 	uint8_t buf[AS_VECTOR_VALUE_HEADER_SIZE] = {0};
 	buf[0] = AS_VECTOR_VALUE_VERSION;
 	buf[1] = AS_VECTOR_ELEMENT_TYPE_FLOAT32;
+	as_error err;
 
 	// The constructors and server reject empty vectors.
-	assert_null(as_vector_value_from(buf, 0, sizeof(buf)));
+	assert_null(as_vector_value_from(&err, buf, 0, sizeof(buf)));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: must have at least 1 dimension");
 
 	uint32_t dimensions = cf_swap_to_le32(
 		as_vector_element_type_max_dimensions(AS_VECTOR_ELEMENT_TYPE_FLOAT32) + 1);
 	memcpy(&buf[2], &dimensions, sizeof(dimensions));
-	assert_null(as_vector_value_from(buf, 0, sizeof(buf)));
+	assert_null(as_vector_value_from(&err, buf, 0, sizeof(buf)));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: 65537 dimensions exceed max 65536 for element type 3");
 }
 
 TEST(vector_from_unknown_version, "as_vector_value_from rejects a version other than 1")
 {
 	float data[2] = {1.0f, 2.0f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 2);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 2);
 	uint8_t buf[64];
 	uint32_t size = as_vector_value_write(vec, buf, 0);
 
 	buf[0] = AS_VECTOR_VALUE_VERSION + 1;
-	assert_null(as_vector_value_from(buf, 0, size));
+	assert_null(as_vector_value_from(&err, buf, 0, size));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: unsupported format version 2 (expected 1)");
 
 	buf[0] = 0;
-	assert_null(as_vector_value_from(buf, 0, size));
+	assert_null(as_vector_value_from(&err, buf, 0, size));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
 
 	as_vector_value_destroy(vec);
 }
@@ -500,7 +534,8 @@ TEST(vector_from_unknown_version, "as_vector_value_from rejects a version other 
 TEST(vector_to_bytes_new, "as_vector_value_to_bytes_new produces a heap AS_BYTES_VECTOR")
 {
 	float data[3] = {1.5f, -2.25f, 3.14159f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 3);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 3);
 
 	as_bytes* bytes = as_vector_value_to_bytes_new(vec);
 	assert_not_null(bytes);
@@ -518,7 +553,8 @@ TEST(vector_to_bytes_new, "as_vector_value_to_bytes_new produces a heap AS_BYTES
 TEST(vector_msgpack_keeps_subtype, "a vector keeps AS_BYTES_VECTOR and its element type through msgpack")
 {
 	int32_t data[3] = {-5, 0, 12345};
-	as_vector_value* vec = as_vector_value_new_int32(data, 3);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_int32(&err, data, 3);
 	as_bytes* bytes = as_vector_value_to_bytes_new(vec);
 	assert_not_null(bytes);
 
@@ -535,7 +571,7 @@ TEST(vector_msgpack_keeps_subtype, "a vector keeps AS_BYTES_VECTOR and its eleme
 	assert_int_eq(as_val_type(out), AS_BYTES);
 	assert_int_eq(((as_bytes*)out)->type, AS_BYTES_VECTOR);
 
-	as_vector_value* rvec = as_vector_value_from_bytes((as_bytes*)out);
+	as_vector_value* rvec = as_vector_value_from_bytes(&err, (as_bytes*)out);
 	assert_not_null(rvec);
 	assert_int_eq(rvec->element_type, AS_VECTOR_ELEMENT_TYPE_INT32);
 	assert_int_eq(rvec->dimensions, 3);
@@ -572,10 +608,11 @@ TEST(vector_getter_type_safety, "typed accessors only return data for the matchi
 	float f32[2] = {1.0f, 2.0f};
 	double f64[2] = {1.0, 2.0};
 
-	as_vector_value* v16 = as_vector_value_new_float16(f16, 2);
-	as_vector_value* v32i = as_vector_value_new_int32(i32, 2);
-	as_vector_value* v32f = as_vector_value_new_float32(f32, 2);
-	as_vector_value* v64 = as_vector_value_new_float64(f64, 2);
+	as_error err;
+	as_vector_value* v16 = as_vector_value_new_float16(&err, f16, 2);
+	as_vector_value* v32i = as_vector_value_new_int32(&err, i32, 2);
+	as_vector_value* v32f = as_vector_value_new_float32(&err, f32, 2);
+	as_vector_value* v64 = as_vector_value_new_float64(&err, f64, 2);
 
 	// Matching getter returns data; the other three return NULL.
 	assert_not_null(as_vector_value_get_float16(v16));
@@ -611,7 +648,10 @@ TEST(vector_null_safety, "accessors and from_bytes tolerate NULL arguments")
 	assert_null(as_vector_value_get_float32(NULL));
 	assert_null(as_vector_value_get_float64(NULL));
 
-	assert_null(as_vector_value_from_bytes(NULL));
+	as_error err;
+	assert_null(as_vector_value_from_bytes(&err, NULL));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: bytes is NULL");
 }
 
 TEST(vector_empty, "zero-dimension vectors are rejected")
@@ -621,23 +661,30 @@ TEST(vector_empty, "zero-dimension vectors are rejected")
 	float float32_data[1] = {0};
 	double float64_data[1] = {0};
 
-	assert_null(as_vector_value_new_float16(float16_data, 0));
-	assert_null(as_vector_value_new_int32(int32_data, 0));
-	assert_null(as_vector_value_new_float32(float32_data, 0));
-	assert_null(as_vector_value_new_float64(float64_data, 0));
+	as_error err;
+	assert_null(as_vector_value_new_float16(&err, float16_data, 0));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: must have at least 1 dimension");
+	assert_null(as_vector_value_new_int32(&err, int32_data, 0));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_null(as_vector_value_new_float32(&err, float32_data, 0));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_null(as_vector_value_new_float64(&err, float64_data, 0));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
 }
 
 TEST(vector_from_trailing_bytes, "as_vector_value_from ignores bytes past the encoded vector")
 {
 	float data[3] = {1.5f, -2.25f, 3.14159f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 3);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 3);
 
 	uint8_t buf[64];
 	memset(buf, 0xCD, sizeof(buf)); // trailing junk after the vector
 	uint32_t size = as_vector_value_write(vec, buf, 0);
 
 	// Report far more available bytes than the vector actually needs.
-	as_vector_value* out = as_vector_value_from(buf, 0, sizeof(buf));
+	as_vector_value* out = as_vector_value_from(&err, buf, 0, sizeof(buf));
 	assert_not_null(out);
 	assert_int_eq(out->dimensions, 3);
 
@@ -648,7 +695,7 @@ TEST(vector_from_trailing_bytes, "as_vector_value_from ignores bytes past the en
 	}
 
 	// The exact-size decode must agree with the oversized-length decode.
-	as_vector_value* exact = as_vector_value_from(buf, 0, size);
+	as_vector_value* exact = as_vector_value_from(&err, buf, 0, size);
 	assert_not_null(exact);
 	assert_int_eq(exact->dimensions, 3);
 
@@ -670,7 +717,8 @@ TEST(vector_from_overflow, "as_vector_value_from rejects dimensions that overflo
 	uint32_t dims = cf_swap_to_le32(0x20000000u);
 	memcpy(&buf[2], &dims, sizeof(dims));
 
-	assert_null(as_vector_value_from(buf, 0, sizeof(buf)));
+	as_error err;
+	assert_null(as_vector_value_from(&err, buf, 0, sizeof(buf)));
 }
 
 TEST(vector_constructor_limits, "constructors enforce the server dimension limits")
@@ -684,10 +732,18 @@ TEST(vector_constructor_limits, "constructors enforce the server dimension limit
 	uint32_t max = as_vector_element_type_max_dimensions(AS_VECTOR_ELEMENT_TYPE_FLOAT32);
 	float* data = calloc(max + 1, sizeof(float));
 
-	as_vector_value* valid = as_vector_value_new_float32(data, max);
+	as_error err;
+	as_vector_value* valid = as_vector_value_new_float32(&err, data, max);
 	assert_not_null(valid);
-	assert_null(as_vector_value_new_float32(data, max + 1));
-	assert_null(as_vector_value_new_float32(NULL, 1));
+	assert_int_eq(err.code, AEROSPIKE_OK);
+
+	assert_null(as_vector_value_new_float32(&err, data, max + 1));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: 65537 dimensions exceed max 65536 for element type 3");
+
+	assert_null(as_vector_value_new_float32(&err, NULL, 1));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: data is NULL");
 
 	as_vector_value_destroy(valid);
 	free(data);
@@ -696,7 +752,8 @@ TEST(vector_constructor_limits, "constructors enforce the server dimension limit
 TEST(vector_serialization_rejects_invalid_vectors, "serialization rejects vectors the server would reject")
 {
 	float data[1] = {1.0f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 1);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 1);
 	uint8_t buffer[16];
 	as_bytes bytes;
 
@@ -735,10 +792,11 @@ TEST(vector_native_bin_roundtrip, "set/get vector bins of every element type rou
 	float f32[4] = {1.5f, -2.25f, 3.14159f, 0.0f};
 	double f64[4] = {1.5, -2.25, 3.14159, 0.0};
 
-	as_vector_value* v16 = as_vector_value_new_float16(f16, 4);
-	as_vector_value* v32i = as_vector_value_new_int32(i32, 4);
-	as_vector_value* v32f = as_vector_value_new_float32(f32, 4);
-	as_vector_value* v64 = as_vector_value_new_float64(f64, 4);
+	as_error err;
+	as_vector_value* v16 = as_vector_value_new_float16(&err, f16, 4);
+	as_vector_value* v32i = as_vector_value_new_int32(&err, i32, 4);
+	as_vector_value* v32f = as_vector_value_new_float32(&err, f32, 4);
+	as_vector_value* v64 = as_vector_value_new_float64(&err, f64, 4);
 
 	remove_key(10);
 
@@ -752,7 +810,6 @@ TEST(vector_native_bin_roundtrip, "set/get vector bins of every element type rou
 	assert_true(as_record_set_vector(&rec, "f32", v32f));
 	assert_true(as_record_set_vector(&rec, "f64", v64));
 
-	as_error err;
 	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
 	assert_int_eq(status, AEROSPIKE_OK);
 	as_record_destroy(&rec);
@@ -802,9 +859,10 @@ TEST(vector_special_float_bits_server, "special float bit patterns survive the s
 	// +Inf, -Inf, NaN, +0, -0, smallest subnormal.
 	uint16_t f16[6] = {0x7C00, 0xFC00, 0x7E00, 0x0000, 0x8000, 0x0001};
 
-	as_vector_value* v32 = as_vector_value_new_float32(f32, 7);
-	as_vector_value* v64 = as_vector_value_new_float64(f64, 7);
-	as_vector_value* v16 = as_vector_value_new_float16(f16, 6);
+	as_error err;
+	as_vector_value* v32 = as_vector_value_new_float32(&err, f32, 7);
+	as_vector_value* v64 = as_vector_value_new_float64(&err, f64, 7);
+	as_vector_value* v16 = as_vector_value_new_float16(&err, f16, 6);
 
 	remove_key(11);
 
@@ -817,7 +875,6 @@ TEST(vector_special_float_bits_server, "special float bit patterns survive the s
 	assert_true(as_record_set_vector(&rec, "f64", v64));
 	assert_true(as_record_set_vector(&rec, "f16", v16));
 
-	as_error err;
 	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
 	as_record_destroy(&rec);
 
@@ -864,7 +921,8 @@ TEST(vector_special_float_bits_server, "special float bit patterns survive the s
 TEST(vector_single_dimension_server, "a single-dimension vector round-trips through the server")
 {
 	float data[1] = {42.5f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 1);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 1);
 
 	remove_key(12);
 
@@ -875,7 +933,6 @@ TEST(vector_single_dimension_server, "a single-dimension vector round-trips thro
 	as_record_inita(&rec, 1);
 	assert_true(as_record_set_vector(&rec, "v", vec));
 
-	as_error err;
 	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
 	as_record_destroy(&rec);
 
@@ -902,7 +959,8 @@ TEST(vector_large_crossing_16bit_server, "a large vector crossing the 16-bit msg
 		data[i] = i * 0.5;
 	}
 
-	as_vector_value* vec = as_vector_value_new_float64(data, dims);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float64(&err, data, dims);
 	assert_not_null(vec);
 	assert_int_eq(as_vector_value_get_wire_size(vec) > 0xFFFF, true);
 
@@ -915,7 +973,6 @@ TEST(vector_large_crossing_16bit_server, "a large vector crossing the 16-bit msg
 	as_record_inita(&rec, 1);
 	assert_true(as_record_set_vector(&rec, "v", vec));
 
-	as_error err;
 	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
 	as_record_destroy(&rec);
 
@@ -943,7 +1000,8 @@ TEST(vector_max_dimensions_server, "a vector at the server dimension limit round
 	double* data = (double*)calloc(dims, sizeof(double));
 	data[0] = -1.0;
 	data[dims - 1] = 1.0;
-	as_vector_value* vec = as_vector_value_new_float64(data, dims);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float64(&err, data, dims);
 	assert_not_null(vec);
 
 	remove_key(24);
@@ -955,7 +1013,6 @@ TEST(vector_max_dimensions_server, "a vector at the server dimension limit round
 	as_record_inita(&rec, 1);
 	assert_true(as_record_set_vector(&rec, "v", vec));
 
-	as_error err;
 	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
 	as_record_destroy(&rec);
 
@@ -1003,15 +1060,15 @@ TEST(vector_overwrite_replaces_type_dims, "overwriting a vector bin fully replac
 {
 	float f32[4] = {1.0f, 2.0f, 3.0f, 4.0f};
 	int32_t i32[2] = {9, -9};
-	as_vector_value* first = as_vector_value_new_float32(f32, 4);
-	as_vector_value* second = as_vector_value_new_int32(i32, 2);
+	as_error err;
+	as_vector_value* first = as_vector_value_new_float32(&err, f32, 4);
+	as_vector_value* second = as_vector_value_new_int32(&err, i32, 2);
 
 	remove_key(15);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 15);
 
-	as_error err;
 	as_record r1;
 	as_record_inita(&r1, 1);
 	assert_true(as_record_set_vector(&r1, "v", first));
@@ -1044,14 +1101,14 @@ TEST(vector_scalar_churn, "a vector bin can be replaced by a scalar and back")
 {
 	float f32[2] = {0.1f, 0.2f};
 	double f64[3] = {9.0, 8.0, 7.0};
-	as_vector_value* v1 = as_vector_value_new_float32(f32, 2);
-	as_vector_value* v2 = as_vector_value_new_float64(f64, 3);
+	as_error err;
+	as_vector_value* v1 = as_vector_value_new_float32(&err, f32, 2);
+	as_vector_value* v2 = as_vector_value_new_float64(&err, f64, 3);
 
 	remove_key(16);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 16);
-	as_error err;
 
 	as_record r1;
 	as_record_inita(&r1, 1);
@@ -1095,14 +1152,14 @@ TEST(vector_selective_read_server, "a selective read returns only the requested 
 {
 	float wanted[2] = {1.0f, 2.0f};
 	int32_t other[3] = {5, 6, 7};
-	as_vector_value* vw = as_vector_value_new_float32(wanted, 2);
-	as_vector_value* vo = as_vector_value_new_int32(other, 3);
+	as_error err;
+	as_vector_value* vw = as_vector_value_new_float32(&err, wanted, 2);
+	as_vector_value* vo = as_vector_value_new_int32(&err, other, 3);
 
 	remove_key(17);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 17);
-	as_error err;
 
 	as_record rec;
 	as_record_inita(&rec, 2);
@@ -1131,7 +1188,8 @@ TEST(vector_selective_read_server, "a selective read returns only the requested 
 TEST(vector_in_collection_rejected_server, "the server rejects a vector in a list or a map")
 {
 	float data[2] = {1.0f, 2.0f};
-	as_vector_value* vec = as_vector_value_new_float32(data, 2);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 2);
 
 	remove_key(23);
 
@@ -1148,7 +1206,6 @@ TEST(vector_in_collection_rejected_server, "the server rejects a vector in a lis
 	as_record_inita(&list_rec, 1);
 	assert_true(as_record_set_list(&list_rec, "list", (as_list*)&list));
 
-	as_error err;
 	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &list_rec), AEROSPIKE_ERR_REQUEST_INVALID);
 	as_record_destroy(&list_rec);
 
@@ -1178,7 +1235,8 @@ TEST(vector_async_roundtrip, "async put/get round-trips a vector through the ser
 	as_monitor_init(&data.monitor);
 	as_monitor_begin(&data.monitor);
 
-	as_vector_value* vec = as_vector_value_new_float32(data.expected, 2);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data.expected, 2);
 	assert_not_null(vec);
 
 	remove_key(25);
@@ -1190,7 +1248,6 @@ TEST(vector_async_roundtrip, "async put/get round-trips a vector through the ser
 	as_record_inita(&rec, 1);
 	assert_true(as_record_set_vector(&rec, "v", vec));
 
-	as_error err;
 	as_status status = aerospike_key_put_async(
 		as, &err, NULL, &key, &rec, vector_async_put_callback, &data, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -1207,13 +1264,13 @@ TEST(vector_batch_read_server, "a batch read returns records that contain vector
 {
 	float d1[3] = {1.0f, 2.0f, 3.0f};
 	int32_t d2[2] = {10, 20};
-	as_vector_value* v1 = as_vector_value_new_float32(d1, 3);
-	as_vector_value* v2 = as_vector_value_new_int32(d2, 2);
+	as_error err;
+	as_vector_value* v1 = as_vector_value_new_float32(&err, d1, 3);
+	as_vector_value* v2 = as_vector_value_new_int32(&err, d2, 2);
 
 	remove_key(19);
 	remove_key(20);
 
-	as_error err;
 	as_key k1;
 	as_key_init_int64(&k1, NAMESPACE, SET, 19);
 	as_key k2;
@@ -1269,7 +1326,8 @@ TEST(vector_batch_read_server, "a batch read returns records that contain vector
 TEST(vector_dist_exp_compiles, "vector distance expression compiles and packs (client-side only)")
 {
 	float data[4] = {0.1f, 0.2f, 0.3f, 0.4f};
-	as_vector_value* query = as_vector_value_new_float32(data, 4);
+	as_error err;
+	as_vector_value* query = as_vector_value_new_float32(&err, data, 4);
 	as_bytes qbytes;
 
 	assert_true(as_vector_value_to_bytes(query, &qbytes));
@@ -1309,13 +1367,13 @@ TEST(vector_dist_exp_compiles, "vector distance expression compiles and packs (c
 TEST(vector_distance_expression_server, "vector distance expression evaluates on the server")
 {
 	float stored[4] = {0.1f, 0.2f, 0.3f, 0.4f};
-	as_vector_value* vec = as_vector_value_new_float32(stored, 4);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, stored, 4);
 
 	remove_key(21);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 21);
-	as_error err;
 
 	as_record rec;
 	as_record_inita(&rec, 1);
@@ -1354,13 +1412,13 @@ TEST(vector_bin_expression_read_server,
 	"[disabled] reading a vector bin directly through an expression succeeds")
 {
 	float stored[3] = {0.5f, -1.5f, 2.0f};
-	as_vector_value* vec = as_vector_value_new_float32(stored, 3);
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, stored, 3);
 
 	remove_key(22);
 
 	as_key key;
 	as_key_init_int64(&key, NAMESPACE, SET, 22);
-	as_error err;
 
 	as_record rec;
 	as_record_inita(&rec, 1);
@@ -1433,12 +1491,14 @@ static void
 assert_knn_query(atf_test_result* __result__, as_vector_distance_metric metric,
 	as_order direction, const float* query_data, const int64_t* expected)
 {
+	as_error err;
+
 	knn_remove_records();
 
 	for (uint32_t i = 0; i < KNN_RECORDS; i++) {
 		float data[KNN_DIMS] = {(float)i, 1.0f, 0.0f, 0.0f};
 
-		as_vector_value* vec = as_vector_value_new_float32(data, KNN_DIMS);
+		as_vector_value* vec = as_vector_value_new_float32(&err, data, KNN_DIMS);
 		assert_not_null(vec);
 
 		as_record rec;
@@ -1456,7 +1516,7 @@ assert_knn_query(atf_test_result* __result__, as_vector_distance_metric metric,
 	}
 
 	as_vector_value* query_vec =
-		as_vector_value_new_float32(query_data, KNN_DIMS);
+		as_vector_value_new_float32(&err, query_data, KNN_DIMS);
 	assert_not_null(query_vec);
 
 	as_bytes query_bytes;
@@ -1483,7 +1543,6 @@ assert_knn_query(atf_test_result* __result__, as_vector_distance_metric metric,
 	as_query_top_k(&query, KNN_K);
 
 	knn_result result = {0};
-	as_error err;
 	as_status status =
 		aerospike_query_foreach(as, &err, NULL, &query, knn_query_callback, &result);
 

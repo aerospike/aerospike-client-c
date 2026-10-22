@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -647,7 +647,8 @@ as_record_set_bytes(as_record* rec, const char* name, as_bytes * value);
  * this call.
  *
  * @code
- * as_vector_value* vec = as_vector_value_new_float32(data, 128);
+ * as_error err;
+ * as_vector_value* vec = as_vector_value_new_float32(&err, data, 128);
  * as_record_set_vector(rec, "embedding", vec);
  * as_vector_value_destroy(vec);
  * @endcode
@@ -932,6 +933,8 @@ as_record_get_bytes(const as_record* rec, const char* name);
  * @param name		The name of the bin.
  *
  * @return a new vector if the bin exists and holds a vector, otherwise NULL.
+ * To learn why a vector bin can't be decoded, call as_vector_value_from_bytes()
+ * on as_record_get_bytes().
  *
  * @relates as_record
  */

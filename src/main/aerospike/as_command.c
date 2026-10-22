@@ -712,7 +712,16 @@ as_command_add_latencies(as_command* cmd, as_node* node, as_ns_metrics* metrics,
 }
 
 as_status
+as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, bool metrics_sampled);
+
+as_status
 as_command_execute(as_command* cmd, as_error* err)
+{
+	return as_command_execute_sample(cmd, err, false, false);
+}
+
+as_status
+as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, bool metrics_sampled)
 {
 	as_socket_context ctx = {
 		.cluster = cmd->cluster,
@@ -721,17 +730,37 @@ as_command_execute(as_command* cmd, as_error* err)
 
 	as_node* node = NULL;
 	as_status status;
+	bool sampled;
+	bool count_command;
 
-	// One sampler decision for this command, before retries. Re-sends of this
-	// command reuse it. A new sub-batch is a new command and draws again.
-	// See as_command.metrics_sample_decision.
-	cmd->metrics_sample_decision = as_cluster_sample_operational(cmd->cluster);
+	// One sampler decision for this user call, before retries. Re-sends of this
+	// command reuse it. A user batch draws once and passes that decision here.
+	// See as_command.metrics_sample_decision and as_metrics_batch_sample_begin().
+	if (as_metrics_batch_sub_command) {
+		sampled = as_metrics_batch_sampled;
+		count_command = false;
+	}
+	else if (inherit_sample) {
+		sampled = metrics_sampled;
+		count_command = false;
+	}
+	else {
+		sampled = as_cluster_sample_operational(cmd->cluster);
+		count_command = true;
+	}
+
+	cmd->metrics_sample_decision = sampled;
 	// Command latency starts once and includes retries.
 	cmd->command_begin = 0;
 
+	// A single-key batch fallback already counted the batch. Record batch latency.
+	if (as_metrics_batch_sub_command && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+		cmd->latency_type = AS_LATENCY_TYPE_BATCH;
+	}
+
 	// A null node is a single-record command. Batch, scan, and query set node
 	// on each node command and already counted the user call.
-	if (cmd->metrics_sample_decision && !cmd->node) {
+	if (count_command && cmd->metrics_sample_decision && !cmd->node && !as_metrics_batch_sub_command) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 

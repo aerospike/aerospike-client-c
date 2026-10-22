@@ -227,11 +227,13 @@ typedef struct as_command_s {
 	uint8_t replica_index;
 	uint8_t replica_index_sc; // Used in batch only.
 	as_latency_type latency_type;
-	// Stored operational sampler decision. Reused for retries of this command.
+	// Stored operational sampler decision. Reused for retries of this command
+	// and for every node command of one user batch.
 	// False when operational metrics are off, or when the sampler skips this call.
 	// Gates the cluster command_count, the retry counter, v3 command latency, and
 	// per-namespace histograms, bytes, and error counts. Namespace error counters
 	// are recorded once on terminal failure.
+	// See as_cluster_sample_operational() and as_metrics_batch_sample_begin().
 	bool metrics_sample_decision;
 } as_command;
 
@@ -672,6 +674,16 @@ as_status
 as_command_send(
 	as_command* cmd, as_error* err, uint32_t comp_threshold, as_write_fn write_fn, void* udata
 	);
+
+/**
+ * @private
+ * Send command to the server.
+ * When inherit_sample is true, metrics_sampled is the user-call decision.
+ * This command does not draw again and does not increment command_count.
+ * See as_metrics_batch_sample_begin().
+ */
+as_status
+as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, bool metrics_sampled);
 
 /**
  * @private

@@ -47,6 +47,17 @@ typedef struct as_query_topk_collector_s as_query_topk_collector;
 
 /**
  * @private
+ * Whether any order-by or top-k setting was made, so the query is checked as a
+ * Top-K query.
+ */
+static inline bool
+as_query_has_topk_settings(const as_query* query)
+{
+	return query->order_by.defined || query->top_k > 0 || query->then_order_by_early;
+}
+
+/**
+ * @private
  * Whether the client merges this query's results as a Top-K query. An order
  * key without k is sent to the server, which rejects it, so it is not merged.
  */

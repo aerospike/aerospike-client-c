@@ -784,9 +784,14 @@ as_query_validate_topk(
 	as_error* err
 	)
 {
-	if (!query->order_by.defined && query->top_k == 0) {
+	if (! as_query_has_topk_settings(query)) {
 		// Not a Top-K query. Nothing to validate.
 		return AEROSPIKE_OK;
+	}
+
+	if (query->then_order_by_early) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"then_order_by requires order_by to be called first");
 	}
 
 	if (!query->order_by.defined) {
@@ -2355,7 +2360,7 @@ aerospike_query_foreach_internal(
 
 	// Rejected before the aggregation thread starts, since a command build failure in
 	// as_query_execute() never closes the aggregation input stream.
-	if (query->apply.function[0] && (query->order_by.defined || query->top_k > 0)) {
+	if (query->apply.function[0] && as_query_has_topk_settings(query)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"order_by/top_k is incompatible with aggregate UDFs");
 	}
@@ -2371,7 +2376,7 @@ aerospike_query_foreach_internal(
 	// order_by/top_k requires the partition-query wire path (needs AS_FIELD_PID_ARRAY and
 	// AS_MSG_INFO3_PARTITION_DONE). Reject explicitly here so it can never silently fall
 	// through to convert_query_to_scan() below, which would drop both fields on the floor.
-	if ((query->order_by.defined || query->top_k > 0) && ! cluster->has_partition_query) {
+	if (as_query_has_topk_settings(query) && ! cluster->has_partition_query) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"order_by/top_k requires server support for partition queries (server too old)");
 	}
@@ -2553,7 +2558,7 @@ aerospike_query_partitions(
 
 	// A query that resumes after a digest would rank only the rest of the scan.
 	// as_query_validate_topk() rejects the other resume points (pf->parts_all).
-	if ((query->order_by.defined || query->top_k > 0) && pf->digest.init) {
+	if (as_query_has_topk_settings(query) && pf->digest.init) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"order_by/top_k cannot resume an earlier query");
 	}
@@ -2599,7 +2604,7 @@ aerospike_query_async(
 			"Async aggregation or background queries are not supported");
 	}
 
-	if (query->order_by.defined || query->top_k > 0) {
+	if (as_query_has_topk_settings(query)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"order_by/top_k is not supported on asynchronous queries");
 	}
@@ -2795,7 +2800,7 @@ aerospike_query_partitions_async(
 			"Aggregation or background queries cannot query by partition");
 	}
 
-	if (query->order_by.defined || query->top_k > 0) {
+	if (as_query_has_topk_settings(query)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"order_by/top_k is not supported on asynchronous queries");
 	}
@@ -2964,7 +2969,7 @@ aerospike_query_background(
 	as_policy_key pkey;
 	policy = as_policy_write_merge(as, policy, &merged, &pkey);
 
-	if (query->order_by.defined || query->top_k > 0) {
+	if (as_query_has_topk_settings(query)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"order_by/top_k is only valid on foreground queries");
 	}

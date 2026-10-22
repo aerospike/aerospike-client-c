@@ -91,6 +91,71 @@ as_vector_value_new(
 	return vec;
 }
 
+static uint32_t
+as_vector_value_get_wire_size(const as_vector_value* vec)
+{
+	return AS_VECTOR_VALUE_HEADER_SIZE + vec->dimensions * as_vector_element_type_size(vec->element_type);
+}
+
+static void
+as_vector_value_write(const as_vector_value* vec, uint8_t* buffer)
+{
+	uint32_t pos = 0;
+
+	// Vector wire format is little-endian to match the server.
+	buffer[pos++] = vec->version;
+	buffer[pos++] = (uint8_t)vec->element_type;
+
+	uint32_t dims_le = cf_swap_to_le32(vec->dimensions);
+	memcpy(&buffer[pos], &dims_le, sizeof(dims_le));
+	pos += sizeof(dims_le);
+
+	uint32_t i;
+
+	switch (vec->element_type) {
+	case AS_VECTOR_ELEMENT_TYPE_FLOAT16: {
+		const uint16_t* src = (const uint16_t*)vec->data;
+		for (i = 0; i < vec->dimensions; i++) {
+			uint16_t le = cf_swap_to_le16(src[i]);
+			memcpy(&buffer[pos], &le, sizeof(le));
+			pos += sizeof(le);
+		}
+		break;
+	}
+	case AS_VECTOR_ELEMENT_TYPE_INT32: {
+		const int32_t* src = (const int32_t*)vec->data;
+		for (i = 0; i < vec->dimensions; i++) {
+			uint32_t le = cf_swap_to_le32((uint32_t)src[i]);
+			memcpy(&buffer[pos], &le, sizeof(le));
+			pos += sizeof(le);
+		}
+		break;
+	}
+	case AS_VECTOR_ELEMENT_TYPE_FLOAT32: {
+		const float* src = (const float*)vec->data;
+		for (i = 0; i < vec->dimensions; i++) {
+			union { float f; uint32_t u; } conv;
+			conv.f = src[i];
+			conv.u = cf_swap_to_le32(conv.u);
+			memcpy(&buffer[pos], &conv.u, sizeof(conv.u));
+			pos += sizeof(conv.u);
+		}
+		break;
+	}
+	case AS_VECTOR_ELEMENT_TYPE_FLOAT64: {
+		const double* src = (const double*)vec->data;
+		for (i = 0; i < vec->dimensions; i++) {
+			double le = cf_swap_to_little_float64(src[i]);
+			memcpy(&buffer[pos], &le, sizeof(le));
+			pos += sizeof(le);
+		}
+		break;
+	}
+	default:
+		break;
+	}
+}
+
 //---------------------------------
 // Functions
 //---------------------------------
@@ -145,71 +210,6 @@ as_vector_element_type_size(as_vector_element_type type)
 	}
 }
 
-uint32_t
-as_vector_value_write(const as_vector_value* vec, uint8_t* buffer, uint32_t offset)
-{
-	if (! as_vector_value_is_valid(vec)) {
-		return 0;
-	}
-
-	uint32_t pos = offset;
-
-	// Vector wire format is little-endian to match the server.
-	buffer[pos++] = vec->version;
-	buffer[pos++] = (uint8_t)vec->element_type;
-
-	uint32_t dims_le = cf_swap_to_le32(vec->dimensions);
-	memcpy(&buffer[pos], &dims_le, sizeof(dims_le));
-	pos += sizeof(dims_le);
-
-	uint32_t i;
-
-	switch (vec->element_type) {
-	case AS_VECTOR_ELEMENT_TYPE_FLOAT16: {
-		const uint16_t* src = (const uint16_t*)vec->data;
-		for (i = 0; i < vec->dimensions; i++) {
-			uint16_t le = cf_swap_to_le16(src[i]);
-			memcpy(&buffer[pos], &le, sizeof(le));
-			pos += sizeof(le);
-		}
-		break;
-	}
-	case AS_VECTOR_ELEMENT_TYPE_INT32: {
-		const int32_t* src = (const int32_t*)vec->data;
-		for (i = 0; i < vec->dimensions; i++) {
-			uint32_t le = cf_swap_to_le32((uint32_t)src[i]);
-			memcpy(&buffer[pos], &le, sizeof(le));
-			pos += sizeof(le);
-		}
-		break;
-	}
-	case AS_VECTOR_ELEMENT_TYPE_FLOAT32: {
-		const float* src = (const float*)vec->data;
-		for (i = 0; i < vec->dimensions; i++) {
-			union { float f; uint32_t u; } conv;
-			conv.f = src[i];
-			conv.u = cf_swap_to_le32(conv.u);
-			memcpy(&buffer[pos], &conv.u, sizeof(conv.u));
-			pos += sizeof(conv.u);
-		}
-		break;
-	}
-	case AS_VECTOR_ELEMENT_TYPE_FLOAT64: {
-		const double* src = (const double*)vec->data;
-		for (i = 0; i < vec->dimensions; i++) {
-			double le = cf_swap_to_little_float64(src[i]);
-			memcpy(&buffer[pos], &le, sizeof(le));
-			pos += sizeof(le);
-		}
-		break;
-	}
-	default:
-		break;
-	}
-
-	return pos - offset;
-}
-
 bool
 as_vector_value_to_bytes(const as_vector_value* vec, as_bytes* bytes)
 {
@@ -219,7 +219,7 @@ as_vector_value_to_bytes(const as_vector_value* vec, as_bytes* bytes)
 
 	uint32_t size = as_vector_value_get_wire_size(vec);
 	uint8_t* buffer = (uint8_t*)cf_malloc(size);
-	as_vector_value_write(vec, buffer, 0);
+	as_vector_value_write(vec, buffer);
 
 	as_bytes_init_wrap(bytes, buffer, size, true);
 	as_bytes_set_type(bytes, AS_BYTES_VECTOR);
@@ -235,7 +235,7 @@ as_vector_value_to_bytes_new(const as_vector_value* vec)
 
 	uint32_t size = as_vector_value_get_wire_size(vec);
 	uint8_t* buffer = (uint8_t*)cf_malloc(size);
-	as_vector_value_write(vec, buffer, 0);
+	as_vector_value_write(vec, buffer);
 
 	as_bytes* bytes = as_bytes_new_wrap(buffer, size, true);
 
@@ -249,14 +249,17 @@ as_vector_value_to_bytes_new(const as_vector_value* vec)
 }
 
 as_vector_value*
-as_vector_value_from(as_error* err, const uint8_t* buffer, uint32_t offset, uint32_t length)
+as_vector_value_from_bytes(as_error* err, const as_bytes* bytes)
 {
 	as_error_reset(err);
 
-	if (buffer == NULL) {
-		as_error_set_message(err, AEROSPIKE_ERR_PARAM, "vector: buffer is NULL");
+	if (bytes == NULL || bytes->value == NULL) {
+		as_error_set_message(err, AEROSPIKE_ERR_PARAM, "vector: bytes is NULL");
 		return NULL;
 	}
+
+	const uint8_t* buffer = bytes->value;
+	uint32_t length = bytes->size;
 
 	if (length < AS_VECTOR_VALUE_HEADER_SIZE) {
 		as_error_update(err, AEROSPIKE_ERR_PARAM,
@@ -265,7 +268,7 @@ as_vector_value_from(as_error* err, const uint8_t* buffer, uint32_t offset, uint
 		return NULL;
 	}
 
-	uint32_t pos = offset;
+	uint32_t pos = 0;
 
 	// Vector wire format is little-endian to match the server.
 	uint8_t version = buffer[pos++];
@@ -357,12 +360,3 @@ as_vector_value_from(as_error* err, const uint8_t* buffer, uint32_t offset, uint
 	return vec;
 }
 
-as_vector_value*
-as_vector_value_from_bytes(as_error* err, const as_bytes* bytes)
-{
-	if (bytes == NULL) {
-		as_error_set_message(err, AEROSPIKE_ERR_PARAM, "vector: bytes is NULL");
-		return NULL;
-	}
-	return as_vector_value_from(err, bytes->value, 0, bytes->size);
-}

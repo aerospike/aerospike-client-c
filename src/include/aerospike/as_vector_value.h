@@ -248,34 +248,6 @@ as_vector_element_type_max_dimensions(as_vector_element_type type)
 }
 
 /**
- * Return the number of bytes needed to serialize this vector in wire format
- * (header plus element data).
- *
- * @relatesalso as_vector_value
- */
-static inline uint32_t
-as_vector_value_get_wire_size(const as_vector_value* vec)
-{
-	return AS_VECTOR_VALUE_HEADER_SIZE + (vec->dimensions * as_vector_element_type_size(vec->element_type));
-}
-
-/**
- * Serialize this vector into the wire format at the given buffer offset.
- * The caller must ensure `buffer` has at least
- * `offset + as_vector_value_get_wire_size(vec)` bytes available.
- *
- * @param vec		Vector to serialize.
- * @param buffer	Destination buffer.
- * @param offset	Offset into `buffer` to begin writing.
- *
- * @return Number of bytes written, or 0 if `vec` is invalid.
- *
- * @relatesalso as_vector_value
- */
-AS_EXTERN uint32_t
-as_vector_value_write(const as_vector_value* vec, uint8_t* buffer, uint32_t offset);
-
-/**
  * Serialize this vector and wrap the result in the given as_bytes instance,
  * tagged with AS_BYTES_VECTOR (analogous to how HLL values are represented
  * as an as_bytes tagged with AS_BYTES_HLL).
@@ -332,33 +304,12 @@ AS_EXTERN as_bytes*
 as_vector_value_to_bytes_new(const as_vector_value* vec);
 
 /**
- * Deserialize a vector from the wire format at the given buffer offset. The
- * returned as_vector_value owns its own copy of the element data, converted
- * from little-endian wire format to host byte order.
- *
- * @param err		Error detail, set when NULL is returned.
- * @param buffer	Buffer containing the vector wire format.
- * @param offset	Offset into `buffer` where the vector starts.
- * @param length	Number of bytes available starting at `offset` (at least
- *					AS_VECTOR_VALUE_HEADER_SIZE).
- *
- * @return New as_vector_value on success, or NULL with `err` set to
- *		   AEROSPIKE_ERR_PARAM if `buffer` is malformed
- *		   (too short, a version other than AS_VECTOR_VALUE_VERSION, unknown
- *		   element type, no dimensions, too many dimensions for the element
- *		   type, or dimensions exceeding `length`). Destroy with
- *		   as_vector_value_destroy().
- *
- * @relatesalso as_vector_value
- */
-AS_EXTERN as_vector_value*
-as_vector_value_from(as_error* err, const uint8_t* buffer, uint32_t offset, uint32_t length);
-
-/**
  * Deserialize a vector from an as_bytes instance, the inverse of
  * as_vector_value_to_bytes()/as_vector_value_to_bytes_new(). Typically used
- * on an as_bytes read from a record bin or collection element (both are
- * tagged AS_BYTES_VECTOR by the client).
+ * on an as_bytes read from a record bin, which the client tags
+ * AS_BYTES_VECTOR. The returned vector owns its own copy of the elements,
+ * converted from little-endian to host byte order. Bytes past the encoded
+ * vector are ignored.
  *
  * ~~~~~~~~~~{.c}
  * as_bytes* bytes = as_record_get_bytes(rec, "embedding");
@@ -372,8 +323,11 @@ as_vector_value_from(as_error* err, const uint8_t* buffer, uint32_t offset, uint
  * @param bytes		Serialized vector.
  *
  * @return New as_vector_value on success, or NULL with `err` set to
- *		   AEROSPIKE_ERR_PARAM if `bytes` is NULL or does not contain a valid
- *		   vector. Destroy with as_vector_value_destroy().
+ *		   AEROSPIKE_ERR_PARAM if `bytes` is NULL or malformed: shorter than
+ *		   the header, a version other than AS_VECTOR_VALUE_VERSION, an
+ *		   unknown element type, no dimensions, too many dimensions for the
+ *		   element type, or fewer element bytes than the dimensions need.
+ *		   Destroy with as_vector_value_destroy().
  *
  * @relatesalso as_vector_value
  */

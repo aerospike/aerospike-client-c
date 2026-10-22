@@ -1107,7 +1107,7 @@ as_query_apply(as_query* query, const char* module, const char* function, const 
  * set by as_query_top_k().
  *
  * An order key without k is sent to the server as is, and the server rejects
- * the query with AEROSPIKE_ERR_PARAM.
+ * the query with AEROSPIKE_ERR_REQUEST_INVALID.
  *
  * If bin_name is longer than AS_BIN_NAME_MAX_LEN characters, the order-by
  * clause is not set and this call is a no-op. This is validated again

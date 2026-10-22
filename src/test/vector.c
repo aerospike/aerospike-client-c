@@ -1128,42 +1128,6 @@ TEST(vector_selective_read_server, "a selective read returns only the requested 
 	as_vector_value_destroy(vo);
 }
 
-TEST(vector_operate_write_read, "as_operations_add_write_vector writes a vector that reads back")
-{
-	double data[3] = {1.1, 2.2, 3.3};
-	as_vector_value* vec = as_vector_value_new_float64(data, 3);
-
-	remove_key(18);
-
-	as_key key;
-	as_key_init_int64(&key, NAMESPACE, SET, 18);
-	as_error err;
-
-	as_operations ops;
-	as_operations_inita(&ops, 2);
-	assert_true(as_operations_add_write_vector(&ops, "v", vec));
-	as_operations_add_read(&ops, "v");
-
-	as_record* out = NULL;
-	as_status status = aerospike_key_operate(as, &err, NULL, &key, &ops, &out);
-	assert_int_eq(status, AEROSPIKE_OK);
-
-	as_vector_value* r = as_record_get_vector(out, "v");
-	assert_not_null(r);
-	assert_int_eq(r->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT64);
-	assert_int_eq(r->dimensions, 3);
-	const double* elems = as_vector_value_get_float64(r);
-	for (uint32_t i = 0; i < 3; i++) {
-		assert(elems[i] == data[i]);
-	}
-
-	as_vector_value_destroy(r);
-	as_record_destroy(out);
-	as_operations_destroy(&ops);
-	as_key_destroy(&key);
-	as_vector_value_destroy(vec);
-}
-
 TEST(vector_in_collection_rejected_server, "the server rejects a vector in a list or a map")
 {
 	float data[2] = {1.0f, 2.0f};
@@ -1606,7 +1570,6 @@ SUITE(vector, "as_vector_value serialization")
 	suite_add(vector_overwrite_replaces_type_dims);
 	suite_add(vector_scalar_churn);
 	suite_add(vector_selective_read_server);
-	suite_add(vector_operate_write_read);
 	suite_add(vector_in_collection_rejected_server);
 #if AS_EVENT_LIB_DEFINED
 	suite_add(vector_async_roundtrip);

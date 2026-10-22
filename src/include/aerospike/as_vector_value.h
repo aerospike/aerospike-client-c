@@ -117,7 +117,7 @@ typedef enum as_vector_distance_metric_e {
  *
  * A vector can only be stored as a top-level bin value. The server rejects a
  * write that puts a vector in a list or map, at any depth, with
- * AEROSPIKE_ERR_PARAM.
+ * AEROSPIKE_ERR_REQUEST_INVALID.
  */
 typedef struct as_vector_value_s {
 	/**

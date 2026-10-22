@@ -28,10 +28,12 @@
 // of every record scanned - without the caller having to sort or truncate
 // anything on its own.
 //
-// NOTE: this requires a server release that supports the ORDER_BY/TOP_K
-// query fields. Running this example against a server that predates Top-K
-// support will fail with a server-side error (the fields will not be
-// recognized).
+// NOTE: this requires every node in the cluster to run a server release that
+// supports Top-K. Otherwise the client fails the query with
+// AEROSPIKE_ERR_PARAM before sending it.
+//
+// A node sends no results until it finishes its scan, so for Top-K over a
+// large set, raise the socket timeout or set it to 0 (see as_query_top_k()).
 //
 
 //==========================================================
@@ -176,10 +178,12 @@ query_top_k_scores(aerospike* p_as, as_error* err)
 	return status;
 }
 
-// ORDER BY name ASC LIMIT 5 with case-insensitive comparison: without the
-// CASE_INSENSITIVE flag, all-uppercase names would sort before any
-// lowercase name (plain byte comparison); with it, comparison folds case
-// first, so e.g. "Alice" and "alice" would compare equal up to case.
+// ORDER BY name ASC, score DESC LIMIT 5 with case-insensitive comparison:
+// without the CASE_INSENSITIVE flag, all-uppercase names would sort before
+// any lowercase name (plain byte comparison); with it, comparison folds case
+// first, so e.g. "Alice" and "alice" would compare equal up to case. Every
+// name appears on many records, so the second order key ranks the records
+// that share a name.
 static as_status
 query_top_k_names_case_insensitive(aerospike* p_as, as_error* err)
 {
@@ -188,9 +192,11 @@ query_top_k_names_case_insensitive(aerospike* p_as, as_error* err)
 
 	as_query_order_by(&query, "name", AS_QUERY_ORDER_BY_STRING, AS_ORDER_ASCENDING,
 			AS_QUERY_ORDER_BY_CASE_INSENSITIVE);
+	as_query_then_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+			AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
 	as_query_top_k(&query, TOP_K);
 
-	LOG("executing query: order by name asc (case insensitive) limit %d", TOP_K);
+	LOG("executing query: order by name asc (case insensitive), score desc limit %d", TOP_K);
 
 	as_status status = aerospike_query_foreach(p_as, err, NULL, &query, print_record_cb, NULL);
 

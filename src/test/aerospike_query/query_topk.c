@@ -20,13 +20,18 @@
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_integer.h>
+#include <aerospike/as_key.h>
 #include <aerospike/as_operations.h>
+#include <aerospike/as_partition_filter.h>
+#include <aerospike/as_policy.h>
 #include <aerospike/as_query.h>
 #include <aerospike/as_query_topk.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_val.h>
+
+#include <math.h>
 
 #include "../test.h"
 
@@ -63,13 +68,49 @@ TEST(query_topk_setters, "as_query_order_by()/as_query_top_k() set fields correc
 	assert_int_eq(query.order_by.flags, AS_QUERY_ORDER_BY_CASE_INSENSITIVE);
 	assert_int_eq(query.top_k, 25);
 
-	// Overwrite - only one order-by clause supported.
+	as_query_then_order_by(&query, "ts", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+
+	assert_string_eq(query.order_by.bin, "score");
+	assert_true(query.then_order_by.defined);
+	assert_string_eq(query.then_order_by.bin, "ts");
+	assert_int_eq(query.then_order_by.type, AS_QUERY_ORDER_BY_INTEGER);
+	assert_int_eq(query.then_order_by.direction, AS_ORDER_ASCENDING);
+	assert_false(query.order_by_overflow);
+
+	// A third key is recorded and rejected when the query runs.
+	as_query_then_order_by(&query, "extra", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+
+	assert_true(query.order_by_overflow);
+	assert_string_eq(query.then_order_by.bin, "ts");
+
+	// Setting the first key again replaces both keys and keeps k.
 	as_query_order_by(&query, "name", AS_QUERY_ORDER_BY_STRING, AS_ORDER_ASCENDING,
 		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
 
 	assert_string_eq(query.order_by.bin, "name");
 	assert_int_eq(query.order_by.type, AS_QUERY_ORDER_BY_STRING);
 	assert_int_eq(query.order_by.direction, AS_ORDER_ASCENDING);
+	assert_false(query.then_order_by.defined);
+	assert_false(query.order_by_overflow);
+	assert_int_eq(query.top_k, 25);
+
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_then_order_by_first, "as_query_then_order_by() without a first key sets the first key")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+
+	as_query_then_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+
+	assert_true(query.order_by.defined);
+	assert_string_eq(query.order_by.bin, "score");
+	assert_int_eq(query.order_by.direction, AS_ORDER_DESCENDING);
+	assert_false(query.then_order_by.defined);
 
 	as_query_destroy(&query);
 }
@@ -80,6 +121,8 @@ TEST(query_topk_serialize, "as_query_to_bytes()/as_query_from_bytes() round-trip
 	as_query_init(&query, NAMESPACE, SET);
 	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
 		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_then_order_by(&query, "name", AS_QUERY_ORDER_BY_STRING, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_CASE_INSENSITIVE);
 	as_query_top_k(&query, 7);
 
 	uint8_t* bytes = NULL;
@@ -96,6 +139,11 @@ TEST(query_topk_serialize, "as_query_to_bytes()/as_query_from_bytes() round-trip
 	assert_string_eq(query2.order_by.bin, "score");
 	assert_int_eq(query2.order_by.type, AS_QUERY_ORDER_BY_INTEGER);
 	assert_int_eq(query2.order_by.direction, AS_ORDER_DESCENDING);
+	assert_true(query2.then_order_by.defined);
+	assert_string_eq(query2.then_order_by.bin, "name");
+	assert_int_eq(query2.then_order_by.type, AS_QUERY_ORDER_BY_STRING);
+	assert_int_eq(query2.then_order_by.direction, AS_ORDER_ASCENDING);
+	assert_int_eq(query2.then_order_by.flags, AS_QUERY_ORDER_BY_CASE_INSENSITIVE);
 	assert_int_eq(query2.top_k, 7);
 
 	assert_true(as_query_compare(&query, &query2));
@@ -123,6 +171,14 @@ TEST(query_topk_compare, "as_query_compare() distinguishes different order_by/to
 	as_query_top_k(&q2, 5);
 	assert_true(as_query_compare(&q1, &q2));
 
+	as_query_then_order_by(&q2, "ts", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	assert_false(as_query_compare(&q1, &q2));
+
+	as_query_then_order_by(&q1, "ts", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	assert_true(as_query_compare(&q1, &q2));
+
 	as_query_destroy(&q1);
 	as_query_destroy(&q2);
 }
@@ -141,20 +197,6 @@ TEST(query_topk_validate_top_k_without_order_by, "top_k without order_by is reje
 	as_query query;
 	as_query_init(&query, NAMESPACE, SET);
 	as_query_top_k(&query, 5);
-
-	as_error err;
-	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
-	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
-
-	as_query_destroy(&query);
-}
-
-TEST(query_topk_validate_order_by_without_top_k, "order_by without top_k is rejected")
-{
-	as_query query;
-	as_query_init(&query, NAMESPACE, SET);
-	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
-		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
 
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
@@ -226,17 +268,122 @@ TEST(query_topk_validate_background_rejected, "order_by/top_k is rejected on bac
 	as_query_destroy(&query);
 }
 
-TEST(query_topk_validate_max_records_inconsistent, "max_records < top_k is rejected")
+TEST(query_topk_validate_max_records, "any max_records is rejected, even one >= top_k")
 {
 	as_query query;
 	as_query_init(&query, NAMESPACE, SET);
 	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
 		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
 	as_query_top_k(&query, 10);
-	query.max_records = 5;
+	query.max_records = 20;
 
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_validate_third_order_key, "a third order key is rejected")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_then_order_by(&query, "ts", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_then_order_by(&query, "name", AS_QUERY_ORDER_BY_STRING, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_validate_second_key_not_projected, "a second order key missing from projection is rejected")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_then_order_by(&query, "ts", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+	as_query_select_init(&query, 1);
+	as_query_select(&query, "score");
+
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_validate_duplicate_projection_op,
+	"an order key produced by more than one projection operation is rejected")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+
+	as_operations* ops = as_operations_new(2);
+	as_operations_add_read(ops, "score");
+	as_operations_add_read(ops, "score");
+	query.ops = ops;
+
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_validate_resumed_partition_filter,
+	"a partition filter that resumes an earlier query is rejected")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 1);
+
+	as_digest* digest = as_key_digest(&key);
+
+	as_partition_filter pf;
+	as_partition_filter_set_after(&pf, digest);
+
+	as_error err;
+	as_status status = aerospike_query_partitions(as, &err, NULL, &query, &pf, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+
+	as_key_destroy(&key);
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_validate_async_rejected, "order_by/top_k is rejected on asynchronous queries")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+
+	as_error err;
+	as_status status = aerospike_query_async(as, &err, NULL, &query, NULL, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+
+	as_partition_filter pf;
+	as_partition_filter_set_all(&pf);
+
+	status = aerospike_query_partitions_async(as, &err, NULL, &query, &pf, NULL, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
 
 	as_query_destroy(&query);
@@ -289,6 +436,7 @@ TEST(query_topk_validate_server_support,
 
 static int g_topk_test_count;
 static char g_topk_test_last[16][256];
+static uint8_t g_topk_test_digests[16];
 
 static bool
 topk_test_collect_cb(const as_val* val, void* udata)
@@ -303,6 +451,8 @@ topk_test_collect_cb(const as_val* val, void* udata)
 	as_integer* score = (as_integer*)as_record_get(rec, "score");
 	as_string* name = (as_string*)as_record_get(rec, "name");
 
+	g_topk_test_digests[g_topk_test_count] = rec->key.digest.value[0];
+
 	if (name) {
 		snprintf(g_topk_test_last[g_topk_test_count], sizeof(g_topk_test_last[0]), "digest=%02x name=%s",
 			rec->key.digest.value[0], as_string_get(name));
@@ -316,35 +466,47 @@ topk_test_collect_cb(const as_val* val, void* udata)
 }
 
 static void
-topk_test_make_int_rec(as_record* rec, uint8_t digest_byte, int64_t score, bool has_bin)
+topk_test_init_rec(as_record* rec, uint8_t digest_byte, uint16_t n_bins)
 {
 	// as_record_init() (heap-allocated bins), not as_record_inita() (stack/alloca'd bins) -
 	// the latter's alloca() must happen in the caller's own frame, not a helper, or the
 	// bins array becomes a dangling pointer the moment this helper returns.
-	as_record_init(rec, 1);
+	as_record_init(rec, n_bins);
 	memset(rec->key.digest.value, 0, AS_DIGEST_VALUE_SIZE);
 	rec->key.digest.value[0] = digest_byte;
 	rec->key.digest.init = true;
+}
+
+static void
+topk_test_make_int_rec(as_record* rec, uint8_t digest_byte, int64_t score, bool has_bin)
+{
+	topk_test_init_rec(rec, digest_byte, 1);
 
 	if (has_bin) {
 		as_record_set_int64(rec, "score", score);
 	}
 }
 
+static void
+topk_test_collect_rec(as_query_topk_collector* collector, as_record* rec)
+{
+	as_query_topk_collect((as_val*)rec, collector);
+	as_record_destroy(rec);
+}
+
 TEST(query_topk_merge_integer_desc,
 	"topk collector merges/dedups/truncates integer-descending batches from multiple nodes")
 {
-	as_query_order_by_field order_by;
-	order_by.type = AS_QUERY_ORDER_BY_INTEGER;
-	order_by.direction = AS_ORDER_DESCENDING;
-	order_by.flags = AS_QUERY_ORDER_BY_FLAGS_DEFAULT;
-	as_strncpy(order_by.bin, "score", sizeof(order_by.bin));
-	order_by.defined = true;
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 3);
 
 	g_topk_test_count = 0;
 
-	as_query_topk_collector* collector =
-		as_query_topk_collector_create_sync(&order_by, 3, topk_test_collect_cb, NULL);
+	as_query_topk_collector* collector = as_query_topk_collector_create(&query, topk_test_collect_cb, NULL);
+	as_query_destroy(&query);
 
 	// Node A batch (already sorted desc by score): 50, 30, 10.
 	as_record a1; topk_test_make_int_rec(&a1, 0xA1, 50, true);
@@ -389,17 +551,16 @@ TEST(query_topk_merge_integer_desc,
 TEST(query_topk_merge_string_case_insensitive_asc,
 	"topk collector applies STRING + CASE_INSENSITIVE ascending ordering")
 {
-	as_query_order_by_field order_by;
-	order_by.type = AS_QUERY_ORDER_BY_STRING;
-	order_by.direction = AS_ORDER_ASCENDING;
-	order_by.flags = AS_QUERY_ORDER_BY_CASE_INSENSITIVE;
-	as_strncpy(order_by.bin, "name", sizeof(order_by.bin));
-	order_by.defined = true;
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "name", AS_QUERY_ORDER_BY_STRING, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_CASE_INSENSITIVE);
+	as_query_top_k(&query, 2);
 
 	g_topk_test_count = 0;
 
-	as_query_topk_collector* collector =
-		as_query_topk_collector_create_sync(&order_by, 2, topk_test_collect_cb, NULL);
+	as_query_topk_collector* collector = as_query_topk_collector_create(&query, topk_test_collect_cb, NULL);
+	as_query_destroy(&query);
 
 	as_record s1;
 	as_record_init(&s1, 1);
@@ -435,6 +596,88 @@ TEST(query_topk_merge_string_case_insensitive_asc,
 	assert_int_eq(g_topk_test_count, 2);
 	assert_true(strstr(g_topk_test_last[0], "name=alice") != NULL);
 	assert_true(strstr(g_topk_test_last[1], "name=Bob") != NULL);
+}
+
+TEST(query_topk_merge_double_nan_and_zero,
+	"topk collector ranks NaN above every double and -0.0 equal to 0.0")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_DOUBLE, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+
+	g_topk_test_count = 0;
+
+	as_query_topk_collector* collector = as_query_topk_collector_create(&query, topk_test_collect_cb, NULL);
+	as_query_destroy(&query);
+
+	double scores[] = {1.0, 0.0, NAN, -0.0, 2.0};
+
+	for (uint8_t i = 0; i < 5; i++) {
+		as_record rec;
+		topk_test_init_rec(&rec, (uint8_t)(i + 1), 1);
+		as_record_set_double(&rec, "score", scores[i]);
+		topk_test_collect_rec(collector, &rec);
+	}
+
+	as_query_topk_collect(NULL, collector);
+	as_query_topk_collector_destroy(collector);
+
+	// NaN (3), 2.0 (5), 1.0 (1), then 0.0 (2) and -0.0 (4) tie and rank by digest.
+	assert_int_eq(g_topk_test_count, 5);
+	assert_int_eq(g_topk_test_digests[0], 3);
+	assert_int_eq(g_topk_test_digests[1], 5);
+	assert_int_eq(g_topk_test_digests[2], 1);
+	assert_int_eq(g_topk_test_digests[3], 2);
+	assert_int_eq(g_topk_test_digests[4], 4);
+}
+
+TEST(query_topk_merge_two_keys,
+	"topk collector breaks first-key ties, including NIL first keys, with the second key")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_then_order_by(&query, "ts", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+
+	g_topk_test_count = 0;
+
+	as_query_topk_collector* collector = as_query_topk_collector_create(&query, topk_test_collect_cb, NULL);
+	as_query_destroy(&query);
+
+	// Digest, score (0 means no score bin), ts.
+	int64_t rows[][3] = {
+		{1, 10, 5},
+		{2, 10, 3},
+		{3, 20, 9},
+		{4, 0, 1},
+		{5, 0, 0}
+	};
+
+	for (uint32_t i = 0; i < 5; i++) {
+		as_record rec;
+		topk_test_init_rec(&rec, (uint8_t)rows[i][0], 2);
+
+		if (rows[i][1] != 0) {
+			as_record_set_int64(&rec, "score", rows[i][1]);
+		}
+		as_record_set_int64(&rec, "ts", rows[i][2]);
+		topk_test_collect_rec(collector, &rec);
+	}
+
+	as_query_topk_collect(NULL, collector);
+	as_query_topk_collector_destroy(collector);
+
+	assert_int_eq(g_topk_test_count, 5);
+	assert_int_eq(g_topk_test_digests[0], 3);
+	assert_int_eq(g_topk_test_digests[1], 2);
+	assert_int_eq(g_topk_test_digests[2], 1);
+	assert_int_eq(g_topk_test_digests[3], 5);
+	assert_int_eq(g_topk_test_digests[4], 4);
 }
 
 //---------------------------------
@@ -478,11 +721,9 @@ topk_integration_remove_records(void)
 	}
 }
 
-TEST(query_topk_integer_desc_server,
-	"server query returns the globally ranked top-k integer values")
+static bool
+topk_integration_put_records(void)
 {
-	topk_integration_remove_records();
-
 	as_record rec;
 	as_record_inita(&rec, 1);
 
@@ -493,22 +734,43 @@ TEST(query_topk_integer_desc_server,
 		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
 
 		as_error err;
-		assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+		as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+
+		if (status != AEROSPIKE_OK) {
+			as_record_destroy(&rec);
+			return false;
+		}
 	}
 	as_record_destroy(&rec);
+	return true;
+}
 
+static as_status
+topk_integration_query(const as_policy_query* policy, topk_integration_result* result)
+{
 	as_query query;
 	as_query_init(&query, NAMESPACE, SET);
 	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
 		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
 	as_query_top_k(&query, TOPK_INTEGRATION_K);
 
-	topk_integration_result result = {0};
 	as_error err;
 	as_status status =
-		aerospike_query_foreach(as, &err, NULL, &query, topk_integration_callback, &result);
+		aerospike_query_foreach(as, &err, policy, &query, topk_integration_callback, result);
 
 	as_query_destroy(&query);
+	return status;
+}
+
+TEST(query_topk_integer_desc_server,
+	"server query returns the globally ranked top-k integer values")
+{
+	topk_integration_remove_records();
+	assert_true(topk_integration_put_records());
+
+	topk_integration_result result = {0};
+	as_status status = topk_integration_query(NULL, &result);
+
 	topk_integration_remove_records();
 
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -517,6 +779,43 @@ TEST(query_topk_integer_desc_server,
 	for (uint32_t i = 0; i < TOPK_INTEGRATION_K; i++) {
 		assert_int_eq(result.scores[i], TOPK_INTEGRATION_RECORDS - 1 - i);
 	}
+}
+
+TEST(query_topk_short_query_server, "a short-query hint is accepted and the query still ranks every record")
+{
+	topk_integration_remove_records();
+	assert_true(topk_integration_put_records());
+
+	as_policy_query policy;
+	as_policy_query_init(&policy);
+	policy.expected_duration = AS_QUERY_DURATION_SHORT;
+
+	topk_integration_result result = {0};
+	as_status status = topk_integration_query(&policy, &result);
+
+	topk_integration_remove_records();
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(result.count, TOPK_INTEGRATION_K);
+	assert_int_eq(result.scores[0], TOPK_INTEGRATION_RECORDS - 1);
+}
+
+TEST(query_topk_order_by_without_top_k_server,
+	"order_by without top_k is sent to the server, which rejects it")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+
+	topk_integration_result result = {0};
+	as_error err;
+	as_status status =
+		aerospike_query_foreach(as, &err, NULL, &query, topk_integration_callback, &result);
+
+	as_query_destroy(&query);
+
+	assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
 }
 
 //---------------------------------
@@ -628,20 +927,29 @@ TEST(query_min_max_bin_not_in_projection, "aerospike_query_min() rejects bin_nam
 SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 {
 	suite_add(query_topk_setters);
+	suite_add(query_topk_then_order_by_first);
 	suite_add(query_topk_serialize);
 	suite_add(query_topk_compare);
 	suite_add(query_topk_validate_top_k_without_order_by);
-	suite_add(query_topk_validate_order_by_without_top_k);
 	suite_add(query_topk_validate_k_out_of_range);
 	suite_add(query_topk_validate_case_insensitive_wrong_type);
 	suite_add(query_topk_validate_incompatible_with_aggregation);
 	suite_add(query_topk_validate_background_rejected);
-	suite_add(query_topk_validate_max_records_inconsistent);
+	suite_add(query_topk_validate_max_records);
+	suite_add(query_topk_validate_third_order_key);
+	suite_add(query_topk_validate_second_key_not_projected);
+	suite_add(query_topk_validate_duplicate_projection_op);
+	suite_add(query_topk_validate_resumed_partition_filter);
+	suite_add(query_topk_validate_async_rejected);
 	suite_add(query_topk_validate_projection_missing_bin);
 	suite_add(query_topk_validate_server_support);
 	suite_add(query_topk_merge_integer_desc);
 	suite_add(query_topk_merge_string_case_insensitive_asc);
+	suite_add(query_topk_merge_double_nan_and_zero);
+	suite_add(query_topk_merge_two_keys);
 	suite_add(query_topk_integer_desc_server);
+	suite_add(query_topk_short_query_server);
+	suite_add(query_topk_order_by_without_top_k_server);
 	suite_add(query_min_max_integer_server);
 	suite_add(query_min_max_empty_result);
 	suite_add(query_min_max_bin_not_in_projection);

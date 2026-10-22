@@ -125,15 +125,17 @@ such record, in this case a single record.
 ### topk
 
 	as_query_order_by()
+	as_query_then_order_by()
 	as_query_top_k()
 	aerospike_query_foreach()
 
-This example demonstrates Top-K queries: `ORDER BY <bin> LIMIT k`. It writes a
-batch of records with an integer "score" bin and a string "name" bin, then runs
-two foreground queries - one ordering by score in descending order, and one
-ordering by name in ascending, case-insensitive order - each limited to the top
-5 results, showing that the callback receives records already fully sorted and
-truncated by the client/server, without the caller doing any of its own sorting.
+This example demonstrates Top-K queries: `ORDER BY <bin> [, <bin>] LIMIT k`. It
+writes a batch of records with an integer "score" bin and a string "name" bin,
+then runs two foreground queries - one ordering by score in descending order,
+and one ordering by name in ascending, case-insensitive order, then by score in
+descending order - each limited to the top 5 results, showing that the callback
+receives records already fully sorted and truncated by the client/server,
+without the caller doing any of its own sorting.
 
 
 ### min_max

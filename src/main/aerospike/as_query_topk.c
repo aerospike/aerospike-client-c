@@ -17,6 +17,7 @@
 #include <aerospike/as_query_topk.h>
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_double.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_msgpack.h>
 #include <aerospike/as_record.h>
@@ -24,7 +25,7 @@
 #include <aerospike/as_val.h>
 #include <aerospike/as_vector.h>
 #include <citrusleaf/alloc.h>
-#include <ctype.h>
+#include <math.h>
 #include <pthread.h>
 #include <string.h>
 
@@ -32,31 +33,16 @@
 // Types
 //---------------------------------
 
-typedef enum {
-	AS_QUERY_TOPK_SYNC,
-	AS_QUERY_TOPK_ASYNC
-} as_query_topk_kind;
-
 struct as_query_topk_collector_s {
 	as_query_order_by_field order_by;
+	as_query_order_by_field then_order_by;
 	uint32_t k;
-	as_query_topk_kind kind;
 
-	union {
-		struct {
-			aerospike_query_foreach_callback callback;
-			void* udata;
-		} sync;
+	aerospike_query_foreach_callback callback;
+	void* udata;
 
-		struct {
-			as_async_query_record_listener listener;
-			void* udata;
-		} async;
-	} real;
-
-	// Protects entries. Multiple node threads (sync: thread pool workers,
-	// async: event loops) may append concurrently while the underlying
-	// query is in flight.
+	// Protects entries. Multiple thread pool workers (one per node) may
+	// append concurrently while the underlying query is in flight.
 	pthread_mutex_t lock;
 
 	// as_record* - one heap-owned, independently-copied record per
@@ -165,8 +151,10 @@ as_query_topk_copy_record(const as_record* src, as_error* err)
 
 //---------------------------------
 // Comparator - matches the server's per-type ordering semantics
-// NIL-for-missing/type-mismatched bin always sorts worst regardless of direction,
-// digest-ascending tie-break, case-folding for STRING + CASE_INSENSITIVE.
+// NIL-for-missing/type-mismatched bin always sorts worst regardless of direction
+// and leaves the next order key to decide, NaN sorts above every other double,
+// -0.0 equals 0.0, digest-ascending tie-break, ASCII case-folding for
+// STRING + CASE_INSENSITIVE.
 //---------------------------------
 
 static void
@@ -215,25 +203,43 @@ as_query_topk_extract_key(const as_record* rec, const as_query_order_by_field* o
 	}
 }
 
-// ASCII-only case fold. The server's own case-fold (as_particle_string_case_fold)
-// may not treat non-ASCII bytes identically; this client does not attempt to
-// replicate that exactly. Case-insensitive Top-K ordering with non-ASCII
-// order-by values may therefore not perfectly match the server's per-node
-// pre-sort in rare cases. Plain ASCII inputs (the common case) are unaffected.
+// The server folds only ASCII letters, so tolower() is not used: its result
+// depends on the process locale.
+static inline int
+as_query_topk_ascii_lower(unsigned char c)
+{
+	if (c >= 'A' && c <= 'Z') {
+		return c + ('a' - 'A');
+	}
+	return c;
+}
+
 static int
 as_query_topk_strcasecmp(const char* a, size_t alen, const char* b, size_t blen)
 {
 	size_t min_len = alen < blen ? alen : blen;
 
 	for (size_t i = 0; i < min_len; i++) {
-		int ca = tolower((unsigned char)a[i]);
-		int cb = tolower((unsigned char)b[i]);
+		int ca = as_query_topk_ascii_lower((unsigned char)a[i]);
+		int cb = as_query_topk_ascii_lower((unsigned char)b[i]);
 
 		if (ca != cb) {
 			return ca - cb;
 		}
 	}
 	return (alen > blen) - (alen < blen);
+}
+
+static int
+as_query_topk_cmp_double(double a, double b)
+{
+	int a_nan = isnan(a) ? 1 : 0;
+	int b_nan = isnan(b) ? 1 : 0;
+
+	if (a_nan || b_nan) {
+		return a_nan - b_nan;
+	}
+	return (a > b) - (a < b);
 }
 
 static int
@@ -246,7 +252,7 @@ as_query_topk_compare_typed(
 			return (a->v.i > b->v.i) - (a->v.i < b->v.i);
 
 		case AS_QUERY_ORDER_BY_DOUBLE:
-			return (a->v.d > b->v.d) - (a->v.d < b->v.d);
+			return as_query_topk_cmp_double(a->v.d, b->v.d);
 
 		case AS_QUERY_ORDER_BY_STRING:
 			if (order_by->flags & AS_QUERY_ORDER_BY_CASE_INSENSITIVE) {
@@ -275,21 +281,21 @@ as_query_topk_cmp_digest(const as_record* a, const as_record* b)
 	return memcmp(a->key.digest.value, b->key.digest.value, AS_DIGEST_VALUE_SIZE);
 }
 
-// Total order over final rank position: negative means a ranks ahead of (is better than) b.
+// Rank order on one order key: negative means a ranks ahead of (is better than) b.
+// Returns 0 when both are NIL, so the next order key decides.
 static int
-as_query_topk_cmp_rank(const as_record* a, const as_record* b, const as_query_order_by_field* order_by)
+as_query_topk_cmp_key(const as_record* a, const as_record* b, const as_query_order_by_field* order_by)
 {
-	as_query_topk_key ka, kb;
+	as_query_topk_key ka;
 	as_query_topk_extract_key(a, order_by, &ka);
+
+	as_query_topk_key kb;
 	as_query_topk_extract_key(b, order_by, &kb);
 
 	if (ka.is_nil || kb.is_nil) {
-		if (ka.is_nil && kb.is_nil) {
-			return as_query_topk_cmp_digest(a, b);
-		}
 		// NIL (missing bin, or bin present with the wrong type) always sorts worst,
 		// regardless of direction - matches the Confluence design doc's "Not errors" note.
-		return ka.is_nil ? 1 : -1;
+		return (int)ka.is_nil - (int)kb.is_nil;
 	}
 
 	int cmp = as_query_topk_compare_typed(&ka, &kb, order_by);
@@ -299,8 +305,27 @@ as_query_topk_cmp_rank(const as_record* a, const as_record* b, const as_query_or
 	if (order_by->direction == AS_ORDER_DESCENDING) {
 		cmp = -cmp;
 	}
+	return cmp;
+}
 
-	return cmp != 0 ? cmp : as_query_topk_cmp_digest(a, b);
+// Total order over final rank position: negative means a ranks ahead of (is better than) b.
+static int
+as_query_topk_cmp_rank(const as_record* a, const as_record* b, const as_query_topk_collector* collector)
+{
+	int cmp = as_query_topk_cmp_key(a, b, &collector->order_by);
+
+	if (cmp != 0) {
+		return cmp;
+	}
+
+	if (collector->then_order_by.defined) {
+		cmp = as_query_topk_cmp_key(a, b, &collector->then_order_by);
+
+		if (cmp != 0) {
+			return cmp;
+		}
+	}
+	return as_query_topk_cmp_digest(a, b);
 }
 
 //---------------------------------
@@ -367,7 +392,7 @@ as_query_topk_cmp_digest_fn(const as_record* a, const as_record* b, const void* 
 static int
 as_query_topk_cmp_rank_fn(const as_record* a, const as_record* b, const void* ctx)
 {
-	return as_query_topk_cmp_rank(a, b, (const as_query_order_by_field*)ctx);
+	return as_query_topk_cmp_rank(a, b, (const as_query_topk_collector*)ctx);
 }
 
 //---------------------------------
@@ -414,7 +439,7 @@ as_query_topk_finalize(as_query_topk_collector* collector, uint32_t* out_count)
 		arr[unique_n++] = arr[i];
 	}
 
-	as_query_topk_sort(arr, unique_n, as_query_topk_cmp_rank_fn, &collector->order_by);
+	as_query_topk_sort(arr, unique_n, as_query_topk_cmp_rank_fn, collector);
 
 	uint32_t final_n = unique_n < collector->k ? unique_n : collector->k;
 
@@ -430,40 +455,21 @@ as_query_topk_finalize(as_query_topk_collector* collector, uint32_t* out_count)
 // Public API
 //---------------------------------
 
-static as_query_topk_collector*
-as_query_topk_collector_create(const as_query_order_by_field* order_by, uint32_t k, as_query_topk_kind kind)
+as_query_topk_collector*
+as_query_topk_collector_create(
+	const as_query* query, aerospike_query_foreach_callback callback, void* udata
+	)
 {
 	as_query_topk_collector* collector = cf_malloc(sizeof(as_query_topk_collector));
+	uint32_t k = query->top_k;
 
-	collector->order_by = *order_by;
+	collector->order_by = query->order_by;
+	collector->then_order_by = query->then_order_by;
 	collector->k = k;
-	collector->kind = kind;
+	collector->callback = callback;
+	collector->udata = udata;
 	pthread_mutex_init(&collector->lock, NULL);
 	as_vector_init(&collector->entries, sizeof(as_record*), k > 64 ? 64 : k);
-	return collector;
-}
-
-as_query_topk_collector*
-as_query_topk_collector_create_sync(
-	const as_query_order_by_field* order_by, uint32_t k, aerospike_query_foreach_callback callback,
-	void* udata
-	)
-{
-	as_query_topk_collector* collector = as_query_topk_collector_create(order_by, k, AS_QUERY_TOPK_SYNC);
-	collector->real.sync.callback = callback;
-	collector->real.sync.udata = udata;
-	return collector;
-}
-
-as_query_topk_collector*
-as_query_topk_collector_create_async(
-	const as_query_order_by_field* order_by, uint32_t k, as_async_query_record_listener listener,
-	void* udata
-	)
-{
-	as_query_topk_collector* collector = as_query_topk_collector_create(order_by, k, AS_QUERY_TOPK_ASYNC);
-	collector->real.async.listener = listener;
-	collector->real.async.udata = udata;
 	return collector;
 }
 
@@ -499,14 +505,14 @@ as_query_topk_collector_destroy(as_query_topk_collector* collector)
 }
 
 static void
-as_query_topk_flush_sync(as_query_topk_collector* collector)
+as_query_topk_flush(as_query_topk_collector* collector)
 {
 	uint32_t count;
 	as_record** results = as_query_topk_finalize(collector, &count);
 	bool notify = true;
 
 	for (uint32_t i = 0; i < count; i++) {
-		if (notify && ! collector->real.sync.callback((as_val*)results[i], collector->real.sync.udata)) {
+		if (notify && ! collector->callback((as_val*)results[i], collector->udata)) {
 			notify = false;
 		}
 		as_record_destroy(results[i]);
@@ -517,8 +523,8 @@ as_query_topk_flush_sync(as_query_topk_collector* collector)
 	}
 
 	// Signal completion, matching aerospike_query_foreach_callback's contract of one
-	// final NULL callback (as_query_execute()/as_query_partitions() do the same).
-	collector->real.sync.callback(NULL, collector->real.sync.udata);
+	// final NULL callback (as_query_partitions() does the same).
+	collector->callback(NULL, collector->udata);
 }
 
 bool
@@ -527,58 +533,11 @@ as_query_topk_collect(const as_val* val, void* udata)
 	as_query_topk_collector* collector = (as_query_topk_collector*)udata;
 
 	if (! val) {
-		as_query_topk_flush_sync(collector);
+		as_query_topk_flush(collector);
 		return true;
 	}
 
-	as_query_topk_collector_append(collector, as_record_fromval(val));
-	return true;
-}
-
-static void
-as_query_topk_flush_async(as_query_topk_collector* collector, as_event_loop* event_loop)
-{
-	uint32_t count;
-	as_record** results = as_query_topk_finalize(collector, &count);
-	bool notify = true;
-
-	for (uint32_t i = 0; i < count; i++) {
-		if (notify &&
-			! collector->real.async.listener(NULL, results[i], collector->real.async.udata, event_loop)) {
-			notify = false;
-		}
-		as_record_destroy(results[i]);
-	}
-
-	if (results) {
-		cf_free(results);
-	}
-
-	// Signal completion, matching as_async_query_record_listener's contract of one
-	// final NULL-record callback.
-	collector->real.async.listener(NULL, NULL, collector->real.async.udata, event_loop);
-}
-
-bool
-as_query_topk_collect_async(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
-{
-	as_query_topk_collector* collector = (as_query_topk_collector*)udata;
-
-	if (err) {
-		// Fatal error. Buffered records may be incomplete - do not flush them as if they
-		// were a valid Top-K result. Forward the error once, matching the contract.
-		bool rv = collector->real.async.listener(err, NULL, collector->real.async.udata, NULL);
-		as_query_topk_collector_destroy(collector);
-		return rv;
-	}
-
-	if (! record) {
-		// Underlying query completed successfully across every targeted node.
-		as_query_topk_flush_async(collector, event_loop);
-		as_query_topk_collector_destroy(collector);
-		return true;
-	}
-
-	as_query_topk_collector_append(collector, record);
+	as_record* rec = as_record_fromval(val);
+	as_query_topk_collector_append(collector, rec);
 	return true;
 }

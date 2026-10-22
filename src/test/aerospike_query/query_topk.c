@@ -99,22 +99,6 @@ TEST(query_topk_setters, "as_query_order_by()/as_query_top_k() set fields correc
 	as_query_destroy(&query);
 }
 
-TEST(query_topk_then_order_by_first, "as_query_then_order_by() without a first key sets the first key")
-{
-	as_query query;
-	as_query_init(&query, NAMESPACE, SET);
-
-	as_query_then_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
-		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
-
-	assert_true(query.order_by.defined);
-	assert_string_eq(query.order_by.bin, "score");
-	assert_int_eq(query.order_by.direction, AS_ORDER_DESCENDING);
-	assert_false(query.then_order_by.defined);
-
-	as_query_destroy(&query);
-}
-
 TEST(query_topk_serialize, "as_query_to_bytes()/as_query_from_bytes() round-trip order_by/top_k")
 {
 	as_query query;
@@ -299,6 +283,34 @@ TEST(query_topk_validate_third_order_key, "a third order key is rejected")
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_validate_then_order_by_first,
+	"as_query_then_order_by() before as_query_order_by() is rejected")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_then_order_by(&query, "ts", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+
+	assert_false(query.order_by.defined);
+	assert_false(query.then_order_by.defined);
+
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_not_null(strstr(err.message, "then_order_by"));
+
+	// Setting the first key afterwards does not clear the error.
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+
+	status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_not_null(strstr(err.message, "then_order_by"));
 
 	as_query_destroy(&query);
 }
@@ -825,7 +837,6 @@ TEST(query_topk_order_by_without_top_k_server,
 SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 {
 	suite_add(query_topk_setters);
-	suite_add(query_topk_then_order_by_first);
 	suite_add(query_topk_serialize);
 	suite_add(query_topk_compare);
 	suite_add(query_topk_validate_top_k_without_order_by);
@@ -835,6 +846,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_validate_background_rejected);
 	suite_add(query_topk_validate_max_records);
 	suite_add(query_topk_validate_third_order_key);
+	suite_add(query_topk_validate_then_order_by_first);
 	suite_add(query_topk_validate_second_key_not_projected);
 	suite_add(query_topk_validate_duplicate_projection_op);
 	suite_add(query_topk_validate_resumed_partition_filter);

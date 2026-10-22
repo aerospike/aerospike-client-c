@@ -28,6 +28,7 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_metrics.h>
 #include <aerospike/as_metrics_internal.h>
+#include <aerospike/as_monitor.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
@@ -51,6 +52,8 @@
  *****************************************************************************/
 
 extern aerospike* as;
+extern char g_host[];
+extern int g_port;
 
 /******************************************************************************
  * STATIC FUNCTIONS
@@ -724,7 +727,7 @@ metrics_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
 }
 
 static uint64_t
-metrics_attempt_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
+metrics_namespace_latency_total(const as_metrics_snapshot* metrics_snapshot, as_latency_type latency_type)
 {
 	uint64_t total = 0;
 
@@ -738,12 +741,32 @@ metrics_attempt_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
 				continue;
 			}
 
-			as_metrics_latency_snapshot* latency_snapshot =
-				&namespace_snapshot->latencies[AS_LATENCY_TYPE_WRITE];
+			as_metrics_latency_snapshot* latency_snapshot = &namespace_snapshot->latencies[latency_type];
 
 			for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
 				total += latency_snapshot->buckets[k];
 			}
+		}
+	}
+	return total;
+}
+
+static uint64_t
+metrics_attempt_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
+{
+	return metrics_namespace_latency_total(metrics_snapshot, AS_LATENCY_TYPE_WRITE);
+}
+
+static uint64_t
+metrics_node_conn_latency_total(const as_metrics_snapshot* metrics_snapshot)
+{
+	uint64_t total = 0;
+
+	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
+		as_metrics_latency_snapshot* latency_snapshot = &metrics_snapshot->nodes[i]->conn_latency;
+
+		for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
+			total += latency_snapshot->buckets[k];
 		}
 	}
 	return total;
@@ -1057,15 +1080,21 @@ TEST(metrics_operational_namespace_latency, "operational metrics copy namespace 
 	assert_true(metrics_validation_failures_zero(first_snapshot));
 
 	uint64_t before = metrics_write_latency_total(first_snapshot);
+	uint64_t before_namespace = metrics_attempt_write_latency_total(first_snapshot);
 	assert_true(before > 0);
+	assert_true(before_namespace > 0);
 	as_metrics_snapshot_destroy(first_snapshot);
 
 	assert_int_eq(metrics_put(&err, "metrics-operational-2"), AEROSPIKE_OK);
 
 	as_metrics_snapshot* second_snapshot = NULL;
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &second_snapshot), AEROSPIKE_OK);
-	assert_true(metrics_write_latency_total(second_snapshot) > before);
+	uint64_t after = metrics_write_latency_total(second_snapshot);
+	uint64_t after_namespace = metrics_attempt_write_latency_total(second_snapshot);
 	as_metrics_snapshot_destroy(second_snapshot);
+
+	assert_true(after > before);
+	assert_true(after_namespace > before_namespace);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
@@ -1107,6 +1136,162 @@ TEST(metrics_disable_exports_operational_latencies, "disable exports the final n
 	assert_true(metrics_off);
 }
 
+static void
+metrics_async_get_listener(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+{
+	as_monitor_notify(udata);
+}
+
+static bool
+metrics_second_client_supported(void)
+{
+	if (as->config.tls.enable) {
+		info("Skip because the second client does not copy the TLS settings");
+		return false;
+	}
+	return true;
+}
+
+static aerospike*
+metrics_connect_client(as_config* config)
+{
+	as_config_add_hosts(config, g_host, (uint16_t)g_port);
+	as_config_set_user(config, as->config.user, as->config.password);
+	config->use_services_alternate = as->config.use_services_alternate;
+	config->auth_mode = as->config.auth_mode;
+
+	aerospike* client = aerospike_new(config);
+	as_error err;
+	as_status status = aerospike_connect(client, &err);
+
+	if (status != AEROSPIKE_OK) {
+		aerospike_destroy(client);
+		return NULL;
+	}
+	return client;
+}
+
+static bool
+metrics_dynamic_enable_operational(const char* yaml_body, bool file_exporter, bool* operational)
+{
+	char dir[256];
+
+	if (!metrics_create_temp_dir_path(dir, sizeof(dir))) {
+		return false;
+	}
+
+	char path[512];
+	snprintf(path, sizeof(path), "%s/aerospike-metrics.yml", dir);
+	FILE* fp = fopen(path, "w");
+
+	if (!fp) {
+		metrics_remove_dir(dir);
+		return false;
+	}
+
+	fputs(yaml_body, fp);
+	fclose(fp);
+
+	// Metrics that the file enables at connect write to dir, not the working directory.
+	as_config config;
+	as_config_init(&config);
+	as_metrics_policy_set_report_dir(&config.policies.metrics, dir);
+	as_config_provider_set_path(&config, path);
+	aerospike* client = metrics_connect_client(&config);
+
+	if (!client) {
+		metrics_remove_dir(dir);
+		return false;
+	}
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.interval = 3600;
+
+	if (file_exporter) {
+		as_metrics_policy_set_report_dir(&policy, dir);
+	}
+
+	as_error err;
+	as_status status = aerospike_enable_metrics(client, &err, &policy);
+	as_metrics_snapshot* metrics_snapshot = NULL;
+
+	if (status == AEROSPIKE_OK) {
+		status = aerospike_get_metrics_snapshot(client, &err, &metrics_snapshot);
+	}
+
+	if (status == AEROSPIKE_OK) {
+		*operational = metrics_snapshot->operational_metrics_enabled;
+		as_metrics_snapshot_destroy(metrics_snapshot);
+	}
+
+	as_metrics_policy_destroy(&policy);
+	aerospike_close(client, &err);
+	aerospike_destroy(client);
+	metrics_remove_dir(dir);
+	return status == AEROSPIKE_OK;
+}
+
+TEST(metrics_async_conn_latency, "an async connection open records connection latency")
+{
+	if (as_event_loop_size == 0) {
+		info("Skip because no event loops are running");
+		return;
+	}
+
+	if (!metrics_second_client_supported()) {
+		return;
+	}
+
+	// A new client has no async connections, so its first async command opens one.
+	// Tend and info connections do not record connection latency, and this client
+	// has no minimum connections, so only that open is recorded.
+	as_config config;
+	as_config_init(&config);
+	aerospike* client = metrics_connect_client(&config);
+	assert_not_null(client);
+
+	as_error err;
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = true;
+	as_status enable_status = aerospike_enable_metrics(client, &err, &policy);
+
+	as_key key;
+	as_key_init_str(&key, "test", "metrics", "metrics-async-conn");
+
+	as_monitor monitor;
+	as_monitor_init(&monitor);
+	as_monitor_begin(&monitor);
+	as_status get_status = aerospike_key_get_async(client, &err, NULL, &key,
+		metrics_async_get_listener, &monitor, NULL, NULL);
+
+	if (get_status == AEROSPIKE_OK) {
+		as_monitor_wait(&monitor);
+	}
+	as_monitor_destroy(&monitor);
+
+	as_metrics_snapshot* metrics_snapshot = NULL;
+	as_status snapshot_status = aerospike_get_metrics_snapshot(client, &err, &metrics_snapshot);
+	uint64_t node_conn = 0;
+
+	if (snapshot_status == AEROSPIKE_OK) {
+		node_conn = metrics_node_conn_latency_total(metrics_snapshot);
+		as_metrics_snapshot_destroy(metrics_snapshot);
+	}
+
+	as_key_destroy(&key);
+	aerospike_disable_metrics(client, &err);
+	as_metrics_policy_destroy(&policy);
+	aerospike_close(client, &err);
+	aerospike_destroy(client);
+
+	assert_int_eq(enable_status, AEROSPIKE_OK);
+	assert_int_eq(get_status, AEROSPIKE_OK);
+	assert_int_eq(snapshot_status, AEROSPIKE_OK);
+	assert_true(node_conn > 0);
+}
+
 TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on the snapshot")
 {
 	as_metrics_policy policy;
@@ -1129,7 +1314,7 @@ TEST(metrics_latency_unit_microseconds, "latency_unit microseconds is stored on 
 	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	assert_true(command_latency > 0);
-	assert_int_eq(attempt_latency, 0);
+	assert_true(attempt_latency > 0);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
@@ -1249,7 +1434,7 @@ TEST(metrics_file_header_microseconds, "file header stays latency(columns,shift)
 	as_metrics_policy_destroy(&policy);
 }
 
-TEST(metrics_file_operational_off, "file exporter writes latencies when operational metrics are off")
+TEST(metrics_file_turns_operational_on, "the file exporter turns operational metrics on even when the policy leaves them off")
 {
 	char dir[256];
 	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
@@ -1266,32 +1451,28 @@ TEST(metrics_file_operational_off, "file exporter writes latencies when operatio
 	as_status put_status = AEROSPIKE_ERR_CLIENT;
 
 	if (status == AEROSPIKE_OK) {
-		put_status = metrics_put(&err, "metrics-file-operational-off");
+		put_status = metrics_put(&err, "metrics-file-operational-on");
 	}
 
 	as_metrics_snapshot* metrics_snapshot = NULL;
-	bool snapshot_hides_operational = false;
+	bool operational = false;
 
 	if (status == AEROSPIKE_OK && put_status == AEROSPIKE_OK &&
 			aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot) == AEROSPIKE_OK) {
-		snapshot_hides_operational = metrics_snapshot->metrics_enabled &&
-			!metrics_snapshot->operational_metrics_enabled &&
-			metrics_snapshot->cpu == 0 && metrics_snapshot->mem == 0 &&
-			metrics_namespaces_empty(metrics_snapshot);
+		operational = metrics_snapshot->operational_metrics_enabled;
 	}
 	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	as_status disable_status = aerospike_disable_metrics(as, &err);
 	char line[65536];
-	// "test," is the namespace from metrics_put(), then the comma before errors.
 	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
-		strstr(line, "test,") && metrics_file_line_has_write_latency(line) &&
+		metrics_file_line_has_write_latency(line) &&
 		metrics_file_line_has_memory(line);
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_int_eq(put_status, AEROSPIKE_OK);
-	assert_true(snapshot_hides_operational);
+	assert_true(operational);
 	assert_int_eq(disable_status, AEROSPIKE_OK);
 	assert_true(line_ok);
 	as_metrics_policy_destroy(&policy);
@@ -1755,13 +1936,14 @@ TEST(metrics_deprecated_listeners, "deprecated listeners still run on enable and
 	assert_int_eq(logs, 0);
 }
 
-TEST(metrics_listener_reads_attempt_latency, "a metrics listener can read per-attempt namespace latency")
+TEST(metrics_listener_reads_attempt_latency, "deprecated listeners turn operational metrics on and see namespace latency")
 {
 	metrics_listener_counts counts;
 	memset(&counts, 0, sizeof(counts));
 
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = false;
 	policy.interval = 3600;
 	as_metrics_policy_set_listeners(&policy, metrics_on_enable, metrics_on_disable,
 		metrics_on_node_close, metrics_on_snapshot, &counts);
@@ -1774,15 +1956,79 @@ TEST(metrics_listener_reads_attempt_latency, "a metrics listener can read per-at
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot), AEROSPIKE_OK);
 	bool operational = metrics_snapshot->operational_metrics_enabled;
 	uint64_t attempt_latency = metrics_attempt_write_latency_total(metrics_snapshot);
-	uint64_t command_latency = metrics_write_latency_total(metrics_snapshot);
 	as_metrics_snapshot_destroy(metrics_snapshot);
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
 
-	assert_false(operational);
+	assert_true(operational);
 	assert_true(attempt_latency > 0);
-	assert_int_eq(command_latency, 0);
+}
+
+TEST(metrics_dynamic_legacy_enable_turns_operational_on, "legacy metrics.enable turns operational on for aerospike_enable_metrics")
+{
+	if (!metrics_second_client_supported()) {
+		return;
+	}
+
+	bool operational = false;
+	assert_true(metrics_dynamic_enable_operational(
+		"version: 1.2.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    enable: true\n",
+		false, &operational));
+	assert_true(operational);
+}
+
+TEST(metrics_dynamic_enabled_keeps_policy_operational, "metrics.enabled keeps the policy value even with the file exporter")
+{
+	if (!metrics_second_client_supported()) {
+		return;
+	}
+
+	bool operational = true;
+	assert_true(metrics_dynamic_enable_operational(
+		"version: 1.2.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    enabled: true\n",
+		true, &operational));
+	assert_false(operational);
+}
+
+TEST(metrics_dynamic_without_enable_uses_file_exporter, "dynamic config that does not enable metrics leaves the file exporter rule in place")
+{
+	if (!metrics_second_client_supported()) {
+		return;
+	}
+
+	bool operational = false;
+	assert_true(metrics_dynamic_enable_operational(
+		"version: 1.2.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    export_interval: 30s\n",
+		true, &operational));
+	assert_true(operational);
+}
+
+TEST(metrics_dynamic_operational_key_overrides_file_exporter, "extended.operational.enabled false overrides the file exporter rule")
+{
+	if (!metrics_second_client_supported()) {
+		return;
+	}
+
+	bool operational = true;
+	assert_true(metrics_dynamic_enable_operational(
+		"version: 1.2.0\n"
+		"dynamic:\n"
+		"  metrics:\n"
+		"    extended:\n"
+		"      operational:\n"
+		"        enabled: false\n",
+		true, &operational));
+	assert_false(operational);
 }
 
 TEST(metrics_usage_api_counters, "usage counters record blocking, deferred, and background API calls")
@@ -1856,6 +2102,7 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while operational
 {
 	as_metrics_policy policy;
 	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = false;
 
 	as_error err;
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
@@ -1888,7 +2135,9 @@ TEST(metrics_command_count_is_cumulative, "command_count grows while operational
 	as_metrics_snapshot* frozen_snapshot = NULL;
 	assert_int_eq(aerospike_get_metrics_snapshot(as, &err, &frozen_snapshot), AEROSPIKE_OK);
 	assert_false(frozen_snapshot->metrics_enabled);
+	assert_false(frozen_snapshot->operational_metrics_enabled);
 	assert_true(frozen_snapshot->command_count == enabled_count);
+	assert_true(metrics_write_latency_total(frozen_snapshot) > 0);
 	as_metrics_snapshot_destroy(frozen_snapshot);
 
 	as_metrics_policy_destroy(&policy);
@@ -2243,12 +2492,13 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_enable_leaves_operational_off);
 	suite_add(metrics_operational_namespace_latency);
 	suite_add(metrics_disable_exports_operational_latencies);
+	suite_add(metrics_async_conn_latency);
 	suite_add(metrics_latency_unit_microseconds);
 	suite_add(metrics_labels);
 	suite_add(metrics_file_header);
 	suite_add(metrics_file_opens_on_export);
 	suite_add(metrics_file_header_microseconds);
-	suite_add(metrics_file_operational_off);
+	suite_add(metrics_file_turns_operational_on);
 	suite_add(metrics_file_keeps_usage_columns_when_usage_off);
 	suite_add(metrics_file_writes_feature_api_when_usage_on);
 	suite_add(metrics_empty_report_dir);
@@ -2261,6 +2511,10 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_listeners_require_all_callbacks);
 	suite_add(metrics_deprecated_listeners);
 	suite_add(metrics_listener_reads_attempt_latency);
+	suite_add(metrics_dynamic_legacy_enable_turns_operational_on);
+	suite_add(metrics_dynamic_enabled_keeps_policy_operational);
+	suite_add(metrics_dynamic_without_enable_uses_file_exporter);
+	suite_add(metrics_dynamic_operational_key_overrides_file_exporter);
 	suite_add(metrics_usage_api_counters);
 	suite_add(metrics_command_count_is_cumulative);
 	suite_add(metrics_operational_sampler_off);

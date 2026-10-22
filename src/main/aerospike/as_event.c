@@ -429,7 +429,6 @@ void
 as_event_command_execute_in_loop(as_event_loop* event_loop, as_event_command* cmd)
 {
 	// Initialize read buffer (buf) to be located after write buffer.
-	cmd->attempt_begin = 0;
 	cmd->command_begin = 0;
 	cmd->write_offset = (uint32_t)(cmd->buf - (uint8_t*)cmd);
 	cmd->buf += cmd->write_len;
@@ -578,47 +577,59 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 		as_event_timer_stop(cmd);
 		as_event_timer_once(cmd, cmd->connect_timeout);
 	}
+	as_event_conn_begin(cmd);
 	as_event_connect(cmd, pool);
-}
-
-static inline void
-as_event_add_attempt_latency(as_event_command* cmd, as_latency_type type)
-{
-	// attempt_begin is 0 when this attempt is not timed for the learn-metrics series.
-	if (cmd->attempt_begin == 0) {
-		return;
-	}
-
-	uint64_t elapsed = cf_getns() - cmd->attempt_begin;
-	as_node_add_attempt_latency(cmd->metrics, type, elapsed);
 }
 
 static inline void
 as_event_add_success_latency(as_event_command* cmd)
 {
-	if (cmd->latency_type == AS_LATENCY_TYPE_NONE) {
+	if (cmd->latency_type == AS_LATENCY_TYPE_NONE || cmd->command_begin == 0) {
 		return;
 	}
 
 	uint64_t now = cf_getns();
 
-	// Existing histograms: this attempt only.
-	if (cmd->metrics && cmd->attempt_begin != 0) {
-		as_node_add_attempt_latency(cmd->metrics, cmd->latency_type, now - cmd->attempt_begin);
+	// See as_command_add_latencies().
+	uint64_t command_elapsed = now - cmd->command_begin;
+	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, command_elapsed);
+
+	if (!cmd->metrics_sample_decision) {
+		return;
 	}
 
-	// See as_command_add_latencies().
-	if (cmd->command_begin != 0) {
-		as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, now - cmd->command_begin);
+	as_ns_metrics* metrics = cmd->metrics;
+
+	if (!metrics) {
+		metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
+	}
+
+	uint64_t rpc_begin = as_node_rpc_latency_begin(cmd->latency_type, cmd->command_begin,
+		cmd->attempt_begin);
+	as_node_add_attempt_latency(metrics, cmd->latency_type, now - rpc_begin);
+}
+
+static void
+as_event_add_conn_latency(as_event_command* cmd)
+{
+	if (cmd->conn_begin == 0) {
+		return;
+	}
+
+	uint64_t elapsed = cf_getns() - cmd->conn_begin;
+	cmd->conn_begin = 0;
+
+	// Same histogram and gate as as_node_create_connection().
+	if (cmd->cluster->metrics_operational_enabled) {
+		as_node_add_conn_latency(cmd->node, elapsed);
 	}
 }
 
 bool
 as_event_connection_complete(as_event_command* cmd)
 {
-	if (cmd->metrics) {
-		as_event_add_attempt_latency(cmd, AS_LATENCY_TYPE_CONN);
-	}
+	// Connect, TLS, and authentication are done. See as_event_conn_begin().
+	as_event_add_conn_latency(cmd);
 
 	if (cmd->type == AS_ASYNC_TYPE_CONNECTOR) {
 		as_event_connector_success(cmd);
@@ -676,26 +687,16 @@ as_event_command_begin(as_event_loop* event_loop, as_event_command* cmd)
 		as_node_reserve(cmd->node);
 	}
 
-	if (cmd->record_namespace_metrics) {
-		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
-
-		// See as_cluster_should_record_attempt_latency().
-		// Restart that clock on retry.
-		if (as_cluster_should_record_attempt_latency(cmd->cluster) &&
-				cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-			cmd->attempt_begin = cf_getns();
-		}
-	}
-
-	// v3 command latency starts on the first attempt and includes retries.
+	// Command latency starts on the first attempt and includes retries.
 	if (cmd->metrics_sample_decision && cmd->command_begin == 0 &&
 			cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-		if (cmd->attempt_begin != 0) {
-			cmd->command_begin = cmd->attempt_begin;
-		}
-		else {
-			cmd->command_begin = cf_getns();
-		}
+		cmd->command_begin = cf_getns();
+	}
+
+	if (cmd->metrics_sample_decision) {
+		cmd->metrics = as_node_prepare_metrics(cmd->node, cmd->ns);
+		// See as_node_rpc_latency_begin().
+		cmd->attempt_begin = cf_getns();
 	}
 
 	if (! as_node_valid_error_rate(cmd->node)) {
@@ -860,9 +861,11 @@ as_event_decompress(as_event_command* cmd)
 static void
 as_event_retry_timeout(as_event_command* cmd)
 {
-	as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
+	// as_node_stats counts each attempt. See as_node_add_timeout().
+	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 
 	if (cmd->pipe_listener) {
+		// A terminal timeout is counted in as_event_error_callback().
 		as_pipe_timeout(cmd, true);
 		return;
 	}
@@ -982,9 +985,11 @@ void
 as_event_total_timeout(as_event_command* cmd)
 {
 	// Node should not be null at this point.
-	as_node_add_client_timeout(cmd->node, cmd->ns, cmd->metrics);
+	// as_node_stats counts each attempt. See as_node_add_timeout().
+	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 
 	if (cmd->pipe_listener) {
+		// See as_event_retry_timeout().
 		as_pipe_timeout(cmd, false);
 		return;
 	}
@@ -1324,6 +1329,12 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 		as_event_executor_complete(executor);
 		return;
 	}
+	// One namespace error or timeout for the failure returned to the caller.
+	// A retry that later succeeds does not get here. An unsampled call does not
+	// increment the counters. See as_command.metrics_sample_decision.
+	if (cmd->metrics_sample_decision) {
+		as_node_add_terminal_result(cmd->node, cmd->ns, cmd->metrics, err);
+	}
 	as_event_notify_error(cmd, err);
 	as_event_command_release(cmd);
 }
@@ -1537,7 +1548,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 			break;
 
 		case AEROSPIKE_ERR_DEVICE_OVERLOAD:
-			as_node_add_device_overload(cmd->node, cmd->ns, cmd->metrics);
+			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_node_incr_error_rate(cmd->node);
 			as_event_put_connection(cmd, pool);
 			break;
@@ -1555,7 +1566,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 			break;
 		
 		case AEROSPIKE_ERR_TIMEOUT:
-			as_node_add_server_timeout(cmd->node, cmd->ns, cmd->metrics);
+			as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
 			as_event_put_connection(cmd, pool);
 			break;
 			
@@ -1572,7 +1583,7 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 			break;
 
 		case AEROSPIKE_ERR_RECORD_TOO_BIG:
-			as_node_add_record_too_big(cmd->node, cmd->ns, cmd->metrics);
+			as_node_add_error(cmd->node, cmd->ns, cmd->metrics);
 			as_event_put_connection(cmd, pool);
 			break;
 
@@ -2482,8 +2493,9 @@ as_event_recover_connection(as_event_command* cmd)
 	}
 
 	recover->type = AS_ASYNC_TYPE_CONN_RECOVER;
-	// Draining the socket is not a successful command. Keep the per-attempt
-	// clock and do not record a v3 command latency sample.
+	// Draining the socket is not a successful command. Leave the clock unset
+	// so recovery does not record command or namespace latency.
+	// See as_event_add_success_latency().
 	recover->command_begin = 0;
 	recover->flags = cmd->flags & AS_ASYNC_FLAGS_READ;
 	recover->txn = NULL;

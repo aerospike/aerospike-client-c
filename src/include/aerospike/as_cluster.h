@@ -421,7 +421,7 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Command-path operational metrics. Off unless the metrics policy enables them.
+	 * Command-path operational metrics. See as_metrics_policy.operational_enabled.
 	 */
 	bool metrics_operational_enabled;
 
@@ -433,8 +433,8 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * A learn-metrics file writer is installed. Namespace histograms, bytes, and
-	 * error counts are recorded for that writer when operational metrics are off.
+	 * A learn-metrics file writer is installed. Timing follows operational
+	 * metrics: commands are not timed while operational metrics are off.
 	 */
 	bool metrics_file_writer;
 
@@ -783,49 +783,12 @@ as_cluster_sample_operational(as_cluster* cluster);
 
 /**
  * @private
- * True when per-attempt namespace latency is published. The learn-metrics file
- * writer and metrics listeners read that series.
+ * Draw the sampler once for this user call and increment command count when
+ * it is sampled. Returns the sampler decision, so node commands and retries of
+ * that same call can reuse it. See as_cluster_sample_operational().
  */
 static inline bool
-as_cluster_should_record_attempt_latency(const as_cluster* cluster)
-{
-	return cluster->metrics_file_writer || cluster->metrics_listeners.snapshot_listener != NULL;
-}
-
-/**
- * @private
- * True when this command should update per-namespace histograms, bytes, and
- * error counts. When operational metrics are on, operational_sample is that
- * decision: false skips namespace metrics. When operational metrics are off,
- * there is no sampler draw, and this records only if a learn-metrics file
- * writer or a metrics listener is installed.
- */
-static inline bool
-as_cluster_record_namespace_metrics(const as_cluster* cluster, bool operational_sample)
-{
-	if (!cluster->metrics_enabled) {
-		return false;
-	}
-
-	if (cluster->metrics_operational_enabled) {
-		// The sampler decided. A "no" skips namespace metrics as well as the
-		// cluster command_count and retry counter.
-		return operational_sample;
-	}
-
-	// The on-demand snapshot omits these fields while operational metrics are
-	// off. The file writer and metrics listeners still read them.
-	return as_cluster_should_record_attempt_latency(cluster);
-}
-
-/**
- * @private
- * Increment command count when this user call is sampled.
- * Returns whether the call was sampled, so later retries of that same call
- * can reuse the decision.
- */
-static inline bool
-as_cluster_add_command_count(as_cluster* cluster)
+as_cluster_sample_command(as_cluster* cluster)
 {
 	if (!as_cluster_sample_operational(cluster)) {
 		return false;

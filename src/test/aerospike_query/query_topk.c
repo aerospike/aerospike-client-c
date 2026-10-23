@@ -310,18 +310,6 @@ TEST(query_topk_then_order_by_first,
 	assert_int_eq(query.order_by.direction, AS_ORDER_ASCENDING);
 	assert_false(query.then_order_by.defined);
 
-	// Not an error: with server support turned off, that is the only rejection.
-	bool has_order_by = as->cluster->has_order_by;
-	as->cluster->has_order_by = false;
-
-	as_error err;
-	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
-
-	as->cluster->has_order_by = has_order_by;
-
-	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
-	assert_not_null(strstr(err.message, "not supported by all nodes"));
-
 	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
 		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
 

@@ -829,20 +829,20 @@ TEST(vector_native_bin_roundtrip, "set/get vector bins of every element type rou
 	as_vector_value_destroy(v64);
 }
 
-TEST(vector_special_float_bits_server, "special float bit patterns survive the server bit-exact")
+TEST(vector_special_float_bits_server, "finite special float bit patterns survive the server bit-exact")
 {
 	if (! server_supports_vector()) {
 		return;
 	}
 
-	float f32[7] = {NAN, INFINITY, -INFINITY, -0.0f, 0.0f, FLT_MIN, FLT_MAX};
-	double f64[7] = {NAN, INFINITY, -INFINITY, -0.0, 0.0, DBL_MIN, DBL_MAX};
-	// +Inf, -Inf, NaN, +0, -0, smallest subnormal.
-	uint16_t f16[6] = {0x7C00, 0xFC00, 0x7E00, 0x0000, 0x8000, 0x0001};
+	// -0, +0, smallest subnormal, smallest normal, largest finite, -largest finite.
+	float f32[6] = {-0.0f, 0.0f, 0x1p-149f, FLT_MIN, FLT_MAX, -FLT_MAX};
+	double f64[6] = {-0.0, 0.0, 0x1p-1074, DBL_MIN, DBL_MAX, -DBL_MAX};
+	uint16_t f16[6] = {0x8000, 0x0000, 0x0001, 0x0400, 0x7BFF, 0xFBFF};
 
 	as_error err;
-	as_vector_value* v32 = as_vector_value_new_float32(&err, f32, 7);
-	as_vector_value* v64 = as_vector_value_new_float64(&err, f64, 7);
+	as_vector_value* v32 = as_vector_value_new_float32(&err, f32, 6);
+	as_vector_value* v64 = as_vector_value_new_float64(&err, f64, 6);
 	as_vector_value* v16 = as_vector_value_new_float16(&err, f16, 6);
 
 	remove_key(11);
@@ -869,12 +869,12 @@ TEST(vector_special_float_bits_server, "special float bit patterns survive the s
 	assert_not_null(r64);
 	assert_not_null(r16);
 
-	// Compare by raw bit pattern so NaN and -0.0 are exercised exactly.
+	// Compare by raw bit pattern so -0.0 and subnormals are exercised exactly.
 	const float* e32 = as_vector_value_get_float32(r32);
 	const double* e64 = as_vector_value_get_float64(r64);
 	const uint16_t* e16 = as_vector_value_get_float16(r16);
 
-	for (uint32_t i = 0; i < 7; i++) {
+	for (uint32_t i = 0; i < 6; i++) {
 		uint32_t a, b;
 		memcpy(&a, &e32[i], sizeof(a));
 		memcpy(&b, &f32[i], sizeof(b));
@@ -884,8 +884,7 @@ TEST(vector_special_float_bits_server, "special float bit patterns survive the s
 		memcpy(&c, &e64[i], sizeof(c));
 		memcpy(&d, &f64[i], sizeof(d));
 		assert_int_eq(c, d);
-	}
-	for (uint32_t i = 0; i < 6; i++) {
+
 		assert_int_eq(e16[i], f16[i]);
 	}
 
@@ -897,6 +896,83 @@ TEST(vector_special_float_bits_server, "special float bit patterns survive the s
 	as_vector_value_destroy(v32);
 	as_vector_value_destroy(v64);
 	as_vector_value_destroy(v16);
+}
+
+static as_status
+put_vector_bin(as_error* err, const as_key* key, as_vector_value* vec)
+{
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_vector(&rec, "v", vec);
+
+	as_status status = aerospike_key_put(as, err, NULL, key, &rec);
+
+	as_record_destroy(&rec);
+	as_vector_value_destroy(vec);
+	return status;
+}
+
+TEST(vector_non_finite_rejected_server, "the server rejects vectors with NaN or infinite elements")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	remove_key(26);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 26);
+
+	float original[2] = {1.0f, 2.0f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, original, 2);
+	assert_not_null(vec);
+
+	as_status status = put_vector_bin(&err, &key, vec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	// NaN, +Inf, -Inf for each floating-point element type.
+	float f32[3] = {NAN, INFINITY, -INFINITY};
+	double f64[3] = {NAN, INFINITY, -INFINITY};
+	uint16_t f16[3] = {0x7E00, 0x7C00, 0xFC00};
+
+	for (uint32_t i = 0; i < 3; i++) {
+		float d32[2] = {1.0f, f32[i]};
+		vec = as_vector_value_new_float32(&err, d32, 2);
+		assert_not_null(vec);
+		status = put_vector_bin(&err, &key, vec);
+		assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
+
+		double d64[2] = {1.0, f64[i]};
+		vec = as_vector_value_new_float64(&err, d64, 2);
+		assert_not_null(vec);
+		status = put_vector_bin(&err, &key, vec);
+		assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
+
+		uint16_t d16[2] = {0x3C00, f16[i]};
+		vec = as_vector_value_new_float16(&err, d16, 2);
+		assert_not_null(vec);
+		status = put_vector_bin(&err, &key, vec);
+		assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
+	}
+
+	// The rejected writes leave the record unchanged.
+	as_record* out = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &out);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_vector_value* stored = as_record_get_vector(&err, out, "v");
+	assert_not_null(stored);
+	assert_int_eq(stored->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
+	assert_int_eq(stored->dimensions, 2);
+
+	const float* elements = as_vector_value_get_float32(stored);
+	assert_true(elements[0] == original[0]);
+	assert_true(elements[1] == original[1]);
+
+	as_vector_value_destroy(stored);
+	as_record_destroy(out);
+	as_key_destroy(&key);
 }
 
 TEST(vector_single_dimension_server, "a single-dimension vector round-trips through the server")
@@ -1664,6 +1740,7 @@ SUITE(vector, "as_vector_value serialization")
 	suite_add(vector_serialization_rejects_invalid_vectors);
 	suite_add(vector_native_bin_roundtrip);
 	suite_add(vector_special_float_bits_server);
+	suite_add(vector_non_finite_rejected_server);
 	suite_add(vector_single_dimension_server);
 	suite_add(vector_large_crossing_16bit_server);
 	suite_add(vector_max_dimensions_server);

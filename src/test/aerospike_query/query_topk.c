@@ -38,6 +38,7 @@
 #include <aerospike/as_string.h>
 #include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
+#include <aerospike/as_version.h>
 
 #include <math.h>
 
@@ -816,6 +817,25 @@ TEST(query_topk_merge_copies_values,
 // Server integration tests
 //---------------------------------
 
+static bool
+server_supports_topk(void)
+{
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (! node) {
+		info("skipping Top-K server test; no cluster node available");
+		return false;
+	}
+
+	bool supported = as_version_compare(&node->version, &as_server_version_8_2_1) >= 0;
+	as_node_release(node);
+
+	if (! supported) {
+		info("skipping Top-K server test; requires server >= 8.2.1");
+	}
+	return supported;
+}
+
 #define TOPK_INTEGRATION_RECORDS 20
 #define TOPK_INTEGRATION_K 5
 
@@ -897,6 +917,10 @@ topk_integration_query(const as_policy_query* policy, topk_integration_result* r
 TEST(query_topk_integer_desc_server,
 	"server query returns the globally ranked top-k integer values")
 {
+	if (! server_supports_topk()) {
+		return;
+	}
+
 	topk_integration_remove_records();
 	assert_true(topk_integration_put_records());
 
@@ -915,6 +939,10 @@ TEST(query_topk_integer_desc_server,
 
 TEST(query_topk_short_query_server, "a short-query hint is accepted and the query still ranks every record")
 {
+	if (! server_supports_topk()) {
+		return;
+	}
+
 	topk_integration_remove_records();
 	assert_true(topk_integration_put_records());
 
@@ -935,6 +963,10 @@ TEST(query_topk_short_query_server, "a short-query hint is accepted and the quer
 TEST(query_topk_order_by_without_top_k_server,
 	"order_by without top_k is sent to the server, which rejects it")
 {
+	if (! server_supports_topk()) {
+		return;
+	}
+
 	as_query query;
 	as_query_init(&query, NAMESPACE, SET);
 	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,

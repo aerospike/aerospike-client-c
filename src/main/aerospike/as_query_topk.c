@@ -15,11 +15,12 @@
  * the License.
  */
 #include <aerospike/as_query_topk.h>
+#include <aerospike/as_boolean.h>
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_double.h>
-#include <aerospike/as_error.h>
+#include <aerospike/as_geojson.h>
 #include <aerospike/as_integer.h>
-#include <aerospike/as_msgpack.h>
+#include <aerospike/as_nil.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_val.h>
@@ -62,53 +63,112 @@ typedef struct {
 } as_query_topk_key;
 
 //---------------------------------
-// Deep copy: detach a record from the caller's (about to be destroyed)
-// stack frame by round-tripping every bin/key value through msgpack. This
-// mirrors how this client already handles arbitrary as_val payloads
-// elsewhere (query UDF arglist serialization, as_query_from_bytes()) and,
-// unlike a manual field-by-field union copy, works correctly for every
-// as_val subtype a bin can hold (scalars, strings, bytes, lists, maps)
-// without needing type-specific ownership-transfer logic.
+// Deep copy: detach a record from the query parser, which builds it on its
+// stack (as_record_inita()), stores scalar, string, GeoJSON and bytes values
+// inline in its bins and key, and destroys it when the callback returns.
 //---------------------------------
 
-static as_status
-as_query_topk_copy_val(const as_val* src, as_val** dst, as_error* err)
+static char*
+as_query_topk_copy_str(const char* src, size_t len)
 {
-	if (! src || src->type == AS_NIL) {
-		*dst = (as_val*)&as_nil;
-		return AEROSPIKE_OK;
+	char* dst = cf_malloc(len + 1);
+
+	if (! dst) {
+		return NULL;
+	}
+	memcpy(dst, src, len);
+	dst[len] = 0;
+	return dst;
+}
+
+static as_val*
+as_query_topk_copy_val(const as_val* src)
+{
+	if (! src) {
+		return (as_val*)&as_nil;
 	}
 
-	as_serializer ser;
-	as_msgpack_init(&ser);
+	switch (src->type) {
+		case AS_NIL:
+			return (as_val*)&as_nil;
 
-	as_buffer buf;
-	as_buffer_init(&buf);
+		case AS_BOOLEAN: {
+			bool b = as_boolean_get((const as_boolean*)src);
+			return (as_val*)as_boolean_new(b);
+		}
 
-	as_serializer_serialize(&ser, (as_val*)src, &buf);
+		case AS_INTEGER: {
+			int64_t i = as_integer_get((const as_integer*)src);
+			return (as_val*)as_integer_new(i);
+		}
 
-	as_val* val = NULL;
-	int rv = as_serializer_deserialize(&ser, &buf, &val);
+		case AS_DOUBLE: {
+			double d = as_double_get((const as_double*)src);
+			return (as_val*)as_double_new(d);
+		}
 
-	as_buffer_destroy(&buf);
-	as_serializer_destroy(&ser);
+		// Copy the full length: strings may contain NUL bytes.
+		case AS_STRING: {
+			as_string* s = (as_string*)src;
+			size_t len = as_string_len(s);
+			char* value = as_string_get(s);
+			char* copy = as_query_topk_copy_str(value, len);
 
-	if (rv != 0 || ! val) {
-		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
-			"Failed to copy Top-K candidate record value");
+			if (! copy) {
+				return NULL;
+			}
+			return (as_val*)as_string_new_wlen(copy, len, true);
+		}
+
+		case AS_GEOJSON: {
+			as_geojson* g = (as_geojson*)src;
+			size_t len = as_geojson_len(g);
+			char* value = as_geojson_get(g);
+			char* copy = as_query_topk_copy_str(value, len);
+
+			if (! copy) {
+				return NULL;
+			}
+			return (as_val*)as_geojson_new_wlen(copy, len, true);
+		}
+
+		case AS_BYTES: {
+			const as_bytes* b = (const as_bytes*)src;
+			uint32_t size = as_bytes_size(b);
+			uint8_t* copy = cf_malloc(size);
+
+			if (! copy) {
+				return NULL;
+			}
+			memcpy(copy, b->value, size);
+
+			as_bytes* dst = as_bytes_new_wrap(copy, size, true);
+
+			if (! dst) {
+				cf_free(copy);
+				return NULL;
+			}
+			dst->type = b->type;
+			return (as_val*)dst;
+		}
+
+		// The parser deserializes lists and maps into reference counted heap
+		// values, so the copy shares them instead of duplicating them.
+		case AS_LIST:
+		case AS_MAP:
+			return as_val_reserve(src);
+
+		default:
+			return NULL;
 	}
-
-	*dst = val;
-	return AEROSPIKE_OK;
 }
 
 static as_record*
-as_query_topk_copy_record(const as_record* src, as_error* err)
+as_query_topk_copy_record(const as_record* src)
 {
 	as_record* dst = as_record_new(src->bins.size);
 
 	if (! dst) {
-		as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to allocate Top-K candidate record");
 		return NULL;
 	}
 
@@ -119,9 +179,9 @@ as_query_topk_copy_record(const as_record* src, as_error* err)
 	dst->key.digest = src->key.digest;
 
 	if (src->key.valuep) {
-		as_val* keyval = NULL;
+		as_val* keyval = as_query_topk_copy_val((as_val*)src->key.valuep);
 
-		if (as_query_topk_copy_val((as_val*)src->key.valuep, &keyval, err) != AEROSPIKE_OK) {
+		if (! keyval) {
 			as_record_destroy(dst);
 			return NULL;
 		}
@@ -134,11 +194,10 @@ as_query_topk_copy_record(const as_record* src, as_error* err)
 
 		as_strncpy(db->name, sb->name, sizeof(db->name));
 
-		as_val* val = NULL;
+		as_val* val = as_query_topk_copy_val((as_val*)sb->valuep);
 
-		if (as_query_topk_copy_val((as_val*)sb->valuep, &val, err) != AEROSPIKE_OK) {
-			// Only bins [0, i) were populated; bump size so destroy cleans up exactly those.
-			dst->bins.size = i;
+		if (! val) {
+			// dst->bins.size counts only the bins copied so far, so destroy frees exactly those.
 			as_record_destroy(dst);
 			return NULL;
 		}
@@ -476,14 +535,10 @@ as_query_topk_collector_create(
 static void
 as_query_topk_collector_append(as_query_topk_collector* collector, const as_record* src)
 {
-	as_error err;
-	as_error_init(&err);
-
-	as_record* copy = as_query_topk_copy_record(src, &err);
+	as_record* copy = as_query_topk_copy_record(src);
 
 	if (! copy) {
-		// Allocation/serialization failure copying a single candidate. Extremely rare
-		// (out of memory, or a bin value this client's serializer can't round-trip).
+		// Out of memory, or a bin value type the query parser never produces.
 		// Dropping this one candidate is preferable to aborting the whole query.
 		return;
 	}

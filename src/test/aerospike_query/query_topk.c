@@ -17,10 +17,17 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_query.h>
+#include <aerospike/as_arraylist.h>
+#include <aerospike/as_boolean.h>
+#include <aerospike/as_bytes.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_error.h>
+#include <aerospike/as_geojson.h>
+#include <aerospike/as_hashmap.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_key.h>
+#include <aerospike/as_list.h>
+#include <aerospike/as_map.h>
 #include <aerospike/as_operations.h>
 #include <aerospike/as_partition_filter.h>
 #include <aerospike/as_policy.h>
@@ -29,6 +36,7 @@
 #include <aerospike/as_record.h>
 #include <aerospike/as_status.h>
 #include <aerospike/as_string.h>
+#include <aerospike/as_stringmap.h>
 #include <aerospike/as_val.h>
 
 #include <math.h>
@@ -692,6 +700,120 @@ TEST(query_topk_merge_two_keys,
 	assert_int_eq(g_topk_test_digests[4], 4);
 }
 
+static as_record* g_topk_test_kept;
+
+static bool
+topk_test_keep_cb(const as_val* val, void* udata)
+{
+	(void)udata;
+
+	if (val && ! g_topk_test_kept) {
+		g_topk_test_kept = (as_record*)as_val_reserve(val);
+	}
+	return true;
+}
+
+TEST(query_topk_merge_copies_values,
+	"topk collector keeps strings past an embedded NUL and copies every bin value type")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "name", AS_QUERY_ORDER_BY_STRING, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 1);
+
+	g_topk_test_kept = NULL;
+
+	as_query_topk_collector* collector = as_query_topk_collector_create(&query, topk_test_keep_cb, NULL);
+	as_query_destroy(&query);
+
+	// Both names read "a" up to the NUL. The higher name gets the lower digest,
+	// so a copy that stopped at the NUL would tie and keep the wrong record.
+	// Values are stack allocated and stored inline, as the query parser does.
+	char higher_name[] = {'a', '\0', 'c'};
+	as_string higher;
+	as_string_init_wlen(&higher, higher_name, sizeof(higher_name), false);
+
+	as_record r1;
+	topk_test_init_rec(&r1, 1, 1);
+	as_record_set_string(&r1, "name", &higher);
+	topk_test_collect_rec(collector, &r1);
+
+	char lower_name[] = {'a', '\0', 'b'};
+	as_string lower;
+	as_string_init_wlen(&lower, lower_name, sizeof(lower_name), false);
+
+	as_boolean flag;
+	as_boolean_init(&flag, true);
+
+	char geo_json[] = "{\"type\":\"Point\",\"coordinates\":[0,0]}";
+	as_geojson geo;
+	as_geojson_init(&geo, geo_json, false);
+
+	uint8_t raw[] = {1, 2, 3};
+	as_bytes bytes;
+	as_bytes_init_wrap(&bytes, raw, sizeof(raw), false);
+	as_bytes_set_type(&bytes, AS_BYTES_HLL);
+
+	as_arraylist* list = as_arraylist_new(1, 0);
+	as_arraylist_append_int64(list, 7);
+
+	as_hashmap* map = as_hashmap_new(1);
+	as_stringmap_set_int64((as_map*)map, "k", 8);
+
+	as_record r2;
+	topk_test_init_rec(&r2, 2, 6);
+	as_string_init(&r2.key.value.string, "pk", false);
+	r2.key.valuep = &r2.key.value;
+	as_record_set_string(&r2, "name", &lower);
+	as_record_set(&r2, "flag", (as_bin_value*)&flag);
+	as_record_set_geojson(&r2, "geo", &geo);
+	as_record_set_bytes(&r2, "bytes", &bytes);
+	as_record_set_list(&r2, "list", (as_list*)list);
+	as_record_set_map(&r2, "map", (as_map*)map);
+	topk_test_collect_rec(collector, &r2);
+
+	as_query_topk_collect(NULL, collector);
+	as_query_topk_collector_destroy(collector);
+
+	as_record* rec = g_topk_test_kept;
+	assert_not_null(rec);
+	assert_int_eq(rec->key.digest.value[0], 2);
+
+	char* key = as_string_get((as_string*)rec->key.valuep);
+	assert_string_eq(key, "pk");
+
+	as_string* name = as_record_get_string(rec, "name");
+	size_t name_len = as_string_len(name);
+	char* name_value = as_string_get(name);
+	assert_true(name_value != lower_name);
+	assert_int_eq(name_len, sizeof(lower_name));
+
+	int name_cmp = memcmp(name_value, lower_name, name_len);
+	assert_int_eq(name_cmp, 0);
+
+	as_val* flag_val = (as_val*)as_record_get(rec, "flag");
+	assert_int_eq(as_val_type(flag_val), AS_BOOLEAN);
+	assert_true(as_boolean_get((as_boolean*)flag_val));
+
+	as_geojson* geo_copy = as_record_get_geojson(rec, "geo");
+	char* geo_value = as_geojson_get(geo_copy);
+	assert_string_eq(geo_value, geo_json);
+
+	as_bytes* bytes_copy = as_record_get_bytes(rec, "bytes");
+	assert_true(bytes_copy->value != raw);
+	assert_int_eq(bytes_copy->type, AS_BYTES_HLL);
+	assert_bytes_eq(bytes_copy->value, bytes_copy->size, raw, sizeof(raw));
+
+	as_list* list_copy = as_record_get_list(rec, "list");
+	assert_int_eq(as_list_get_int64(list_copy, 0), 7);
+
+	as_map* map_copy = as_record_get_map(rec, "map");
+	assert_int_eq(as_stringmap_get_int64(map_copy, "k"), 8);
+
+	as_record_destroy(rec);
+}
+
 //---------------------------------
 // Server integration tests
 //---------------------------------
@@ -857,6 +979,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_merge_string_case_insensitive_asc);
 	suite_add(query_topk_merge_double_nan_and_zero);
 	suite_add(query_topk_merge_two_keys);
+	suite_add(query_topk_merge_copies_values);
 	suite_add(query_topk_integer_desc_server);
 	suite_add(query_topk_short_query_server);
 	suite_add(query_topk_order_by_without_top_k_server);

@@ -1,0 +1,1783 @@
+/*
+ * Copyright 2008-2026 Aerospike, Inc.
+ *
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+#include <aerospike/aerospike.h>
+#include <aerospike/aerospike_batch.h>
+#include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_query.h>
+#include <aerospike/as_arraylist.h>
+#include <aerospike/as_batch.h>
+#include <aerospike/as_buffer.h>
+#include <aerospike/as_bytes.h>
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_error.h>
+#include <aerospike/as_event.h>
+#include <aerospike/as_exp.h>
+#include <aerospike/as_exp_operations.h>
+#include <aerospike/as_hashmap.h>
+#if AS_EVENT_LIB_DEFINED
+#include <aerospike/as_monitor.h>
+#endif
+#include <aerospike/as_msgpack.h>
+#include <aerospike/as_operations.h>
+#include <aerospike/as_query.h>
+#include <aerospike/as_record.h>
+#include <aerospike/as_serializer.h>
+#include <aerospike/as_string.h>
+#include <aerospike/as_vector_value.h>
+#include <aerospike/as_version.h>
+#include <citrusleaf/cf_byte_order.h>
+#include <float.h>
+#include <string.h>
+
+#include "test.h"
+
+extern aerospike* as;
+
+#define NAMESPACE "test"
+#define SET "test_vector"
+
+//---------------------------------
+// Helpers
+//---------------------------------
+
+// Assert that an as_bytes holds the same float32 vector as `expected`.
+static void
+assert_vector_bytes_eq_float32(atf_test_result* __result__, as_bytes* bytes, const float* expected, uint32_t count)
+{
+	assert_not_null(bytes);
+	assert_int_eq(bytes->type, AS_BYTES_VECTOR);
+
+	as_error err;
+	as_vector_value* vec = as_vector_value_from_bytes(&err, bytes);
+	assert_not_null(vec);
+	assert_int_eq(vec->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
+	assert_int_eq(vec->dimensions, count);
+
+	const float* elems = as_vector_value_get_float32(vec);
+	assert_not_null(elems);
+	for (uint32_t i = 0; i < count; i++) {
+		assert(elems[i] == expected[i]);
+	}
+	as_vector_value_destroy(vec);
+}
+
+// Decode the first `size` bytes of `buf` as a vector bin value.
+static as_vector_value*
+vector_from_buffer(as_error* err, uint8_t* buf, uint32_t size)
+{
+	as_bytes bytes;
+	as_bytes_init_wrap(&bytes, buf, size, false);
+	return as_vector_value_from_bytes(err, &bytes);
+}
+
+#if AS_EVENT_LIB_DEFINED
+typedef struct vector_async_data_s {
+	as_monitor monitor;
+	atf_test_result* result;
+	float expected[2];
+} vector_async_data;
+
+static void
+vector_async_get_callback(as_error* err, as_record* rec, void* udata, as_event_loop* event_loop)
+{
+	vector_async_data* data = (vector_async_data*)udata;
+	assert_success_async(&data->monitor, err, data->result);
+
+	assert_async(&data->monitor, rec);
+	as_error vec_err;
+	as_vector_value* vec = as_record_get_vector(&vec_err, rec, "v");
+	assert_async(&data->monitor, vec);
+
+	if (vec) {
+		assert_int_eq_async(&data->monitor, vec->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
+		assert_int_eq_async(&data->monitor, vec->dimensions, 2);
+		const float* values = as_vector_value_get_float32(vec);
+		assert_async(&data->monitor, values);
+		assert_async(&data->monitor, values[0] == data->expected[0]);
+		assert_async(&data->monitor, values[1] == data->expected[1]);
+		as_vector_value_destroy(vec);
+	}
+	as_monitor_notify(&data->monitor);
+}
+
+static void
+vector_async_put_callback(as_error* err, void* udata, as_event_loop* event_loop)
+{
+	vector_async_data* data = (vector_async_data*)udata;
+	assert_success_async(&data->monitor, err, data->result);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 25);
+
+	as_error get_err;
+	as_status status = aerospike_key_get_async(
+		as, &get_err, NULL, &key, vector_async_get_callback, data, event_loop, NULL);
+	assert_status_async(&data->monitor, status, &get_err);
+}
+#endif
+
+//---------------------------------
+// Test Cases
+//---------------------------------
+
+TEST(vector_wire_size, "serialized vector size per element type")
+{
+	uint16_t f16[3] = {0, 0, 0};
+	int32_t i32[3] = {0, 0, 0};
+	float f32[3] = {0, 0, 0};
+	double f64[3] = {0, 0, 0};
+
+	as_error err;
+	as_vector_value* v16 = as_vector_value_new_float16(&err, f16, 3);
+	as_vector_value* v32i = as_vector_value_new_int32(&err, i32, 3);
+	as_vector_value* v32f = as_vector_value_new_float32(&err, f32, 3);
+	as_vector_value* v64 = as_vector_value_new_float64(&err, f64, 3);
+
+	as_bytes b16;
+	as_bytes b32i;
+	as_bytes b32f;
+	as_bytes b64;
+	assert_true(as_vector_value_to_bytes(v16, &b16));
+	assert_true(as_vector_value_to_bytes(v32i, &b32i));
+	assert_true(as_vector_value_to_bytes(v32f, &b32f));
+	assert_true(as_vector_value_to_bytes(v64, &b64));
+
+	assert_int_eq(b16.size, AS_VECTOR_VALUE_HEADER_SIZE + 3 * 2);
+	assert_int_eq(b32i.size, AS_VECTOR_VALUE_HEADER_SIZE + 3 * 4);
+	assert_int_eq(b32f.size, AS_VECTOR_VALUE_HEADER_SIZE + 3 * 4);
+	assert_int_eq(b64.size, AS_VECTOR_VALUE_HEADER_SIZE + 3 * 8);
+
+	as_bytes_destroy(&b16);
+	as_bytes_destroy(&b32i);
+	as_bytes_destroy(&b32f);
+	as_bytes_destroy(&b64);
+	as_vector_value_destroy(v16);
+	as_vector_value_destroy(v32i);
+	as_vector_value_destroy(v32f);
+	as_vector_value_destroy(v64);
+}
+
+TEST(vector_header, "as_vector_value serializes the fixed header")
+{
+	float data[4] = {1.5f, -2.25f, 0.0f, 100.0f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 4);
+
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+	const uint8_t* buf = bytes.value;
+
+	assert_int_eq(buf[0], AS_VECTOR_VALUE_VERSION);
+	assert_int_eq(buf[1], AS_VECTOR_ELEMENT_TYPE_FLOAT32);
+
+	uint32_t dims;
+	memcpy(&dims, &buf[2], sizeof(dims));
+	assert_int_eq(cf_swap_from_le32(dims), 4);
+
+	// The elements follow the 6-byte header directly.
+	assert_int_eq(bytes.size, 6 + 4 * sizeof(float));
+
+	uint32_t bits;
+	memcpy(&bits, &buf[6], sizeof(bits));
+	union { float f; uint32_t u; } conv;
+	conv.u = cf_swap_from_le32(bits);
+	assert(conv.f == data[0]);
+
+	as_bytes_destroy(&bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_float32_roundtrip, "as_vector_value float32 data is serialized little-endian")
+{
+	float data[4] = {1.5f, -2.25f, 0.0f, 100.0f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 4);
+
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+
+	for (uint32_t i = 0; i < 4; i++) {
+		uint32_t bits;
+		memcpy(&bits, &bytes.value[AS_VECTOR_VALUE_HEADER_SIZE + i * 4], sizeof(bits));
+		bits = cf_swap_from_le32(bits);
+
+		float out;
+		memcpy(&out, &bits, sizeof(out));
+		assert(out == data[i]);
+	}
+
+	as_bytes_destroy(&bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_int32_roundtrip, "as_vector_value int32 data is serialized little-endian")
+{
+	int32_t data[4] = {0, -1, 2147483647, -2147483648};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_int32(&err, data, 4);
+
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+	assert_int_eq(bytes.value[1], AS_VECTOR_ELEMENT_TYPE_INT32);
+
+	for (uint32_t i = 0; i < 4; i++) {
+		uint32_t bits;
+		memcpy(&bits, &bytes.value[AS_VECTOR_VALUE_HEADER_SIZE + i * 4], sizeof(bits));
+		assert_int_eq((int32_t)cf_swap_from_le32(bits), data[i]);
+	}
+
+	as_bytes_destroy(&bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_float64_roundtrip, "as_vector_value float64 data is serialized little-endian")
+{
+	double data[3] = {3.14159265358979, -0.5, 1e300};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float64(&err, data, 3);
+
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+	assert_int_eq(bytes.value[1], AS_VECTOR_ELEMENT_TYPE_FLOAT64);
+
+	for (uint32_t i = 0; i < 3; i++) {
+		double out;
+		memcpy(&out, &bytes.value[AS_VECTOR_VALUE_HEADER_SIZE + i * 8], sizeof(out));
+		out = cf_swap_from_little_float64(out);
+		assert(out == data[i]);
+	}
+
+	as_bytes_destroy(&bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_float16_roundtrip, "as_vector_value float16 raw bit patterns are serialized little-endian")
+{
+	uint16_t data[3] = {0x3C00, 0xC000, 0x0000}; // 1.0, -2.0, 0.0 as IEEE 754 half
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float16(&err, data, 3);
+
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+	assert_int_eq(bytes.value[1], AS_VECTOR_ELEMENT_TYPE_FLOAT16);
+
+	for (uint32_t i = 0; i < 3; i++) {
+		uint16_t bits;
+		memcpy(&bits, &bytes.value[AS_VECTOR_VALUE_HEADER_SIZE + i * 2], sizeof(bits));
+		assert_int_eq(cf_swap_from_le16(bits), data[i]);
+	}
+
+	as_bytes_destroy(&bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_to_bytes, "as_vector_value_to_bytes produces AS_BYTES_VECTOR")
+{
+	float data[4] = {1.5f, -2.25f, 0.0f, 100.0f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 4);
+
+	as_bytes bytes;
+	assert(as_vector_value_to_bytes(vec, &bytes));
+
+	assert_int_eq(as_bytes_get_type(&bytes), AS_BYTES_VECTOR);
+	assert_int_eq(bytes.size, AS_VECTOR_VALUE_HEADER_SIZE + 4 * sizeof(float));
+	assert_vector_bytes_eq_float32(__result__, &bytes, data, 4);
+
+	as_bytes_destroy(&bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_from_float32, "as_vector_value_from_bytes deserializes float32 elements")
+{
+	float data[4] = {1.5f, -2.25f, 0.0f, 100.0f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 4);
+
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+
+	as_vector_value* out = as_vector_value_from_bytes(&err, &bytes);
+	assert_not_null(out);
+	assert_int_eq(out->version, AS_VECTOR_VALUE_VERSION);
+	assert_int_eq(out->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
+	assert_int_eq(out->dimensions, 4);
+
+	const float* elems = as_vector_value_get_float32(out);
+	assert_not_null(elems);
+	for (uint32_t i = 0; i < 4; i++) {
+		assert(elems[i] == data[i]);
+	}
+
+	// Wrong-type accessors must return NULL.
+	assert_null(as_vector_value_get_int32(out));
+	assert_null(as_vector_value_get_float64(out));
+	assert_null(as_vector_value_get_float16(out));
+
+	as_vector_value_destroy(out);
+	as_bytes_destroy(&bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_from_int32, "as_vector_value_from_bytes deserializes int32 elements")
+{
+	int32_t data[4] = {0, -1, 2147483647, -2147483648};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_int32(&err, data, 4);
+
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+
+	as_vector_value* out = as_vector_value_from_bytes(&err, &bytes);
+	assert_not_null(out);
+	assert_int_eq(out->element_type, AS_VECTOR_ELEMENT_TYPE_INT32);
+	assert_int_eq(out->dimensions, 4);
+
+	const int32_t* elems = as_vector_value_get_int32(out);
+	assert_not_null(elems);
+	for (uint32_t i = 0; i < 4; i++) {
+		assert_int_eq(elems[i], data[i]);
+	}
+
+	as_vector_value_destroy(out);
+	as_bytes_destroy(&bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_from_float64, "as_vector_value_from_bytes deserializes float64 elements")
+{
+	double data[3] = {3.14159265358979, -0.5, 1e300};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float64(&err, data, 3);
+
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+
+	as_vector_value* out = as_vector_value_from_bytes(&err, &bytes);
+	assert_not_null(out);
+	assert_int_eq(out->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT64);
+	assert_int_eq(out->dimensions, 3);
+
+	const double* elems = as_vector_value_get_float64(out);
+	assert_not_null(elems);
+	for (uint32_t i = 0; i < 3; i++) {
+		assert(elems[i] == data[i]);
+	}
+
+	as_vector_value_destroy(out);
+	as_bytes_destroy(&bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_from_float16, "as_vector_value_from_bytes deserializes float16 raw bit patterns")
+{
+	uint16_t data[3] = {0x3C00, 0xC000, 0x0000}; // 1.0, -2.0, 0.0 as IEEE 754 half
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float16(&err, data, 3);
+
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+
+	as_vector_value* out = as_vector_value_from_bytes(&err, &bytes);
+	assert_not_null(out);
+	assert_int_eq(out->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT16);
+	assert_int_eq(out->dimensions, 3);
+
+	const uint16_t* elems = as_vector_value_get_float16(out);
+	assert_not_null(elems);
+	for (uint32_t i = 0; i < 3; i++) {
+		assert_int_eq(elems[i], data[i]);
+	}
+
+	as_vector_value_destroy(out);
+	as_bytes_destroy(&bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_from_invalid, "as_vector_value_from_bytes rejects malformed buffers")
+{
+	uint8_t buf[64];
+	memset(buf, 0, sizeof(buf));
+	as_error err;
+
+	// Length shorter than the fixed header.
+	assert_null(vector_from_buffer(&err, buf, AS_VECTOR_VALUE_HEADER_SIZE - 1));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: value size 5 smaller than 6-byte header");
+
+	// NULL buffer.
+	assert_null(vector_from_buffer(&err, NULL, 32));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: bytes is NULL");
+
+	// Unknown element type.
+	buf[0] = AS_VECTOR_VALUE_VERSION;
+	buf[1] = 0x7F; // not a valid as_vector_element_type
+	assert_null(vector_from_buffer(&err, buf, sizeof(buf)));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: invalid element type 127");
+
+	// Valid type but dimensions exceed the available length.
+	float data[2] = {1.0f, 2.0f};
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 2);
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+	assert_null(vector_from_buffer(&err, bytes.value, bytes.size - 1));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message,
+		"vector: value size 13 does not match 14 (2 dimensions of 4 bytes, little-endian)");
+	as_bytes_destroy(&bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_from_limits, "as_vector_value_from_bytes rejects empty and oversized vectors before allocation")
+{
+	uint8_t buf[AS_VECTOR_VALUE_HEADER_SIZE] = {0};
+	buf[0] = AS_VECTOR_VALUE_VERSION;
+	buf[1] = AS_VECTOR_ELEMENT_TYPE_FLOAT32;
+	as_error err;
+
+	// The constructors and server reject empty vectors.
+	assert_null(vector_from_buffer(&err, buf, sizeof(buf)));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: must have at least 1 dimension");
+
+	uint32_t dimensions = cf_swap_to_le32(
+		as_vector_element_type_max_dimensions(AS_VECTOR_ELEMENT_TYPE_FLOAT32) + 1);
+	memcpy(&buf[2], &dimensions, sizeof(dimensions));
+	assert_null(vector_from_buffer(&err, buf, sizeof(buf)));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: 65537 dimensions exceed max 65536 for element type 3");
+}
+
+TEST(vector_from_unknown_version, "as_vector_value_from_bytes rejects a version other than 1")
+{
+	float data[2] = {1.0f, 2.0f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 2);
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+
+	bytes.value[0] = AS_VECTOR_VALUE_VERSION + 1;
+	assert_null(as_vector_value_from_bytes(&err, &bytes));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: unsupported format version 2 (expected 1)");
+
+	bytes.value[0] = 0;
+	assert_null(as_vector_value_from_bytes(&err, &bytes));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+
+	as_bytes_destroy(&bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_to_bytes_new, "as_vector_value_to_bytes_new produces a heap AS_BYTES_VECTOR")
+{
+	float data[3] = {1.5f, -2.25f, 3.14159f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 3);
+
+	as_bytes* bytes = as_vector_value_to_bytes_new(vec);
+	assert_not_null(bytes);
+	assert_int_eq(bytes->type, AS_BYTES_VECTOR);
+	assert_int_eq(bytes->size, AS_VECTOR_VALUE_HEADER_SIZE + 3 * sizeof(float));
+
+	assert_vector_bytes_eq_float32(__result__, bytes, data, 3);
+
+	// as_vector_value_to_bytes_new returns a heap as_bytes (an as_val), so
+	// as_bytes_destroy() releases both the buffer and the struct.
+	as_bytes_destroy(bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_msgpack_keeps_subtype, "a vector keeps AS_BYTES_VECTOR and its element type through msgpack")
+{
+	int32_t data[3] = {-5, 0, 12345};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_int32(&err, data, 3);
+	as_bytes* bytes = as_vector_value_to_bytes_new(vec);
+	assert_not_null(bytes);
+
+	as_serializer ser;
+	as_msgpack_init(&ser);
+
+	uint32_t size = as_serializer_serialize_getsize(&ser, (as_val*)bytes);
+	assert_true(size > 0);
+
+	uint8_t* packed = malloc(size);
+	int32_t packed_size = as_serializer_serialize_presized(&ser, (as_val*)bytes, packed);
+	assert_int_eq(packed_size, (int32_t)size);
+
+	as_buffer buffer;
+	buffer.data = packed;
+	buffer.size = size;
+	buffer.capacity = size;
+
+	as_val* out = NULL;
+	assert_int_eq(as_serializer_deserialize(&ser, &buffer, &out), 0);
+	assert_not_null(out);
+	assert_int_eq(as_val_type(out), AS_BYTES);
+	assert_int_eq(((as_bytes*)out)->type, AS_BYTES_VECTOR);
+
+	as_vector_value* rvec = as_vector_value_from_bytes(&err, (as_bytes*)out);
+	assert_not_null(rvec);
+	assert_int_eq(rvec->element_type, AS_VECTOR_ELEMENT_TYPE_INT32);
+	assert_int_eq(rvec->dimensions, 3);
+
+	const int32_t* elems = as_vector_value_get_int32(rvec);
+	assert_not_null(elems);
+	for (uint32_t i = 0; i < 3; i++) {
+		assert_int_eq(elems[i], data[i]);
+	}
+
+	as_vector_value_destroy(rvec);
+	as_val_destroy(out);
+	free(packed);
+	as_serializer_destroy(&ser);
+	as_bytes_destroy(bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_element_type_size, "as_vector_element_type_size reports per-type byte sizes")
+{
+	assert_int_eq(as_vector_element_type_size(AS_VECTOR_ELEMENT_TYPE_FLOAT16), 2);
+	assert_int_eq(as_vector_element_type_size(AS_VECTOR_ELEMENT_TYPE_INT32), 4);
+	assert_int_eq(as_vector_element_type_size(AS_VECTOR_ELEMENT_TYPE_FLOAT32), 4);
+	assert_int_eq(as_vector_element_type_size(AS_VECTOR_ELEMENT_TYPE_FLOAT64), 8);
+
+	// Unknown element type has no defined size.
+	assert_int_eq(as_vector_element_type_size((as_vector_element_type)0x7F), 0);
+}
+
+TEST(vector_getter_type_safety, "typed accessors only return data for the matching element type")
+{
+	uint16_t f16[2] = {0x3C00, 0x0000};
+	int32_t i32[2] = {1, 2};
+	float f32[2] = {1.0f, 2.0f};
+	double f64[2] = {1.0, 2.0};
+
+	as_error err;
+	as_vector_value* v16 = as_vector_value_new_float16(&err, f16, 2);
+	as_vector_value* v32i = as_vector_value_new_int32(&err, i32, 2);
+	as_vector_value* v32f = as_vector_value_new_float32(&err, f32, 2);
+	as_vector_value* v64 = as_vector_value_new_float64(&err, f64, 2);
+
+	// Matching getter returns data; the other three return NULL.
+	assert_not_null(as_vector_value_get_float16(v16));
+	assert_null(as_vector_value_get_int32(v16));
+	assert_null(as_vector_value_get_float32(v16));
+	assert_null(as_vector_value_get_float64(v16));
+
+	assert_not_null(as_vector_value_get_int32(v32i));
+	assert_null(as_vector_value_get_float16(v32i));
+	assert_null(as_vector_value_get_float32(v32i));
+	assert_null(as_vector_value_get_float64(v32i));
+
+	assert_not_null(as_vector_value_get_float32(v32f));
+	assert_null(as_vector_value_get_float16(v32f));
+	assert_null(as_vector_value_get_int32(v32f));
+	assert_null(as_vector_value_get_float64(v32f));
+
+	assert_not_null(as_vector_value_get_float64(v64));
+	assert_null(as_vector_value_get_float16(v64));
+	assert_null(as_vector_value_get_int32(v64));
+	assert_null(as_vector_value_get_float32(v64));
+
+	as_vector_value_destroy(v16);
+	as_vector_value_destroy(v32i);
+	as_vector_value_destroy(v32f);
+	as_vector_value_destroy(v64);
+}
+
+TEST(vector_null_safety, "accessors and from_bytes tolerate NULL arguments")
+{
+	assert_null(as_vector_value_get_float16(NULL));
+	assert_null(as_vector_value_get_int32(NULL));
+	assert_null(as_vector_value_get_float32(NULL));
+	assert_null(as_vector_value_get_float64(NULL));
+
+	as_error err;
+	assert_null(as_vector_value_from_bytes(&err, NULL));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: bytes is NULL");
+}
+
+TEST(vector_empty, "zero-dimension vectors are rejected")
+{
+	uint16_t float16_data[1] = {0};
+	int32_t int32_data[1] = {0};
+	float float32_data[1] = {0};
+	double float64_data[1] = {0};
+
+	as_error err;
+	assert_null(as_vector_value_new_float16(&err, float16_data, 0));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: must have at least 1 dimension");
+	assert_null(as_vector_value_new_int32(&err, int32_data, 0));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_null(as_vector_value_new_float32(&err, float32_data, 0));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_null(as_vector_value_new_float64(&err, float64_data, 0));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+}
+
+TEST(vector_from_trailing_bytes, "as_vector_value_from_bytes ignores bytes past the encoded vector")
+{
+	float data[3] = {1.5f, -2.25f, 3.14159f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 3);
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+
+	uint8_t buf[64];
+	memset(buf, 0xCD, sizeof(buf)); // trailing junk after the vector
+	memcpy(buf, bytes.value, bytes.size);
+
+	// Report far more available bytes than the vector actually needs.
+	as_vector_value* out = vector_from_buffer(&err, buf, sizeof(buf));
+	assert_not_null(out);
+	assert_int_eq(out->dimensions, 3);
+
+	const float* elems = as_vector_value_get_float32(out);
+	assert_not_null(elems);
+	for (uint32_t i = 0; i < 3; i++) {
+		assert(elems[i] == data[i]);
+	}
+
+	// The exact-size decode must agree with the oversized-length decode.
+	as_vector_value* exact = vector_from_buffer(&err, buf, bytes.size);
+	assert_not_null(exact);
+	assert_int_eq(exact->dimensions, 3);
+
+	as_vector_value_destroy(exact);
+	as_vector_value_destroy(out);
+	as_bytes_destroy(&bytes);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_from_overflow, "as_vector_value_from_bytes rejects dimensions that overflow 32-bit size math")
+{
+	// dimensions * element_size overflows a uint32_t (0x20000000 * 8 == 0x100000000),
+	// which would wrap to 0 with 32-bit math and bypass the length check. The 64-bit
+	// guard must reject it instead of attempting a multi-gigabyte read.
+	uint8_t buf[16];
+	memset(buf, 0, sizeof(buf));
+	buf[0] = AS_VECTOR_VALUE_VERSION;
+	buf[1] = (uint8_t)AS_VECTOR_ELEMENT_TYPE_FLOAT64; // 8 bytes/element
+
+	uint32_t dims = cf_swap_to_le32(0x20000000u);
+	memcpy(&buf[2], &dims, sizeof(dims));
+
+	as_error err;
+	assert_null(vector_from_buffer(&err, buf, sizeof(buf)));
+}
+
+TEST(vector_constructor_limits, "constructors enforce the server dimension limits")
+{
+	assert_int_eq(as_vector_element_type_max_dimensions(AS_VECTOR_ELEMENT_TYPE_FLOAT16), 131072);
+	assert_int_eq(as_vector_element_type_max_dimensions(AS_VECTOR_ELEMENT_TYPE_INT32), 65536);
+	assert_int_eq(as_vector_element_type_max_dimensions(AS_VECTOR_ELEMENT_TYPE_FLOAT32), 65536);
+	assert_int_eq(as_vector_element_type_max_dimensions(AS_VECTOR_ELEMENT_TYPE_FLOAT64), 32768);
+	assert_int_eq(as_vector_element_type_max_dimensions((as_vector_element_type)0x7F), 0);
+
+	uint32_t max = as_vector_element_type_max_dimensions(AS_VECTOR_ELEMENT_TYPE_FLOAT32);
+	float* data = calloc(max + 1, sizeof(float));
+
+	as_error err;
+	as_vector_value* valid = as_vector_value_new_float32(&err, data, max);
+	assert_not_null(valid);
+	assert_int_eq(err.code, AEROSPIKE_OK);
+
+	assert_null(as_vector_value_new_float32(&err, data, max + 1));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: 65537 dimensions exceed max 65536 for element type 3");
+
+	assert_null(as_vector_value_new_float32(&err, NULL, 1));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: data is NULL");
+
+	as_vector_value_destroy(valid);
+	free(data);
+}
+
+TEST(vector_serialization_rejects_invalid_vectors, "serialization rejects vectors the server would reject")
+{
+	float data[1] = {1.0f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 1);
+	as_bytes bytes;
+
+	vec->version = AS_VECTOR_VALUE_VERSION + 1;
+	assert_false(as_vector_value_to_bytes(vec, &bytes));
+	assert_null(as_vector_value_to_bytes_new(vec));
+
+	vec->version = AS_VECTOR_VALUE_VERSION;
+	vec->dimensions = as_vector_element_type_max_dimensions(vec->element_type) + 1;
+	assert_false(as_vector_value_to_bytes(vec, &bytes));
+	assert_null(as_vector_value_to_bytes_new(vec));
+
+	as_vector_value_destroy(vec);
+}
+
+//---------------------------------
+// Server integration tests (native value API)
+//---------------------------------
+
+static bool
+server_supports_vector(void)
+{
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (! node) {
+		info("skipping vector server test; no cluster node available");
+		return false;
+	}
+
+	bool supported = as_version_compare(&node->version, &as_server_version_8_2_1) >= 0;
+	as_node_release(node);
+
+	if (! supported) {
+		info("skipping vector server test; requires server >= 8.2.1");
+	}
+	return supported;
+}
+
+static void
+remove_key(int64_t id)
+{
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, id);
+	as_error err;
+	aerospike_key_remove(as, &err, NULL, &key);
+	as_key_destroy(&key);
+}
+
+TEST(vector_native_bin_roundtrip, "set/get vector bins of every element type round-trip through the server")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	uint16_t f16[4] = {0x3C00, 0xBC00, 0x4000, 0x0000};
+	int32_t i32[4] = {INT32_MIN, -5, 12345, INT32_MAX};
+	float f32[4] = {1.5f, -2.25f, 3.14159f, 0.0f};
+	double f64[4] = {1.5, -2.25, 3.14159, 0.0};
+
+	as_error err;
+	as_vector_value* v16 = as_vector_value_new_float16(&err, f16, 4);
+	as_vector_value* v32i = as_vector_value_new_int32(&err, i32, 4);
+	as_vector_value* v32f = as_vector_value_new_float32(&err, f32, 4);
+	as_vector_value* v64 = as_vector_value_new_float64(&err, f64, 4);
+
+	remove_key(10);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 10);
+
+	as_record rec;
+	as_record_inita(&rec, 4);
+	assert_true(as_record_set_vector(&rec, "f16", v16));
+	assert_true(as_record_set_vector(&rec, "i32", v32i));
+	assert_true(as_record_set_vector(&rec, "f32", v32f));
+	assert_true(as_record_set_vector(&rec, "f64", v64));
+
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_record* out = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &out);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_vector_value* r16 = as_record_get_vector(&err, out, "f16");
+	as_vector_value* r32i = as_record_get_vector(&err, out, "i32");
+	as_vector_value* r32f = as_record_get_vector(&err, out, "f32");
+	as_vector_value* r64 = as_record_get_vector(&err, out, "f64");
+	assert_not_null(r16);
+	assert_not_null(r32i);
+	assert_not_null(r32f);
+	assert_not_null(r64);
+
+	assert_int_eq(r16->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT16);
+	assert_int_eq(r32i->element_type, AS_VECTOR_ELEMENT_TYPE_INT32);
+	assert_int_eq(r32f->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
+	assert_int_eq(r64->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT64);
+	assert_int_eq(r16->dimensions, 4);
+
+	for (uint32_t i = 0; i < 4; i++) {
+		assert_int_eq(as_vector_value_get_float16(r16)[i], f16[i]);
+		assert_int_eq(as_vector_value_get_int32(r32i)[i], i32[i]);
+		assert(as_vector_value_get_float32(r32f)[i] == f32[i]);
+		assert(as_vector_value_get_float64(r64)[i] == f64[i]);
+	}
+
+	as_vector_value_destroy(r16);
+	as_vector_value_destroy(r32i);
+	as_vector_value_destroy(r32f);
+	as_vector_value_destroy(r64);
+	as_record_destroy(out);
+	as_key_destroy(&key);
+	as_vector_value_destroy(v16);
+	as_vector_value_destroy(v32i);
+	as_vector_value_destroy(v32f);
+	as_vector_value_destroy(v64);
+}
+
+TEST(vector_special_float_bits_server, "finite special float bit patterns survive the server bit-exact")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	// -0, +0, smallest subnormal, smallest normal, largest finite, -largest finite.
+	float f32[6] = {-0.0f, 0.0f, 0x1p-149f, FLT_MIN, FLT_MAX, -FLT_MAX};
+	double f64[6] = {-0.0, 0.0, 0x1p-1074, DBL_MIN, DBL_MAX, -DBL_MAX};
+	uint16_t f16[6] = {0x8000, 0x0000, 0x0001, 0x0400, 0x7BFF, 0xFBFF};
+
+	as_error err;
+	as_vector_value* v32 = as_vector_value_new_float32(&err, f32, 6);
+	as_vector_value* v64 = as_vector_value_new_float64(&err, f64, 6);
+	as_vector_value* v16 = as_vector_value_new_float16(&err, f16, 6);
+
+	remove_key(11);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 11);
+
+	as_record rec;
+	as_record_inita(&rec, 3);
+	assert_true(as_record_set_vector(&rec, "f32", v32));
+	assert_true(as_record_set_vector(&rec, "f64", v64));
+	assert_true(as_record_set_vector(&rec, "f16", v16));
+
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_record* out = NULL;
+	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
+
+	as_vector_value* r32 = as_record_get_vector(&err, out, "f32");
+	as_vector_value* r64 = as_record_get_vector(&err, out, "f64");
+	as_vector_value* r16 = as_record_get_vector(&err, out, "f16");
+	assert_not_null(r32);
+	assert_not_null(r64);
+	assert_not_null(r16);
+
+	// Compare by raw bit pattern so -0.0 and subnormals are exercised exactly.
+	const float* e32 = as_vector_value_get_float32(r32);
+	const double* e64 = as_vector_value_get_float64(r64);
+	const uint16_t* e16 = as_vector_value_get_float16(r16);
+
+	for (uint32_t i = 0; i < 6; i++) {
+		uint32_t a, b;
+		memcpy(&a, &e32[i], sizeof(a));
+		memcpy(&b, &f32[i], sizeof(b));
+		assert_int_eq(a, b);
+
+		uint64_t c, d;
+		memcpy(&c, &e64[i], sizeof(c));
+		memcpy(&d, &f64[i], sizeof(d));
+		assert_int_eq(c, d);
+
+		assert_int_eq(e16[i], f16[i]);
+	}
+
+	as_vector_value_destroy(r32);
+	as_vector_value_destroy(r64);
+	as_vector_value_destroy(r16);
+	as_record_destroy(out);
+	as_key_destroy(&key);
+	as_vector_value_destroy(v32);
+	as_vector_value_destroy(v64);
+	as_vector_value_destroy(v16);
+}
+
+static as_status
+put_vector_bin(as_error* err, const as_key* key, as_vector_value* vec)
+{
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_vector(&rec, "v", vec);
+
+	as_status status = aerospike_key_put(as, err, NULL, key, &rec);
+
+	as_record_destroy(&rec);
+	as_vector_value_destroy(vec);
+	return status;
+}
+
+TEST(vector_non_finite_rejected_server, "the server rejects vectors with NaN or infinite elements")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	remove_key(26);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 26);
+
+	float original[2] = {1.0f, 2.0f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, original, 2);
+	assert_not_null(vec);
+
+	as_status status = put_vector_bin(&err, &key, vec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	// NaN, +Inf, -Inf for each floating-point element type.
+	float f32[3] = {NAN, INFINITY, -INFINITY};
+	double f64[3] = {NAN, INFINITY, -INFINITY};
+	uint16_t f16[3] = {0x7E00, 0x7C00, 0xFC00};
+
+	for (uint32_t i = 0; i < 3; i++) {
+		float d32[2] = {1.0f, f32[i]};
+		vec = as_vector_value_new_float32(&err, d32, 2);
+		assert_not_null(vec);
+		status = put_vector_bin(&err, &key, vec);
+		assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
+
+		double d64[2] = {1.0, f64[i]};
+		vec = as_vector_value_new_float64(&err, d64, 2);
+		assert_not_null(vec);
+		status = put_vector_bin(&err, &key, vec);
+		assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
+
+		uint16_t d16[2] = {0x3C00, f16[i]};
+		vec = as_vector_value_new_float16(&err, d16, 2);
+		assert_not_null(vec);
+		status = put_vector_bin(&err, &key, vec);
+		assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
+	}
+
+	// The rejected writes leave the record unchanged.
+	as_record* out = NULL;
+	status = aerospike_key_get(as, &err, NULL, &key, &out);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_vector_value* stored = as_record_get_vector(&err, out, "v");
+	assert_not_null(stored);
+	assert_int_eq(stored->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
+	assert_int_eq(stored->dimensions, 2);
+
+	const float* elements = as_vector_value_get_float32(stored);
+	assert_true(elements[0] == original[0]);
+	assert_true(elements[1] == original[1]);
+
+	as_vector_value_destroy(stored);
+	as_record_destroy(out);
+	as_key_destroy(&key);
+}
+
+TEST(vector_single_dimension_server, "a single-dimension vector round-trips through the server")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	float data[1] = {42.5f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 1);
+
+	remove_key(12);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 12);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	assert_true(as_record_set_vector(&rec, "v", vec));
+
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_record* out = NULL;
+	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
+
+	as_vector_value* r = as_record_get_vector(&err, out, "v");
+	assert_not_null(r);
+	assert_int_eq(r->dimensions, 1);
+	assert(as_vector_value_get_float32(r)[0] == 42.5f);
+
+	as_vector_value_destroy(r);
+	as_record_destroy(out);
+	as_key_destroy(&key);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_large_crossing_16bit_server, "a large vector crossing the 16-bit msgpack length boundary round-trips")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	// 9000 f64 => 6 + 9000*8 = 72006 bytes, past 65535.
+	uint32_t dims = 9000;
+	double* data = (double*)malloc(sizeof(double) * dims);
+	for (uint32_t i = 0; i < dims; i++) {
+		data[i] = i * 0.5;
+	}
+
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float64(&err, data, dims);
+	assert_not_null(vec);
+
+	remove_key(13);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 13);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	assert_true(as_record_set_vector(&rec, "v", vec));
+
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_record* out = NULL;
+	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
+
+	as_vector_value* r = as_record_get_vector(&err, out, "v");
+	assert_not_null(r);
+	assert_int_eq(r->dimensions, dims);
+	const double* elems = as_vector_value_get_float64(r);
+	for (uint32_t i = 0; i < dims; i++) {
+		assert(elems[i] == data[i]);
+	}
+
+	as_vector_value_destroy(r);
+	as_record_destroy(out);
+	as_key_destroy(&key);
+	as_vector_value_destroy(vec);
+	free(data);
+}
+
+TEST(vector_max_dimensions_server, "a vector at the server dimension limit round-trips")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	uint32_t dims = as_vector_element_type_max_dimensions(AS_VECTOR_ELEMENT_TYPE_FLOAT64);
+	double* data = (double*)calloc(dims, sizeof(double));
+	data[0] = -1.0;
+	data[dims - 1] = 1.0;
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float64(&err, data, dims);
+	assert_not_null(vec);
+
+	remove_key(24);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 24);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	assert_true(as_record_set_vector(&rec, "v", vec));
+
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_record* out = NULL;
+	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
+	as_vector_value* result = as_record_get_vector(&err, out, "v");
+	assert_not_null(result);
+	assert_int_eq(result->dimensions, dims);
+	assert(as_vector_value_get_float64(result)[0] == -1.0);
+	assert(as_vector_value_get_float64(result)[dims - 1] == 1.0);
+
+	as_vector_value_destroy(result);
+	as_record_destroy(out);
+	as_key_destroy(&key);
+	as_vector_value_destroy(vec);
+	free(data);
+}
+
+TEST(vector_absent_bin_null, "an absent vector bin reads back as NULL, not an empty vector")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	remove_key(14);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 14);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, "scalar", 42);
+
+	as_error err;
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_record* out = NULL;
+	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
+
+	assert_null(as_record_get_vector(&err, out, "missing"));
+	assert_int_eq(err.code, AEROSPIKE_ERR_BIN_NOT_FOUND);
+	assert_string_eq(err.message, "bin 'missing' not found");
+	assert_int_eq(as_record_get_int64(out, "scalar", -1), 42);
+
+	as_record_destroy(out);
+	as_key_destroy(&key);
+}
+
+TEST(vector_overwrite_replaces_type_dims, "overwriting a vector bin fully replaces element type and dimensions")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	float f32[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+	int32_t i32[2] = {9, -9};
+	as_error err;
+	as_vector_value* first = as_vector_value_new_float32(&err, f32, 4);
+	as_vector_value* second = as_vector_value_new_int32(&err, i32, 2);
+
+	remove_key(15);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 15);
+
+	as_record r1;
+	as_record_inita(&r1, 1);
+	assert_true(as_record_set_vector(&r1, "v", first));
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &r1), AEROSPIKE_OK);
+	as_record_destroy(&r1);
+
+	as_record r2;
+	as_record_inita(&r2, 1);
+	assert_true(as_record_set_vector(&r2, "v", second));
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &r2), AEROSPIKE_OK);
+	as_record_destroy(&r2);
+
+	as_record* out = NULL;
+	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
+
+	as_vector_value* r = as_record_get_vector(&err, out, "v");
+	assert_not_null(r);
+	assert_int_eq(r->element_type, AS_VECTOR_ELEMENT_TYPE_INT32);
+	assert_int_eq(r->dimensions, 2);
+	assert_int_eq(as_vector_value_get_int32(r)[0], 9);
+
+	as_vector_value_destroy(r);
+	as_record_destroy(out);
+	as_key_destroy(&key);
+	as_vector_value_destroy(first);
+	as_vector_value_destroy(second);
+}
+
+TEST(vector_scalar_churn, "a vector bin can be replaced by a scalar and back")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	float f32[2] = {0.1f, 0.2f};
+	double f64[3] = {9.0, 8.0, 7.0};
+	as_error err;
+	as_vector_value* v1 = as_vector_value_new_float32(&err, f32, 2);
+	as_vector_value* v2 = as_vector_value_new_float64(&err, f64, 3);
+
+	remove_key(16);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 16);
+
+	as_record r1;
+	as_record_inita(&r1, 1);
+	assert_true(as_record_set_vector(&r1, "b", v1));
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &r1), AEROSPIKE_OK);
+	as_record_destroy(&r1);
+
+	as_record r2;
+	as_record_inita(&r2, 1);
+	as_record_set_int64(&r2, "b", 123);
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &r2), AEROSPIKE_OK);
+	as_record_destroy(&r2);
+
+	as_record* mid = NULL;
+	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &mid), AEROSPIKE_OK);
+	assert_null(as_record_get_vector(&err, mid, "b"));
+	assert_int_eq(err.code, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE);
+	assert_string_eq(err.message, "bin 'b' is not a vector");
+	assert_int_eq(as_record_get_int64(mid, "b", -1), 123);
+	as_record_destroy(mid);
+
+	as_record r3;
+	as_record_inita(&r3, 1);
+	assert_true(as_record_set_vector(&r3, "b", v2));
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &r3), AEROSPIKE_OK);
+	as_record_destroy(&r3);
+
+	as_record* out = NULL;
+	assert_int_eq(aerospike_key_get(as, &err, NULL, &key, &out), AEROSPIKE_OK);
+	as_vector_value* r = as_record_get_vector(&err, out, "b");
+	assert_not_null(r);
+	assert_int_eq(r->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT64);
+	assert_int_eq(r->dimensions, 3);
+
+	as_vector_value_destroy(r);
+	as_record_destroy(out);
+	as_key_destroy(&key);
+	as_vector_value_destroy(v1);
+	as_vector_value_destroy(v2);
+}
+
+TEST(vector_selective_read_server, "a selective read returns only the requested vector bin")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	float wanted[2] = {1.0f, 2.0f};
+	int32_t other[3] = {5, 6, 7};
+	as_error err;
+	as_vector_value* vw = as_vector_value_new_float32(&err, wanted, 2);
+	as_vector_value* vo = as_vector_value_new_int32(&err, other, 3);
+
+	remove_key(17);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 17);
+
+	as_record rec;
+	as_record_inita(&rec, 2);
+	assert_true(as_record_set_vector(&rec, "wanted", vw));
+	assert_true(as_record_set_vector(&rec, "other", vo));
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	const char* bins[] = {"wanted", NULL};
+	as_record* out = NULL;
+	as_status status = aerospike_key_select(as, &err, NULL, &key, bins, &out);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_vector_value* r = as_record_get_vector(&err, out, "wanted");
+	assert_not_null(r);
+	assert_int_eq(r->dimensions, 2);
+	assert_null(as_record_get_vector(&err, out, "other"));
+	assert_int_eq(err.code, AEROSPIKE_ERR_BIN_NOT_FOUND);
+
+	as_vector_value_destroy(r);
+	as_record_destroy(out);
+	as_key_destroy(&key);
+	as_vector_value_destroy(vw);
+	as_vector_value_destroy(vo);
+}
+
+TEST(vector_in_collection_rejected_server, "the server rejects a vector in a list or a map")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	float data[2] = {1.0f, 2.0f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 2);
+
+	remove_key(23);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 23);
+
+	as_arraylist list;
+	as_arraylist_init(&list, 1, 0);
+	as_bytes* list_vec = as_vector_value_to_bytes_new(vec);
+	assert_not_null(list_vec);
+	as_arraylist_append(&list, (as_val*)list_vec);
+
+	as_record list_rec;
+	as_record_inita(&list_rec, 1);
+	assert_true(as_record_set_list(&list_rec, "list", (as_list*)&list));
+
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &list_rec), AEROSPIKE_ERR_REQUEST_INVALID);
+	as_record_destroy(&list_rec);
+
+	as_hashmap map;
+	as_hashmap_init(&map, 1);
+	as_bytes* map_vec = as_vector_value_to_bytes_new(vec);
+	assert_not_null(map_vec);
+	as_hashmap_set(&map, (as_val*)as_string_new_strdup("v"), (as_val*)map_vec);
+
+	as_record map_rec;
+	as_record_inita(&map_rec, 1);
+	assert_true(as_record_set_map(&map_rec, "map", (as_map*)&map));
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &map_rec), AEROSPIKE_ERR_REQUEST_INVALID);
+	as_record_destroy(&map_rec);
+
+	as_key_destroy(&key);
+	as_vector_value_destroy(vec);
+}
+
+#if AS_EVENT_LIB_DEFINED
+TEST(vector_async_roundtrip, "async put/get round-trips a vector through the server")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	vector_async_data data;
+	data.result = __result__;
+	data.expected[0] = 1.5f;
+	data.expected[1] = -2.25f;
+	as_monitor_init(&data.monitor);
+	as_monitor_begin(&data.monitor);
+
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data.expected, 2);
+	assert_not_null(vec);
+
+	remove_key(25);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 25);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	assert_true(as_record_set_vector(&rec, "v", vec));
+
+	as_status status = aerospike_key_put_async(
+		as, &err, NULL, &key, &rec, vector_async_put_callback, &data, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_key_destroy(&key);
+	as_record_destroy(&rec);
+	as_vector_value_destroy(vec);
+	as_monitor_wait(&data.monitor);
+	as_monitor_destroy(&data.monitor);
+}
+#endif
+
+TEST(vector_batch_read_server, "a batch read returns records that contain vector bins")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	float d1[3] = {1.0f, 2.0f, 3.0f};
+	int32_t d2[2] = {10, 20};
+	as_error err;
+	as_vector_value* v1 = as_vector_value_new_float32(&err, d1, 3);
+	as_vector_value* v2 = as_vector_value_new_int32(&err, d2, 2);
+
+	remove_key(19);
+	remove_key(20);
+
+	as_key k1;
+	as_key_init_int64(&k1, NAMESPACE, SET, 19);
+	as_key k2;
+	as_key_init_int64(&k2, NAMESPACE, SET, 20);
+
+	as_record r1;
+	as_record_inita(&r1, 1);
+	assert_true(as_record_set_vector(&r1, "embedding", v1));
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &k1, &r1), AEROSPIKE_OK);
+	as_record_destroy(&r1);
+
+	as_record r2;
+	as_record_inita(&r2, 1);
+	assert_true(as_record_set_vector(&r2, "embedding", v2));
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &k2, &r2), AEROSPIKE_OK);
+	as_record_destroy(&r2);
+
+	as_batch_records recs;
+	as_batch_records_inita(&recs, 2);
+
+	as_batch_read_record* br1 = as_batch_read_reserve(&recs);
+	as_key_init_int64(&br1->key, NAMESPACE, SET, 19);
+	br1->read_all_bins = true;
+
+	as_batch_read_record* br2 = as_batch_read_reserve(&recs);
+	as_key_init_int64(&br2->key, NAMESPACE, SET, 20);
+	br2->read_all_bins = true;
+
+	as_status status = aerospike_batch_read(as, &err, NULL, &recs);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	assert_int_eq(br1->result, AEROSPIKE_OK);
+	assert_int_eq(br2->result, AEROSPIKE_OK);
+
+	as_vector_value* rv1 = as_record_get_vector(&err, &br1->record, "embedding");
+	as_vector_value* rv2 = as_record_get_vector(&err, &br2->record, "embedding");
+	assert_not_null(rv1);
+	assert_not_null(rv2);
+	assert_int_eq(rv1->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
+	assert_int_eq(rv2->element_type, AS_VECTOR_ELEMENT_TYPE_INT32);
+	assert_int_eq(rv1->dimensions, 3);
+	assert_int_eq(rv2->dimensions, 2);
+
+	as_vector_value_destroy(rv1);
+	as_vector_value_destroy(rv2);
+	as_batch_records_destroy(&recs);
+	as_key_destroy(&k1);
+	as_key_destroy(&k2);
+	as_vector_value_destroy(v1);
+	as_vector_value_destroy(v2);
+}
+
+TEST(vector_dist_exp_compiles, "vector distance expression compiles and packs (client-side only)")
+{
+	float data[4] = {0.1f, 0.2f, 0.3f, 0.4f};
+	as_error err;
+	as_vector_value* query = as_vector_value_new_float32(&err, data, 4);
+	as_bytes qbytes;
+
+	assert_true(as_vector_value_to_bytes(query, &qbytes));
+	assert_int_eq(as_bytes_size(&qbytes), AS_VECTOR_VALUE_HEADER_SIZE + 4 * sizeof(float));
+
+	as_exp_build(euclidean,
+		as_exp_vector_dist(AS_VECTOR_DISTANCE_EUCLIDEAN_SQUARED,
+			as_bytes_get(&qbytes), as_bytes_size(&qbytes), as_exp_bin_vector("embedding")));
+	as_exp_build(dot_product,
+		as_exp_vector_dist(AS_VECTOR_DISTANCE_DOT_PRODUCT,
+			as_bytes_get(&qbytes), as_bytes_size(&qbytes), as_exp_bin_vector("embedding")));
+	as_exp_build(cosine,
+		as_exp_vector_dist(AS_VECTOR_DISTANCE_COSINE_SIMILARITY,
+			as_bytes_get(&qbytes), as_bytes_size(&qbytes), as_exp_bin_vector("embedding")));
+
+	assert_not_null(euclidean);
+	assert_not_null(dot_product);
+	assert_not_null(cosine);
+
+	// Each distance call packs as a 3-element msgpack array
+	// [metric-specific-op, query-vector, vector-bin].
+	assert_int_eq(euclidean->packed[0], 0x90 | 3);
+	assert_int_eq(euclidean->packed[1], _AS_EXP_CODE_VECTOR_EUCLIDEAN_DIST);
+	assert_int_eq(dot_product->packed[1], _AS_EXP_CODE_VECTOR_DOT_PRODUCT);
+	assert_int_eq(cosine->packed[1], _AS_EXP_CODE_VECTOR_COSINE_SIM);
+
+	as_exp_destroy(euclidean);
+	as_exp_destroy(dot_product);
+	as_exp_destroy(cosine);
+	as_bytes_destroy(&qbytes);
+	as_vector_value_destroy(query);
+}
+
+//---------------------------------
+// Vector expression server tests.
+//---------------------------------
+
+TEST(vector_distance_expression_server, "vector distance expression evaluates on the server")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	float stored[4] = {0.1f, 0.2f, 0.3f, 0.4f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, stored, 4);
+
+	remove_key(21);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 21);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	assert_true(as_record_set_vector(&rec, "embedding", vec));
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_bytes qbytes;
+	assert_true(as_vector_value_to_bytes(vec, &qbytes));
+
+	as_exp_build(read_exp,
+		as_exp_vector_dist(AS_VECTOR_DISTANCE_EUCLIDEAN_SQUARED,
+			as_bytes_get(&qbytes), as_bytes_size(&qbytes), as_exp_bin_vector("embedding")));
+	assert_not_null(read_exp);
+	as_bytes_destroy(&qbytes);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_read(&ops, "dist", read_exp, AS_EXP_READ_DEFAULT);
+
+	as_record* out = NULL;
+	as_status status = aerospike_key_operate(as, &err, NULL, &key, &ops, &out);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	// Distance from a vector to itself is zero (for L2 / L2-squared).
+	assert_double_eq(as_record_get_double(out, "dist", -1.0), 0.0);
+
+	as_record_destroy(out);
+	as_operations_destroy(&ops);
+	as_exp_destroy(read_exp);
+	as_key_destroy(&key);
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_bin_expression_read_server,
+	"reading a vector bin directly through an expression returns the stored vector")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	float stored[3] = {0.5f, -1.5f, 2.0f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, stored, 3);
+
+	remove_key(22);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 22);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	assert_true(as_record_set_vector(&rec, "embedding", vec));
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_exp_build(read_exp, as_exp_bin_vector("embedding"));
+	assert_not_null(read_exp);
+
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_operations_exp_read(&ops, "out", read_exp, AS_EXP_READ_DEFAULT);
+
+	as_record* out = NULL;
+	as_status status = aerospike_key_operate(as, &err, NULL, &key, &ops, &out);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_vector_value* rvec = as_record_get_vector(&err, out, "out");
+	assert_not_null(rvec);
+	assert_int_eq(rvec->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
+	assert_int_eq(rvec->dimensions, 3);
+
+	const float* elems = as_vector_value_get_float32(rvec);
+	assert_not_null(elems);
+	for (uint32_t i = 0; i < 3; i++) {
+		assert(elems[i] == stored[i]);
+	}
+
+	as_vector_value_destroy(rvec);
+	as_record_destroy(out);
+	as_operations_destroy(&ops);
+	as_exp_destroy(read_exp);
+	as_key_destroy(&key);
+	as_vector_value_destroy(vec);
+}
+
+//---------------------------------
+// Vector KNN query integration test
+//---------------------------------
+
+#define KNN_SET "test_vector_knn"
+#define KNN_RECORDS 20
+#define KNN_K 5
+#define KNN_DIMS 4
+
+typedef struct knn_result_s {
+	uint32_t count;
+	int64_t ids[KNN_K];
+} knn_result;
+
+static void
+knn_remove_records(void)
+{
+	for (uint32_t i = 0; i < KNN_RECORDS; i++) {
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, KNN_SET, (int64_t)i);
+
+		as_error err;
+		aerospike_key_remove(as, &err, NULL, &key);
+	}
+}
+
+static bool
+knn_query_callback(const as_val* val, void* udata)
+{
+	if (! val) {
+		return true;
+	}
+
+	knn_result* result = (knn_result*)udata;
+
+	if (result->count < KNN_K) {
+		result->ids[result->count] =
+			as_record_get_int64(as_record_fromval(val), "id", -1);
+	}
+	result->count++;
+	return true;
+}
+
+static void
+assert_knn_query(atf_test_result* __result__, as_vector_distance_metric metric,
+	as_order direction, const float* query_data, const int64_t* expected)
+{
+	as_error err;
+
+	knn_remove_records();
+
+	for (uint32_t i = 0; i < KNN_RECORDS; i++) {
+		float data[KNN_DIMS] = {(float)i, 1.0f, 0.0f, 0.0f};
+
+		as_vector_value* vec = as_vector_value_new_float32(&err, data, KNN_DIMS);
+		assert_not_null(vec);
+
+		as_record rec;
+		as_record_inita(&rec, 2);
+		as_record_set_int64(&rec, "id", (int64_t)i);
+		assert_true(as_record_set_vector(&rec, "vec", vec));
+		as_vector_value_destroy(vec);
+
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, KNN_SET, (int64_t)i);
+
+		as_error err;
+		assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+		as_record_destroy(&rec);
+	}
+
+	as_vector_value* query_vec =
+		as_vector_value_new_float32(&err, query_data, KNN_DIMS);
+	assert_not_null(query_vec);
+
+	as_bytes query_bytes;
+	assert_true(as_vector_value_to_bytes(query_vec, &query_bytes));
+	as_vector_value_destroy(query_vec);
+
+	as_exp_build(exp,
+		as_exp_vector_dist(metric,
+			as_bytes_get(&query_bytes), as_bytes_size(&query_bytes),
+			as_exp_bin_vector("vec")));
+	as_bytes_destroy(&query_bytes);
+	assert_not_null(exp);
+
+	as_operations* ops = as_operations_new(2);
+	as_operations_exp_read(ops, "distance", exp, AS_EXP_READ_DEFAULT);
+	as_operations_add_read(ops, "id");
+	as_exp_destroy(exp);
+
+	as_query query;
+	as_query_init(&query, NAMESPACE, KNN_SET);
+	query.ops = ops;
+	as_query_order_by(&query, "distance", AS_QUERY_ORDER_BY_DOUBLE,
+		direction, AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, KNN_K);
+
+	knn_result result = {0};
+	as_status status =
+		aerospike_query_foreach(as, &err, NULL, &query, knn_query_callback, &result);
+
+	as_query_destroy(&query);
+	knn_remove_records();
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(result.count, KNN_K);
+
+	for (uint32_t i = 0; i < KNN_K; i++) {
+		assert_int_eq(result.ids[i], expected[i]);
+	}
+}
+
+TEST(vector_knn_euclidean_query_server,
+	"Euclidean distance projection and top-k return nearest neighbors")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	const float query[KNN_DIMS] = {7.3f, 1.0f, 0.0f, 0.0f};
+	const int64_t expected[KNN_K] = {7, 8, 6, 9, 5};
+
+	assert_knn_query(__result__, AS_VECTOR_DISTANCE_EUCLIDEAN_SQUARED,
+		AS_ORDER_ASCENDING, query, expected);
+}
+
+TEST(vector_knn_dot_product_query_server,
+	"dot-product projection and top-k return the largest projections")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	const float query[KNN_DIMS] = {1.0f, 0.0f, 0.0f, 0.0f};
+	const int64_t expected[KNN_K] = {19, 18, 17, 16, 15};
+
+	assert_knn_query(__result__, AS_VECTOR_DISTANCE_DOT_PRODUCT,
+		AS_ORDER_DESCENDING, query, expected);
+}
+
+TEST(vector_knn_cosine_similarity_query_server,
+	"cosine-similarity projection and top-k return the most similar vectors")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	const float query[KNN_DIMS] = {1.0f, 1.0f, 0.0f, 0.0f};
+	const int64_t expected[KNN_K] = {1, 2, 3, 4, 5};
+
+	assert_knn_query(__result__, AS_VECTOR_DISTANCE_COSINE_SIMILARITY,
+		AS_ORDER_DESCENDING, query, expected);
+}
+
+//---------------------------------
+// Test Suite
+//---------------------------------
+
+SUITE(vector, "as_vector_value serialization")
+{
+	suite_add(vector_wire_size);
+	suite_add(vector_header);
+	suite_add(vector_float32_roundtrip);
+	suite_add(vector_int32_roundtrip);
+	suite_add(vector_float64_roundtrip);
+	suite_add(vector_float16_roundtrip);
+	suite_add(vector_to_bytes);
+	suite_add(vector_from_float32);
+	suite_add(vector_from_int32);
+	suite_add(vector_from_float64);
+	suite_add(vector_from_float16);
+	suite_add(vector_from_invalid);
+	suite_add(vector_from_limits);
+	suite_add(vector_from_unknown_version);
+	suite_add(vector_to_bytes_new);
+	suite_add(vector_msgpack_keeps_subtype);
+	suite_add(vector_element_type_size);
+	suite_add(vector_getter_type_safety);
+	suite_add(vector_null_safety);
+	suite_add(vector_empty);
+	suite_add(vector_from_trailing_bytes);
+	suite_add(vector_from_overflow);
+	suite_add(vector_constructor_limits);
+	suite_add(vector_serialization_rejects_invalid_vectors);
+	suite_add(vector_native_bin_roundtrip);
+	suite_add(vector_special_float_bits_server);
+	suite_add(vector_non_finite_rejected_server);
+	suite_add(vector_single_dimension_server);
+	suite_add(vector_large_crossing_16bit_server);
+	suite_add(vector_max_dimensions_server);
+	suite_add(vector_absent_bin_null);
+	suite_add(vector_overwrite_replaces_type_dims);
+	suite_add(vector_scalar_churn);
+	suite_add(vector_selective_read_server);
+	suite_add(vector_in_collection_rejected_server);
+#if AS_EVENT_LIB_DEFINED
+	suite_add(vector_async_roundtrip);
+#endif
+	suite_add(vector_batch_read_server);
+	suite_add(vector_dist_exp_compiles);
+	suite_add(vector_distance_expression_server);
+	suite_add(vector_bin_expression_read_server);
+	suite_add(vector_knn_euclidean_query_server);
+	suite_add(vector_knn_dot_product_query_server);
+	suite_add(vector_knn_cosine_similarity_query_server);
+}

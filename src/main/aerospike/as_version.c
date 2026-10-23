@@ -24,6 +24,7 @@
 as_version as_server_version_8_1 = {8, 1, 0, 0};
 as_version as_server_version_8_1_1 = {8, 1, 1, 0};
 as_version as_server_version_8_2_0 = {8, 2, 0, 0};
+as_version as_server_version_8_2_1 = {8, 2, 1, 0};
 
 //---------------------------------
 // Functions

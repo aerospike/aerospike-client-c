@@ -396,6 +396,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_poll.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_proto.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_query.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_query_topk.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_query_validate.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_record.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_record_iterator.h" />
@@ -409,6 +410,7 @@
     <ClInclude Include="..\..\src\include\aerospike\as_txn.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_txn_monitor.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_udf.h" />
+    <ClInclude Include="..\..\src\include\aerospike\as_vector_value.h" />
     <ClInclude Include="..\..\src\include\aerospike\as_version.h" />
     <ClInclude Include="..\..\src\include\aerospike\version.h" />
   </ItemGroup>
@@ -522,6 +524,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_policy.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_proto.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_query.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_query_topk.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_query_validate.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_record.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_record_hooks.c" />
@@ -534,6 +537,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_txn.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_txn_monitor.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_udf.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_vector_value.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_version.c" />
     <ClCompile Include="..\..\src\main\aerospike\version.c" />
     <ClCompile Include="..\..\src\main\aerospike\_bin.c" />

@@ -82,7 +82,7 @@ as_query_is_topk(const as_query* query)
  * regardless of the returned status (destroy is safe to call whether or not
  * a flush already happened internally).
  */
-as_query_topk_collector*
+AS_EXTERN as_query_topk_collector*
 as_query_topk_collector_create(
 	const as_query* query, aerospike_query_foreach_callback callback, void* udata
 	);
@@ -102,7 +102,7 @@ as_query_topk_collector_create(
  * targeted node, so there is nothing to gain by stopping early once a
  * single node's batch has arrived.
  */
-bool
+AS_EXTERN bool
 as_query_topk_collect(const as_val* val, void* udata);
 
 /**
@@ -112,7 +112,7 @@ as_query_topk_collect(const as_val* val, void* udata);
  * as_query_topk_collect() never observed the val == NULL completion
  * signal).
  */
-void
+AS_EXTERN void
 as_query_topk_collector_destroy(as_query_topk_collector* collector);
 
 #ifdef __cplusplus

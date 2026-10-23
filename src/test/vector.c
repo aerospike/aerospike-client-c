@@ -515,9 +515,17 @@ TEST(vector_msgpack_keeps_subtype, "a vector keeps AS_BYTES_VECTOR and its eleme
 	as_serializer ser;
 	as_msgpack_init(&ser);
 
+	uint32_t size = as_serializer_serialize_getsize(&ser, (as_val*)bytes);
+	assert_true(size > 0);
+
+	uint8_t* packed = malloc(size);
+	int32_t packed_size = as_serializer_serialize_presized(&ser, (as_val*)bytes, packed);
+	assert_int_eq(packed_size, (int32_t)size);
+
 	as_buffer buffer;
-	as_buffer_init(&buffer);
-	assert_int_eq(as_serializer_serialize(&ser, (as_val*)bytes, &buffer), 0);
+	buffer.data = packed;
+	buffer.size = size;
+	buffer.capacity = size;
 
 	as_val* out = NULL;
 	assert_int_eq(as_serializer_deserialize(&ser, &buffer, &out), 0);
@@ -538,7 +546,7 @@ TEST(vector_msgpack_keeps_subtype, "a vector keeps AS_BYTES_VECTOR and its eleme
 
 	as_vector_value_destroy(rvec);
 	as_val_destroy(out);
-	as_buffer_destroy(&buffer);
+	free(packed);
 	as_serializer_destroy(&ser);
 	as_bytes_destroy(bytes);
 	as_vector_value_destroy(vec);

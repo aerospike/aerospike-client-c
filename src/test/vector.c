@@ -1523,7 +1523,7 @@ TEST(vector_distance_expression_server, "vector distance expression evaluates on
 }
 
 TEST(vector_bin_expression_read_server,
-	"[disabled] reading a vector bin directly through an expression succeeds")
+	"reading a vector bin directly through an expression returns the stored vector")
 {
 	if (! server_supports_vector()) {
 		return;
@@ -1555,6 +1555,18 @@ TEST(vector_bin_expression_read_server,
 	as_status status = aerospike_key_operate(as, &err, NULL, &key, &ops, &out);
 	assert_int_eq(status, AEROSPIKE_OK);
 
+	as_vector_value* rvec = as_record_get_vector(&err, out, "out");
+	assert_not_null(rvec);
+	assert_int_eq(rvec->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT32);
+	assert_int_eq(rvec->dimensions, 3);
+
+	const float* elems = as_vector_value_get_float32(rvec);
+	assert_not_null(elems);
+	for (uint32_t i = 0; i < 3; i++) {
+		assert(elems[i] == stored[i]);
+	}
+
+	as_vector_value_destroy(rvec);
 	as_record_destroy(out);
 	as_operations_destroy(&ops);
 	as_exp_destroy(read_exp);
@@ -1764,13 +1776,8 @@ SUITE(vector, "as_vector_value serialization")
 	suite_add(vector_batch_read_server);
 	suite_add(vector_dist_exp_compiles);
 	suite_add(vector_distance_expression_server);
+	suite_add(vector_bin_expression_read_server);
 	suite_add(vector_knn_euclidean_query_server);
 	suite_add(vector_knn_dot_product_query_server);
 	suite_add(vector_knn_cosine_similarity_query_server);
-
-	// The current server aborts in rt_value_bin_ptr_to_bin() with
-	// "unexpected type 16" when a VECTOR is returned directly as an expression
-	// result. Distance expressions translate VECTOR operands to BLOB internally
-	// and are covered by the enabled tests above.
-	//   vector_bin_expression_read_server
 }

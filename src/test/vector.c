@@ -1456,11 +1456,12 @@ TEST(vector_dist_exp_compiles, "vector distance expression compiles and packs (c
 	assert_not_null(dot_product);
 	assert_not_null(cosine);
 
-	// Each server expression is [metric-specific-op, query-vector, vector-bin].
-	assert_int_eq(euclidean->packed[0], 0x93);
-	assert_int_eq(euclidean->packed[1], 52);
-	assert_int_eq(dot_product->packed[1], 53);
-	assert_int_eq(cosine->packed[1], 54);
+	// Each distance call packs as a 3-element msgpack array
+	// [metric-specific-op, query-vector, vector-bin].
+	assert_int_eq(euclidean->packed[0], 0x90 | 3);
+	assert_int_eq(euclidean->packed[1], _AS_EXP_CODE_VECTOR_EUCLIDEAN_DIST);
+	assert_int_eq(dot_product->packed[1], _AS_EXP_CODE_VECTOR_DOT_PRODUCT);
+	assert_int_eq(cosine->packed[1], _AS_EXP_CODE_VECTOR_COSINE_SIM);
 
 	as_exp_destroy(euclidean);
 	as_exp_destroy(dot_product);

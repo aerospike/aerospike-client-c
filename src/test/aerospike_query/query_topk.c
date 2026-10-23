@@ -295,30 +295,40 @@ TEST(query_topk_validate_third_order_key, "a third order key is rejected")
 	as_query_destroy(&query);
 }
 
-TEST(query_topk_validate_then_order_by_first,
-	"as_query_then_order_by() before as_query_order_by() is rejected")
+TEST(query_topk_then_order_by_first,
+	"as_query_then_order_by() before as_query_order_by() sets the first key, which as_query_order_by() replaces")
 {
 	as_query query;
 	as_query_init(&query, NAMESPACE, SET);
 	as_query_then_order_by(&query, "ts", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
 		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
 
-	assert_false(query.order_by.defined);
+	assert_true(query.order_by.defined);
+	assert_string_eq(query.order_by.bin, "ts");
+	assert_int_eq(query.order_by.type, AS_QUERY_ORDER_BY_INTEGER);
+	assert_int_eq(query.order_by.direction, AS_ORDER_ASCENDING);
 	assert_false(query.then_order_by.defined);
+
+	// Not an error: with server support turned off, that is the only rejection.
+	bool has_order_by = as->cluster->has_order_by;
+	as->cluster->has_order_by = false;
 
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
-	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
-	assert_not_null(strstr(err.message, "then_order_by"));
 
-	// Setting the first key afterwards does not clear the error.
+	as->cluster->has_order_by = has_order_by;
+
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_not_null(strstr(err.message, "not supported by all nodes"));
+
 	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
 		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
-	as_query_top_k(&query, 5);
 
-	status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
-	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
-	assert_not_null(strstr(err.message, "then_order_by"));
+	assert_string_eq(query.order_by.bin, "score");
+	assert_int_eq(query.order_by.direction, AS_ORDER_DESCENDING);
+	assert_false(query.then_order_by.defined);
+	assert_int_eq(query.top_k, 5);
 
 	as_query_destroy(&query);
 }
@@ -968,7 +978,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_validate_background_rejected);
 	suite_add(query_topk_validate_max_records);
 	suite_add(query_topk_validate_third_order_key);
-	suite_add(query_topk_validate_then_order_by_first);
+	suite_add(query_topk_then_order_by_first);
 	suite_add(query_topk_validate_second_key_not_projected);
 	suite_add(query_topk_validate_duplicate_projection_op);
 	suite_add(query_topk_validate_resumed_partition_filter);

@@ -789,11 +789,6 @@ as_query_validate_topk(
 		return AEROSPIKE_OK;
 	}
 
-	if (query->then_order_by_early) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"then_order_by requires order_by to be called first");
-	}
-
 	if (!query->order_by.defined) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "top_k requires order_by to be set");
 	}

@@ -22,6 +22,7 @@
 #include <aerospike/as_batch.h>
 #include <aerospike/as_buffer.h>
 #include <aerospike/as_bytes.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_exp.h>
@@ -37,6 +38,7 @@
 #include <aerospike/as_serializer.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_vector_value.h>
+#include <aerospike/as_version.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <float.h>
 #include <string.h>
@@ -727,6 +729,25 @@ TEST(vector_serialization_rejects_invalid_vectors, "serialization rejects vector
 // Server integration tests (native value API)
 //---------------------------------
 
+static bool
+server_supports_vector(void)
+{
+	as_node* node = as_node_get_random(as->cluster);
+
+	if (! node) {
+		info("skipping vector server test; no cluster node available");
+		return false;
+	}
+
+	bool supported = as_version_compare(&node->version, &as_server_version_8_2_1) >= 0;
+	as_node_release(node);
+
+	if (! supported) {
+		info("skipping vector server test; requires server >= 8.2.1");
+	}
+	return supported;
+}
+
 static void
 remove_key(int64_t id)
 {
@@ -739,6 +760,10 @@ remove_key(int64_t id)
 
 TEST(vector_native_bin_roundtrip, "set/get vector bins of every element type round-trip through the server")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	uint16_t f16[4] = {0x3C00, 0xBC00, 0x4000, 0x0000};
 	int32_t i32[4] = {INT32_MIN, -5, 12345, INT32_MAX};
 	float f32[4] = {1.5f, -2.25f, 3.14159f, 0.0f};
@@ -806,6 +831,10 @@ TEST(vector_native_bin_roundtrip, "set/get vector bins of every element type rou
 
 TEST(vector_special_float_bits_server, "special float bit patterns survive the server bit-exact")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	float f32[7] = {NAN, INFINITY, -INFINITY, -0.0f, 0.0f, FLT_MIN, FLT_MAX};
 	double f64[7] = {NAN, INFINITY, -INFINITY, -0.0, 0.0, DBL_MIN, DBL_MAX};
 	// +Inf, -Inf, NaN, +0, -0, smallest subnormal.
@@ -872,6 +901,10 @@ TEST(vector_special_float_bits_server, "special float bit patterns survive the s
 
 TEST(vector_single_dimension_server, "a single-dimension vector round-trips through the server")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	float data[1] = {42.5f};
 	as_error err;
 	as_vector_value* vec = as_vector_value_new_float32(&err, data, 1);
@@ -904,6 +937,10 @@ TEST(vector_single_dimension_server, "a single-dimension vector round-trips thro
 
 TEST(vector_large_crossing_16bit_server, "a large vector crossing the 16-bit msgpack length boundary round-trips")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	// 9000 f64 => 6 + 9000*8 = 72006 bytes, past 65535.
 	uint32_t dims = 9000;
 	double* data = (double*)malloc(sizeof(double) * dims);
@@ -947,6 +984,10 @@ TEST(vector_large_crossing_16bit_server, "a large vector crossing the 16-bit msg
 
 TEST(vector_max_dimensions_server, "a vector at the server dimension limit round-trips")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	uint32_t dims = as_vector_element_type_max_dimensions(AS_VECTOR_ELEMENT_TYPE_FLOAT64);
 	double* data = (double*)calloc(dims, sizeof(double));
 	data[0] = -1.0;
@@ -984,6 +1025,10 @@ TEST(vector_max_dimensions_server, "a vector at the server dimension limit round
 
 TEST(vector_absent_bin_null, "an absent vector bin reads back as NULL, not an empty vector")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	remove_key(14);
 
 	as_key key;
@@ -1011,6 +1056,10 @@ TEST(vector_absent_bin_null, "an absent vector bin reads back as NULL, not an em
 
 TEST(vector_overwrite_replaces_type_dims, "overwriting a vector bin fully replaces element type and dimensions")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	float f32[4] = {1.0f, 2.0f, 3.0f, 4.0f};
 	int32_t i32[2] = {9, -9};
 	as_error err;
@@ -1052,6 +1101,10 @@ TEST(vector_overwrite_replaces_type_dims, "overwriting a vector bin fully replac
 
 TEST(vector_scalar_churn, "a vector bin can be replaced by a scalar and back")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	float f32[2] = {0.1f, 0.2f};
 	double f64[3] = {9.0, 8.0, 7.0};
 	as_error err;
@@ -1105,6 +1158,10 @@ TEST(vector_scalar_churn, "a vector bin can be replaced by a scalar and back")
 
 TEST(vector_selective_read_server, "a selective read returns only the requested vector bin")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	float wanted[2] = {1.0f, 2.0f};
 	int32_t other[3] = {5, 6, 7};
 	as_error err;
@@ -1143,6 +1200,10 @@ TEST(vector_selective_read_server, "a selective read returns only the requested 
 
 TEST(vector_in_collection_rejected_server, "the server rejects a vector in a list or a map")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	float data[2] = {1.0f, 2.0f};
 	as_error err;
 	as_vector_value* vec = as_vector_value_new_float32(&err, data, 2);
@@ -1184,6 +1245,10 @@ TEST(vector_in_collection_rejected_server, "the server rejects a vector in a lis
 #if AS_EVENT_LIB_DEFINED
 TEST(vector_async_roundtrip, "async put/get round-trips a vector through the server")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	vector_async_data data;
 	data.result = __result__;
 	data.expected[0] = 1.5f;
@@ -1218,6 +1283,10 @@ TEST(vector_async_roundtrip, "async put/get round-trips a vector through the ser
 
 TEST(vector_batch_read_server, "a batch read returns records that contain vector bins")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	float d1[3] = {1.0f, 2.0f, 3.0f};
 	int32_t d2[2] = {10, 20};
 	as_error err;
@@ -1322,6 +1391,10 @@ TEST(vector_dist_exp_compiles, "vector distance expression compiles and packs (c
 
 TEST(vector_distance_expression_server, "vector distance expression evaluates on the server")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	float stored[4] = {0.1f, 0.2f, 0.3f, 0.4f};
 	as_error err;
 	as_vector_value* vec = as_vector_value_new_float32(&err, stored, 4);
@@ -1367,6 +1440,10 @@ TEST(vector_distance_expression_server, "vector distance expression evaluates on
 TEST(vector_bin_expression_read_server,
 	"[disabled] reading a vector bin directly through an expression succeeds")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	float stored[3] = {0.5f, -1.5f, 2.0f};
 	as_error err;
 	as_vector_value* vec = as_vector_value_new_float32(&err, stored, 3);
@@ -1516,6 +1593,10 @@ assert_knn_query(atf_test_result* __result__, as_vector_distance_metric metric,
 TEST(vector_knn_euclidean_query_server,
 	"Euclidean distance projection and top-k return nearest neighbors")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	const float query[KNN_DIMS] = {7.3f, 1.0f, 0.0f, 0.0f};
 	const int64_t expected[KNN_K] = {7, 8, 6, 9, 5};
 
@@ -1526,6 +1607,10 @@ TEST(vector_knn_euclidean_query_server,
 TEST(vector_knn_dot_product_query_server,
 	"dot-product projection and top-k return the largest projections")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	const float query[KNN_DIMS] = {1.0f, 0.0f, 0.0f, 0.0f};
 	const int64_t expected[KNN_K] = {19, 18, 17, 16, 15};
 
@@ -1536,6 +1621,10 @@ TEST(vector_knn_dot_product_query_server,
 TEST(vector_knn_cosine_similarity_query_server,
 	"cosine-similarity projection and top-k return the most similar vectors")
 {
+	if (! server_supports_vector()) {
+		return;
+	}
+
 	const float query[KNN_DIMS] = {1.0f, 1.0f, 0.0f, 0.0f};
 	const int64_t expected[KNN_K] = {1, 2, 3, 4, 5};
 

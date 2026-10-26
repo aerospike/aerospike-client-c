@@ -164,6 +164,9 @@ cleanup(aerospike* p_as)
 static bool
 insert_records(aerospike* p_as)
 {
+	as_record rec;
+	as_record_inita(&rec, 2);
+
 	for (uint32_t i = 0; i < N_RECORDS; i++) {
 		float vals[DIM];
 
@@ -176,11 +179,10 @@ insert_records(aerospike* p_as)
 
 		if (! vec) {
 			LOG("as_vector_value_new_float32() returned %d - %s", err.code, err.message);
+			as_record_destroy(&rec);
 			return false;
 		}
 
-		as_record rec;
-		as_record_inita(&rec, 2);
 		as_record_set_int64(&rec, ID_BIN, (int64_t)i);
 
 		bool set = as_record_set_vector(&rec, VEC_BIN, vec);
@@ -200,9 +202,8 @@ insert_records(aerospike* p_as)
 			as_record_destroy(&rec);
 			return false;
 		}
-
-		as_record_destroy(&rec);
 	}
+	as_record_destroy(&rec);
 
 	LOG("inserted %d records, each with a %d-dim VECTOR bin", N_RECORDS, DIM);
 	return true;

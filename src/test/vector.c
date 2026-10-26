@@ -1625,14 +1625,15 @@ assert_knn_query(atf_test_result* __result__, as_vector_distance_metric metric,
 
 	knn_remove_records();
 
+	as_record rec;
+	as_record_inita(&rec, 2);
+
 	for (uint32_t i = 0; i < KNN_RECORDS; i++) {
 		float data[KNN_DIMS] = {(float)i, 1.0f, 0.0f, 0.0f};
 
 		as_vector_value* vec = as_vector_value_new_float32(&err, data, KNN_DIMS);
 		assert_not_null(vec);
 
-		as_record rec;
-		as_record_inita(&rec, 2);
 		as_record_set_int64(&rec, "id", (int64_t)i);
 		assert_true(as_record_set_vector(&rec, "vec", vec));
 		as_vector_value_destroy(vec);
@@ -1640,10 +1641,9 @@ assert_knn_query(atf_test_result* __result__, as_vector_distance_metric metric,
 		as_key key;
 		as_key_init_int64(&key, NAMESPACE, KNN_SET, (int64_t)i);
 
-		as_error err;
 		assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
-		as_record_destroy(&rec);
 	}
+	as_record_destroy(&rec);
 
 	as_vector_value* query_vec =
 		as_vector_value_new_float32(&err, query_data, KNN_DIMS);

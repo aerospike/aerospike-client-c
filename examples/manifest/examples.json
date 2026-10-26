@@ -834,6 +834,70 @@
       "vs_project": "query"
     },
     {
+      "id": "query.topk",
+      "group": "query",
+      "name": "topk",
+      "binary_path": "examples/query_examples/topk/target/example",
+      "source_dir": "examples/query_examples/topk",
+      "working_dir": "examples/query_examples/topk",
+      "cli_mode": "shared_cli",
+      "args_profile": "multi_key",
+      "namespace_mode": "shared_cli",
+      "set_mode": "shared_cli",
+      "fixed_namespace": null,
+      "fixed_set": null,
+      "resource_roots": [],
+      "tags": ["query", "multi-key", "top-k"],
+      "requires": {
+        "event_lib": false,
+        "ttl_support": false,
+        "enterprise": false,
+        "strong_consistency": false,
+        "min_server_version": "8.2.1",
+        "udf": false,
+        "secondary_index": false
+      },
+      "registry_flags": {
+        "unix_makefile": true,
+        "examples_readme": false,
+        "vs": false,
+        "xcode": false
+      },
+      "vs_project": null
+    },
+    {
+      "id": "query.vector_knn",
+      "group": "query",
+      "name": "vector_knn",
+      "binary_path": "examples/query_examples/vector_knn/target/example",
+      "source_dir": "examples/query_examples/vector_knn",
+      "working_dir": "examples/query_examples/vector_knn",
+      "cli_mode": "shared_cli",
+      "args_profile": "multi_key",
+      "namespace_mode": "shared_cli",
+      "set_mode": "shared_cli",
+      "fixed_namespace": null,
+      "fixed_set": null,
+      "resource_roots": [],
+      "tags": ["query", "multi-key", "top-k", "vector"],
+      "requires": {
+        "event_lib": false,
+        "ttl_support": false,
+        "enterprise": false,
+        "strong_consistency": false,
+        "min_server_version": "8.2.1",
+        "udf": false,
+        "secondary_index": false
+      },
+      "registry_flags": {
+        "unix_makefile": true,
+        "examples_readme": false,
+        "vs": false,
+        "xcode": false
+      },
+      "vs_project": null
+    },
+    {
       "id": "scan.background",
       "group": "scan",
       "name": "background",

@@ -1,0 +1,421 @@
+/*
+ * Copyright 2008-2026 Aerospike, Inc.
+ *
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+#pragma once
+
+#include <aerospike/as_bytes.h>
+#include <aerospike/as_error.h>
+#include <aerospike/as_std.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+//---------------------------------
+// Macros
+//---------------------------------
+
+/**
+ * Vector wire format version. The server accepts only this version.
+ */
+#define AS_VECTOR_VALUE_VERSION 1
+
+/**
+ * Size in bytes of the fixed vector header (version + element_type +
+ * dimensions).
+ */
+#define AS_VECTOR_VALUE_HEADER_SIZE 6
+
+/**
+ * Maximum size in bytes of a vector element array.
+ */
+#define AS_VECTOR_VALUE_MAX_ELEMENTS_BYTES (1u << 18)
+
+//---------------------------------
+// Types
+//---------------------------------
+
+/**
+ * Vector element type. Identifies how each element of an as_vector_value is
+ * encoded on the wire.
+ */
+typedef enum as_vector_element_type_e {
+	/**
+	 * float16: high-density vectors (IEEE 754 half). Since C has no native
+	 * float16 type, each element is represented by its raw 16-bit pattern.
+	 */
+	AS_VECTOR_ELEMENT_TYPE_FLOAT16 = 0x01,
+
+	/**
+	 * int32: integer-based embeddings.
+	 */
+	AS_VECTOR_ELEMENT_TYPE_INT32 = 0x02,
+
+	/**
+	 * float (fp32): standard FP32.
+	 */
+	AS_VECTOR_ELEMENT_TYPE_FLOAT32 = 0x03,
+
+	/**
+	 * double (fp64): high-precision FP64.
+	 */
+	AS_VECTOR_ELEMENT_TYPE_FLOAT64 = 0x04
+} as_vector_element_type;
+
+/**
+ * Distance metric used to compare two vectors in a vector distance expression.
+ * See as_exp_vector_dist().
+ */
+typedef enum as_vector_distance_metric_e {
+	/**
+	 * Squared Euclidean (L2) distance. Smaller values indicate closer vectors.
+	 */
+	AS_VECTOR_DISTANCE_EUCLIDEAN_SQUARED = 0,
+
+	/**
+	 * Dot product. Larger values indicate more similar vectors.
+	 */
+	AS_VECTOR_DISTANCE_DOT_PRODUCT = 1,
+
+	/**
+	 * Cosine similarity. Larger values indicate closer vectors.
+	 */
+	AS_VECTOR_DISTANCE_COSINE_SIMILARITY = 2
+} as_vector_distance_metric;
+
+/**
+ * Vector of numeric elements, used for vector similarity search. A vector is
+ * defined by the following wire format:
+ *
+ * ~~~~~~~~~~
+ * Offset  Size (bytes)  Field         Description
+ * 0       1             version       The version of the vector format.
+ * 1       1             element_type  Enum identifying the element type (see as_vector_element_type).
+ * 2       4             dimensions    Number of dimensions (elements) in the vector.
+ * 6       variable      data          Contiguous array of elements, little-endian.
+ * ~~~~~~~~~~
+ *
+ * Create with one of the as_vector_value_new_*() functions and destroy with
+ * as_vector_value_destroy().
+ *
+ * as_vector_value is not an as_val and cannot be used directly as a bin
+ * value. Convert to/from an as_bytes tagged AS_BYTES_VECTOR using
+ * as_vector_value_to_bytes()/as_vector_value_to_bytes_new() and
+ * as_vector_value_from_bytes().
+ *
+ * A vector can only be stored as a top-level bin value. The server rejects a
+ * write that puts a vector in a list or map, at any depth, with
+ * AEROSPIKE_ERR_REQUEST_INVALID.
+ */
+typedef struct as_vector_value_s {
+	/**
+	 * Vector format version.
+	 */
+	uint8_t version;
+
+	/**
+	 * Vector element type.
+	 */
+	as_vector_element_type element_type;
+
+	/**
+	 * Number of dimensions (elements) in this vector.
+	 */
+	uint32_t dimensions;
+
+	/**
+	 * Contiguous array of elements. The element type/count must be
+	 * interpreted using `element_type` and `dimensions`.
+	 */
+	void* data;
+
+	/**
+	 * If true, `data` is owned by this instance and will be freed when
+	 * as_vector_value_destroy() is called.
+	 */
+	bool free_data;
+} as_vector_value;
+
+//---------------------------------
+// Functions
+//---------------------------------
+
+/**
+ * Create a heap allocated vector of raw float16 (IEEE 754 half precision)
+ * elements. Since C has no native float16 type, each element is passed as
+ * its raw 16-bit bit pattern. The data array is copied.
+ *
+ * @param err		Error detail, set when NULL is returned.
+ * @param data		Array of raw float16 bit patterns.
+ * @param count		Number of elements in `data`.
+ *
+ * @return New vector, or NULL with `err` set to AEROSPIKE_ERR_PARAM if `data`
+ *		   is NULL or `count` is outside the server's supported range.
+ *
+ * @relatesalso as_vector_value
+ */
+AS_EXTERN as_vector_value*
+as_vector_value_new_float16(as_error* err, const uint16_t* data, uint32_t count);
+
+/**
+ * Create a heap allocated vector of int32 elements. The data array is
+ * copied.
+ *
+ * @param err		Error detail, set when NULL is returned.
+ * @param data		Array of int32 elements.
+ * @param count		Number of elements in `data`.
+ *
+ * @return New vector, or NULL with `err` set to AEROSPIKE_ERR_PARAM if `data`
+ *		   is NULL or `count` is outside the server's supported range.
+ *
+ * @relatesalso as_vector_value
+ */
+AS_EXTERN as_vector_value*
+as_vector_value_new_int32(as_error* err, const int32_t* data, uint32_t count);
+
+/**
+ * Create a heap allocated vector of float (fp32) elements. The data array is
+ * copied.
+ *
+ * @param err		Error detail, set when NULL is returned.
+ * @param data		Array of float elements.
+ * @param count		Number of elements in `data`.
+ *
+ * @return New vector, or NULL with `err` set to AEROSPIKE_ERR_PARAM if `data`
+ *		   is NULL or `count` is outside the server's supported range.
+ *
+ * @relatesalso as_vector_value
+ */
+AS_EXTERN as_vector_value*
+as_vector_value_new_float32(as_error* err, const float* data, uint32_t count);
+
+/**
+ * Create a heap allocated vector of double (fp64) elements. The data array
+ * is copied.
+ *
+ * @param err		Error detail, set when NULL is returned.
+ * @param data		Array of double elements.
+ * @param count		Number of elements in `data`.
+ *
+ * @return New vector, or NULL with `err` set to AEROSPIKE_ERR_PARAM if `data`
+ *		   is NULL or `count` is outside the server's supported range.
+ *
+ * @relatesalso as_vector_value
+ */
+AS_EXTERN as_vector_value*
+as_vector_value_new_float64(as_error* err, const double* data, uint32_t count);
+
+/**
+ * Destroy a heap allocated as_vector_value and release its resources.
+ *
+ * @relatesalso as_vector_value
+ */
+AS_EXTERN void
+as_vector_value_destroy(as_vector_value* vec);
+
+/**
+ * Return the number of bytes used to encode a single element of the given
+ * type.
+ *
+ * @relatesalso as_vector_value
+ */
+AS_EXTERN uint32_t
+as_vector_element_type_size(as_vector_element_type type);
+
+/**
+ * Return the maximum number of elements permitted for the given type.
+ *
+ * @relatesalso as_vector_value
+ */
+static inline uint32_t
+as_vector_element_type_max_dimensions(as_vector_element_type type)
+{
+	uint32_t size = as_vector_element_type_size(type);
+	return size == 0 ? 0 : AS_VECTOR_VALUE_MAX_ELEMENTS_BYTES / size;
+}
+
+/**
+ * Serialize this vector and wrap the result in the given as_bytes instance,
+ * tagged with AS_BYTES_VECTOR (analogous to how HLL values are represented
+ * as an as_bytes tagged with AS_BYTES_HLL).
+ *
+ * The serialized buffer is heap allocated and owned by `bytes` (bytes->free
+ * is true). Destroy `bytes` via as_bytes_destroy() independently of `vec`.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_error err;
+ * as_vector_value* vec = as_vector_value_new_float32(&err, data, 128);
+ *
+ * as_bytes bytes;
+ * as_vector_value_to_bytes(vec, &bytes);
+ * as_record_set_bytes(rec, "embedding", &bytes);
+ *
+ * as_vector_value_destroy(vec);
+ * ~~~~~~~~~~
+ *
+ * @param vec		Vector to serialize.
+ * @param bytes		Uninitialized as_bytes to initialize with the serialized vector.
+ *
+ * @return true on success, or false if `vec` is invalid or `bytes` is NULL.
+ *
+ * @relatesalso as_vector_value
+ */
+AS_EXTERN bool
+as_vector_value_to_bytes(const as_vector_value* vec, as_bytes* bytes);
+
+/**
+ * Serialize this vector into a newly heap allocated as_bytes tagged with
+ * AS_BYTES_VECTOR. Unlike as_vector_value_to_bytes(), the result is itself an
+ * as_val, so it can be passed where an as_val is expected, such as a UDF
+ * argument list.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_error err;
+ * as_vector_value* vec = as_vector_value_new_float32(&err, data, 128);
+ *
+ * as_arraylist args;
+ * as_arraylist_init(&args, 1, 0);
+ * as_arraylist_append(&args, (as_val*)as_vector_value_to_bytes_new(vec));
+ *
+ * as_vector_value_destroy(vec);
+ * ~~~~~~~~~~
+ *
+ * @param vec		Vector to serialize.
+ *
+ * @return New as_bytes on success, or NULL if `vec` is invalid. Destroy with
+ *		   as_bytes_destroy(), or let the owning collection do so.
+ *
+ * @relatesalso as_vector_value
+ */
+AS_EXTERN as_bytes*
+as_vector_value_to_bytes_new(const as_vector_value* vec);
+
+/**
+ * Deserialize a vector from an as_bytes instance, the inverse of
+ * as_vector_value_to_bytes()/as_vector_value_to_bytes_new(). Typically used
+ * on an as_bytes read from a record bin, which the client tags
+ * AS_BYTES_VECTOR. The returned vector owns its own copy of the elements,
+ * converted from little-endian to host byte order. Bytes past the encoded
+ * vector are ignored.
+ *
+ * ~~~~~~~~~~{.c}
+ * as_bytes* bytes = as_record_get_bytes(rec, "embedding");
+ * as_error err;
+ * as_vector_value* vec = as_vector_value_from_bytes(&err, bytes);
+ * // ... use vec ...
+ * as_vector_value_destroy(vec);
+ * ~~~~~~~~~~
+ *
+ * @param err		Error detail, set when NULL is returned.
+ * @param bytes		Serialized vector.
+ *
+ * @return New as_vector_value on success, or NULL with `err` set to
+ *		   AEROSPIKE_ERR_PARAM if `bytes` is NULL or malformed: shorter than
+ *		   the header, a version other than AS_VECTOR_VALUE_VERSION, an
+ *		   unknown element type, no dimensions, too many dimensions for the
+ *		   element type, or fewer element bytes than the dimensions need.
+ *		   Destroy with as_vector_value_destroy().
+ *
+ * @relatesalso as_vector_value
+ */
+AS_EXTERN as_vector_value*
+as_vector_value_from_bytes(as_error* err, const as_bytes* bytes);
+
+/**
+ * Return the vector's data as a float16 array, or NULL if element_type is not
+ * AS_VECTOR_ELEMENT_TYPE_FLOAT16. Has `vec->dimensions` elements, owned by `vec`.
+ *
+ * @relatesalso as_vector_value
+ */
+static inline const uint16_t*
+as_vector_value_get_float16(const as_vector_value* vec)
+{
+	return (vec && vec->element_type == AS_VECTOR_ELEMENT_TYPE_FLOAT16) ? (const uint16_t*)vec->data : NULL;
+}
+
+/**
+ * Return the vector's data as an int32 array, or NULL if element_type is not
+ * AS_VECTOR_ELEMENT_TYPE_INT32. Has `vec->dimensions` elements, owned by `vec`.
+ *
+ * @relatesalso as_vector_value
+ */
+static inline const int32_t*
+as_vector_value_get_int32(const as_vector_value* vec)
+{
+	return (vec && vec->element_type == AS_VECTOR_ELEMENT_TYPE_INT32) ? (const int32_t*)vec->data : NULL;
+}
+
+/**
+ * Return the vector's data as a float (fp32) array, or NULL if element_type
+ * is not AS_VECTOR_ELEMENT_TYPE_FLOAT32. Has `vec->dimensions` elements, owned by `vec`.
+ *
+ * @relatesalso as_vector_value
+ */
+static inline const float*
+as_vector_value_get_float32(const as_vector_value* vec)
+{
+	return (vec && vec->element_type == AS_VECTOR_ELEMENT_TYPE_FLOAT32) ? (const float*)vec->data : NULL;
+}
+
+/**
+ * Return the vector's data as a double (fp64) array, or NULL if element_type
+ * is not AS_VECTOR_ELEMENT_TYPE_FLOAT64. Has `vec->dimensions` elements, owned by `vec`.
+ *
+ * @relatesalso as_vector_value
+ */
+static inline const double*
+as_vector_value_get_float64(const as_vector_value* vec)
+{
+	return (vec && vec->element_type == AS_VECTOR_ELEMENT_TYPE_FLOAT64) ? (const double*)vec->data : NULL;
+}
+
+/**
+ * Return a pointer to the vector's contiguous element array (without the
+ * header) and its size in bytes.
+ *
+ * The returned pointer is owned by `vec` and valid for its lifetime. The bytes
+ * are in the vector's little-endian wire order on little-endian hosts (the only
+ * platforms the vector format supports).
+ *
+ * A vector distance expression requires the complete serialized vector,
+ * including its header. Use as_vector_value_to_bytes() for that purpose.
+ *
+ * @param vec		Vector to inspect.
+ * @param size		Set to the element-array size in bytes.
+ *
+ * @return Pointer to the element bytes, or NULL if `vec` is NULL.
+ *
+ * @relatesalso as_vector_value
+ */
+static inline const uint8_t*
+as_vector_value_element_bytes(const as_vector_value* vec, uint32_t* size)
+{
+	if (vec == NULL) {
+		if (size) {
+			*size = 0;
+		}
+		return NULL;
+	}
+
+	if (size) {
+		*size = vec->dimensions * as_vector_element_type_size(vec->element_type);
+	}
+	return (const uint8_t*)vec->data;
+}
+
+#ifdef __cplusplus
+} // end extern "C"
+#endif

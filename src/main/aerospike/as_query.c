@@ -30,6 +30,16 @@
 // Init/Destroy
 //---------------------------------
 
+static void
+as_query_order_by_field_clear(as_query_order_by_field* field)
+{
+	field->bin[0] = 0;
+	field->type = AS_QUERY_ORDER_BY_INTEGER;
+	field->direction = AS_ORDER_ASCENDING;
+	field->flags = AS_QUERY_ORDER_BY_FLAGS_DEFAULT;
+	field->defined = false;
+}
+
 static as_query*
 as_query_defaults(as_query* query, bool free, const char* ns, const char* set)
 {
@@ -51,6 +61,11 @@ as_query_defaults(as_query* query, bool free, const char* ns, const char* set)
 	query->ops = NULL;
 	query->ttl = 0;
 	query->no_bins = false;
+
+	as_query_order_by_field_clear(&query->order_by);
+	as_query_order_by_field_clear(&query->then_order_by);
+	query->top_k = 0;
+	query->order_by_overflow = false;
 
 	as_udf_call_init(&query->apply, NULL, NULL, NULL);
 
@@ -428,8 +443,139 @@ as_query_apply(as_query* query, const char* module, const char* function, const 
 }
 
 //---------------------------------
+// Order By / Top-K
+//---------------------------------
+
+static void
+as_query_order_by_field_set(
+	as_query_order_by_field* field, const char* bin_name, as_query_order_by_type type,
+	as_order direction, as_query_order_by_flags flags
+	)
+{
+	as_strncpy(field->bin, bin_name, sizeof(field->bin));
+	field->type = type;
+	field->direction = direction;
+	field->flags = flags;
+	field->defined = true;
+}
+
+void
+as_query_order_by(
+	as_query* query, const char* bin_name, as_query_order_by_type type, as_order direction,
+	as_query_order_by_flags flags
+	)
+{
+	if (!query || !bin_name || strlen(bin_name) >= AS_BIN_NAME_MAX_SIZE) {
+		return;
+	}
+
+	as_query_order_by_field_set(&query->order_by, bin_name, type, direction, flags);
+	as_query_order_by_field_clear(&query->then_order_by);
+	query->order_by_overflow = false;
+}
+
+void
+as_query_then_order_by(
+	as_query* query, const char* bin_name, as_query_order_by_type type, as_order direction,
+	as_query_order_by_flags flags
+	)
+{
+	if (!query || !bin_name || strlen(bin_name) >= AS_BIN_NAME_MAX_SIZE) {
+		return;
+	}
+
+	if (!query->order_by.defined) {
+		as_query_order_by_field_set(&query->order_by, bin_name, type, direction, flags);
+		return;
+	}
+
+	if (query->then_order_by.defined) {
+		query->order_by_overflow = true;
+		return;
+	}
+
+	as_query_order_by_field_set(&query->then_order_by, bin_name, type, direction, flags);
+}
+
+void
+as_query_top_k(as_query* query, uint32_t k)
+{
+	if (!query) {
+		return;
+	}
+
+	query->top_k = k;
+}
+
+//---------------------------------
 // Query Serialization
 //---------------------------------
+
+static void
+as_query_pack_order_by(as_packer* pk, const as_query_order_by_field* field)
+{
+	if (! field->defined) {
+		as_pack_bool(pk, false);
+		return;
+	}
+
+	as_pack_bool(pk, true);
+	as_pack_string(pk, field->bin);
+	as_pack_int64(pk, field->type);
+	as_pack_int64(pk, field->direction);
+	as_pack_uint64(pk, field->flags);
+}
+
+static bool
+as_query_unpack_order_by(as_unpacker* pk, as_query_order_by_field* field)
+{
+	bool defined;
+
+	if (as_unpack_boolean(pk, &defined) != 0) {
+		return false;
+	}
+
+	if (! defined) {
+		as_query_order_by_field_clear(field);
+		return true;
+	}
+
+	if (! as_unpack_str_init(pk, field->bin, AS_BIN_NAME_MAX_SIZE)) {
+		return false;
+	}
+
+	int64_t type;
+
+	if (as_unpack_int64(pk, &type) != 0) {
+		return false;
+	}
+
+	if (type < AS_QUERY_ORDER_BY_INTEGER || type > AS_QUERY_ORDER_BY_BYTES) {
+		return false;
+	}
+
+	int64_t direction;
+
+	if (as_unpack_int64(pk, &direction) != 0) {
+		return false;
+	}
+
+	if (direction != AS_ORDER_ASCENDING && direction != AS_ORDER_DESCENDING) {
+		return false;
+	}
+
+	uint64_t flags;
+
+	if (as_unpack_uint64(pk, &flags) != 0) {
+		return false;
+	}
+
+	field->type = (as_query_order_by_type)type;
+	field->direction = (as_order)direction;
+	field->flags = (as_query_order_by_flags)flags;
+	field->defined = true;
+	return true;
+}
 
 bool
 as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
@@ -569,6 +715,11 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 	as_pack_uint64(&pk, query->ttl);
 	as_pack_bool(&pk, query->paginate);
 	as_pack_bool(&pk, query->no_bins);
+
+	as_query_pack_order_by(&pk, &query->order_by);
+	as_query_pack_order_by(&pk, &query->then_order_by);
+	as_pack_uint64(&pk, query->top_k);
+	as_pack_bool(&pk, query->order_by_overflow);
 
 	as_cdt_end(&pk);
 
@@ -967,6 +1118,27 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 		goto HandleError;
 	}
 
+	// Order by / top_k. Older serialized queries do not have these fields, but
+	// as_query_from_bytes() is only ever used with buffers produced by this
+	// client's own as_query_to_bytes(), so no version negotiation is needed.
+	if (! as_query_unpack_order_by(&pk, &query->order_by)) {
+		goto HandleError;
+	}
+
+	if (! as_query_unpack_order_by(&pk, &query->then_order_by)) {
+		goto HandleError;
+	}
+
+	if (as_unpack_uint64(&pk, &uval) != 0) {
+		goto HandleError;
+	}
+
+	query->top_k = (uint32_t)uval;
+
+	if (as_unpack_boolean(&pk, &query->order_by_overflow) != 0) {
+		goto HandleError;
+	}
+
 	return true;
 
 HandlePredError:
@@ -1002,6 +1174,23 @@ as_query_from_bytes_new(const uint8_t* bytes, uint32_t bytes_size)
 //---------------------------------
 // Query Compare
 //---------------------------------
+
+static bool
+as_query_order_by_field_compare(
+	const as_query_order_by_field* f1, const as_query_order_by_field* f2
+	)
+{
+	if (f1->defined != f2->defined) {
+		return false;
+	}
+
+	if (! f1->defined) {
+		return true;
+	}
+
+	return strcmp(f1->bin, f2->bin) == 0 && f1->type == f2->type &&
+		f1->direction == f2->direction && f1->flags == f2->flags;
+}
 
 bool
 as_query_compare(as_query* q1, as_query* q2) {
@@ -1308,6 +1497,22 @@ as_query_compare(as_query* q1, as_query* q2) {
 	}
 
 	if (q1->no_bins != q2->no_bins) {
+		as_cmp_error();
+	}
+
+	if (! as_query_order_by_field_compare(&q1->order_by, &q2->order_by)) {
+		as_cmp_error();
+	}
+
+	if (! as_query_order_by_field_compare(&q1->then_order_by, &q2->then_order_by)) {
+		as_cmp_error();
+	}
+
+	if (q1->top_k != q2->top_k) {
+		as_cmp_error();
+	}
+
+	if (q1->order_by_overflow != q2->order_by_overflow) {
 		as_cmp_error();
 	}
 

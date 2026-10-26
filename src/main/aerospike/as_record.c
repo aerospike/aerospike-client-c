@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2022 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -309,6 +309,30 @@ as_record_set_bytes(as_record* rec, const char* name, as_bytes * value)
 }
 
 bool
+as_record_set_vector(as_record* rec, const char* name, const as_vector_value* value)
+{
+	as_bytes bytes;
+
+	if (! as_vector_value_to_bytes(value, &bytes)) {
+		return false;
+	}
+
+	as_bin* bin = as_record_bin_forupdate(rec, name);
+
+	if (! bin) {
+		as_bytes_destroy(&bytes);
+		return false;
+	}
+
+	// Embed the serialized buffer in the bin (sets the bin name and points
+	// valuep at the embedded value), then re-tag it as a vector. Ownership of
+	// the heap buffer transfers to the bin, which frees it on record destroy.
+	as_bin_init_raw(bin, name, bytes.value, bytes.size, true);
+	as_bytes_set_type((as_bytes*)&bin->value, AS_BYTES_VECTOR);
+	return true;
+}
+
+bool
 as_record_set_list(as_record* rec, const char* name, as_list * value)
 {
 	as_bin* bin = as_record_bin_forupdate(rec, name);
@@ -425,6 +449,26 @@ as_bytes*
 as_record_get_bytes(const as_record* rec, const char* name)
 {
 	return as_bytes_fromval((as_val *) as_record_get(rec, name));
+}
+
+as_vector_value*
+as_record_get_vector(as_error* err, const as_record* rec, const char* name)
+{
+	as_val* val = (as_val*)as_record_get(rec, name);
+
+	if (! val) {
+		as_error_update(err, AEROSPIKE_ERR_BIN_NOT_FOUND, "bin '%s' not found", name);
+		return NULL;
+	}
+
+	as_bytes* bytes = as_bytes_fromval(val);
+
+	if (! bytes || bytes->type != AS_BYTES_VECTOR) {
+		as_error_update(err, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE, "bin '%s' is not a vector",
+			name);
+		return NULL;
+	}
+	return as_vector_value_from_bytes(err, bytes);
 }
 
 as_list*

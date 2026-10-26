@@ -322,6 +322,105 @@ TEST(query_topk_then_order_by_first,
 	as_query_destroy(&query);
 }
 
+TEST(query_topk_setters_invalid_bin_name, "an invalid order-by bin name still sets an order key")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "a_very_long_bin_name", AS_QUERY_ORDER_BY_INTEGER,
+		AS_ORDER_DESCENDING, AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+
+	assert_true(query.order_by.defined);
+	assert_string_eq(query.order_by.bin, "");
+
+	as_query_then_order_by(&query, NULL, AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+
+	assert_true(query.then_order_by.defined);
+	assert_string_eq(query.then_order_by.bin, "");
+
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_validate_bin_name_too_long, "an order-by bin name longer than 15 bytes is rejected")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "a_very_long_bin_name", AS_QUERY_ORDER_BY_INTEGER,
+		AS_ORDER_DESCENDING, AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "Top-K order-by bin name must be 1-15 UTF-8 bytes without NUL");
+
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_validate_bin_name_too_long_without_top_k,
+	"an order-by bin name longer than 15 bytes is rejected without top_k")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "a_very_long_bin_name", AS_QUERY_ORDER_BY_INTEGER,
+		AS_ORDER_DESCENDING, AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "Top-K order-by bin name must be 1-15 UTF-8 bytes without NUL");
+
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_validate_second_key_bin_name_invalid,
+	"a second order key with a NULL or too-long bin name is rejected")
+{
+	const char* bin_names[] = {"a_very_long_bin_name", NULL};
+
+	for (uint32_t i = 0; i < sizeof(bin_names) / sizeof(bin_names[0]); i++) {
+		as_query query;
+		as_query_init(&query, NAMESPACE, SET);
+		as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+			AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+		as_query_then_order_by(&query, bin_names[i], AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
+			AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+		as_query_top_k(&query, 5);
+
+		as_error err;
+		as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+		assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+		assert_string_eq(err.message, "Top-K order-by bin name must be 1-15 UTF-8 bytes without NUL");
+
+		as_query_destroy(&query);
+	}
+}
+
+TEST(query_topk_validate_direction_invalid, "an order key direction other than ASC or DESC is rejected")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, (as_order)2,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "orderBy direction must be ASC or DESC");
+
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_then_order_by(&query, "ts", AS_QUERY_ORDER_BY_INTEGER, (as_order)2,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+
+	status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "orderBy direction must be ASC or DESC");
+
+	as_query_destroy(&query);
+}
+
 TEST(query_topk_validate_second_key_not_projected, "a second order key missing from projection is rejected")
 {
 	as_query query;
@@ -999,6 +1098,11 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_validate_max_records);
 	suite_add(query_topk_validate_third_order_key);
 	suite_add(query_topk_then_order_by_first);
+	suite_add(query_topk_setters_invalid_bin_name);
+	suite_add(query_topk_validate_bin_name_too_long);
+	suite_add(query_topk_validate_bin_name_too_long_without_top_k);
+	suite_add(query_topk_validate_second_key_bin_name_invalid);
+	suite_add(query_topk_validate_direction_invalid);
 	suite_add(query_topk_validate_second_key_not_projected);
 	suite_add(query_topk_validate_duplicate_projection_op);
 	suite_add(query_topk_validate_resumed_partition_filter);

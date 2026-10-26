@@ -711,11 +711,18 @@ as_query_validate_order_key(
 				"order_by type must be one of INTEGER, DOUBLE, STRING, BYTES");
 	}
 
+	// The top-k merge in as_query_topk.c ranks any direction other than DESC as ASC, so an
+	// unchecked value could rank differently there than on the server.
+	if (key->direction != AS_ORDER_ASCENDING && key->direction != AS_ORDER_DESCENDING) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "orderBy direction must be ASC or DESC");
+	}
+
+	// as_query_order_by() and as_query_then_order_by() store a NULL or too-long name as empty.
 	size_t bin_len = strlen(key->bin);
 
 	if (bin_len == 0 || bin_len > AS_BIN_NAME_MAX_LEN) {
-		return as_error_update(err, AEROSPIKE_ERR_PARAM, "order_by bin name exceeds %d-character limit",
-			AS_BIN_NAME_MAX_LEN);
+		return as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"Top-K order-by bin name must be 1-%d UTF-8 bytes without NUL", AS_BIN_NAME_MAX_LEN);
 	}
 
 	if (key->flags & ~(as_query_order_by_flags)AS_QUERY_ORDER_BY_CASE_INSENSITIVE) {

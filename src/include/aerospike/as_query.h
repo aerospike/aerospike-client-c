@@ -1109,9 +1109,9 @@ as_query_apply(as_query* query, const char* module, const char* function, const 
  * An order key without k is sent to the server as is, and the server rejects
  * the query with AEROSPIKE_ERR_REQUEST_INVALID.
  *
- * If bin_name is longer than AS_BIN_NAME_MAX_LEN characters, the order-by
- * clause is not set and this call is a no-op. This is validated again
- * (and reported via as_error) when the query is executed.
+ * The order key is still set if bin_name is NULL, empty or longer than
+ * AS_BIN_NAME_MAX_LEN bytes, or if direction is not AS_ORDER_ASCENDING or
+ * AS_ORDER_DESCENDING. Executing the query then fails with AEROSPIKE_ERR_PARAM.
  *
  * IMPORTANT: setting order_by/top_k changes aerospike_query_foreach()/
  * aerospike_query_partitions() from streaming-as-records-arrive to

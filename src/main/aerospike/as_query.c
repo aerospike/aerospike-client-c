@@ -452,7 +452,14 @@ as_query_order_by_field_set(
 	as_order direction, as_query_order_by_flags flags
 	)
 {
-	as_strncpy(field->bin, bin_name, sizeof(field->bin));
+	// An invalid name is kept as an empty name, which as_query_validate_order_key() rejects.
+	if (bin_name && strlen(bin_name) < AS_BIN_NAME_MAX_SIZE) {
+		as_strncpy(field->bin, bin_name, sizeof(field->bin));
+	}
+	else {
+		field->bin[0] = 0;
+	}
+
 	field->type = type;
 	field->direction = direction;
 	field->flags = flags;
@@ -465,7 +472,7 @@ as_query_order_by(
 	as_query_order_by_flags flags
 	)
 {
-	if (!query || !bin_name || strlen(bin_name) >= AS_BIN_NAME_MAX_SIZE) {
+	if (!query) {
 		return;
 	}
 
@@ -480,7 +487,7 @@ as_query_then_order_by(
 	as_query_order_by_flags flags
 	)
 {
-	if (!query || !bin_name || strlen(bin_name) >= AS_BIN_NAME_MAX_SIZE) {
+	if (!query) {
 		return;
 	}
 

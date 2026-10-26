@@ -226,7 +226,7 @@ TEST(vector_float32_roundtrip, "as_vector_value float32 data is serialized littl
 
 TEST(vector_int32_roundtrip, "as_vector_value int32 data is serialized little-endian")
 {
-	int32_t data[4] = {0, -1, 2147483647, -2147483648};
+	int32_t data[4] = {0, -1, INT32_MAX, INT32_MIN};
 	as_error err;
 	as_vector_value* vec = as_vector_value_new_int32(&err, data, 4);
 
@@ -335,7 +335,7 @@ TEST(vector_from_float32, "as_vector_value_from_bytes deserializes float32 eleme
 
 TEST(vector_from_int32, "as_vector_value_from_bytes deserializes int32 elements")
 {
-	int32_t data[4] = {0, -1, 2147483647, -2147483648};
+	int32_t data[4] = {0, -1, INT32_MAX, INT32_MIN};
 	as_error err;
 	as_vector_value* vec = as_vector_value_new_int32(&err, data, 4);
 

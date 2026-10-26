@@ -568,15 +568,17 @@ typedef struct as_query_predicates_s {
  * as_query_top_k(query, 10);
  * @endcode
  *
- * Top-K is only supported on synchronous foreground queries
- * (aerospike_query_foreach() and aerospike_query_partitions()). It is
- * rejected on asynchronous, background and aggregation UDF queries. See
- * as_query_top_k() for the full list of incompatible settings.
+ * Top-K is supported on foreground queries, both synchronous
+ * (aerospike_query_foreach() and aerospike_query_partitions()) and
+ * asynchronous (aerospike_query_async() and
+ * aerospike_query_partitions_async()). It is rejected on background and
+ * aggregation UDF queries. See as_query_top_k() for the full list of
+ * incompatible settings.
  *
  * **Important:** Setting order_by/top_k changes the foreground query
- * callback from "streaming as records arrive" to "buffered until every
- * targeted node has returned its results, then delivered once in final rank
- * order." This is inherent: the global top-k cannot be known until every
+ * callback or listener from "streaming as records arrive" to "buffered until
+ * every targeted node has returned its results, then delivered once in final
+ * rank order." This is inherent: the global top-k cannot be known until every
  * targeted node has reported. The memory bound is at most `n_nodes * k`
  * records buffered at once (k capped at 1000).
  *
@@ -1121,9 +1123,10 @@ as_query_apply(as_query* query, const char* module, const char* function, const 
  * AS_ORDER_DESCENDING. Executing the query then fails with AEROSPIKE_ERR_PARAM.
  *
  * IMPORTANT: setting order_by/top_k changes aerospike_query_foreach()/
- * aerospike_query_partitions() from streaming-as-records-arrive to
- * buffering until every targeted node has returned its results, then
- * delivering them once in final rank order. See as_query_top_k().
+ * aerospike_query_partitions() and their asynchronous variants from
+ * streaming-as-records-arrive to buffering until every targeted node has
+ * returned its results, then delivering them once in final rank order. See
+ * as_query_top_k().
  *
  * @code
  * as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_DOUBLE, AS_ORDER_DESCENDING,
@@ -1188,7 +1191,7 @@ as_query_then_order_by(
  * Top-K always runs as a long query. The server ignores a short-query hint
  * (as_policy_query.short_query / AS_QUERY_DURATION_SHORT).
  *
- * Incompatible with: asynchronous queries, background queries, aggregate UDFs
+ * Incompatible with: background queries, aggregate UDFs
  * (as_query_apply), metadata-only projection (as_query.no_bins), query
  * pagination (as_query_set_paginate()), a partition filter that resumes an
  * earlier query, any query->max_records, and an order key that is not in the

@@ -28,6 +28,9 @@
 #include <aerospike/as_key.h>
 #include <aerospike/as_list.h>
 #include <aerospike/as_map.h>
+#if AS_EVENT_LIB_DEFINED
+#include <aerospike/as_monitor.h>
+#endif
 #include <aerospike/as_operations.h>
 #include <aerospike/as_partition_filter.h>
 #include <aerospike/as_policy.h>
@@ -579,29 +582,33 @@ TEST(query_topk_validate_resumed_partition_filter,
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
 	assert_string_eq(err.message, "Top-K can't resume a partition filter from an earlier query");
 
+	status = aerospike_query_partitions_async(as, &err, NULL, &query, &pf, NULL, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "Top-K can't resume a partition filter from an earlier query");
+
 	as_key_destroy(&key);
 	as_query_destroy(&query);
 }
 
-TEST(query_topk_validate_async_rejected, "order_by/top_k is rejected on asynchronous queries")
+TEST(query_topk_validate_async, "order_by/top_k is validated on asynchronous queries")
 {
 	as_query query;
 	as_query_init(&query, NAMESPACE, SET);
 	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
 		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
-	as_query_top_k(&query, 5);
+	as_query_top_k(&query, 1001);
 
 	as_error err;
 	as_status status = aerospike_query_async(as, &err, NULL, &query, NULL, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
-	assert_string_eq(err.message, "Top-K is only supported by synchronous partition queries");
+	assert_string_eq(err.message, "topK must be in [1, 1000]; got 1001");
 
 	as_partition_filter pf;
 	as_partition_filter_set_all(&pf);
 
 	status = aerospike_query_partitions_async(as, &err, NULL, &query, &pf, NULL, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
-	assert_string_eq(err.message, "Top-K is only supported by synchronous partition queries");
+	assert_string_eq(err.message, "topK must be in [1, 1000]; got 1001");
 
 	as_query_destroy(&query);
 }
@@ -640,11 +647,16 @@ TEST(query_topk_validate_server_support,
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 
+	as_error async_err;
+	as_status async_status = aerospike_query_async(as, &async_err, NULL, &query, NULL, NULL, NULL);
+
 	as->cluster->has_order_by = has_order_by;
 	as_query_destroy(&query);
 
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
 	assert_string_eq(err.message, "orderBy/topK is not supported by all nodes in the cluster");
+	assert_int_eq(async_status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(async_err.message, "orderBy/topK is not supported by all nodes in the cluster");
 }
 
 //---------------------------------
@@ -1014,6 +1026,115 @@ TEST(query_topk_merge_copies_values,
 	as_record_destroy(rec);
 }
 
+typedef struct topk_async_result_s {
+	uint32_t count;
+	int64_t scores[16];
+	uint32_t ends;
+	as_status error;
+	// Return false after this many records; 0 never stops.
+	uint32_t stop_after;
+} topk_async_result;
+
+static bool
+topk_test_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	(void)event_loop;
+	topk_async_result* result = (topk_async_result*)udata;
+
+	if (err) {
+		result->error = err->code;
+		return false;
+	}
+
+	if (! record) {
+		result->ends++;
+		return false;
+	}
+
+	result->scores[result->count++] = as_record_get_int64(record, "score", -1);
+	return result->count != result->stop_after;
+}
+
+static as_query_topk_collector*
+topk_test_create_async(uint32_t k, topk_async_result* result)
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, k);
+
+	as_query_topk_collector* collector =
+		as_query_topk_collector_create_async(&query, topk_test_listener, result);
+	as_query_destroy(&query);
+	return collector;
+}
+
+static void
+topk_test_collect_async_rec(as_query_topk_collector* collector, uint8_t digest_byte, int64_t score)
+{
+	as_record rec;
+	topk_test_make_int_rec(&rec, digest_byte, score, true);
+	as_query_topk_collect_async(NULL, &rec, collector, NULL);
+	as_record_destroy(&rec);
+}
+
+TEST(query_topk_merge_async,
+	"async topk collector merges batches from multiple nodes before notifying the listener")
+{
+	topk_async_result result = {0};
+	as_query_topk_collector* collector = topk_test_create_async(3, &result);
+
+	// Node A and node B batches, each already sorted desc by score.
+	topk_test_collect_async_rec(collector, 0xA1, 50);
+	topk_test_collect_async_rec(collector, 0xA2, 30);
+	topk_test_collect_async_rec(collector, 0xB1, 40);
+	topk_test_collect_async_rec(collector, 0xB2, 20);
+	assert_int_eq(result.count, 0);
+
+	// Completion delivers the merged result, then destroys the collector.
+	as_query_topk_collect_async(NULL, NULL, collector, NULL);
+
+	assert_int_eq(result.count, 3);
+	assert_int_eq(result.scores[0], 50);
+	assert_int_eq(result.scores[1], 40);
+	assert_int_eq(result.scores[2], 30);
+	assert_int_eq(result.ends, 1);
+	assert_int_eq(result.error, AEROSPIKE_OK);
+}
+
+TEST(query_topk_merge_async_error,
+	"async topk collector forwards an error without delivering the buffered records")
+{
+	topk_async_result result = {0};
+	as_query_topk_collector* collector = topk_test_create_async(3, &result);
+
+	topk_test_collect_async_rec(collector, 0xA1, 50);
+
+	as_error err;
+	as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, "timeout");
+	as_query_topk_collect_async(&err, NULL, collector, NULL);
+
+	assert_int_eq(result.count, 0);
+	assert_int_eq(result.ends, 0);
+	assert_int_eq(result.error, AEROSPIKE_ERR_TIMEOUT);
+}
+
+TEST(query_topk_merge_async_listener_stops,
+	"async topk collector stops notifying a listener that returns false")
+{
+	topk_async_result result = {.stop_after = 1};
+	as_query_topk_collector* collector = topk_test_create_async(3, &result);
+
+	topk_test_collect_async_rec(collector, 0xA1, 50);
+	topk_test_collect_async_rec(collector, 0xB1, 40);
+	as_query_topk_collect_async(NULL, NULL, collector, NULL);
+
+	assert_int_eq(result.count, 1);
+	assert_int_eq(result.scores[0], 50);
+	assert_int_eq(result.ends, 0);
+}
+
 //---------------------------------
 // Server integration tests
 //---------------------------------
@@ -1183,6 +1304,105 @@ TEST(query_topk_order_by_without_top_k_server,
 	assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
 }
 
+#if AS_EVENT_LIB_DEFINED
+typedef struct topk_async_server_data_s {
+	as_monitor monitor;
+	topk_integration_result result;
+	as_status status;
+} topk_async_server_data;
+
+static bool
+topk_async_server_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	(void)event_loop;
+	topk_async_server_data* data = (topk_async_server_data*)udata;
+
+	if (err) {
+		data->status = err->code;
+		as_monitor_notify(&data->monitor);
+		return false;
+	}
+
+	if (! record) {
+		as_monitor_notify(&data->monitor);
+		return false;
+	}
+
+	topk_integration_result* result = &data->result;
+
+	if (result->count < TOPK_INTEGRATION_K) {
+		result->scores[result->count] = as_record_get_int64(record, "score", -1);
+	}
+	result->count++;
+	return true;
+}
+
+static as_status
+topk_integration_query_async(bool by_partition, topk_async_server_data* data)
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, TOPK_INTEGRATION_K);
+
+	as_monitor_init(&data->monitor);
+	as_monitor_begin(&data->monitor);
+
+	as_error err;
+	as_status status;
+
+	if (by_partition) {
+		as_partition_filter pf;
+		as_partition_filter_set_all(&pf);
+		status = aerospike_query_partitions_async(as, &err, NULL, &query, &pf,
+			topk_async_server_listener, data, NULL);
+	}
+	else {
+		status = aerospike_query_async(as, &err, NULL, &query, topk_async_server_listener, data,
+			NULL);
+	}
+
+	if (status == AEROSPIKE_OK) {
+		as_monitor_wait(&data->monitor);
+		status = data->status;
+	}
+
+	as_monitor_destroy(&data->monitor);
+	as_query_destroy(&query);
+	return status;
+}
+
+TEST(query_topk_integer_desc_async_server,
+	"async server queries return the globally ranked top-k integer values")
+{
+	if (! server_supports_topk()) {
+		return;
+	}
+
+	topk_integration_remove_records();
+	assert_true(topk_integration_put_records());
+
+	topk_async_server_data query_data = {0};
+	as_status query_status = topk_integration_query_async(false, &query_data);
+
+	topk_async_server_data partitions_data = {0};
+	as_status partitions_status = topk_integration_query_async(true, &partitions_data);
+
+	topk_integration_remove_records();
+
+	assert_int_eq(query_status, AEROSPIKE_OK);
+	assert_int_eq(query_data.result.count, TOPK_INTEGRATION_K);
+	assert_int_eq(partitions_status, AEROSPIKE_OK);
+	assert_int_eq(partitions_data.result.count, TOPK_INTEGRATION_K);
+
+	for (uint32_t i = 0; i < TOPK_INTEGRATION_K; i++) {
+		assert_int_eq(query_data.result.scores[i], TOPK_INTEGRATION_RECORDS - 1 - i);
+		assert_int_eq(partitions_data.result.scores[i], TOPK_INTEGRATION_RECORDS - 1 - i);
+	}
+}
+#endif
+
 //---------------------------------
 // Suite
 //---------------------------------
@@ -1212,7 +1432,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_validate_second_key_not_projected);
 	suite_add(query_topk_validate_duplicate_projection_op);
 	suite_add(query_topk_validate_resumed_partition_filter);
-	suite_add(query_topk_validate_async_rejected);
+	suite_add(query_topk_validate_async);
 	suite_add(query_topk_validate_projection_missing_bin);
 	suite_add(query_topk_validate_server_support);
 	suite_add(query_topk_merge_integer_desc);
@@ -1220,7 +1440,13 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_merge_double_nan_and_zero);
 	suite_add(query_topk_merge_two_keys);
 	suite_add(query_topk_merge_copies_values);
+	suite_add(query_topk_merge_async);
+	suite_add(query_topk_merge_async_error);
+	suite_add(query_topk_merge_async_listener_stops);
 	suite_add(query_topk_integer_desc_server);
 	suite_add(query_topk_short_query_server);
 	suite_add(query_topk_order_by_without_top_k_server);
+#if AS_EVENT_LIB_DEFINED
+	suite_add(query_topk_integer_desc_async_server);
+#endif
 }

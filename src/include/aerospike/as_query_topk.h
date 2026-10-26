@@ -32,12 +32,14 @@ extern "C" {
  * Buffers records from every targeted node (each node's response is already
  * a fully sorted, deduplicated, <= k batch) and, once every node has reported,
  * delivers the merged/truncated global top-k in final rank order to the
- * caller's real callback.
+ * caller's real callback or listener.
  *
- * A collector is single-use: create it, drive one query through
- * as_query_topk_collect() (used as the query's callback/udata in place of the
- * caller's own callback/udata), then destroy it with
- * as_query_topk_collector_destroy().
+ * A collector is single-use: create it, then drive one query through
+ * as_query_topk_collect() or as_query_topk_collect_async() (used as the
+ * query's callback/udata in place of the caller's own callback/udata). A
+ * synchronous collector is destroyed by its caller with
+ * as_query_topk_collector_destroy(). An asynchronous collector destroys
+ * itself; see as_query_topk_collector_create_async().
  */
 typedef struct as_query_topk_collector_s as_query_topk_collector;
 
@@ -89,6 +91,27 @@ as_query_topk_collector_create(
 
 /**
  * @private
+ * Create a new collector for an asynchronous (aerospike_query_async()/
+ * aerospike_query_partitions_async()) Top-K query. The query's order keys and
+ * k must already be validated (as_query_validate_topk()) by the caller.
+ *
+ * Pass as_query_topk_collect_async() (with the returned collector as udata)
+ * to the underlying as_query_partition_async() call in place of the caller's
+ * own listener/udata.
+ *
+ * The collector destroys itself when the query reports completion or an
+ * error, because the query is still running on its event loop after the
+ * call that started it returns. If that call fails, the listener is never
+ * notified, so the caller must destroy the collector with
+ * as_query_topk_collector_destroy() instead.
+ */
+AS_EXTERN as_query_topk_collector*
+as_query_topk_collector_create_async(
+	const as_query* query, as_async_query_record_listener listener, void* udata
+	);
+
+/**
+ * @private
  * Trampoline callback with the same signature as
  * aerospike_query_foreach_callback. Deep-copies val (assumed to be an
  * as_record) so it survives past the lifetime of the caller's
@@ -107,10 +130,26 @@ as_query_topk_collect(const as_val* val, void* udata);
 
 /**
  * @private
+ * Trampoline listener with the same signature as
+ * as_async_query_record_listener. Deep-copies record, like
+ * as_query_topk_collect(). record == NULL (with err NULL) signals that the
+ * underlying query completed successfully across every targeted node: the
+ * buffered records are merged and replayed to the real listener, followed by
+ * one final NULL record unless the listener returned false. err set signals a
+ * fatal error, which is forwarded to the real listener without delivering
+ * the buffered records. In both cases the collector then destroys itself.
+ */
+AS_EXTERN bool
+as_query_topk_collect_async(
+	as_error* err, as_record* record, void* udata, as_event_loop* event_loop
+	);
+
+/**
+ * @private
  * Destroy the collector and any buffered records it still owns (e.g.
- * because the underlying query failed before completion, so
+ * because the underlying synchronous query failed before completion, so
  * as_query_topk_collect() never observed the val == NULL completion
- * signal).
+ * signal, or because an asynchronous query failed to start).
  */
 AS_EXTERN void
 as_query_topk_collector_destroy(as_query_topk_collector* collector);

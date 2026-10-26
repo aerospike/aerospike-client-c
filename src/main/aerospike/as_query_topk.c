@@ -219,7 +219,7 @@ as_query_topk_copy_record(const as_record* src)
 static void
 as_query_topk_extract_key(const as_record* rec, const as_query_order_by_field* order_by, as_query_topk_key* key)
 {
-	key->is_nil = true;
+	*key = (as_query_topk_key){.is_nil = true};
 
 	as_bin_value* bv = as_record_get(rec, order_by->bin);
 

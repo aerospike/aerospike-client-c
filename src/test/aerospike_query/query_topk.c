@@ -246,7 +246,7 @@ TEST(query_topk_validate_k_zero, "a top_k set to 0 is rejected, with or without 
 
 	status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
-	assert_string_eq(err.message, "top_k requires order_by to be set");
+	assert_string_eq(err.message, "topK requires orderBy to be set");
 
 	as_query_destroy(&query);
 }
@@ -530,7 +530,7 @@ TEST(query_topk_validate_second_key_not_projected, "a second order key missing f
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
 	assert_string_eq(err.message,
-		"orderBy bin 'ts' is not in projection; add it to setOperations or remove projection");
+		"orderBy bin 'ts' is not in projection; add it to the projection or remove the projection");
 
 	as_query_destroy(&query);
 }
@@ -620,7 +620,7 @@ TEST(query_topk_validate_projection_missing_bin, "order_by bin missing from proj
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
 	assert_string_eq(err.message,
-		"orderBy bin 'score' is not in projection; add it to setOperations or remove projection");
+		"orderBy bin 'score' is not in projection; add it to the projection or remove the projection");
 
 	as_query_destroy(&query);
 }
@@ -644,7 +644,7 @@ TEST(query_topk_validate_server_support,
 	as_query_destroy(&query);
 
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
-	assert_string_eq(err.message, "order_by/top_k is not supported by all nodes in the cluster");
+	assert_string_eq(err.message, "orderBy/topK is not supported by all nodes in the cluster");
 }
 
 //---------------------------------

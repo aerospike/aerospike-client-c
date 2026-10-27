@@ -694,11 +694,14 @@ as_query_is_integer_dtype(as_index_datatype dtype)
 // Top-K (order_by / top_k) validation
 //---------------------------------
 
-// Messages from the request-time validation table of the Top-K developer API design, shared by
-// the checks that run in more than one place.
+// Messages shared by the checks that run in more than one place. Messages follow the request-time
+// validation table of the Top-K developer API design, which also sets the orderBy/topK naming for
+// the checks it doesn't list.
 #define AS_QUERY_TOPK_ERR_FOREGROUND_ONLY "orderBy/topK is only valid on foreground (SELECT-style) " \
 	"queries; background (UPDATE-style) queries do not produce a result stream"
 #define AS_QUERY_TOPK_ERR_RESUME "Top-K can't resume a partition filter from an earlier query"
+#define AS_QUERY_TOPK_ERR_PARTITION_QUERY \
+	"orderBy/topK requires server support for partition queries (server too old)"
 #define AS_QUERY_TOPK_ERR_ASYNC "Top-K is only supported by synchronous partition queries"
 
 static as_status
@@ -745,7 +748,7 @@ as_query_validate_order_key(
 	}
 
 	if (key->flags & ~(as_query_order_by_flags)AS_QUERY_ORDER_BY_CASE_INSENSITIVE) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "order_by has unknown flag bits set");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "orderBy has unknown flag bits set");
 	}
 
 	// Order key must be one of the projected names, if a projection is set. Two operations
@@ -767,8 +770,8 @@ as_query_validate_order_key(
 
 		if (n_found == 0) {
 			return as_error_update(err, AEROSPIKE_ERR_PARAM,
-				"orderBy bin '%s' is not in projection; add it to setOperations or remove projection",
-				key->bin);
+				"orderBy bin '%s' is not in projection; add it to the projection or remove the "
+				"projection", key->bin);
 		}
 		return AEROSPIKE_OK;
 	}
@@ -781,8 +784,8 @@ as_query_validate_order_key(
 
 	if (query->select.size > 0) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
-			"orderBy bin '%s' is not in projection; add it to setOperations or remove projection",
-			key->bin);
+			"orderBy bin '%s' is not in projection; add it to the projection or remove the "
+			"projection", key->bin);
 	}
 	return AEROSPIKE_OK;
 }
@@ -812,7 +815,7 @@ as_query_validate_topk(
 	}
 
 	if (!query->order_by.defined) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "top_k requires order_by to be set");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "topK requires orderBy to be set");
 	}
 
 	if (query->order_by_overflow) {
@@ -846,12 +849,12 @@ as_query_validate_topk(
 
 	if (query->no_bins) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k cannot be combined with a metadata-only (no-bins) query");
+			"orderBy/topK cannot be combined with a metadata-only (no-bins) query");
 	}
 
 	if (query->paginate) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k does not support pagination in this client version");
+			"orderBy/topK does not support pagination in this client version");
 	}
 
 	// A resumed query would rank only the rest of the scan.
@@ -865,12 +868,11 @@ as_query_validate_topk(
 
 	if (! qb->cluster->has_order_by) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k is not supported by all nodes in the cluster");
+			"orderBy/topK is not supported by all nodes in the cluster");
 	}
 
 	if (! qb->is_new) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k requires server support for partition queries (server too old)");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_PARTITION_QUERY);
 	}
 	return AEROSPIKE_OK;
 }
@@ -2390,8 +2392,7 @@ aerospike_query_foreach_internal(
 	// AS_MSG_INFO3_PARTITION_DONE). Reject explicitly here so it can never silently fall
 	// through to convert_query_to_scan() below, which would drop both fields on the floor.
 	if (as_query_has_topk_settings(query) && ! cluster->has_partition_query) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k requires server support for partition queries (server too old)");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_PARTITION_QUERY);
 	}
 
 	if (cluster->has_partition_query && ! query->apply.function[0]) {

@@ -260,7 +260,7 @@ TEST(query_topk_validate_background_rejected, "order_by/top_k is rejected on bac
 	uint64_t query_id = 0;
 	as_status status = aerospike_query_background(as, &err, NULL, &query, &query_id);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
-	assert_string_eq(err.message, 
+	assert_string_eq(err.message,
 		"orderBy/topK is only valid on foreground (SELECT-style) queries; background (UPDATE-style) "
 		"queries do not produce a result stream");
 
@@ -492,7 +492,7 @@ TEST(query_topk_validate_second_key_not_projected, "a second order key missing f
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
-	assert_string_eq(err.message, 
+	assert_string_eq(err.message,
 		"orderBy bin 'ts' is not in projection; add it to setOperations or remove projection");
 
 	as_query_destroy(&query);
@@ -582,7 +582,7 @@ TEST(query_topk_validate_projection_missing_bin, "order_by bin missing from proj
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
-	assert_string_eq(err.message, 
+	assert_string_eq(err.message,
 		"orderBy bin 'score' is not in projection; add it to setOperations or remove projection");
 
 	as_query_destroy(&query);

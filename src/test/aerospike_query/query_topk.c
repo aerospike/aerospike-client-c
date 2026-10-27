@@ -610,6 +610,16 @@ TEST(query_topk_validate_async, "order_by/top_k is validated on asynchronous que
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
 	assert_string_eq(err.message, "topK must be in [1, 1000]; got 1001");
 
+	as_query_top_k(&query, 0);
+
+	status = aerospike_query_async(as, &err, NULL, &query, NULL, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "topK must be in [1, 1000]; got 0");
+
+	status = aerospike_query_partitions_async(as, &err, NULL, &query, &pf, NULL, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "topK must be in [1, 1000]; got 0");
+
 	as_query_destroy(&query);
 }
 

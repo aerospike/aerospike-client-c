@@ -723,6 +723,13 @@ typedef struct as_query_s {
 
 	/**
 	 * @private
+	 * Set by as_query_top_k(), so that a k set to 0 is rejected while a query
+	 * without k is not. Set/cleared internally; do not set directly.
+	 */
+	bool top_k_defined;
+
+	/**
+	 * @private
 	 * Set when as_query_then_order_by() is called with two order keys already
 	 * set. Cleared by as_query_order_by().
 	 */
@@ -1174,9 +1181,9 @@ as_query_then_order_by(
 
 /**
  * Set the global Top-K limit for a Top-K query. Replaces any k already set.
- * k must be in [1, 1000]; this is validated at query execution time
- * (mirroring as_query_where()/as_query_select(), which also defer validation
- * to command-build time).
+ * k must be in [1, 1000], so a k of 0 is also rejected; this is validated at
+ * query execution time (mirroring as_query_where()/as_query_select(), which
+ * also defer validation to command-build time).
  *
  * Top-K always runs as a long query. The server ignores a short-query hint
  * (as_policy_query.short_query / AS_QUERY_DURATION_SHORT).

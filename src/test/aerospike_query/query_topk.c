@@ -65,6 +65,7 @@ TEST(query_topk_setters, "as_query_order_by()/as_query_top_k() set fields correc
 
 	assert_false(query.order_by.defined);
 	assert_int_eq(query.top_k, 0);
+	assert_false(query.top_k_defined);
 
 	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_DOUBLE, AS_ORDER_DESCENDING,
 		AS_QUERY_ORDER_BY_CASE_INSENSITIVE);
@@ -76,6 +77,7 @@ TEST(query_topk_setters, "as_query_order_by()/as_query_top_k() set fields correc
 	assert_int_eq(query.order_by.direction, AS_ORDER_DESCENDING);
 	assert_int_eq(query.order_by.flags, AS_QUERY_ORDER_BY_CASE_INSENSITIVE);
 	assert_int_eq(query.top_k, 25);
+	assert_true(query.top_k_defined);
 
 	as_query_then_order_by(&query, "ts", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
 		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
@@ -138,6 +140,7 @@ TEST(query_topk_serialize, "as_query_to_bytes()/as_query_from_bytes() round-trip
 	assert_int_eq(query2.then_order_by.direction, AS_ORDER_ASCENDING);
 	assert_int_eq(query2.then_order_by.flags, AS_QUERY_ORDER_BY_CASE_INSENSITIVE);
 	assert_int_eq(query2.top_k, 7);
+	assert_true(query2.top_k_defined);
 
 	assert_true(as_query_compare(&query, &query2));
 
@@ -171,6 +174,15 @@ TEST(query_topk_compare, "as_query_compare() distinguishes different order_by/to
 	as_query_then_order_by(&q1, "ts", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
 		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
 	assert_true(as_query_compare(&q1, &q2));
+
+	as_query_destroy(&q1);
+	as_query_destroy(&q2);
+
+	// A k set to 0 differs from no k.
+	as_query_init(&q1, NAMESPACE, SET);
+	as_query_init(&q2, NAMESPACE, SET);
+	as_query_top_k(&q2, 0);
+	assert_false(as_query_compare(&q1, &q2));
 
 	as_query_destroy(&q1);
 	as_query_destroy(&q2);
@@ -210,6 +222,31 @@ TEST(query_topk_validate_k_out_of_range, "top_k > 1000 is rejected")
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
 	assert_string_eq(err.message, "topK must be in [1, 1000]; got 1001");
+
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_validate_k_zero, "a top_k set to 0 is rejected, with or without an order key")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 0);
+
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "topK must be in [1, 1000]; got 0");
+
+	as_query_destroy(&query);
+
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_top_k(&query, 0);
+
+	status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "top_k requires order_by to be set");
 
 	as_query_destroy(&query);
 }
@@ -1157,6 +1194,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_compare);
 	suite_add(query_topk_validate_top_k_without_order_by);
 	suite_add(query_topk_validate_k_out_of_range);
+	suite_add(query_topk_validate_k_zero);
 	suite_add(query_topk_validate_case_insensitive_wrong_type);
 	suite_add(query_topk_validate_incompatible_with_aggregation);
 	suite_add(query_topk_validate_background_rejected);

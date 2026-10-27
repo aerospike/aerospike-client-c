@@ -819,9 +819,9 @@ as_query_validate_topk(
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "orderBy supports at most two keys");
 	}
 
-	// An order key without k (top_k == 0) is not checked here: it is sent to the server,
-	// which rejects it with a reason.
-	if (query->top_k > 1000) {
+	// An order key without k is not checked here: it is sent to the server, which rejects it
+	// with a reason. A k set to 0 is rejected like any other k out of range.
+	if (query->top_k > 1000 || (query->top_k_defined && query->top_k == 0)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM, "topK must be in [1, 1000]; got %u",
 			query->top_k);
 	}

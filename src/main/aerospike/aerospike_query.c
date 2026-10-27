@@ -694,11 +694,25 @@ as_query_is_integer_dtype(as_index_datatype dtype)
 // Top-K (order_by / top_k) validation
 //---------------------------------
 
+// Messages from the request-time validation table of the Top-K developer API design, shared by
+// the checks that run in more than one place.
+#define AS_QUERY_TOPK_ERR_FOREGROUND_ONLY "orderBy/topK is only valid on foreground (SELECT-style) " \
+	"queries; background (UPDATE-style) queries do not produce a result stream"
+#define AS_QUERY_TOPK_ERR_RESUME "Top-K can't resume a partition filter from an earlier query"
+#define AS_QUERY_TOPK_ERR_ASYNC "Top-K is only supported by synchronous partition queries"
+
 static as_status
 as_query_validate_order_key(
 	const as_query* query, const as_query_order_by_field* key, as_error* err
 	)
 {
+	// 0 is not a type, so a zero-initialized type is treated as missing.
+	if ((int)key->type == 0) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"orderBy requires a type declaration (INTEGER, DOUBLE, STRING, or BYTES); "
+			"Aerospike has no schema");
+	}
+
 	switch (key->type) {
 		case AS_QUERY_ORDER_BY_INTEGER:
 		case AS_QUERY_ORDER_BY_DOUBLE:
@@ -707,8 +721,8 @@ as_query_validate_order_key(
 			break;
 
 		default:
-			return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-				"order_by type must be one of INTEGER, DOUBLE, STRING, BYTES");
+			return as_error_update(err, AEROSPIKE_ERR_PARAM,
+				"orderBy type must be one of INTEGER, DOUBLE, STRING, BYTES; got %d", (int)key->type);
 	}
 
 	// The top-k merge in as_query_topk.c ranks any direction other than DESC as ASC, so an
@@ -725,13 +739,13 @@ as_query_validate_order_key(
 			"Top-K order-by bin name must be 1-%d UTF-8 bytes without NUL", AS_BIN_NAME_MAX_LEN);
 	}
 
-	if (key->flags & ~(as_query_order_by_flags)AS_QUERY_ORDER_BY_CASE_INSENSITIVE) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "order_by has unknown flag bits set");
+	if (key->flags != AS_QUERY_ORDER_BY_FLAGS_DEFAULT && key->type != AS_QUERY_ORDER_BY_STRING) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"orderBy flags are only valid with type STRING");
 	}
 
-	if ((key->flags & AS_QUERY_ORDER_BY_CASE_INSENSITIVE) && key->type != AS_QUERY_ORDER_BY_STRING) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by flag CASE_INSENSITIVE is only valid with type STRING");
+	if (key->flags & ~(as_query_order_by_flags)AS_QUERY_ORDER_BY_CASE_INSENSITIVE) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "order_by has unknown flag bits set");
 	}
 
 	// Order key must be one of the projected names, if a projection is set. Two operations
@@ -748,13 +762,13 @@ as_query_validate_order_key(
 
 		if (n_found > 1) {
 			return as_error_update(err, AEROSPIKE_ERR_PARAM,
-				"order_by bin '%s' is produced by %u projection operations; it must be produced by one",
-				key->bin, n_found);
+				"orderBy bin '%s' is produced by more than one operation", key->bin);
 		}
 
 		if (n_found == 0) {
 			return as_error_update(err, AEROSPIKE_ERR_PARAM,
-				"order_by bin '%s' is not in projection; add it to ops or remove projection", key->bin);
+				"orderBy bin '%s' is not in projection; add it to setOperations or remove projection",
+				key->bin);
 		}
 		return AEROSPIKE_OK;
 	}
@@ -767,7 +781,8 @@ as_query_validate_order_key(
 
 	if (query->select.size > 0) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
-			"order_by bin '%s' is not in projection; add it to select or remove projection", key->bin);
+			"orderBy bin '%s' is not in projection; add it to setOperations or remove projection",
+			key->bin);
 	}
 	return AEROSPIKE_OK;
 }
@@ -801,14 +816,13 @@ as_query_validate_topk(
 	}
 
 	if (query->order_by_overflow) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k allows at most two order keys");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "orderBy supports at most two keys");
 	}
 
 	// An order key without k (top_k == 0) is not checked here: it is sent to the server,
 	// which rejects it with a reason.
 	if (query->top_k > 1000) {
-		return as_error_update(err, AEROSPIKE_ERR_PARAM, "top_k must be in [1, 1000]; got %u",
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "topK must be in [1, 1000]; got %u",
 			query->top_k);
 	}
 
@@ -827,8 +841,7 @@ as_query_validate_topk(
 	}
 
 	if (! query_policy) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k is only valid on foreground queries");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_FOREGROUND_ONLY);
 	}
 
 	if (query->no_bins) {
@@ -843,13 +856,11 @@ as_query_validate_topk(
 
 	// A resumed query would rank only the rest of the scan.
 	if (query->parts_all) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k cannot resume an earlier query");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_RESUME);
 	}
 
 	if (query->max_records > 0) {
-		return as_error_update(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k cannot be combined with max_records(%" PRIu64 ")", query->max_records);
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Top-K is incompatible with maxRecords");
 	}
 
 	if (! qb->cluster->has_order_by) {
@@ -2364,7 +2375,7 @@ aerospike_query_foreach_internal(
 	// as_query_execute() never closes the aggregation input stream.
 	if (query->apply.function[0] && as_query_has_topk_settings(query)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k is incompatible with aggregate UDFs");
+			"orderBy is incompatible with aggregate UDFs; use the UDF's own reduce stage");
 	}
 
 	as_error_reset(err);
@@ -2561,8 +2572,7 @@ aerospike_query_partitions(
 	// A query that resumes after a digest would rank only the rest of the scan.
 	// as_query_validate_topk() rejects the other resume points (pf->parts_all).
 	if (as_query_has_topk_settings(query) && pf->digest.init) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k cannot resume an earlier query");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_RESUME);
 	}
 
 	if (pf->parts_all && ! query->parts_all) {
@@ -2607,8 +2617,7 @@ aerospike_query_async(
 	}
 
 	if (as_query_has_topk_settings(query)) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k is not supported on asynchronous queries");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_ASYNC);
 	}
 
 	as_error_reset(err);
@@ -2803,8 +2812,7 @@ aerospike_query_partitions_async(
 	}
 
 	if (as_query_has_topk_settings(query)) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k is not supported on asynchronous queries");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_ASYNC);
 	}
 
 	as_cluster* cluster = as->cluster;
@@ -2865,8 +2873,7 @@ aerospike_query_background(
 	policy = as_policy_write_merge(as, policy, &merged, &pkey);
 
 	if (as_query_has_topk_settings(query)) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k is only valid on foreground queries");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_FOREGROUND_ONLY);
 	}
 
 	if (! (query->apply.function[0] || query->ops)) {

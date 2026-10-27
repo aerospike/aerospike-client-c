@@ -209,6 +209,7 @@ TEST(query_topk_validate_k_out_of_range, "top_k > 1000 is rejected")
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "topK must be in [1, 1000]; got 1001");
 
 	as_query_destroy(&query);
 }
@@ -224,6 +225,7 @@ TEST(query_topk_validate_case_insensitive_wrong_type, "CASE_INSENSITIVE with non
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "orderBy flags are only valid with type STRING");
 
 	as_query_destroy(&query);
 }
@@ -240,6 +242,7 @@ TEST(query_topk_validate_incompatible_with_aggregation, "order_by/top_k is rejec
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "orderBy is incompatible with aggregate UDFs; use the UDF's own reduce stage");
 
 	as_query_destroy(&query);
 }
@@ -257,6 +260,9 @@ TEST(query_topk_validate_background_rejected, "order_by/top_k is rejected on bac
 	uint64_t query_id = 0;
 	as_status status = aerospike_query_background(as, &err, NULL, &query, &query_id);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, 
+		"orderBy/topK is only valid on foreground (SELECT-style) queries; background (UPDATE-style) "
+		"queries do not produce a result stream");
 
 	as_query_destroy(&query);
 }
@@ -273,6 +279,7 @@ TEST(query_topk_validate_max_records, "any max_records is rejected, even one >= 
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "Top-K is incompatible with maxRecords");
 
 	as_query_destroy(&query);
 }
@@ -292,6 +299,7 @@ TEST(query_topk_validate_third_order_key, "a third order key is rejected")
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "orderBy supports at most two keys");
 
 	as_query_destroy(&query);
 }
@@ -421,6 +429,54 @@ TEST(query_topk_validate_direction_invalid, "an order key direction other than A
 	as_query_destroy(&query);
 }
 
+TEST(query_topk_validate_type_missing, "an order key without a type is rejected")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", (as_query_order_by_type)0, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message,
+		"orderBy requires a type declaration (INTEGER, DOUBLE, STRING, or BYTES); Aerospike has no schema");
+
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_validate_type_invalid, "an order key type other than INTEGER, DOUBLE, STRING, BYTES is rejected")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", (as_query_order_by_type)9, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "orderBy type must be one of INTEGER, DOUBLE, STRING, BYTES; got 9");
+
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_validate_flags_wrong_type, "any order-by flag with a non-STRING type is rejected")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING, 4);
+	as_query_top_k(&query, 5);
+
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "orderBy flags are only valid with type STRING");
+
+	as_query_destroy(&query);
+}
+
 TEST(query_topk_validate_second_key_not_projected, "a second order key missing from projection is rejected")
 {
 	as_query query;
@@ -436,6 +492,8 @@ TEST(query_topk_validate_second_key_not_projected, "a second order key missing f
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, 
+		"orderBy bin 'ts' is not in projection; add it to setOperations or remove projection");
 
 	as_query_destroy(&query);
 }
@@ -457,6 +515,7 @@ TEST(query_topk_validate_duplicate_projection_op,
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "orderBy bin 'score' is produced by more than one operation");
 
 	as_query_destroy(&query);
 }
@@ -481,6 +540,7 @@ TEST(query_topk_validate_resumed_partition_filter,
 	as_error err;
 	as_status status = aerospike_query_partitions(as, &err, NULL, &query, &pf, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "Top-K can't resume a partition filter from an earlier query");
 
 	as_key_destroy(&key);
 	as_query_destroy(&query);
@@ -497,12 +557,14 @@ TEST(query_topk_validate_async_rejected, "order_by/top_k is rejected on asynchro
 	as_error err;
 	as_status status = aerospike_query_async(as, &err, NULL, &query, NULL, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "Top-K is only supported by synchronous partition queries");
 
 	as_partition_filter pf;
 	as_partition_filter_set_all(&pf);
 
 	status = aerospike_query_partitions_async(as, &err, NULL, &query, &pf, NULL, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "Top-K is only supported by synchronous partition queries");
 
 	as_query_destroy(&query);
 }
@@ -520,6 +582,8 @@ TEST(query_topk_validate_projection_missing_bin, "order_by bin missing from proj
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, 
+		"orderBy bin 'score' is not in projection; add it to setOperations or remove projection");
 
 	as_query_destroy(&query);
 }
@@ -543,6 +607,7 @@ TEST(query_topk_validate_server_support,
 	as_query_destroy(&query);
 
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "order_by/top_k is not supported by all nodes in the cluster");
 }
 
 //---------------------------------
@@ -1103,6 +1168,9 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_validate_bin_name_too_long_without_top_k);
 	suite_add(query_topk_validate_second_key_bin_name_invalid);
 	suite_add(query_topk_validate_direction_invalid);
+	suite_add(query_topk_validate_type_missing);
+	suite_add(query_topk_validate_type_invalid);
+	suite_add(query_topk_validate_flags_wrong_type);
 	suite_add(query_topk_validate_second_key_not_projected);
 	suite_add(query_topk_validate_duplicate_projection_op);
 	suite_add(query_topk_validate_resumed_partition_filter);

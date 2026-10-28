@@ -315,12 +315,14 @@ typedef enum as_query_order_by_type_e {
 	AS_QUERY_ORDER_BY_DOUBLE = 2,
 
 	/**
-	 * Order-by bin is a string.
+	 * Order-by bin is a string. Upcoming feature: a Top-K query with this
+	 * type fails with AEROSPIKE_ERR_PARAM.
 	 */
 	AS_QUERY_ORDER_BY_STRING = 3,
 
 	/**
-	 * Order-by bin is a byte array.
+	 * Order-by bin is a byte array. Upcoming feature: a Top-K query with this
+	 * type fails with AEROSPIKE_ERR_PARAM.
 	 */
 	AS_QUERY_ORDER_BY_BYTES = 4
 
@@ -339,7 +341,7 @@ typedef uint32_t as_query_order_by_flags;
 
 /**
  * Perform a case-insensitive comparison. Only valid when the order-by type
- * is AS_QUERY_ORDER_BY_STRING.
+ * is AS_QUERY_ORDER_BY_STRING, which is an upcoming feature.
  */
 #define AS_QUERY_ORDER_BY_CASE_INSENSITIVE (1 << 0)
 

@@ -33,6 +33,21 @@ typedef enum as_status_e {
 	//---------------------------------
 
 	/**
+	 * Address translation did not map an advertised endpoint.
+	 */
+	AEROSPIKE_ERR_TRANSLATION_MISS = -25,
+
+	/**
+	 * Address translation mapped two nodes to one transport endpoint.
+	 */
+	AEROSPIKE_ERR_TRANSLATION_COLLISION = -26,
+
+	/**
+	 * A seed discovery provider failed.
+	 */
+	AEROSPIKE_ERR_SEED_DISCOVERY_FAILED = -27,
+
+	/**
 	 * There is a conflict between metrics enable/disable and dynamic configuration metrics.
 	 */
 	AEROSPIKE_METRICS_CONFLICT = -20,

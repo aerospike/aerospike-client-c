@@ -20,6 +20,7 @@
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_string_builder.h>
+#include <aerospike/as_version.h>
 
 //---------------------------------
 // Declarations
@@ -459,6 +460,10 @@ as_lookup_node(
 
 	if (as_version_compare(&node_info->version, &query_ops_projection) >= 0) {
 		features |= AS_FEATURES_HAS_QUERY_OPS_PROJECTION_EXT;
+	}
+
+	if (as_version_compare(&node_info->version, &as_server_version_8_2_1) >= 0) {
+		features |= AS_FEATURES_ORDER_BY;
 	}
 
 	node_info->features = features;

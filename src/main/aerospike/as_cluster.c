@@ -158,6 +158,23 @@ as_cluster_has_partition_query(as_nodes* nodes)
 }
 
 static bool
+as_cluster_has_order_by(as_nodes* nodes)
+{
+	if (nodes->size == 0) {
+		return false;
+	}
+
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+
+		if ((node->features & AS_FEATURES_ORDER_BY) == 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool
 as_cluster_has_query_ops_projection_ext(as_nodes* nodes)
 {
 	if (nodes->size == 0) {
@@ -236,6 +253,7 @@ as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes
 	set_nodes(cluster, nodes_new);
 
 	cluster->has_partition_query = as_cluster_has_partition_query(nodes_new);
+	cluster->has_order_by = as_cluster_has_order_by(nodes_new);
 	cluster->has_query_ops_projection_ext = as_cluster_has_query_ops_projection_ext(nodes_new);
 
 	// Put old nodes on garbage collector stack.
@@ -565,6 +583,7 @@ as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ no
 	set_nodes(cluster, nodes_new);
 
 	cluster->has_partition_query = as_cluster_has_partition_query(nodes_new);
+	cluster->has_order_by = as_cluster_has_order_by(nodes_new);
 	cluster->has_query_ops_projection_ext = as_cluster_has_query_ops_projection_ext(nodes_new);
 
 	if (nodes_new->size == 0) {

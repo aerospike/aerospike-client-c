@@ -35,8 +35,9 @@ extern "C" {
  * namespace counters, and namespace latency are written when operational
  * metrics are enabled. Namespace latency is filled for a successful sampled
  * RPC. See as_ns_metrics.latency. The namespace conn slot is not recorded, so
- * each namespace's conn entry is the node's as_metrics_node_snapshot.conn_latency.
- * Summing conn across namespaces counts each connection open once per namespace.
+ * each namespace's conn entry repeats the node's
+ * as_metrics_node_snapshot.conn_latency. Read one namespace's conn entry per
+ * node; summing conn across a node's namespaces overcounts connection opens.
  * Cluster command latency is not written.
  * blockingCount, deferredCount, and backgroundCount follow commandCount on
  * the cluster line. They are feature.api.blocking, feature.api.deferred, and

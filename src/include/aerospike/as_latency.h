@@ -29,18 +29,17 @@ extern "C" {
 
 typedef uint8_t as_latency_type;
 
-#define AS_LATENCY_TYPE_WRITE 0
-#define AS_LATENCY_TYPE_READ 1
-#define AS_LATENCY_TYPE_BATCH 2
-#define AS_LATENCY_TYPE_QUERY 3
-#define AS_LATENCY_TYPE_MAX 4
-
 /**
- * Type of as_metrics_node_snapshot.conn_latency. Not an index into the
- * AS_LATENCY_TYPE_MAX histogram arrays.
+ * Connection-open latency is recorded per node in as_node.conn_latency. The
+ * namespace and command latency[AS_LATENCY_TYPE_CONN] slots are not recorded.
  */
-#define AS_LATENCY_TYPE_CONN 4
+#define AS_LATENCY_TYPE_CONN 0
+#define AS_LATENCY_TYPE_WRITE 1
+#define AS_LATENCY_TYPE_READ 2
+#define AS_LATENCY_TYPE_BATCH 3
+#define AS_LATENCY_TYPE_QUERY 4
 #define AS_LATENCY_TYPE_NONE 5
+#define AS_LATENCY_TYPE_MAX 5
 
 /**
  * Histogram bucket unit. Default is milliseconds, matching learn-metrics.

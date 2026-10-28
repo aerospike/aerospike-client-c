@@ -193,8 +193,9 @@ typedef struct as_metrics_namespace_snapshot_s {
 	 * RPC, only when operational metrics are on and the command was sampled.
 	 * A retry is a new RPC, so the sample starts at the attempt that succeeded.
 	 * A batch sub-batch re-sent to its node is one RPC that includes the
-	 * re-sends. Connection-open latency is per node in
-	 * as_metrics_node_snapshot.conn_latency. Same rules as as_ns_metrics.latency.
+	 * re-sends. latencies[AS_LATENCY_TYPE_CONN] is not recorded. Connection-open
+	 * latency is per node in as_metrics_node_snapshot.conn_latency.
+	 * Same rules as as_ns_metrics.latency.
 	 * v3 command latency is `as_metrics_snapshot.command_latencies`.
 	 */
 	as_metrics_latency_snapshot latencies[AS_LATENCY_TYPE_MAX];
@@ -283,7 +284,8 @@ typedef struct as_metrics_node_snapshot_s {
 	 * Successful connection-open latency for this node.
 	 * Recorded when operational metrics are enabled. Not sampler-gated.
 	 * The type is AS_LATENCY_TYPE_CONN. See as_node.conn_latency.
-	 * The learn-metrics file does not write this series.
+	 * The learn-metrics file writes this series as the conn entry of each
+	 * namespace on the node. See as_metrics_file_exporter.
 	 */
 	as_metrics_latency_snapshot conn_latency;
 } as_metrics_node_snapshot;
@@ -898,8 +900,8 @@ as_metrics_snapshot_destroy(as_metrics_snapshot* snapshot);
  * the learn-metrics file writer's deprecated node-close listener.
  * Namespace counters and latency buckets are copied only when operational metrics
  * are enabled. See as_metrics_namespace_snapshot.latencies.
- * conn_latency is copied when operational metrics are enabled. The file writer
- * does not write it. See as_metrics_node_snapshot.conn_latency.
+ * conn_latency is copied when operational metrics are enabled.
+ * See as_metrics_node_snapshot.conn_latency.
  */
 AS_EXTERN void
 as_metrics_node_snapshot_create(struct as_node_s* node, as_metrics_node_snapshot** snapshot);

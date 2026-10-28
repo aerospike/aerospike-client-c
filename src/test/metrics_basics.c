@@ -424,19 +424,22 @@ metrics_read_cluster_line(const char* dir, char* line, size_t line_size)
 #endif
 }
 
+// Return true when the first "<type>[" entry on the line has a nonzero bucket.
 static bool
-metrics_file_line_has_write_latency(const char* line)
+metrics_file_line_has_latency(const char* line, const char* type)
 {
-	const char* write = strstr(line, "write[");
+	char token[16];
+	snprintf(token, sizeof(token), "%s[", type);
+	const char* p = strstr(line, token);
 
-	if (!write) {
+	if (!p) {
 		return false;
 	}
 
-	write += 6;
+	p += strlen(token);
 
-	for (; *write && *write != ']'; write++) {
-		if (*write >= '1' && *write <= '9') {
+	for (; *p && *p != ']'; p++) {
+		if (*p >= '1' && *p <= '9') {
 			return true;
 		}
 	}
@@ -1466,13 +1469,65 @@ TEST(metrics_file_turns_operational_on, "the file exporter turns operational met
 	as_status disable_status = aerospike_disable_metrics(as, &err);
 	char line[65536];
 	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
-		metrics_file_line_has_write_latency(line) &&
+		metrics_file_line_has_latency(line, "write") &&
 		metrics_file_line_has_memory(line);
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_int_eq(put_status, AEROSPIKE_OK);
 	assert_true(operational);
+	assert_int_eq(disable_status, AEROSPIKE_OK);
+	assert_true(line_ok);
+	as_metrics_policy_destroy(&policy);
+}
+
+TEST(metrics_file_writes_node_conn_latency, "the file writes node connection latency as the namespace conn entry")
+{
+	if (!metrics_second_client_supported()) {
+		return;
+	}
+
+	char dir[256];
+	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
+
+	as_config config;
+	as_config_init(&config);
+	aerospike* client = metrics_connect_client(&config);
+	assert_not_null(client);
+
+	as_metrics_policy policy;
+	as_metrics_policy_init(&policy);
+	// Keep the interval thread from exporting before disable.
+	policy.interval = 3600;
+	as_metrics_policy_set_report_dir(&policy, dir);
+
+	as_error err;
+	as_status status = aerospike_enable_metrics(client, &err, &policy);
+	as_status put_status = AEROSPIKE_ERR_CLIENT;
+
+	if (status == AEROSPIKE_OK) {
+		as_key key;
+		as_key_init_str(&key, "test", "metrics", "metrics-file-conn-latency");
+
+		as_record rec;
+		as_record_init(&rec, 1);
+		as_record_set_int64(&rec, "v", 1);
+
+		put_status = aerospike_key_put(client, &err, NULL, &key, &rec);
+		as_record_destroy(&rec);
+		as_key_destroy(&key);
+	}
+
+	as_status disable_status = aerospike_disable_metrics(client, &err);
+	char line[65536];
+	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
+		metrics_file_line_has_latency(line, "conn");
+	metrics_remove_dir(dir);
+	aerospike_close(client, &err);
+	aerospike_destroy(client);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(put_status, AEROSPIKE_OK);
 	assert_int_eq(disable_status, AEROSPIKE_OK);
 	assert_true(line_ok);
 	as_metrics_policy_destroy(&policy);
@@ -2499,6 +2554,7 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_file_opens_on_export);
 	suite_add(metrics_file_header_microseconds);
 	suite_add(metrics_file_turns_operational_on);
+	suite_add(metrics_file_writes_node_conn_latency);
 	suite_add(metrics_file_keeps_usage_columns_when_usage_off);
 	suite_add(metrics_file_writes_feature_api_when_usage_on);
 	suite_add(metrics_empty_report_dir);

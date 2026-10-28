@@ -34,8 +34,9 @@ extern "C" {
  * The log is header(3). CamelCase segment names are unchanged. Cpu, memory,
  * namespace counters, and namespace latency are written when operational
  * metrics are enabled. Namespace latency is filled for a successful sampled
- * RPC and has no conn type. See as_ns_metrics.latency. Connection-open latency
- * is as_metrics_node_snapshot.conn_latency and is not written.
+ * RPC. See as_ns_metrics.latency. The namespace conn slot is not recorded, so
+ * each namespace's conn entry is the node's as_metrics_node_snapshot.conn_latency.
+ * Summing conn across namespaces counts each connection open once per namespace.
  * Cluster command latency is not written.
  * blockingCount, deferredCount, and backgroundCount follow commandCount on
  * the cluster line. They are feature.api.blocking, feature.api.deferred, and

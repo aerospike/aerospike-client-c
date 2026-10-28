@@ -60,6 +60,7 @@
 //
 
 #define N_RECORDS 100
+#define N_GROUPS 5
 #define TOP_K 5
 
 //==========================================================
@@ -69,7 +70,7 @@
 static void cleanup(aerospike* p_as);
 static bool insert_records(aerospike* p_as);
 static as_status query_top_k_scores(aerospike* p_as, as_error* err);
-static as_status query_top_k_names_case_insensitive(aerospike* p_as, as_error* err);
+static as_status query_top_k_groups(aerospike* p_as, as_error* err);
 static bool print_record_cb(const as_val* p_val, void* udata);
 
 //==========================================================
@@ -104,8 +105,8 @@ main(int argc, char* argv[])
 		exit(-1);
 	}
 
-	if (query_top_k_names_case_insensitive(&as, &err) != AEROSPIKE_OK) {
-		LOG("query_top_k_names_case_insensitive() returned %d - %s", err.code, err.message);
+	if (query_top_k_groups(&as, &err) != AEROSPIKE_OK) {
+		LOG("query_top_k_groups() returned %d - %s", err.code, err.message);
 		cleanup(&as);
 		exit(-1);
 	}
@@ -129,15 +130,13 @@ cleanup(aerospike* p_as)
 }
 
 // Insert N_RECORDS records, each with an integer "score" bin (a distinct
-// value per record, so the Top-K result is deterministic) and a "name" bin
-// (a mix of upper/lower case strings, to exercise case-insensitive Top-K).
+// value per record, so the Top-K result is deterministic) and an integer
+// "group" bin (shared by many records, to exercise a second order key).
 static bool
 insert_records(aerospike* p_as)
 {
 	as_record rec;
 	as_record_inita(&rec, 2);
-
-	static const char* names[] = {"Alice", "bob", "CAROL", "dave", "EVE"};
 
 	for (uint32_t i = 0; i < N_RECORDS; i++) {
 		as_error err;
@@ -146,7 +145,7 @@ insert_records(aerospike* p_as)
 		as_key_init_int64(&key, g_namespace, g_set, (int64_t)i);
 
 		as_record_set_int64(&rec, "score", (int64_t)i);
-		as_record_set_str(&rec, "name", names[i % (sizeof(names) / sizeof(names[0]))]);
+		as_record_set_int64(&rec, "group", (int64_t)(i % N_GROUPS));
 
 		if (aerospike_key_put(p_as, &err, NULL, &key, &rec) != AEROSPIKE_OK) {
 			LOG("aerospike_key_put() returned %d - %s", err.code, err.message);
@@ -178,25 +177,21 @@ query_top_k_scores(aerospike* p_as, as_error* err)
 	return status;
 }
 
-// ORDER BY name ASC, score DESC LIMIT 5 with case-insensitive comparison:
-// without the CASE_INSENSITIVE flag, all-uppercase names would sort before
-// any lowercase name (plain byte comparison); with it, comparison folds case
-// first, so e.g. "Alice" and "alice" would compare equal up to case. Every
-// name appears on many records, so the second order key ranks the records
-// that share a name.
+// ORDER BY group ASC, score DESC LIMIT 5: every group appears on many
+// records, so the second order key ranks the records that share a group.
 static as_status
-query_top_k_names_case_insensitive(aerospike* p_as, as_error* err)
+query_top_k_groups(aerospike* p_as, as_error* err)
 {
 	as_query query;
 	as_query_init(&query, g_namespace, g_set);
 
-	as_query_order_by(&query, "name", AS_QUERY_ORDER_BY_STRING, AS_ORDER_ASCENDING,
-			AS_QUERY_ORDER_BY_CASE_INSENSITIVE);
+	as_query_order_by(&query, "group", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
+			AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
 	as_query_then_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
 			AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
 	as_query_top_k(&query, TOP_K);
 
-	LOG("executing query: order by name asc (case insensitive), score desc limit %d", TOP_K);
+	LOG("executing query: order by group asc, score desc limit %d", TOP_K);
 
 	as_status status = aerospike_query_foreach(p_as, err, NULL, &query, print_record_cb, NULL);
 

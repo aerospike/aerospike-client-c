@@ -212,21 +212,19 @@ typedef struct as_event_executor {
 static inline void
 as_event_command_apply_sample(as_event_command* cmd, bool sampled, bool count_command)
 {
-	bool count_command_now = count_command;
-
 	cmd->metrics_sample_decision = sampled;
 
 	// A single-key batch fallback already counted the batch. Record batch latency.
 	// See as_metrics_batch_sample_begin().
 	if (as_metrics_batch_sub_command) {
-		count_command_now = false;
+		count_command = false;
 
 		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
 			cmd->latency_type = AS_LATENCY_TYPE_BATCH;
 		}
 	}
 
-	if (cmd->metrics_sample_decision && count_command_now) {
+	if (cmd->metrics_sample_decision && count_command) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 }

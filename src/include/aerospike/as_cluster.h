@@ -703,6 +703,13 @@ as_cluster_change_password(as_cluster* cluster, const char* user, const char* pa
 
 /**
  * @private
+ * Return the legacy ip_map translation of hostname, or hostname when unmapped.
+ */
+AS_EXTERN const char*
+as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname);
+
+/**
+ * @private
  * Get random node in the cluster.
  * as_nodes_release() must be called when done with node.
  */

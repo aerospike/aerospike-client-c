@@ -247,12 +247,28 @@ aerospike_connect(aerospike* as, as_error* err)
 		return AEROSPIKE_OK;
 	}
 
+	if (as->config.discovery.provider_released) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Seed provider was released by aerospike_close(). Register it again");
+	}
+
+	if (as->config.translation.provider_released) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Address translator was released by aerospike_close(). Register it again");
+	}
+
 	as_config* config = &as->config;
 	as_vector* hosts = config->hosts;
 	
 	// Verify seed hosts are specified.
 	if (hosts == NULL || hosts->size == 0) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No hosts provided");
+	}
+
+	if (config->discovery.binding_provider &&
+		config->discovery.execution_mode != AS_DISCOVERY_EXECUTION_THREAD) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Binding seed provider requires thread execution mode");
 	}
 
 	// Verify max_socket_idle.
@@ -269,6 +285,12 @@ aerospike_connect(aerospike* as, as_error* err)
 				return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Seed host is null");
 			}
 			
+			if (host->tls_name && ! host->tls_name[0]) {
+				// An empty TLS name is the same as none.
+				cf_free(host->tls_name);
+				host->tls_name = NULL;
+			}
+
 			if (! host->tls_name) {
 				if (config->cluster_name) {
 					host->tls_name = cf_strdup(config->cluster_name);
@@ -294,6 +316,9 @@ aerospike_connect(aerospike* as, as_error* err)
 		return status;
 	}
 
+	// Plugin registrations stay fixed while the cluster may invoke them.
+	config->discovery.registration_locked = true;
+
 	// Dynamic configuration allows metrics to be enabled from a file.
 	if (as->config.policies.metrics.enable) {
 		as_log_info("Enable metrics");
@@ -310,6 +335,7 @@ aerospike_connect(aerospike* as, as_error* err)
 }
 
 as_status as_event_close_cluster(aerospike* as, as_error* err);
+void as_config_release_plugins(as_config* config);
 
 /**
  * Close connections to the cluster
@@ -346,7 +372,12 @@ aerospike_close(aerospike* as, as_error* err)
 			// Close sync only configurations immediately.
 			as_cluster_destroy(cluster);
 			as->cluster = NULL;
+			as->config.discovery.registration_locked = false;
 		}
+	}
+	else if (as_event_loop_size > 0 && !as_event_single_thread) {
+		// aerospike_destroy() is a no-op in async mode, so release plugins here.
+		as_config_release_plugins(&as->config);
 	}
 	return err->code;
 }

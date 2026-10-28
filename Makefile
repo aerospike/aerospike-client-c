@@ -123,6 +123,7 @@ AEROSPIKE += as_config.o
 AEROSPIKE += as_config_file.o
 AEROSPIKE += as_conn_recover.o
 AEROSPIKE += as_cluster.o
+AEROSPIKE += as_discovery.o
 AEROSPIKE += as_error.o
 AEROSPIKE += as_event.o
 AEROSPIKE += as_event_ev.o
@@ -273,4 +274,3 @@ $(TARGET_INCL)/aerospike/%.h: $(SOURCE_INCL)/aerospike/%.h
 
 ###############################################################################
 include project/modules.mk project/test.mk project/rules.mk
-

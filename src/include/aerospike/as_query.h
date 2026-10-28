@@ -723,6 +723,13 @@ typedef struct as_query_s {
 
 	/**
 	 * @private
+	 * Set by as_query_top_k(), so that a k set to 0 is rejected while a query
+	 * without k is not. Set/cleared internally; do not set directly.
+	 */
+	bool top_k_defined;
+
+	/**
+	 * @private
 	 * Set when as_query_then_order_by() is called with two order keys already
 	 * set. Cleared by as_query_order_by().
 	 */
@@ -1109,9 +1116,9 @@ as_query_apply(as_query* query, const char* module, const char* function, const 
  * An order key without k is sent to the server as is, and the server rejects
  * the query with AEROSPIKE_ERR_REQUEST_INVALID.
  *
- * If bin_name is longer than AS_BIN_NAME_MAX_LEN characters, the order-by
- * clause is not set and this call is a no-op. This is validated again
- * (and reported via as_error) when the query is executed.
+ * The order key is still set if bin_name is NULL, empty or longer than
+ * AS_BIN_NAME_MAX_LEN bytes, or if direction is not AS_ORDER_ASCENDING or
+ * AS_ORDER_DESCENDING. Executing the query then fails with AEROSPIKE_ERR_PARAM.
  *
  * IMPORTANT: setting order_by/top_k changes aerospike_query_foreach()/
  * aerospike_query_partitions() from streaming-as-records-arrive to
@@ -1174,9 +1181,9 @@ as_query_then_order_by(
 
 /**
  * Set the global Top-K limit for a Top-K query. Replaces any k already set.
- * k must be in [1, 1000]; this is validated at query execution time
- * (mirroring as_query_where()/as_query_select(), which also defer validation
- * to command-build time).
+ * k must be in [1, 1000], so a k of 0 is also rejected; this is validated at
+ * query execution time (mirroring as_query_where()/as_query_select(), which
+ * also defer validation to command-build time).
  *
  * Top-K always runs as a long query. The server ignores a short-query hint
  * (as_policy_query.short_query / AS_QUERY_DURATION_SHORT).

@@ -65,6 +65,7 @@ as_query_defaults(as_query* query, bool free, const char* ns, const char* set)
 	as_query_order_by_field_clear(&query->order_by);
 	as_query_order_by_field_clear(&query->then_order_by);
 	query->top_k = 0;
+	query->top_k_defined = false;
 	query->order_by_overflow = false;
 
 	as_udf_call_init(&query->apply, NULL, NULL, NULL);
@@ -452,7 +453,14 @@ as_query_order_by_field_set(
 	as_order direction, as_query_order_by_flags flags
 	)
 {
-	as_strncpy(field->bin, bin_name, sizeof(field->bin));
+	// An invalid name is kept as an empty name, which as_query_validate_order_key() rejects.
+	if (bin_name && strlen(bin_name) < AS_BIN_NAME_MAX_SIZE) {
+		as_strncpy(field->bin, bin_name, sizeof(field->bin));
+	}
+	else {
+		field->bin[0] = 0;
+	}
+
 	field->type = type;
 	field->direction = direction;
 	field->flags = flags;
@@ -465,7 +473,7 @@ as_query_order_by(
 	as_query_order_by_flags flags
 	)
 {
-	if (!query || !bin_name || strlen(bin_name) >= AS_BIN_NAME_MAX_SIZE) {
+	if (!query) {
 		return;
 	}
 
@@ -480,7 +488,7 @@ as_query_then_order_by(
 	as_query_order_by_flags flags
 	)
 {
-	if (!query || !bin_name || strlen(bin_name) >= AS_BIN_NAME_MAX_SIZE) {
+	if (!query) {
 		return;
 	}
 
@@ -505,6 +513,7 @@ as_query_top_k(as_query* query, uint32_t k)
 	}
 
 	query->top_k = k;
+	query->top_k_defined = true;
 }
 
 //---------------------------------
@@ -719,6 +728,7 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 	as_query_pack_order_by(&pk, &query->order_by);
 	as_query_pack_order_by(&pk, &query->then_order_by);
 	as_pack_uint64(&pk, query->top_k);
+	as_pack_bool(&pk, query->top_k_defined);
 	as_pack_bool(&pk, query->order_by_overflow);
 
 	as_cdt_end(&pk);
@@ -1135,6 +1145,10 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 
 	query->top_k = (uint32_t)uval;
 
+	if (as_unpack_boolean(&pk, &query->top_k_defined) != 0) {
+		goto HandleError;
+	}
+
 	if (as_unpack_boolean(&pk, &query->order_by_overflow) != 0) {
 		goto HandleError;
 	}
@@ -1509,6 +1523,10 @@ as_query_compare(as_query* q1, as_query* q2) {
 	}
 
 	if (q1->top_k != q2->top_k) {
+		as_cmp_error();
+	}
+
+	if (q1->top_k_defined != q2->top_k_defined) {
 		as_cmp_error();
 	}
 

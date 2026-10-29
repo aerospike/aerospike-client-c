@@ -129,7 +129,13 @@ as_query_topk_collector_create_async(
  * targeted node, so the query is not stopped early otherwise. A record that
  * could not be buffered might belong in the top k, so this returns false to
  * stop the query, and nothing is delivered to the real callback, not even the
- * final NULL. See as_query_topk_collector_status().
+ * final NULL.
+ *
+ * A foreach callback can only return a bool, so this function cannot return
+ * the error itself. It records the failure in the collector instead. The
+ * underlying query treats the false return as a user abort and returns
+ * AEROSPIKE_OK, so the caller must then call as_query_topk_collector_status()
+ * to get the error.
  */
 AS_EXTERN bool
 as_query_topk_collect(const as_val* val, void* udata);

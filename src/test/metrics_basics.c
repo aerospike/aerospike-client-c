@@ -1145,14 +1145,27 @@ metrics_async_get_listener(as_error* err, as_record* rec, void* udata, as_event_
 	as_monitor_notify(udata);
 }
 
-static bool
-metrics_second_client_supported(void)
+// The main client owns its TLS strings and frees them on destroy, so the
+// second client needs its own copies.
+static void
+metrics_copy_tls(as_config* config, const as_config_tls* src)
 {
-	if (as->config.tls.enable) {
-		info("Skip because the second client does not copy the TLS settings");
-		return false;
-	}
-	return true;
+	config->tls.enable = src->enable;
+	config->tls.crl_check = src->crl_check;
+	config->tls.crl_check_all = src->crl_check_all;
+	config->tls.log_session_info = src->log_session_info;
+	config->tls.for_login_only = src->for_login_only;
+	as_config_tls_set_cafile(config, src->cafile);
+	as_config_tls_set_castring(config, src->castring);
+	as_config_tls_set_capath(config, src->capath);
+	as_config_tls_set_protocols(config, src->protocols);
+	as_config_tls_set_cipher_suite(config, src->cipher_suite);
+	as_config_tls_set_cert_blacklist(config, src->cert_blacklist);
+	as_config_tls_set_keyfile(config, src->keyfile);
+	as_config_tls_set_keyfile_pw(config, src->keyfile_pw);
+	as_config_tls_set_keystring(config, src->keystring);
+	as_config_tls_set_certfile(config, src->certfile);
+	as_config_tls_set_certstring(config, src->certstring);
 }
 
 static aerospike*
@@ -1162,6 +1175,7 @@ metrics_connect_client(as_config* config)
 	as_config_set_user(config, as->config.user, as->config.password);
 	config->use_services_alternate = as->config.use_services_alternate;
 	config->auth_mode = as->config.auth_mode;
+	metrics_copy_tls(config, &as->config.tls);
 
 	aerospike* client = aerospike_new(config);
 	as_error err;
@@ -1239,10 +1253,6 @@ TEST(metrics_async_conn_latency, "an async connection open records connection la
 {
 	if (as_event_loop_size == 0) {
 		info("Skip because no event loops are running");
-		return;
-	}
-
-	if (!metrics_second_client_supported()) {
 		return;
 	}
 
@@ -1483,10 +1493,6 @@ TEST(metrics_file_turns_operational_on, "the file exporter turns operational met
 
 TEST(metrics_file_writes_node_conn_latency, "the file writes node connection latency as the namespace conn entry")
 {
-	if (!metrics_second_client_supported()) {
-		return;
-	}
-
 	char dir[256];
 	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
 
@@ -2022,10 +2028,6 @@ TEST(metrics_listener_reads_attempt_latency, "deprecated listeners turn operatio
 
 TEST(metrics_dynamic_legacy_enable_turns_operational_on, "legacy metrics.enable turns operational on for aerospike_enable_metrics")
 {
-	if (!metrics_second_client_supported()) {
-		return;
-	}
-
 	bool operational = false;
 	assert_true(metrics_dynamic_enable_operational(
 		"version: 1.2.0\n"
@@ -2038,10 +2040,6 @@ TEST(metrics_dynamic_legacy_enable_turns_operational_on, "legacy metrics.enable 
 
 TEST(metrics_dynamic_enabled_keeps_policy_operational, "metrics.enabled keeps the policy value even with the file exporter")
 {
-	if (!metrics_second_client_supported()) {
-		return;
-	}
-
 	bool operational = true;
 	assert_true(metrics_dynamic_enable_operational(
 		"version: 1.2.0\n"
@@ -2054,10 +2052,6 @@ TEST(metrics_dynamic_enabled_keeps_policy_operational, "metrics.enabled keeps th
 
 TEST(metrics_dynamic_without_enable_uses_file_exporter, "dynamic config that does not enable metrics leaves the file exporter rule in place")
 {
-	if (!metrics_second_client_supported()) {
-		return;
-	}
-
 	bool operational = false;
 	assert_true(metrics_dynamic_enable_operational(
 		"version: 1.2.0\n"
@@ -2070,10 +2064,6 @@ TEST(metrics_dynamic_without_enable_uses_file_exporter, "dynamic config that doe
 
 TEST(metrics_dynamic_operational_key_overrides_file_exporter, "extended.operational.enabled false overrides the file exporter rule")
 {
-	if (!metrics_second_client_supported()) {
-		return;
-	}
-
 	bool operational = true;
 	assert_true(metrics_dynamic_enable_operational(
 		"version: 1.2.0\n"

@@ -30,8 +30,10 @@
 #include "aerospike_test.h"
 
 // Coverage: U-1 (contract shape and error channel only), U-2, U-3, U-5, U-7,
-// U-8, U-11 and the static-map/merge L1 rows. Runtime degradation in U-1,
-// U-9, U-10, U-13, U-15 and M-7 are owned by later commits.
+// U-8, U-11 and the static-map/port-map/pass-through/merge L1 translate and
+// merge rows. Pair-collision L1 rows are reported as unsupported by
+// discovery_translation because the shared fixture format cannot express two
+// endpoints. Runtime degradation in U-1 and M-7 is owned by later commits.
 
 extern aerospike* as;
 
@@ -668,16 +670,41 @@ TEST(discovery_conformance_translate, "L1 translate rows run against the C built
 	assert_string_eq(out.name, "10.0.0.9");
 	as_host_destroy(&out);
 
-	// Kinds owned by later work are reported explicitly, never skipped.
+	// Port-map: endpoint key first, then node name; unmapped under strict is a miss.
+	as_addr_map port_entries[] = {{"10.0.0.9:3010", "198.51.100.9:4010"}, {"A1", "node-a.example:5000"}};
 	translation.kind = AS_TRANSLATOR_PORT_MAP;
+	translation.map = port_entries;
+	translation.map_size = 2;
 	assert_int_eq(as_discovery_conformance_translate(&err, &translation, &endpoint, &out),
-		AEROSPIKE_ERR_UNSUPPORTED_FEATURE);
+		AEROSPIKE_OK);
+	assert_string_eq(out.name, "198.51.100.9");
+	assert_int_eq(out.port, 4010);
+	assert_string_eq(out.tls_name, "node-a.example");
+	as_host_destroy(&out);
+
+	endpoint.host = "10.0.0.8";
+	assert_int_eq(as_discovery_conformance_translate(&err, &translation, &endpoint, &out),
+		AEROSPIKE_OK);
+	assert_string_eq(out.name, "node-a.example");
+	assert_int_eq(out.port, 5000);
+	as_host_destroy(&out);
+
+	endpoint.node_name = "B2";
+	translation.on_miss = AS_TRANSLATION_STRICT;
+	assert_int_eq(as_discovery_conformance_translate(&err, &translation, &endpoint, &out),
+		AEROSPIKE_ERR_TRANSLATION_MISS);
 	assert_not_null(strstr(err.message, "port-map"));
 
+	// Pass-through is an explicit mapping, so it succeeds even under strict.
 	translation.kind = AS_TRANSLATOR_PASS_THROUGH;
+	translation.map = NULL;
+	translation.map_size = 0;
 	assert_int_eq(as_discovery_conformance_translate(&err, &translation, &endpoint, &out),
-		AEROSPIKE_ERR_UNSUPPORTED_FEATURE);
-	assert_not_null(strstr(err.message, "pass-through"));
+		AEROSPIKE_OK);
+	assert_string_eq(out.name, "10.0.0.8");
+	assert_string_eq(out.tls_name, "node-a.example");
+	assert_int_eq(out.port, 3010);
+	as_host_destroy(&out);
 
 	translation.kind = (as_translator_kind)99;
 	assert_int_eq(as_discovery_conformance_translate(&err, &translation, &endpoint, &out),

@@ -189,6 +189,39 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
+	 * Shallow copy of the translator registered in the config. The name and udata stay
+	 * owned by the config, which outlives the cluster and cannot change while connected.
+	 * Only valid when translator_registered is true; otherwise ip_map is the translator.
+	 */
+	as_address_translator translator;
+
+	/**
+	 * @private
+	 * Behavior when the translator has no mapping.
+	 */
+	as_translation_miss_policy translation_on_miss;
+
+	/**
+	 * @private
+	 * Client-wide counter passed to the translator's on_cluster_view_changed callback.
+	 * Incremented in the tend thread.
+	 */
+	uint32_t translation_view_generation;
+
+	/**
+	 * @private
+	 * True when a registered translator has a translate callback.
+	 */
+	bool translator_registered;
+
+	/**
+	 * @private
+	 * True when the registered translator wants cluster view change notifications.
+	 */
+	bool translation_view_callback;
+
+	/**
+	 * @private
 	 * TLS parameters
 	 */
 	as_tls_context* tls_ctx;
@@ -659,6 +692,30 @@ as_nodes_release(as_nodes* nodes)
 		as_fence_acq();
 		as_nodes_destroy(nodes);
 	}
+}
+
+/**
+ * @private
+ * Translate an advertised peer or service endpoint into the host to connect to. Uses the
+ * registered translator, or the static map over ip_map when none is registered, then applies the
+ * translation miss policy. On AEROSPIKE_OK out is a copy owned by the caller, with a copy of
+ * tls_name: translation never changes the TLS identity. A strict miss returns
+ * AEROSPIKE_ERR_TRANSLATION_MISS. Performs no I/O.
+ */
+as_status
+as_cluster_translate_address(
+	as_cluster* cluster, as_error* err, const char* node_name, const char* tls_name,
+	const char* host, uint16_t port, as_endpoint_source source, as_host* out
+	);
+
+/**
+ * @private
+ * Source list that servers advertise endpoints from, according to use_services_alternate.
+ */
+static inline as_endpoint_source
+as_cluster_endpoint_source(const as_cluster* cluster)
+{
+	return cluster->use_services_alternate ? AS_ENDPOINT_SOURCE_ALTERNATE : AS_ENDPOINT_SOURCE_STANDARD;
 }
 
 /**

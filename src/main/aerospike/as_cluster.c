@@ -277,9 +277,14 @@ as_cluster_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_a
 const char*
 as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname)
 {
-	// Return alternate IP address if specified in ip_map.
+	// Configured seeds are only rewritten by the implicit static map over ip_map.
+	// A registered translator never rewrites configured seeds.
 	// Useful when there are both internal and external addresses for the same node.
 	const char* alt = hostname;
+
+	if (cluster->translator_registered) {
+		return alt;
+	}
 
 	if (cluster->ip_map) {
 		as_vector* ip_map = cluster->ip_map;
@@ -295,6 +300,50 @@ as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname)
 		}
 	}
 	return alt;
+}
+
+as_status
+as_cluster_translate_address(
+	as_cluster* cluster, as_error* err, const char* node_name, const char* tls_name,
+	const char* host, uint16_t port, as_endpoint_source source, as_host* out
+	)
+{
+	as_endpoint endpoint = {
+		.node_name = node_name,
+		.tls_name = tls_name,
+		.host = host,
+		.port = port,
+		.source = source
+	};
+
+	as_host mapped = {.name = NULL, .tls_name = NULL, .port = 0};
+	const char* name;
+	bool found;
+
+	if (cluster->translator_registered) {
+		name = cluster->translator.name;
+		found = cluster->translator.translate(&endpoint, &mapped, cluster->translator.udata);
+	}
+	else {
+		as_vector* ip_map = cluster->ip_map;
+		name = "static-map";
+		found = ip_map ?
+			as_discovery_static_map_translate((as_addr_map*)ip_map->list, ip_map->size, &endpoint, &mapped) :
+			false;
+	}
+	return as_discovery_complete_translation(err, name, cluster->translation_on_miss, &endpoint,
+		found, &mapped, out);
+}
+
+static void
+as_cluster_add_peer_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ peer_nodes)
+{
+	// A collision can still drop a validated peer until it is added, so its connections are
+	// created only now.
+	for (uint32_t i = 0; i < peer_nodes->size; i++) {
+		as_node_create_min_connections(as_vector_get_ptr(peer_nodes, i));
+	}
+	as_cluster_add_nodes(cluster, peer_nodes);
 }
 
 static void
@@ -332,7 +381,7 @@ as_cluster_refresh_peers(as_cluster* cluster, as_peers* peers)
 
 		if (peer_nodes->size > 0) {
 			// Add new peer nodes to cluster.
-			as_cluster_add_nodes(cluster, peer_nodes);
+			as_cluster_add_peer_nodes(cluster, peer_nodes);
 			as_vector_clear(&nodes);
 		}
 		else {
@@ -351,6 +400,11 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 	as_error error_local;
 	as_error_init(&error_local);
 	as_status conn_status = AEROSPIKE_ERR_CLIENT;
+
+	// Keep the first translation, collision or alternate address error so initialization reports
+	// it instead of a generic connection failure.
+	as_error topology_error;
+	bool has_topology_error = false;
 	
 	pthread_mutex_lock(&cluster->seed_lock);
 	as_vector* seeds = cluster->seeds;
@@ -432,6 +486,11 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 					as_log_warn("Failed to connect to seed %s %d. %s %s", host.name, host.port, as_error_string(status), error_local.message);
 				}
 				conn_status = status;
+
+				if (! has_topology_error && as_peers_is_topology_error(status)) {
+					topology_error = error_local;
+					has_topology_error = true;
+				}
 			}
 		}
 		as_lookup_end(&iter);
@@ -450,6 +509,15 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 	}
 
 	if (! node) {
+		if (has_topology_error) {
+			*err = topology_error;
+			return err->code;
+		}
+
+		if (peers->has_topology_error) {
+			*err = peers->topology_error;
+			return err->code;
+		}
 		return as_error_set_message(err, conn_status, "Failed to connect");
 	}
 
@@ -464,6 +532,7 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 
 	for (uint32_t i = 0; i < peer_nodes->size; i++) {
 		as_node* n = as_vector_get_ptr(peer_nodes, i);
+		as_node_create_min_connections(n);
 		as_vector_append(&nodes_to_add, &n);
 	}
 
@@ -859,6 +928,7 @@ as_cluster_destroy_peers(as_peers* peers)
 {
 	as_vector_destroy(&peers->nodes);
 	as_vector_destroy(&peers->nodes_to_remove);
+	as_vector_destroy(&peers->collided);
 
 	as_vector* invalid_hosts = &peers->invalid_hosts;
 	
@@ -911,10 +981,15 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 	as_vector_inita(&peers.nodes, sizeof(as_node*), 16);
 	as_vector_inita(&peers.nodes_to_remove, sizeof(as_node*), 8);
 	as_vector_inita(&peers.invalid_hosts, sizeof(as_host), 4);
+	as_vector_inita(&peers.collided, sizeof(as_peers_collided), 4);
 	peers.refresh_count = 0;
 	peers.gen_changed = false;
+	peers.view_changed = false;
+	peers.has_topology_error = false;
+	peers.alternate_missing = false;
 
 	as_nodes* nodes = cluster->nodes;
+	as_nodes* initial_nodes = nodes;
 	bool rebalance = false;
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
@@ -935,11 +1010,18 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 
 		nodes = cluster->nodes;
 
-		// Abort cluster init if all peers of the seed are not reachable and
-		// fail_if_not_connected is true.
+		// Abort cluster init if all peers of the seed are not reachable, or a peer has no
+		// alternate address, and fail_if_not_connected is true. Collisions and translation
+		// misses alone do not fail init.
 		if (is_init && cluster->fail_if_not_connected && nodes->size == 1 &&
-			peers.invalid_hosts.size > 0) {
-			status = as_cluster_init_error(&peers.invalid_hosts, err);
+			(peers.invalid_hosts.size > 0 || peers.alternate_missing)) {
+			if (peers.has_topology_error) {
+				*err = peers.topology_error;
+				status = err->code;
+			}
+			else {
+				status = as_cluster_init_error(&peers.invalid_hosts, err);
+			}
 			as_cluster_destroy_peers(&peers);
 			return status;
 		}
@@ -1014,7 +1096,7 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 
 		// Add peer nodes to cluster.
 		if (peers.nodes.size > 0) {
-			as_cluster_add_nodes(cluster, &peers.nodes);
+			as_cluster_add_peer_nodes(cluster, &peers.nodes);
 			as_cluster_refresh_peers(cluster, &peers);
 			nodes = cluster->nodes;
 		}
@@ -1061,7 +1143,17 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 		as_incr_uint32(&cluster->shm_info->cluster_shm->rebalance_gen);
 	}
 
+	// Notify the translator once per tend when the node set or an advertised address changed.
+	// The initial view is never reported.
+	bool view_changed = peers.view_changed || cluster->nodes != initial_nodes;
+
 	as_cluster_destroy_peers(&peers);
+
+	if (cluster->translation_view_callback && ! is_init && view_changed) {
+		uint32_t generation = ++cluster->translation_view_generation;
+		cluster->translator.on_cluster_view_changed(generation, cluster->translator.udata);
+	}
+
 	as_cluster_manage(cluster);
 	return AEROSPIKE_OK;
 }
@@ -1621,6 +1713,16 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->use_services_alternate = config->use_services_alternate;
 	cluster->rack_aware = config->rack_aware;
 	cluster->fail_if_not_connected = config->fail_if_not_connected;
+	cluster->translation_on_miss = config->translation.on_miss;
+	cluster->translation_view_generation = 0;
+	cluster->translator_registered = config->translation.provider.translate != NULL;
+	cluster->translation_view_callback = false;
+	memset(&cluster->translator, 0, sizeof(cluster->translator));
+
+	if (cluster->translator_registered) {
+		cluster->translator = config->translation.provider;
+		cluster->translation_view_callback = cluster->translator.on_cluster_view_changed != NULL;
+	}
 
 	if (config->rack_ids) {
 		uint32_t max = config->rack_ids->size;

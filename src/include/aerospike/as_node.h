@@ -367,6 +367,13 @@ typedef struct as_node_s {
 	char* hostname;
 
 	/**
+	 * @private
+	 * Last advertised host list from peers, kept only when the translator wants view change
+	 * notifications. Tend thread only.
+	 */
+	char* advertised_hosts;
+
+	/**
 	 * Cluster from which this node resides.
 	 */
 	struct as_cluster_s* cluster;

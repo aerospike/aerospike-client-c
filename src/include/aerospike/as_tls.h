@@ -38,6 +38,28 @@ void as_tls_context_destroy(as_tls_context* ctx);
 
 as_status as_tls_config_reload(as_config_tls* tlscfg, as_tls_context* ctx, as_error *err);
 
+typedef enum as_tls_match_kind_e {
+	AS_TLS_MATCH_NONE,
+	AS_TLS_MATCH_STRICT,
+	AS_TLS_MATCH_LEGACY
+} as_tls_match_kind;
+
+/**
+ * @private
+ * Strict certificate identity match without any fallback. IPv4/IPv6 literal identifiers match
+ * only SAN iPAddress bytes. DNS identifiers match only SAN dNSName, ASCII case-insensitively,
+ * and a sole left-most '*' label matches exactly one non-empty label. The identifier is never
+ * resolved.
+ */
+AS_EXTERN bool as_tls_match_identity_strict(X509* cert, const char* identifier);
+
+/**
+ * @private
+ * Match certificate identity. Falls back to the deprecated legacy name check when the strict match
+ * fails and logs a deprecation warning once per identifier.
+ */
+AS_EXTERN as_tls_match_kind as_tls_match_identity(X509* cert, const char* identifier);
+
 int as_tls_wrap(as_tls_context* ctx, as_socket* sock, const char* tls_name);
 
 void as_tls_set_name(as_socket* sock, const char* tls_name);

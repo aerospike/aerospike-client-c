@@ -545,8 +545,9 @@ typedef struct as_config_s {
 	 * registered the static map over ip_map is used, including for configured
 	 * seeds.
 	 *
-	 * Registered translators are not yet invoked by the cluster; ip_map remains
-	 * the runtime translation.
+	 * A registered translator is invoked for every peer and service endpoint a
+	 * server advertises, never for configured seeds. The implicit static map
+	 * over ip_map also translates configured seeds.
 	 */
 	as_translation_config translation;
 	
@@ -967,6 +968,35 @@ as_config_set_seed_provider(as_config* config, const as_seed_provider* provider,
 AS_EXTERN as_status
 as_config_set_address_translator(as_config* config, const as_address_translator* translator,
 	as_error* err);
+
+/**
+ * Register the built-in port-map translator. entries maps an advertised
+ * host:port, or a node name, to the host:port to connect to; see
+ * as_discovery_port_map_translator() for the grammar. The entries are
+ * validated and copied; the caller keeps ownership of its strings.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for an invalid entry (the message names it) or
+ * while a client created from this config is connected. On failure the
+ * previous registration is unchanged.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_port_map_translator(as_config* config, const as_addr_map* entries, uint32_t size,
+	as_error* err);
+
+/**
+ * Register the built-in pass-through translator, which returns every advertised
+ * endpoint unchanged as a successful mapping, so it succeeds even with
+ * translation.on_miss set to AS_TRANSLATION_STRICT.
+ *
+ * Returns AEROSPIKE_ERR_PARAM while a client created from this config is
+ * connected.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_pass_through_translator(as_config* config, as_error* err);
 
 /**
  * Register a seed provider implemented by a language binding (Python, Node.js).

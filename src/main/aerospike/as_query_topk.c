@@ -39,11 +39,15 @@ struct as_query_topk_collector_s {
 	as_query_order_by_field then_order_by;
 	uint32_t k;
 
+	// Exactly one of callback (synchronous query) and listener (asynchronous
+	// query) is set.
 	aerospike_query_foreach_callback callback;
+	as_async_query_record_listener listener;
 	void* udata;
 
-	// Protects entries. Multiple thread pool workers (one per node) may
-	// append concurrently while the underlying query is in flight.
+	// Protects entries. Multiple thread pool workers (one per node) may append
+	// concurrently while a synchronous query is in flight. An asynchronous
+	// query runs every node command on one event loop.
 	pthread_mutex_t lock;
 
 	// as_record* - one heap-owned, independently-copied record per
@@ -514,10 +518,8 @@ as_query_topk_finalize(as_query_topk_collector* collector, uint32_t* out_count)
 // Public API
 //---------------------------------
 
-as_query_topk_collector*
-as_query_topk_collector_create(
-	const as_query* query, aerospike_query_foreach_callback callback, void* udata
-	)
+static as_query_topk_collector*
+as_query_topk_collector_new(const as_query* query, void* udata)
 {
 	as_query_topk_collector* collector = cf_malloc(sizeof(as_query_topk_collector));
 	uint32_t k = query->top_k;
@@ -525,10 +527,31 @@ as_query_topk_collector_create(
 	collector->order_by = query->order_by;
 	collector->then_order_by = query->then_order_by;
 	collector->k = k;
-	collector->callback = callback;
+	collector->callback = NULL;
+	collector->listener = NULL;
 	collector->udata = udata;
 	pthread_mutex_init(&collector->lock, NULL);
 	as_vector_init(&collector->entries, sizeof(as_record*), k > 64 ? 64 : k);
+	return collector;
+}
+
+as_query_topk_collector*
+as_query_topk_collector_create(
+	const as_query* query, aerospike_query_foreach_callback callback, void* udata
+	)
+{
+	as_query_topk_collector* collector = as_query_topk_collector_new(query, udata);
+	collector->callback = callback;
+	return collector;
+}
+
+as_query_topk_collector*
+as_query_topk_collector_create_async(
+	const as_query* query, as_async_query_record_listener listener, void* udata
+	)
+{
+	as_query_topk_collector* collector = as_query_topk_collector_new(query, udata);
+	collector->listener = listener;
 	return collector;
 }
 
@@ -594,5 +617,52 @@ as_query_topk_collect(const as_val* val, void* udata)
 
 	as_record* rec = as_record_fromval(val);
 	as_query_topk_collector_append(collector, rec);
+	return true;
+}
+
+static void
+as_query_topk_flush_async(as_query_topk_collector* collector, as_event_loop* event_loop)
+{
+	uint32_t count;
+	as_record** results = as_query_topk_finalize(collector, &count);
+	bool notify = true;
+
+	for (uint32_t i = 0; i < count; i++) {
+		if (notify && ! collector->listener(NULL, results[i], collector->udata, event_loop)) {
+			notify = false;
+		}
+		as_record_destroy(results[i]);
+	}
+
+	if (results) {
+		cf_free(results);
+	}
+
+	// Like the async query executor, do not notify a listener that returned false again.
+	if (notify) {
+		collector->listener(NULL, NULL, collector->udata, event_loop);
+	}
+}
+
+bool
+as_query_topk_collect_async(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	as_query_topk_collector* collector = (as_query_topk_collector*)udata;
+
+	if (err) {
+		// The buffered records may be missing a node's candidates, so they are not a
+		// valid Top-K result.
+		collector->listener(err, NULL, collector->udata, event_loop);
+		as_query_topk_collector_destroy(collector);
+		return false;
+	}
+
+	if (! record) {
+		as_query_topk_flush_async(collector, event_loop);
+		as_query_topk_collector_destroy(collector);
+		return false;
+	}
+
+	as_query_topk_collector_append(collector, record);
 	return true;
 }

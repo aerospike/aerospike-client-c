@@ -31,7 +31,9 @@ typedef uint8_t as_latency_type;
 
 /**
  * Connection-open latency is recorded per node in as_node.conn_latency. The
- * namespace and command latency[AS_LATENCY_TYPE_CONN] slots are not recorded.
+ * namespace and command latency[AS_LATENCY_TYPE_CONN] slots are deprecated.
+ * They are not recorded, read as zero, and will be removed in the next major
+ * release. AS_LATENCY_TYPE_CONN remains the type of as_node.conn_latency.
  */
 #define AS_LATENCY_TYPE_CONN 0
 #define AS_LATENCY_TYPE_WRITE 1

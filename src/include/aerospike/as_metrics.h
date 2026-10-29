@@ -193,8 +193,9 @@ typedef struct as_metrics_namespace_snapshot_s {
 	 * RPC, only when operational metrics are on and the command was sampled.
 	 * A retry is a new RPC, so the sample starts at the attempt that succeeded.
 	 * A batch sub-batch re-sent to its node is one RPC that includes the
-	 * re-sends. latencies[AS_LATENCY_TYPE_CONN] is not recorded. Connection-open
-	 * latency is per node in as_metrics_node_snapshot.conn_latency.
+	 * re-sends. latencies[AS_LATENCY_TYPE_CONN] is deprecated and not recorded.
+	 * See AS_LATENCY_TYPE_CONN. Connection-open latency is per node in
+	 * as_metrics_node_snapshot.conn_latency.
 	 * Same rules as as_ns_metrics.latency.
 	 * v3 command latency is `as_metrics_snapshot.command_latencies`.
 	 */

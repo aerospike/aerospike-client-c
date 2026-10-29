@@ -571,13 +571,13 @@ as_query_topk_set_buffer_error(as_error* err)
 static bool
 as_query_topk_collector_append(as_query_topk_collector* collector, const as_record* src)
 {
-	// Out of memory, or a bin value type the query parser never produces.
-	// A missing candidate could belong in the top k, so the query fails.
 	as_record* copy = as_query_topk_copy_record(src);
 
 	pthread_mutex_lock(&collector->lock);
 
 	if (! copy) {
+		// Out of memory, or a bin value type the query parser never produces.
+		// A missing candidate could belong in the top k, so the query fails.
 		collector->failed = true;
 	}
 	else if (! collector->failed) {

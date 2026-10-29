@@ -32,6 +32,7 @@
 #include <aerospike/as_monitor.h>
 #endif
 #include <aerospike/as_operations.h>
+#include <aerospike/as_pair.h>
 #include <aerospike/as_partition_filter.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_query.h>
@@ -1168,6 +1169,86 @@ TEST(query_topk_merge_async_listener_stops,
 	assert_int_eq(result.ends, 0);
 }
 
+// The collector cannot copy an as_pair bin, which stands in for an allocation
+// failure while buffering a candidate.
+static void
+topk_test_make_unbufferable_rec(as_record* rec, uint8_t digest_byte)
+{
+	topk_test_init_rec(rec, digest_byte, 1);
+	as_pair* pair = as_pair_new((as_val*)as_integer_new(1), (as_val*)as_integer_new(2));
+	as_record_set(rec, "score", (as_bin_value*)pair);
+}
+
+static int g_topk_test_calls;
+
+static bool
+topk_test_count_cb(const as_val* val, void* udata)
+{
+	(void)val;
+	(void)udata;
+	g_topk_test_calls++;
+	return true;
+}
+
+TEST(query_topk_merge_buffer_failure,
+	"topk collector fails the query when a candidate cannot be buffered")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 3);
+
+	g_topk_test_calls = 0;
+
+	as_query_topk_collector* collector = as_query_topk_collector_create(&query, topk_test_count_cb, NULL);
+	as_query_destroy(&query);
+
+	as_record good;
+	topk_test_make_int_rec(&good, 0xA1, 50, true);
+	bool good_rv = as_query_topk_collect((as_val*)&good, collector);
+	as_record_destroy(&good);
+
+	as_record bad;
+	topk_test_make_unbufferable_rec(&bad, 0xA2);
+	bool bad_rv = as_query_topk_collect((as_val*)&bad, collector);
+	as_record_destroy(&bad);
+
+	// as_query_partitions() still signals completion after the false return.
+	as_query_topk_collect(NULL, collector);
+
+	as_error err;
+	as_error_init(&err);
+	as_status status = as_query_topk_collector_status(collector, &err);
+	as_query_topk_collector_destroy(collector);
+
+	assert_true(good_rv);
+	assert_false(bad_rv);
+	assert_int_eq(g_topk_test_calls, 0);
+	assert_int_eq(status, AEROSPIKE_ERR_CLIENT);
+	assert_int_eq(err.code, AEROSPIKE_ERR_CLIENT);
+}
+
+TEST(query_topk_merge_async_buffer_failure,
+	"async topk collector reports an error when a candidate cannot be buffered")
+{
+	topk_async_result result = {0};
+	as_query_topk_collector* collector = topk_test_create_async(3, &result);
+
+	topk_test_collect_async_rec(collector, 0xA1, 50);
+
+	// The failure destroys the collector, so nothing else is sent to it.
+	as_record bad;
+	topk_test_make_unbufferable_rec(&bad, 0xA2);
+	bool rv = as_query_topk_collect_async(NULL, &bad, collector, NULL);
+	as_record_destroy(&bad);
+
+	assert_false(rv);
+	assert_int_eq(result.count, 0);
+	assert_int_eq(result.ends, 0);
+	assert_int_eq(result.error, AEROSPIKE_ERR_CLIENT);
+}
+
 //---------------------------------
 // Server integration tests
 //---------------------------------
@@ -1477,6 +1558,8 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_merge_async);
 	suite_add(query_topk_merge_async_error);
 	suite_add(query_topk_merge_async_listener_stops);
+	suite_add(query_topk_merge_buffer_failure);
+	suite_add(query_topk_merge_async_buffer_failure);
 	suite_add(query_topk_integer_desc_server);
 	suite_add(query_topk_short_query_server);
 	suite_add(query_topk_order_by_without_top_k_server);

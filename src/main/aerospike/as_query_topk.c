@@ -18,6 +18,7 @@
 #include <aerospike/as_boolean.h>
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_double.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_geojson.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_nil.h>
@@ -54,6 +55,10 @@ struct as_query_topk_collector_s {
 	// collected candidate. Bounded by (n_nodes * k) since each node's batch
 	// is already trimmed to <= k server-side.
 	as_vector entries;
+
+	// A candidate could not be buffered, so the merged result would be wrong.
+	// Protected by lock. See as_query_topk_collector_status().
+	bool failed;
 };
 
 typedef struct {
@@ -530,6 +535,7 @@ as_query_topk_collector_new(const as_query* query, void* udata)
 	collector->callback = NULL;
 	collector->listener = NULL;
 	collector->udata = udata;
+	collector->failed = false;
 	pthread_mutex_init(&collector->lock, NULL);
 	as_vector_init(&collector->entries, sizeof(as_record*), k > 64 ? 64 : k);
 	return collector;
@@ -556,19 +562,54 @@ as_query_topk_collector_create_async(
 }
 
 static void
+as_query_topk_set_buffer_error(as_error* err)
+{
+	as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to buffer a Top-K candidate record");
+}
+
+// Return false when this or an earlier candidate could not be buffered.
+static bool
 as_query_topk_collector_append(as_query_topk_collector* collector, const as_record* src)
 {
+	pthread_mutex_lock(&collector->lock);
+	bool failed = collector->failed;
+	pthread_mutex_unlock(&collector->lock);
+
+	if (failed) {
+		return false;
+	}
+
+	// Copy outside the lock so node threads do not wait on each other. Another
+	// node thread can fail meanwhile, so failed is checked again below.
 	as_record* copy = as_query_topk_copy_record(src);
+
+	pthread_mutex_lock(&collector->lock);
 
 	if (! copy) {
 		// Out of memory, or a bin value type the query parser never produces.
-		// Dropping this one candidate is preferable to aborting the whole query.
-		return;
+		// A missing candidate could belong in the top k, so the query fails.
+		collector->failed = true;
+	}
+	else if (! collector->failed) {
+		as_vector_append(&collector->entries, &copy);
+	}
+	else {
+		as_record_destroy(copy);
 	}
 
-	pthread_mutex_lock(&collector->lock);
-	as_vector_append(&collector->entries, &copy);
+	bool ok = ! collector->failed;
 	pthread_mutex_unlock(&collector->lock);
+	return ok;
+}
+
+as_status
+as_query_topk_collector_status(const as_query_topk_collector* collector, as_error* err)
+{
+	if (collector->failed) {
+		as_query_topk_set_buffer_error(err);
+		return err->code;
+	}
+	return AEROSPIKE_OK;
 }
 
 void
@@ -585,6 +626,16 @@ as_query_topk_collector_destroy(as_query_topk_collector* collector)
 static void
 as_query_topk_flush(as_query_topk_collector* collector)
 {
+	// A candidate could not be buffered, so as_query_topk_collect() returned
+	// false. as_query_partitions() treats that like a user abort: it returns
+	// AEROSPIKE_OK and still sends the val == NULL completion that calls this
+	// function. Skip delivery, including the final NULL, so the application
+	// does not get an incomplete top k. as_query_topk_partitions() then
+	// returns the error from as_query_topk_collector_status().
+	if (collector->failed) {
+		return;
+	}
+
 	uint32_t count;
 	as_record** results = as_query_topk_finalize(collector, &count);
 	bool notify = true;
@@ -616,8 +667,7 @@ as_query_topk_collect(const as_val* val, void* udata)
 	}
 
 	as_record* rec = as_record_fromval(val);
-	as_query_topk_collector_append(collector, rec);
-	return true;
+	return as_query_topk_collector_append(collector, rec);
 }
 
 static void
@@ -663,6 +713,14 @@ as_query_topk_collect_async(as_error* err, as_record* record, void* udata, as_ev
 		return false;
 	}
 
-	as_query_topk_collector_append(collector, record);
+	if (! as_query_topk_collector_append(collector, record)) {
+		// Returning false stops the query without notifying the listener again.
+		as_error buffer_err;
+		as_error_init(&buffer_err);
+		as_query_topk_set_buffer_error(&buffer_err);
+		collector->listener(&buffer_err, NULL, collector->udata, event_loop);
+		as_query_topk_collector_destroy(collector);
+		return false;
+	}
 	return true;
 }

@@ -1957,6 +1957,27 @@ as_query_partitions(
 }
 
 static as_status
+as_query_topk_partitions(
+	as_cluster* cluster, as_error* err, const as_policy_query* policy, const as_query* query,
+	as_partition_tracker* pt, aerospike_query_foreach_callback callback, void* udata
+	)
+{
+	// Top-K: buffer every targeted node's (already server-ranked) batch and
+	// replay it to the real callback once, in final merged rank order, instead
+	// of streaming records to it as they arrive. See as_query_topk.h.
+	as_query_topk_collector* collector = as_query_topk_collector_create(query, callback, udata);
+	as_status status = as_query_partitions(cluster, err, policy, query, pt, as_query_topk_collect,
+		collector);
+
+	if (status == AEROSPIKE_OK) {
+		status = as_query_topk_collector_status(collector, err);
+	}
+
+	as_query_topk_collector_destroy(collector);
+	return status;
+}
+
+static as_status
 as_query_partition_execute_async(
 	as_async_query_executor* qe, as_partition_tracker* pt, as_error* err
 	)
@@ -2442,14 +2463,7 @@ aerospike_query_foreach_internal(
 		}
 
 		if (as_query_is_topk(query)) {
-			// Top-K: buffer every targeted node's (already server-ranked) batch and
-			// replay it to the real callback once, in final merged rank order, instead
-			// of streaming records to it as they arrive. See as_query_topk.h.
-			as_query_topk_collector* collector = as_query_topk_collector_create(query, callback, udata);
-
-			status = as_query_partitions(cluster, err, policy, query, &pt, as_query_topk_collect,
-				collector);
-			as_query_topk_collector_destroy(collector);
+			status = as_query_topk_partitions(cluster, err, policy, query, &pt, callback, udata);
 		}
 		else {
 			status = as_query_partitions(cluster, err, policy, query, &pt, callback, udata);
@@ -2619,10 +2633,7 @@ aerospike_query_partitions(
 	}
 
 	if (as_query_is_topk(query)) {
-		as_query_topk_collector* collector = as_query_topk_collector_create(query, callback, udata);
-
-		status = as_query_partitions(cluster, err, policy, query, &pt, as_query_topk_collect, collector);
-		as_query_topk_collector_destroy(collector);
+		status = as_query_topk_partitions(cluster, err, policy, query, &pt, callback, udata);
 	}
 	else {
 		status = as_query_partitions(cluster, err, policy, query, &pt, callback, udata);

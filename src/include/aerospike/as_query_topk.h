@@ -79,6 +79,10 @@ as_query_is_topk(const as_query* query)
  * underlying as_query_partitions() call in place of the caller's own
  * callback/udata.
  *
+ * When the underlying call returns AEROSPIKE_OK, the caller must also check
+ * as_query_topk_collector_status(), because a candidate that could not be
+ * buffered stops the query the same way a user abort does.
+ *
  * The caller remains responsible for destroying the collector via
  * as_query_topk_collector_destroy() once the underlying call returns,
  * regardless of the returned status (destroy is safe to call whether or not
@@ -120,13 +124,24 @@ as_query_topk_collector_create_async(
  * function synchronously sorts/dedups/truncates the buffered records and
  * replays them to the real callback, followed by one final NULL callback.
  *
- * Always returns true for non-NULL val (never aborts the underlying query
- * early) - Top-K requires a full scan of the candidate set on every
- * targeted node, so there is nothing to gain by stopping early once a
- * single node's batch has arrived.
+ * Returns true for non-NULL val unless the record could not be buffered (out
+ * of memory). Top-K requires a full scan of the candidate set on every
+ * targeted node, so the query is not stopped early otherwise. A record that
+ * could not be buffered might belong in the top k, so this returns false to
+ * stop the query, and nothing is delivered to the real callback, not even the
+ * final NULL. See as_query_topk_collector_status().
  */
 AS_EXTERN bool
 as_query_topk_collect(const as_val* val, void* udata);
+
+/**
+ * @private
+ * Return AEROSPIKE_OK, or set err and return AEROSPIKE_ERR_CLIENT when
+ * as_query_topk_collect() could not buffer a candidate record. Call after the
+ * underlying synchronous query returns AEROSPIKE_OK.
+ */
+AS_EXTERN as_status
+as_query_topk_collector_status(const as_query_topk_collector* collector, as_error* err);
 
 /**
  * @private
@@ -137,7 +152,9 @@ as_query_topk_collect(const as_val* val, void* udata);
  * buffered records are merged and replayed to the real listener, followed by
  * one final NULL record unless the listener returned false. err set signals a
  * fatal error, which is forwarded to the real listener without delivering
- * the buffered records. In both cases the collector then destroys itself.
+ * the buffered records. A record that could not be buffered is reported the
+ * same way, with AEROSPIKE_ERR_CLIENT, and stops the query. In each case the
+ * collector then destroys itself.
  */
 AS_EXTERN bool
 as_query_topk_collect_async(

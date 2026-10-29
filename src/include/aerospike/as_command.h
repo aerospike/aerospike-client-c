@@ -680,8 +680,11 @@ as_command_send(
 /**
  * @private
  * Send command to the server.
- * When inherit_sample is true, metrics_sampled is the user-call decision.
- * This command does not draw again and does not increment command_count.
+ * When inherit_sample is false, this command draws the sampler and increments
+ * command_count when sampled, the same as as_command_execute(). When
+ * inherit_sample is true, metrics_sampled is the user-call decision, and this
+ * command does not draw again or increment command_count. A single-key batch
+ * fallback reuses the batch decision either way.
  * See as_metrics_batch_sample_begin().
  */
 as_status

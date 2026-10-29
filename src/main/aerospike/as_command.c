@@ -712,9 +712,6 @@ as_command_add_latencies(as_command* cmd, as_node* node, as_ns_metrics* metrics,
 }
 
 as_status
-as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, bool metrics_sampled);
-
-as_status
 as_command_execute(as_command* cmd, as_error* err)
 {
 	return as_command_execute_sample(cmd, err, false, false);

@@ -626,10 +626,12 @@ as_query_topk_collector_destroy(as_query_topk_collector* collector)
 static void
 as_query_topk_flush(as_query_topk_collector* collector)
 {
-	// as_query_partitions() treats the false return from
-	// as_query_topk_collect() as a user abort and still signals completion.
-	// Deliver nothing. The caller reports the failure through
-	// as_query_topk_collector_status().
+	// A candidate could not be buffered, so as_query_topk_collect() returned
+	// false. as_query_partitions() treats that like a user abort: it returns
+	// AEROSPIKE_OK and still sends the val == NULL completion that calls this
+	// function. Skip delivery, including the final NULL, so the application
+	// does not get an incomplete top k. as_query_topk_partitions() then
+	// returns the error from as_query_topk_collector_status().
 	if (collector->failed) {
 		return;
 	}

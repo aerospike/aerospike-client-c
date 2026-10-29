@@ -757,7 +757,7 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 
 	// A null node is a single-record command. Batch, scan, and query set node
 	// on each node command and already counted the user call.
-	if (count_command && cmd->metrics_sample_decision && !cmd->node && !as_metrics_batch_sub_command) {
+	if (count_command && cmd->metrics_sample_decision && !cmd->node) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
 

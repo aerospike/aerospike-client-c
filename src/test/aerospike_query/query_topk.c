@@ -814,6 +814,54 @@ TEST(query_topk_merge_integer_desc,
 	assert_true(strstr(g_topk_test_last[2], "score=30") != NULL);
 }
 
+static void
+topk_test_collect_many_rec(as_query_topk_collector* collector, uint32_t id, int64_t score)
+{
+	as_record rec;
+	topk_test_init_rec(&rec, 0, 1);
+
+	// Only 4 distinct leading bytes, so many digests share an index slot.
+	rec.key.digest.value[0] = (uint8_t)(id % 4);
+	rec.key.digest.value[4] = (uint8_t)id;
+	as_record_set_int64(&rec, "score", score);
+	as_query_topk_collect((as_val*)&rec, collector);
+	as_record_destroy(&rec);
+}
+
+TEST(query_topk_merge_bounded, "topk collector keeps only the best k of many candidates")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
+
+	g_topk_test_count = 0;
+
+	as_query_topk_collector* collector = as_query_topk_collector_create(&query, topk_test_collect_cb, NULL);
+	as_query_destroy(&query);
+
+	// 200 distinct scores in a scrambled order, so the kept candidates are replaced
+	// many times.
+	for (uint32_t id = 0; id < 200; id++) {
+		topk_test_collect_many_rec(collector, id, (int64_t)((id * 37) % 200));
+	}
+
+	// Record 0 (score 0) was replaced long ago, so a later copy of it is no longer a
+	// duplicate of a kept record.
+	topk_test_collect_many_rec(collector, 0, 500);
+
+	as_query_topk_collect(NULL, collector);
+	as_query_topk_collector_destroy(collector);
+
+	assert_int_eq(g_topk_test_count, 5);
+	assert_not_null(strstr(g_topk_test_last[0], "score=500"));
+	assert_not_null(strstr(g_topk_test_last[1], "score=199"));
+	assert_not_null(strstr(g_topk_test_last[2], "score=198"));
+	assert_not_null(strstr(g_topk_test_last[3], "score=197"));
+	assert_not_null(strstr(g_topk_test_last[4], "score=196"));
+}
+
 TEST(query_topk_merge_string_case_insensitive_asc,
 	"topk collector applies STRING + CASE_INSENSITIVE ascending ordering")
 {
@@ -1551,6 +1599,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_validate_projection_missing_bin);
 	suite_add(query_topk_validate_server_support);
 	suite_add(query_topk_merge_integer_desc);
+	suite_add(query_topk_merge_bounded);
 	suite_add(query_topk_merge_string_case_insensitive_asc);
 	suite_add(query_topk_merge_double_nan_and_zero);
 	suite_add(query_topk_merge_two_keys);

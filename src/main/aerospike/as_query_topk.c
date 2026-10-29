@@ -571,6 +571,16 @@ as_query_topk_set_buffer_error(as_error* err)
 static bool
 as_query_topk_collector_append(as_query_topk_collector* collector, const as_record* src)
 {
+	pthread_mutex_lock(&collector->lock);
+	bool failed = collector->failed;
+	pthread_mutex_unlock(&collector->lock);
+
+	if (failed) {
+		return false;
+	}
+
+	// Copy outside the lock so node threads do not wait on each other. Another
+	// node thread can fail meanwhile, so failed is checked again below.
 	as_record* copy = as_query_topk_copy_record(src);
 
 	pthread_mutex_lock(&collector->lock);

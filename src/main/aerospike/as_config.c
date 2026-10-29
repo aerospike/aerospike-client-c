@@ -325,6 +325,37 @@ as_config_set_address_translator(as_config* config, const as_address_translator*
 }
 
 as_status
+as_config_set_port_map_translator(as_config* config, const as_addr_map* entries, uint32_t size,
+	as_error* err)
+{
+	if (!config) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid address translator");
+	}
+
+	as_address_translator translator;
+	as_status status = as_discovery_port_map_translator(err, entries, size, &translator);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	status = as_config_set_address_translator(config, &translator, err);
+
+	if (status != AEROSPIKE_OK) {
+		translator.destroy(translator.udata);
+	}
+	return status;
+}
+
+as_status
+as_config_set_pass_through_translator(as_config* config, as_error* err)
+{
+	as_address_translator translator;
+	as_discovery_pass_through_translator(&translator);
+	return as_config_set_address_translator(config, &translator, err);
+}
+
+as_status
 as_config_set_binding_seed_provider(as_config* config, const char* name,
 	as_status (*refresh)(as_error* err, const as_seed_candidate_context* context,
 		as_seed_candidates* candidates, void* udata),

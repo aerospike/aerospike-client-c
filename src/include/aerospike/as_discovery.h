@@ -513,6 +513,10 @@ typedef struct as_conformance_translation_s {
 	/**
 	 * Translator map entries. For AS_TRANSLATOR_STATIC_MAP: host to host,
 	 * which is also the default translator built over as_config.ip_map.
+	 * For AS_TRANSLATOR_PORT_MAP: orig is an advertised host:port or a node
+	 * name and alt is the host:port to connect to (see
+	 * as_discovery_port_map_translator()). Ignored for
+	 * AS_TRANSLATOR_PASS_THROUGH.
 	 */
 	const struct as_addr_map_s* map;
 
@@ -585,6 +589,64 @@ as_discovery_static_map_translate(const struct as_addr_map_s* entries, uint32_t 
 	const as_endpoint* endpoint, as_host* out);
 
 /**
+ * Fill translator with the built-in port-map translator named "port-map".
+ *
+ * Each entry maps orig to alt. orig is an advertised host:port, or, when it
+ * contains no ':', a node name. alt is the host:port to connect to. IPv6 hosts
+ * must be written in brackets in both ([2001:db8::1]:3000). Ports are decimal
+ * and in the range 1 to 65535. A lookup tries the advertised host:port first
+ * (exact, case-sensitive host) and the advertised node name second. The mapped
+ * endpoint keeps the advertised TLS name.
+ *
+ * The entries are validated and copied once; later changes to them have no
+ * effect. Null or empty keys or values, empty hosts, a missing or invalid port,
+ * an unbracketed IPv6 host and duplicate keys return AEROSPIKE_ERR_PARAM with a
+ * message naming the entry; translator is then left untouched.
+ *
+ * On success the caller owns translator->udata until it is registered with
+ * as_config_set_address_translator(), which then takes ownership; release an
+ * unregistered table with translator->destroy(translator->udata). Most callers
+ * should use as_config_set_port_map_translator().
+ * @ingroup discovery_api
+ */
+AS_EXTERN as_status
+as_discovery_port_map_translator(as_error* err, const struct as_addr_map_s* entries,
+	uint32_t size, as_address_translator* translator);
+
+/**
+ * Fill translator with the built-in pass-through translator named
+ * "pass-through". It returns the advertised host and port as a mapping, so it
+ * succeeds even when as_translation_config.on_miss is AS_TRANSLATION_STRICT.
+ * It has no state and no destroy callback.
+ * @ingroup discovery_api
+ */
+AS_EXTERN void
+as_discovery_pass_through_translator(as_address_translator* translator);
+
+/**
+ * Complete one translation: apply the miss policy, validate the mapping and
+ * produce the effective endpoint. This is the single implementation shared by
+ * the cluster and the conformance entry point.
+ *
+ * If mapped is true, mapped_host holds the translator output; it is always
+ * consumed (destroyed) by this call, and any tls_name in it is ignored. If
+ * mapped is false it is a miss: AS_TRANSLATION_PASS_THROUGH uses the advertised
+ * host and port, AS_TRANSLATION_STRICT returns AEROSPIKE_ERR_TRANSLATION_MISS
+ * naming translator_name, the node, the advertised host:port and the source
+ * list.
+ *
+ * On AEROSPIKE_OK, out receives a copy of the effective host and port with a
+ * copy of endpoint->tls_name; the caller destroys it with as_host_destroy().
+ * An invalid mapped host or port (empty, over-long, port zero) returns
+ * AEROSPIKE_ERR_CLIENT.
+ * @ingroup discovery_api
+ */
+AS_EXTERN as_status
+as_discovery_complete_translation(as_error* err, const char* translator_name,
+	as_translation_miss_policy on_miss, const as_endpoint* endpoint, bool mapped,
+	as_host* mapped_host, as_host* out);
+
+/**
  * Merge static and discovered hosts per policy into output, which must be
  * initialized by the caller and receives copies. init is true for the result
  * obtained at client initialization and false for later refreshes. Duplicates
@@ -604,9 +666,10 @@ as_discovery_merge_hosts(as_seed_merge_policy policy, bool init, const as_vector
  * pass-through miss) advertised host and port, with the endpoint tls_name. The
  * caller destroys out with as_host_destroy().
  *
- * Returns AEROSPIKE_ERR_TRANSLATION_MISS for a strict miss,
- * AEROSPIKE_ERR_UNSUPPORTED_FEATURE with a reason for a translator kind that is
- * not implemented, and AEROSPIKE_ERR_PARAM for invalid input.
+ * Returns AEROSPIKE_ERR_TRANSLATION_MISS for a strict miss and
+ * AEROSPIKE_ERR_PARAM for invalid input, including an invalid port-map entry.
+ * AEROSPIKE_ERR_UNSUPPORTED_FEATURE is reserved for translator kinds the build
+ * does not implement.
  *
  * @ingroup discovery_api
  */

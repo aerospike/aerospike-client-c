@@ -69,26 +69,129 @@ as_vector_value_check_dimensions(
 	return true;
 }
 
-static as_vector_value*
-as_vector_value_new(
-	as_error* err, as_vector_element_type element_type, uint32_t count, const void* data,
-	uint32_t elem_size
+static bool
+as_vector_value_check_new(
+	as_error* err, as_vector_element_type element_type, uint32_t count, const void* data
 	)
 {
 	as_error_reset(err);
 
 	if (data == NULL) {
 		as_error_set_message(err, AEROSPIKE_ERR_PARAM, "vector: data is NULL");
-		return NULL;
+		return false;
 	}
+	return as_vector_value_check_dimensions(err, element_type, count);
+}
 
-	if (! as_vector_value_check_dimensions(err, element_type, count)) {
+static as_vector_value*
+as_vector_value_new(
+	as_error* err, as_vector_element_type element_type, uint32_t count, const void* data,
+	uint32_t elem_size
+	)
+{
+	if (! as_vector_value_check_new(err, element_type, count, data)) {
 		return NULL;
 	}
 
 	as_vector_value* vec = as_vector_value_alloc(element_type, count, elem_size);
 	memcpy(vec->data, data, (size_t)count * elem_size);
 	return vec;
+}
+
+// IEEE 754 binary32 to binary16 with round-ties-to-even. float is binary32 on
+// every supported platform. memcpy reads its bit pattern.
+static uint16_t
+as_vector_float32_to_float16_bits(float v)
+{
+	uint32_t bits;
+	memcpy(&bits, &v, sizeof(bits));
+
+	uint16_t sign = (uint16_t)((bits >> 16) & 0x8000);
+	int32_t exponent = (int32_t)((bits >> 23) & 0xff);
+	uint32_t mantissa = bits & 0x7fffffu;
+
+	if (exponent == 0xff) {
+		// Infinity keeps a zero mantissa. NaN becomes a quiet NaN.
+		uint16_t inf_or_nan = mantissa == 0 ? 0x7c00 : 0x7e00;
+		return (uint16_t)(sign | inf_or_nan);
+	}
+
+	int32_t exp = exponent - 127 + 15;
+
+	if (exp >= 0x1f) {
+		return (uint16_t)(sign | 0x7c00);
+	}
+
+	if (exp <= 0) {
+		// Subnormal binary16, or zero when the value is too small.
+		if (exp < -10) {
+			return sign;
+		}
+
+		uint32_t m = mantissa | 0x800000u;
+		uint32_t shift = (uint32_t)(14 - exp);
+		uint16_t half_mant = (uint16_t)(m >> shift);
+		uint32_t remainder = m & ((1u << shift) - 1u);
+		uint32_t halfway = 1u << (shift - 1u);
+
+		if (remainder > halfway || (remainder == halfway && (half_mant & 1u))) {
+			half_mant++;
+		}
+		return (uint16_t)(sign | half_mant);
+	}
+
+	uint16_t half_mant = (uint16_t)(mantissa >> 13);
+	uint32_t round_bit = (mantissa >> 12) & 1u;
+	uint32_t sticky = mantissa & 0xfffu;
+
+	if (round_bit && (sticky || (half_mant & 1u))) {
+		half_mant++;
+
+		if (half_mant == 0x400) {
+			half_mant = 0;
+			exp++;
+
+			if (exp >= 0x1f) {
+				return (uint16_t)(sign | 0x7c00);
+			}
+		}
+	}
+	return (uint16_t)(sign | (uint16_t)(exp << 10) | half_mant);
+}
+
+// IEEE 754 binary16 to binary32. Every binary16 value is exact in binary32.
+static float
+as_vector_float16_bits_to_float32(uint16_t half)
+{
+	uint32_t sign = (uint32_t)(half & 0x8000) << 16;
+	int32_t exp = (half >> 10) & 0x1f;
+	uint32_t mant = half & 0x3ff;
+	uint32_t bits;
+
+	if (exp == 0 && mant == 0) {
+		bits = sign;
+	}
+	else if (exp == 0) {
+		// Normalize a subnormal binary16.
+		int32_t e = 127 - 14;
+
+		while ((mant & 0x400) == 0) {
+			mant <<= 1;
+			e--;
+		}
+		mant &= 0x3ff;
+		bits = sign | ((uint32_t)e << 23) | (mant << 13);
+	}
+	else if (exp == 0x1f) {
+		bits = sign | 0x7f800000u | (mant << 13);
+	}
+	else {
+		bits = sign | ((uint32_t)(exp + (127 - 15)) << 23) | (mant << 13);
+	}
+
+	float v;
+	memcpy(&v, &bits, sizeof(v));
+	return v;
 }
 
 static uint32_t
@@ -164,6 +267,60 @@ as_vector_value*
 as_vector_value_new_float16(as_error* err, const uint16_t* data, uint32_t count)
 {
 	return as_vector_value_new(err, AS_VECTOR_ELEMENT_TYPE_FLOAT16, count, data, sizeof(uint16_t));
+}
+
+as_vector_value*
+as_vector_value_new_float16_from_float(as_error* err, const float* data, uint32_t count)
+{
+	if (! as_vector_value_check_new(err, AS_VECTOR_ELEMENT_TYPE_FLOAT16, count, data)) {
+		return NULL;
+	}
+
+	as_vector_value* vec = as_vector_value_alloc(AS_VECTOR_ELEMENT_TYPE_FLOAT16, count,
+		sizeof(uint16_t));
+	uint16_t* dst = (uint16_t*)vec->data;
+
+	for (uint32_t i = 0; i < count; i++) {
+		uint16_t bits = as_vector_float32_to_float16_bits(data[i]);
+
+		// An all-ones exponent is infinity or NaN, which a vector cannot hold.
+		if ((bits & 0x7c00) == 0x7c00) {
+			as_vector_value_destroy(vec);
+			as_error_update(err, AEROSPIKE_ERR_PARAM,
+				"vector: element %u (%g) is not finite as float16", i, (double)data[i]);
+			return NULL;
+		}
+		dst[i] = bits;
+	}
+	return vec;
+}
+
+as_status
+as_vector_value_get_float16_as_float(
+	as_error* err, const as_vector_value* vec, float* out, uint32_t count
+	)
+{
+	as_error_reset(err);
+
+	if (vec == NULL || vec->element_type != AS_VECTOR_ELEMENT_TYPE_FLOAT16) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "vector: element type is not float16");
+	}
+
+	if (out == NULL) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "vector: out is NULL");
+	}
+
+	if (count < vec->dimensions) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"vector: out has %u elements, %u needed", count, vec->dimensions);
+	}
+
+	const uint16_t* src = (const uint16_t*)vec->data;
+
+	for (uint32_t i = 0; i < vec->dimensions; i++) {
+		out[i] = as_vector_float16_bits_to_float32(src[i]);
+	}
+	return AEROSPIKE_OK;
 }
 
 as_vector_value*

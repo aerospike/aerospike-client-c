@@ -154,6 +154,21 @@ as_query_topk_collector_status(const as_query_topk_collector* collector, as_erro
 
 /**
  * @private
+ * Collect a record parsed from a synchronous Top-K query response, like
+ * as_query_topk_collect() does for a non-NULL val, along with the record's
+ * last-update time from the response (0 if the server did not send it). A
+ * record can reach the client from two nodes while its partition migrates,
+ * and the copy with the later last-update time is kept. On a tie, the copy
+ * already kept stays. Returns false when the record could not be buffered,
+ * the same as as_query_topk_collect().
+ */
+AS_EXTERN bool
+as_query_topk_collect_record(
+	as_query_topk_collector* collector, const as_record* record, uint64_t last_update_time
+	);
+
+/**
+ * @private
  * Trampoline listener with the same signature as
  * as_async_query_record_listener. Deep-copies record, like
  * as_query_topk_collect(). record == NULL (with err NULL) signals that the
@@ -168,6 +183,20 @@ as_query_topk_collector_status(const as_query_topk_collector* collector, as_erro
 AS_EXTERN bool
 as_query_topk_collect_async(
 	as_error* err, as_record* record, void* udata, as_event_loop* event_loop
+	);
+
+/**
+ * @private
+ * Collect a record parsed from an asynchronous Top-K query response, like
+ * as_query_topk_collect_async() does for a non-NULL record, along with the
+ * record's last-update time. Duplicates are resolved as in
+ * as_query_topk_collect_record(). A record that could not be buffered is
+ * reported as in as_query_topk_collect_async(), and this returns false.
+ */
+AS_EXTERN bool
+as_query_topk_collect_record_async(
+	as_query_topk_collector* collector, const as_record* record, uint64_t last_update_time,
+	as_event_loop* event_loop
 	);
 
 /**

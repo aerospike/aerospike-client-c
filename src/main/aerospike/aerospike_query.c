@@ -347,6 +347,22 @@ as_query_partition_complete_async(as_event_executor* ee)
 	as_query_partition_retry_async(qe, &err);
 }
 
+// Return a Top-K record's last-update time, which the server sends in a field that
+// as_command_parse_key() skips, or 0 if the record has none.
+static uint64_t
+as_query_parse_last_update_time(const uint8_t* p, uint32_t n_fields)
+{
+	for (uint32_t i = 0; i < n_fields; i++) {
+		uint32_t field_sz = cf_swap_from_be32(*(uint32_t*)p);
+
+		if (p[4] == AS_FIELD_LUT && field_sz == 1 + sizeof(uint64_t)) {
+			return cf_swap_from_be64(*(uint64_t*)(p + AS_FIELD_HEADER_SIZE));
+		}
+		p += 4 + field_sz;
+	}
+	return 0;
+}
+
 static as_status
 as_query_parse_record_async(
 	as_async_query_executor* qe, as_async_query_command* qc, uint8_t** pp, as_msg* msg,
@@ -358,6 +374,13 @@ as_query_parse_record_async(
 	
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
+
+	bool topk_collect = qe->listener == as_query_topk_collect_async;
+	uint64_t last_update_time = 0;
+
+	if (topk_collect) {
+		last_update_time = as_query_parse_last_update_time(*pp, msg->n_fields);
+	}
 
 	uint64_t bval = 0;
 	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, &bval);
@@ -375,7 +398,15 @@ as_query_parse_record_async(
 		return AEROSPIKE_OK;
 	}
 
-	bool rv = qe->listener(NULL, &rec, qe->executor.udata, qe->executor.event_loop);
+	bool rv;
+
+	if (topk_collect) {
+		rv = as_query_topk_collect_record_async(qe->executor.udata, &rec, last_update_time,
+			qe->executor.event_loop);
+	}
+	else {
+		rv = qe->listener(NULL, &rec, qe->executor.udata, qe->executor.event_loop);
+	}
 
 	if (! rv) {
 		as_record_destroy(&rec);
@@ -498,6 +529,13 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		rec.gen = msg->generation;
 		rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 
+		bool topk_collect = task->callback == as_query_topk_collect;
+		uint64_t last_update_time = 0;
+
+		if (topk_collect) {
+			last_update_time = as_query_parse_last_update_time(*pp, msg->n_fields);
+		}
+
 		uint64_t bval = 0;
 		*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, &bval);
 
@@ -514,7 +552,14 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		}
 
 		if (task->callback) {
-			bool rv = task->callback((as_val*)&rec, task->udata);
+			bool rv;
+
+			if (topk_collect) {
+				rv = as_query_topk_collect_record(task->udata, &rec, last_update_time);
+			}
+			else {
+				rv = task->callback((as_val*)&rec, task->udata);
+			}
 
 			if (! rv) {
 				as_record_destroy(&rec);

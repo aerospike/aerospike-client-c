@@ -862,6 +862,50 @@ TEST(query_topk_merge_bounded, "topk collector keeps only the best k of many can
 	assert_not_null(strstr(g_topk_test_last[4], "score=196"));
 }
 
+static void
+topk_test_collect_lut(
+	as_query_topk_collector* collector, uint8_t digest_byte, int64_t score, uint64_t last_update_time
+	)
+{
+	as_record rec;
+	topk_test_make_int_rec(&rec, digest_byte, score, true);
+	as_query_topk_collect_record(collector, &rec, last_update_time);
+	as_record_destroy(&rec);
+}
+
+TEST(query_topk_merge_duplicate_later_update_wins,
+	"topk collector keeps the duplicate copy with the later last-update time")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 3);
+
+	g_topk_test_count = 0;
+
+	as_query_topk_collector* collector = as_query_topk_collector_create(&query, topk_test_collect_cb, NULL);
+	as_query_destroy(&query);
+
+	topk_test_collect_lut(collector, 0xA1, 50, 100);
+	topk_test_collect_lut(collector, 0xB1, 40, 100);
+
+	// The newer copy of 0xA1 wins even though it ranks lower.
+	topk_test_collect_lut(collector, 0xA1, 10, 200);
+
+	// The older copy of 0xC1 loses even though it ranks higher.
+	topk_test_collect_lut(collector, 0xC1, 20, 300);
+	topk_test_collect_lut(collector, 0xC1, 60, 150);
+
+	as_query_topk_collect(NULL, collector);
+	as_query_topk_collector_destroy(collector);
+
+	assert_int_eq(g_topk_test_count, 3);
+	assert_string_eq(g_topk_test_last[0], "digest=b1 score=40");
+	assert_string_eq(g_topk_test_last[1], "digest=c1 score=20");
+	assert_string_eq(g_topk_test_last[2], "digest=a1 score=10");
+}
+
 TEST(query_topk_merge_string_case_insensitive_asc,
 	"topk collector applies STRING + CASE_INSENSITIVE ascending ordering")
 {
@@ -1297,6 +1341,24 @@ TEST(query_topk_merge_async_buffer_failure,
 	assert_int_eq(result.error, AEROSPIKE_ERR_CLIENT);
 }
 
+TEST(query_topk_merge_async_record_buffer_failure,
+	"async topk record collector reports an error when a candidate cannot be buffered")
+{
+	topk_async_result result = {0};
+	as_query_topk_collector* collector = topk_test_create_async(3, &result);
+
+	// The failure destroys the collector, so nothing else is sent to it.
+	as_record bad;
+	topk_test_make_unbufferable_rec(&bad, 0xA2);
+	bool rv = as_query_topk_collect_record_async(collector, &bad, 100, NULL);
+	as_record_destroy(&bad);
+
+	assert_false(rv);
+	assert_int_eq(result.count, 0);
+	assert_int_eq(result.ends, 0);
+	assert_int_eq(result.error, AEROSPIKE_ERR_CLIENT);
+}
+
 //---------------------------------
 // Server integration tests
 //---------------------------------
@@ -1600,6 +1662,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_validate_server_support);
 	suite_add(query_topk_merge_integer_desc);
 	suite_add(query_topk_merge_bounded);
+	suite_add(query_topk_merge_duplicate_later_update_wins);
 	suite_add(query_topk_merge_string_case_insensitive_asc);
 	suite_add(query_topk_merge_double_nan_and_zero);
 	suite_add(query_topk_merge_two_keys);
@@ -1609,6 +1672,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_merge_async_listener_stops);
 	suite_add(query_topk_merge_buffer_failure);
 	suite_add(query_topk_merge_async_buffer_failure);
+	suite_add(query_topk_merge_async_record_buffer_failure);
 	suite_add(query_topk_integer_desc_server);
 	suite_add(query_topk_short_query_server);
 	suite_add(query_topk_order_by_without_top_k_server);

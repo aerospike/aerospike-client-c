@@ -29,9 +29,10 @@ extern "C" {
 
 /**
  * @private
- * Buffers records from every targeted node (each node's response is already
- * a fully sorted, deduplicated, <= k batch) and, once every node has reported,
- * delivers the merged/truncated global top-k in final rank order to the
+ * Merges records from every targeted node (each node's response is already
+ * a fully sorted, deduplicated, <= k batch), keeping only the best k seen so
+ * far, so it holds about k records whatever the cluster size. Once every node
+ * has reported, it delivers the global top-k in final rank order to the
  * caller's real callback or listener.
  *
  * A collector is single-use: create it, then drive one query through
@@ -117,12 +118,14 @@ as_query_topk_collector_create_async(
 /**
  * @private
  * Trampoline callback with the same signature as
- * aerospike_query_foreach_callback. Deep-copies val (assumed to be an
- * as_record) so it survives past the lifetime of the caller's
- * stack-allocated record. val == NULL signals that the underlying query
+ * aerospike_query_foreach_callback. If val (assumed to be an as_record) ranks
+ * among the best k records seen so far, and no copy of the same record is
+ * already kept, deep-copies it so it survives past the lifetime of the
+ * caller's stack-allocated record, and drops the worst kept record if there
+ * are now more than k. val == NULL signals that the underlying query
  * completed successfully across every targeted node; at that point, this
- * function synchronously sorts/dedups/truncates the buffered records and
- * replays them to the real callback, followed by one final NULL callback.
+ * function synchronously sorts the kept records and replays them to the real
+ * callback, followed by one final NULL callback.
  *
  * Returns true for non-NULL val unless the record could not be buffered (out
  * of memory). Top-K requires a full scan of the candidate set on every

@@ -229,11 +229,13 @@ typedef struct as_command_s {
 	uint8_t replica_index;
 	uint8_t replica_index_sc; // Used in batch only.
 	as_latency_type latency_type;
-	// Stored operational sampler decision. Reused for retries of this command.
+	// Stored operational sampler decision. Reused for retries of this command
+	// and for every node command of one user batch.
 	// False when operational metrics are off, or when the sampler skips this call.
 	// Gates the cluster command_count, the retry counter, v3 command latency, and
 	// per-namespace histograms, bytes, and error counts. Namespace error counters
 	// are recorded once on terminal failure.
+	// See as_cluster_sample_operational() and as_command_execute_key().
 	bool metrics_sample_decision;
 } as_command;
 
@@ -669,11 +671,24 @@ as_command_start_timer(as_command* cmd)
 /**
  * @private
  * Write buffer and send command to the server.
+ * See as_command_execute_key() for batch_sampled.
  */
 as_status
 as_command_send(
-	as_command* cmd, as_error* err, uint32_t comp_threshold, as_write_fn write_fn, void* udata
+	as_command* cmd, as_error* err, uint32_t comp_threshold, as_write_fn write_fn, void* udata,
+	const bool* batch_sampled
 	);
+
+/**
+ * @private
+ * Send command to the server.
+ * When inherit_sample is false, this command draws the sampler and increments
+ * command_count when sampled, the same as as_command_execute(). When
+ * inherit_sample is true, metrics_sampled is the user-call decision, and this
+ * command does not draw again or increment command_count.
+ */
+as_status
+as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, bool metrics_sampled);
 
 /**
  * @private
@@ -681,6 +696,20 @@ as_command_send(
  */
 as_status
 as_command_execute(as_command* cmd, as_error* err);
+
+/**
+ * @private
+ * Send a single-key command to the server.
+ * batch_sampled is NULL when this command is its own user call, which draws the
+ * sampler like as_command_execute(). Otherwise, this command is a single-key
+ * batch fallback and batch_sampled points to the user-batch sampler decision.
+ * The fallback reuses that decision, records batch latency, and does not
+ * increment command_count again. The decision travels with this command, so
+ * other commands created on the same thread are not affected.
+ * Async key commands follow the same rule. See as_event_command_sample_key().
+ */
+as_status
+as_command_execute_key(as_command* cmd, as_error* err, const bool* batch_sampled);
 
 /**
  * @private

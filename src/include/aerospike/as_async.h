@@ -83,7 +83,8 @@ as_async_write_command_create(
 	as_cluster* cluster, const as_policy_base* policy, as_partition_info* pi,
 	as_policy_replica replica, as_async_write_listener listener, void* udata,
 	as_event_loop* event_loop, as_pipe_listener pipe_listener, size_t size,
-	as_event_parse_results_fn parse_results, uint8_t* ubuf, uint32_t ubuf_size
+	as_event_parse_results_fn parse_results, uint8_t* ubuf, uint32_t ubuf_size,
+	const bool* batch_sampled
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -119,7 +120,7 @@ as_async_write_command_create(
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
 	wcmd->listener = listener;
-	as_event_command_select_sample(cmd, true);
+	as_event_command_sample_key(cmd, batch_sampled);
 	return cmd;
 }
 	
@@ -129,7 +130,8 @@ as_async_record_command_create(
 	as_policy_replica replica, uint8_t replica_index, bool deserialize, bool heap_rec,
 	uint8_t flags, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
 	as_pipe_listener pipe_listener, size_t size, as_event_parse_results_fn parse_results, 
-	uint8_t type, as_latency_type latency_type, uint8_t* ubuf, uint32_t ubuf_size
+	uint8_t type, as_latency_type latency_type, uint8_t* ubuf, uint32_t ubuf_size,
+	const bool* batch_sampled
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -175,7 +177,7 @@ as_async_record_command_create(
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = latency_type;
 	rcmd->listener = listener;
-	as_event_command_select_sample(cmd, true);
+	as_event_command_sample_key(cmd, batch_sampled);
 	return cmd;
 }
 
@@ -184,7 +186,8 @@ as_async_value_command_create(
 	as_cluster* cluster, const as_policy_base* policy, as_partition_info* pi,
 	as_policy_replica replica, as_async_value_listener listener, void* udata,
 	as_event_loop* event_loop, as_pipe_listener pipe_listener, size_t size,
-	as_event_parse_results_fn parse_results, uint8_t* ubuf, uint32_t ubuf_size
+	as_event_parse_results_fn parse_results, uint8_t* ubuf, uint32_t ubuf_size,
+	const bool* batch_sampled
 	)
 {
 	// Allocate enough memory to cover: struct size + write buffer size + auth max buffer size
@@ -221,7 +224,7 @@ as_async_value_command_create(
 	cmd->ubuf_size = ubuf_size;
 	cmd->latency_type = AS_LATENCY_TYPE_WRITE;
 	vcmd->listener = listener;
-	as_event_command_select_sample(cmd, true);
+	as_event_command_sample_key(cmd, batch_sampled);
 	return cmd;
 }
 

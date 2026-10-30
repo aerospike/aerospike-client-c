@@ -175,7 +175,7 @@ static inline as_status
 as_command_execute_read(
 	as_cluster* cluster, as_error* err, const as_policy_base* policy, as_policy_replica replica,
 	as_policy_read_mode_sc read_mode_sc, const as_key* key, uint8_t* buf, size_t size,
-	as_partition_info* pi, const as_parse_results_fn fn, void* udata
+	as_partition_info* pi, const as_parse_results_fn fn, void* udata, const bool* batch_sampled
 	)
 {
 	as_command cmd;
@@ -184,7 +184,7 @@ as_command_execute_read(
 
 	cmd.buf = buf;
 	as_command_start_timer(&cmd);
-	return as_command_execute(&cmd, err);
+	return as_command_execute_key(&cmd, err, batch_sampled);
 }
 
 static inline void
@@ -455,9 +455,12 @@ as_policy_read_merge(aerospike* as, const as_policy_read* src, as_policy_read* m
 // transaction is counted once, not once per key. The Node.js client does not
 // call the key helpers. It uses the public async key functions, which already
 // increment deferred.
+// batch_sampled is NULL except for a single-key batch fallback.
+// See as_command_execute_key().
 as_status
 aerospike_key_get_internal(
-	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec,
+	const bool* batch_sampled
 	)
 {
 	as_policy_read merged;
@@ -491,7 +494,7 @@ aerospike_key_get_internal(
 	data.deserialize = policy->deserialize;
 
 	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
-				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_result, &data);
+				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_result, &data, batch_sampled);
 
 	as_command_buffer_free(buf, size);
 	return status;
@@ -503,7 +506,7 @@ aerospike_key_get(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return aerospike_key_get_internal(as, err, policy, key, rec);
+	return aerospike_key_get_internal(as, err, policy, key, rec, NULL);
 }
 
 // Skips feature.api. See aerospike_key_get_internal().
@@ -511,7 +514,7 @@ as_status
 aerospike_key_get_async_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener
+	as_pipe_listener pipe_listener, const bool* batch_sampled
 	)
 {
 	as_policy_read merged;
@@ -536,7 +539,7 @@ aerospike_key_get_async_internal(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener, size,
-		as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0);
+		as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0, batch_sampled);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
@@ -557,7 +560,7 @@ aerospike_key_get_async(
 	)
 {
 	as_metrics_add_api_deferred(as);
-	return aerospike_key_get_async_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener);
+	return aerospike_key_get_async_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener, NULL);
 }
 
 //---------------------------------
@@ -617,7 +620,7 @@ aerospike_key_select(
 	data.deserialize = policy->deserialize;
 
 	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
-				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_result, &data);
+				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_result, &data, NULL);
 
 	as_command_buffer_free(buf, size);
 	return status;
@@ -663,7 +666,7 @@ aerospike_key_select_async(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener, size,
-		as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0);
+		as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0, NULL);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
@@ -684,7 +687,7 @@ aerospike_key_select_async(
 as_status
 aerospike_key_select_bins_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
-	const char* bins[], uint32_t n_bins, as_record** rec
+	const char* bins[], uint32_t n_bins, as_record** rec, const bool* batch_sampled
 	)
 {
 	as_policy_read merged;
@@ -730,7 +733,7 @@ aerospike_key_select_bins_internal(
 	data.deserialize = policy->deserialize;
 
 	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
-				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_result, &data);
+				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_result, &data, batch_sampled);
 
 	as_command_buffer_free(buf, size);
 	return status;
@@ -743,7 +746,7 @@ aerospike_key_select_bins(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return aerospike_key_select_bins_internal(as, err, policy, key, bins, n_bins, rec);
+	return aerospike_key_select_bins_internal(as, err, policy, key, bins, n_bins, rec, NULL);
 }
 
 // Skips feature.api. See aerospike_key_get_internal().
@@ -751,7 +754,7 @@ as_status
 aerospike_key_select_bins_async_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
 	uint32_t n_bins, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener
+	as_pipe_listener pipe_listener, const bool* batch_sampled
 	)
 {
 	as_policy_read merged;
@@ -784,7 +787,7 @@ aerospike_key_select_bins_async_internal(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 		policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener, size,
-		as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0);
+		as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0, batch_sampled);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* p = as_command_write_header_read(cmd->buf, &policy->base, policy->read_mode_ap,
@@ -810,7 +813,7 @@ aerospike_key_select_bins_async(
 {
 	as_metrics_add_api_deferred(as);
 	return aerospike_key_select_bins_async_internal(as, err, policy, key, bins, n_bins, listener, udata, event_loop,
-		pipe_listener);
+		pipe_listener, NULL);
 }
 
 //---------------------------------
@@ -820,7 +823,8 @@ aerospike_key_select_bins_async(
 // Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_exists_internal(
-	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec,
+	const bool* batch_sampled
 	)
 {
 	as_policy_read merged;
@@ -849,7 +853,7 @@ aerospike_key_exists_internal(
 	size = as_command_write_end(buf, p);
 
 	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
-				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_header, rec);
+				policy->read_mode_sc, key, buf, size, &pi, as_command_parse_header, rec, batch_sampled);
 
 	as_command_buffer_free(buf, size);
 
@@ -865,7 +869,7 @@ aerospike_key_exists(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return aerospike_key_exists_internal(as, err, policy, key, rec);
+	return aerospike_key_exists_internal(as, err, policy, key, rec, NULL);
 }
 
 // Skips feature.api. See aerospike_key_get_internal().
@@ -873,7 +877,7 @@ as_status
 aerospike_key_exists_async_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener
+	as_pipe_listener pipe_listener, const bool* batch_sampled
 	)
 {
 	as_policy_read merged;
@@ -898,7 +902,7 @@ aerospike_key_exists_async_internal(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, false, policy->async_heap_rec,
 		ri.flags, listener, udata, event_loop, pipe_listener, size, as_event_command_parse_result,
-		AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0);
+		AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0, batch_sampled);
 
 	uint8_t* p = as_command_write_header_read_header(cmd->buf, &policy->base, policy->read_mode_ap,
 		policy->read_mode_sc, policy->read_touch_ttl_percent, tdata.n_fields, 0,
@@ -918,7 +922,7 @@ aerospike_key_exists_async(
 	)
 {
 	as_metrics_add_api_deferred(as);
-	return aerospike_key_exists_async_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener);
+	return aerospike_key_exists_async_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener, NULL);
 }
 
 //---------------------------------
@@ -1083,7 +1087,7 @@ aerospike_key_put(
 	as_command_init_write(&cmd, as->cluster, &policy->base, policy->replica, key, put.size, &pi,
 						  as_command_parse_header, NULL);
 
-	status = as_command_send(&cmd, err, compression_threshold, as_put_write, &put);
+	status = as_command_send(&cmd, err, compression_threshold, as_put_write, &put, NULL);
 	return status;
 }
 
@@ -1129,7 +1133,7 @@ aerospike_key_put_async_ex(
 		// Send uncompressed command.
 		as_event_command* cmd = as_async_write_command_create(
 			as->cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
-			pipe_listener, put.size, as_event_command_parse_header, NULL, 0);
+			pipe_listener, put.size, as_event_command_parse_header, NULL, 0, NULL);
 
 		cmd->write_len = (uint32_t)as_put_write(&put, cmd->buf);
 
@@ -1154,7 +1158,7 @@ aerospike_key_put_async_ex(
 		size_t comp_size = as_command_compress_max_size(size);
 		as_event_command* cmd = as_async_write_command_create(
 			as->cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
-			pipe_listener, comp_size, as_event_command_parse_header, ubuf, (uint32_t)size);
+			pipe_listener, comp_size, as_event_command_parse_header, ubuf, (uint32_t)size, NULL);
 
 		return as_async_compress_command_execute(as, err, &policy->base, key, cmd, &put.tdata,
 			ubuf, size, comp_size, length, comp_length);
@@ -1226,7 +1230,8 @@ as_policy_remove_merge(
 // Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_remove_internal(
-	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
+	const bool* batch_sampled
 	)
 {
 	as_policy_remove merged;
@@ -1260,7 +1265,7 @@ aerospike_key_remove_internal(
 
 	cmd.buf = buf;
 	as_command_start_timer(&cmd);
-	status = as_command_execute(&cmd, err);
+	status = as_command_execute_key(&cmd, err, batch_sampled);
 
 	as_command_buffer_free(buf, size);
 	return status;
@@ -1272,7 +1277,7 @@ aerospike_key_remove(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return aerospike_key_remove_internal(as, err, policy, key);
+	return aerospike_key_remove_internal(as, err, policy, key, NULL);
 }
 
 // Skips feature.api. See aerospike_key_get_internal().
@@ -1280,7 +1285,7 @@ as_status
 aerospike_key_remove_async_ex_internal(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
 	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener, size_t* length
+	as_pipe_listener pipe_listener, size_t* length, const bool* batch_sampled
 	)
 {
 	as_policy_remove merged;
@@ -1301,7 +1306,7 @@ aerospike_key_remove_async_ex_internal(
 
 	as_event_command* cmd = as_async_write_command_create(
 		as->cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
-		pipe_listener, size, as_event_command_parse_header, NULL, 0);
+		pipe_listener, size, as_event_command_parse_header, NULL, 0, batch_sampled);
 
 	uint8_t* p = as_command_write_header_write(cmd->buf, &policy->base, policy->commit_level,
 		AS_POLICY_EXISTS_IGNORE, policy->gen, policy->generation, 0, tdata.n_fields, 0,
@@ -1326,7 +1331,8 @@ aerospike_key_remove_async_ex(
 	)
 {
 	as_metrics_add_api_deferred(as);
-	return aerospike_key_remove_async_ex_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener, length);
+	return aerospike_key_remove_async_ex_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener, length,
+		NULL);
 }
 
 // Skips feature.api. See aerospike_key_get_internal().
@@ -1334,10 +1340,11 @@ as_status
 aerospike_key_remove_async_internal(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
 	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener
+	as_pipe_listener pipe_listener, const bool* batch_sampled
 	)
 {
-	return aerospike_key_remove_async_ex_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener, NULL);
+	return aerospike_key_remove_async_ex_internal(as, err, policy, key, listener, udata, event_loop, pipe_listener, NULL,
+		batch_sampled);
 }
 
 as_status
@@ -1565,7 +1572,7 @@ as_operate_write(void* udata, uint8_t* buf)
 as_status
 aerospike_key_operate_internal(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key,
-	const as_operations* ops, as_record** rec
+	const as_operations* ops, as_record** rec, const bool* batch_sampled
 	)
 {
 	uint32_t n_operations = ops->binops.size;
@@ -1625,7 +1632,7 @@ aerospike_key_operate_internal(
 
 	uint32_t compression_threshold = policy->base.compress ? AS_COMPRESS_THRESHOLD : 0;
 
-	status = as_command_send(&cmd, err, compression_threshold, as_operate_write, &oper);
+	status = as_command_send(&cmd, err, compression_threshold, as_operate_write, &oper, batch_sampled);
 
 	return status;
 }
@@ -1637,14 +1644,15 @@ aerospike_key_operate(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return aerospike_key_operate_internal(as, err, policy, key, ops, rec);
+	return aerospike_key_operate_internal(as, err, policy, key, ops, rec, NULL);
 }
 
 // Skips feature.api. See aerospike_key_get_internal().
 as_status
 aerospike_key_operate_async_internal(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener,
+	const bool* batch_sampled
 	)
 {
 	uint32_t n_operations = ops->binops.size;
@@ -1688,7 +1696,7 @@ aerospike_key_operate_async_internal(
 			cmd = as_async_record_command_create(
 				as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, oper.size,
-				as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_WRITE, NULL, 0);
+				as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_WRITE, NULL, 0, batch_sampled);
 
 			cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
 
@@ -1707,7 +1715,7 @@ aerospike_key_operate_async_internal(
 			cmd = as_async_record_command_create(
 				as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 				policy->async_heap_rec, 0, listener, udata, event_loop, pipe_listener, comp_size,
-				as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_WRITE, ubuf, (uint32_t)size);
+				as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_WRITE, ubuf, (uint32_t)size, batch_sampled);
 
 			return as_async_compress_command_execute(as, err, &policy->base, key, cmd, &oper.tdata,
 				ubuf, size, comp_size, NULL, NULL);
@@ -1723,7 +1731,7 @@ aerospike_key_operate_async_internal(
 			cmd = as_async_record_command_create(
 				as->cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
-				oper.size, as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0);
+				oper.size, as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0, batch_sampled);
 
 			cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
 		}
@@ -1743,7 +1751,7 @@ aerospike_key_operate_async_internal(
 			cmd = as_async_record_command_create(
 				as->cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 				policy->async_heap_rec, ri.flags, listener, udata, event_loop, pipe_listener,
-				comp_size, as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, ubuf, (uint32_t)size);
+				comp_size, as_event_command_parse_result, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, ubuf, (uint32_t)size, batch_sampled);
 
 			// Compress buffer and execute.
 			status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
@@ -1768,7 +1776,8 @@ aerospike_key_operate_async(
 	)
 {
 	as_metrics_add_api_deferred(as);
-	return aerospike_key_operate_async_internal(as, err, policy, key, ops, listener, udata, event_loop, pipe_listener);
+	return aerospike_key_operate_async_internal(as, err, policy, key, ops, listener, udata, event_loop, pipe_listener,
+		NULL);
 }
 
 //---------------------------------
@@ -1888,7 +1897,8 @@ as_apply_write(void* udata, uint8_t* buf)
 as_status
 aerospike_key_apply_internal(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
-	const char* module, const char* function, as_list* arglist, as_val** result
+	const char* module, const char* function, as_list* arglist, as_val** result,
+	const bool* batch_sampled
 	)
 {
 	as_policy_apply merged;
@@ -1911,7 +1921,7 @@ aerospike_key_apply_internal(
 
 	uint32_t compression_threshold = policy->base.compress ? AS_COMPRESS_THRESHOLD : 0;
 
-	status = as_command_send(&cmd, err, compression_threshold, as_apply_write, &ap);
+	status = as_command_send(&cmd, err, compression_threshold, as_apply_write, &ap, batch_sampled);
 
 	as_buffer_destroy(&ap.args);
 	as_serializer_destroy(&ap.ser);
@@ -1925,7 +1935,7 @@ aerospike_key_apply(
 	)
 {
 	as_metrics_add_api_blocking(as);
-	return aerospike_key_apply_internal(as, err, policy, key, module, function, arglist, result);
+	return aerospike_key_apply_internal(as, err, policy, key, module, function, arglist, result, NULL);
 }
 
 // Skips feature.api. See aerospike_key_get_internal().
@@ -1934,7 +1944,7 @@ aerospike_key_apply_async_internal(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
 	const char* module, const char* function, as_list* arglist,
 	as_async_value_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener
+	as_pipe_listener pipe_listener, const bool* batch_sampled
 	)
 {
 	as_policy_apply merged;
@@ -1955,7 +1965,7 @@ aerospike_key_apply_async_internal(
 		// Send uncompressed command.
 		as_event_command* cmd = as_async_value_command_create(as->cluster, &policy->base, &pi,
 			policy->replica, listener, udata, event_loop, pipe_listener, size,
-			as_event_command_parse_success_failure, NULL, 0);
+			as_event_command_parse_success_failure, NULL, 0, batch_sampled);
 
 		cmd->write_len = (uint32_t)as_apply_write(&ap, cmd->buf);
 
@@ -1979,7 +1989,7 @@ aerospike_key_apply_async_internal(
 
 		as_event_command* cmd = as_async_value_command_create(as->cluster, &policy->base, &pi,
 			policy->replica, listener, udata, event_loop, pipe_listener, comp_size,
-			as_event_command_parse_success_failure, ubuf, (uint32_t)size);
+			as_event_command_parse_success_failure, ubuf, (uint32_t)size, batch_sampled);
 
 		return as_async_compress_command_execute(as, err, &policy->base, key, cmd, &ap.tdata,
 			ubuf, size, comp_size, NULL, NULL);
@@ -1996,7 +2006,7 @@ aerospike_key_apply_async(
 {
 	as_metrics_add_api_deferred(as);
 	return aerospike_key_apply_async_internal(as, err, policy, key, module, function, arglist, listener, udata,
-		event_loop, pipe_listener);
+		event_loop, pipe_listener, NULL);
 }
 
 //---------------------------------
@@ -2063,7 +2073,7 @@ as_txn_monitor_mark_roll_forward(
 	as_command_init_write(&cmd, as->cluster, &policy.base, policy.replica, key, put.size, &pi,
 						  as_txn_monitor_parse_header, NULL);
 
-	status = as_command_send(&cmd, err, 0, as_put_write, &put);
+	status = as_command_send(&cmd, err, 0, as_put_write, &put, NULL);
 
 	as_record_destroy(&rec);
 	return status;
@@ -2132,7 +2142,7 @@ as_txn_monitor_mark_roll_forward_async(
 
 	as_event_command* cmd = as_async_write_command_create(
 		as->cluster, &policy.base, &pi, policy.replica, listener, udata, event_loop,
-		NULL, put.size, as_txn_monitor_parse_header_async, NULL, 0);
+		NULL, put.size, as_txn_monitor_parse_header_async, NULL, 0, NULL);
 
 	cmd->write_len = (uint32_t)as_put_write(&put, cmd->buf);
 
@@ -2180,7 +2190,7 @@ as_txn_monitor_operate(
 
 	uint32_t compression_threshold = policy->base.compress ? AS_COMPRESS_THRESHOLD : 0;
 
-	return as_command_send(&cmd, err, compression_threshold, as_operate_write, &oper);
+	return as_command_send(&cmd, err, compression_threshold, as_operate_write, &oper, NULL);
 }
 
 as_status
@@ -2222,7 +2232,7 @@ as_txn_monitor_operate_async(
 			as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 			policy->async_heap_rec, 0, listener, udata, event_loop, NULL, oper.size,
 			as_event_command_parse_deadline, AS_ASYNC_TYPE_TXN_MONITOR, AS_LATENCY_TYPE_WRITE,
-			NULL, 0);
+			NULL, 0, NULL);
 
 		cmd->txn = txn;
 		cmd->write_len = (uint32_t)as_operate_write(&oper, cmd->buf);
@@ -2242,7 +2252,7 @@ as_txn_monitor_operate_async(
 			as->cluster, &policy->base, &pi, policy->replica, 0, policy->deserialize,
 			policy->async_heap_rec, 0, listener, udata, event_loop, NULL, comp_size,
 			as_event_command_parse_deadline, AS_ASYNC_TYPE_TXN_MONITOR, AS_LATENCY_TYPE_WRITE,
-			ubuf, (uint32_t)size);
+			ubuf, (uint32_t)size, NULL);
 
 		// Compress buffer and execute.
 		status = as_command_compress(err, ubuf, size, cmd->buf, &comp_size);
@@ -2280,7 +2290,8 @@ parse_result_code(as_error* err, as_command* cmd, as_node* node, uint8_t* buf, s
 
 as_status
 as_txn_verify_single(
-	aerospike* as, as_error* err, const as_policy_txn_verify* policy, const as_key* key, uint64_t ver
+	aerospike* as, as_error* err, const as_policy_txn_verify* policy, const as_key* key, uint64_t ver,
+	const bool* batch_sampled
 	)
 {
 	as_cluster* cluster = as->cluster;
@@ -2320,7 +2331,7 @@ as_txn_verify_single(
 	size = as_command_write_end(buf, p);
 
 	status = as_command_execute_read(cluster, err, &policy->base, policy->replica,
-			policy->read_mode_sc, key, buf, size, &pi, parse_result_code, NULL);
+			policy->read_mode_sc, key, buf, size, &pi, parse_result_code, NULL, batch_sampled);
 
 	as_command_buffer_free(buf, size);
 	return status;
@@ -2350,7 +2361,7 @@ txn_verify_parse(as_event_command* cmd)
 as_status
 as_txn_verify_single_async(
 	aerospike* as, as_error* err, const as_policy_txn_verify* policy, const as_key* key, uint64_t ver,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, const bool* batch_sampled
 	)
 {
 	as_cluster* cluster = as->cluster;
@@ -2371,7 +2382,7 @@ as_txn_verify_single_async(
 	as_event_command* cmd = as_async_record_command_create(
 		cluster, &policy->base, &pi, ri.replica, ri.replica_index, policy->deserialize,
 		false, ri.flags, listener, udata, event_loop, NULL, size,
-		txn_verify_parse, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0);
+		txn_verify_parse, AS_ASYNC_TYPE_RECORD, AS_LATENCY_TYPE_READ, NULL, 0, batch_sampled);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* buf = cmd->buf;
@@ -2407,7 +2418,7 @@ as_txn_verify_single_async(
 as_status
 as_txn_roll_single(
 	aerospike* as, as_error* err, as_txn* txn, const as_policy_txn_roll* policy, const as_key* key,
-	uint64_t ver, uint8_t roll_attr
+	uint64_t ver, uint8_t roll_attr, const bool* batch_sampled
 	)
 {
 	as_cluster* cluster = as->cluster;
@@ -2462,7 +2473,7 @@ as_txn_roll_single(
 	cmd.buf = buf;
 	as_command_start_timer(&cmd);
 
-	status = as_command_execute(&cmd, err);
+	status = as_command_execute_key(&cmd, err, batch_sampled);
 
 	as_command_buffer_free(buf, size);
 	return status;
@@ -2493,7 +2504,7 @@ as_status
 as_txn_roll_single_async(
 	aerospike* as, as_error* err, as_txn* txn, const as_policy_txn_roll* policy, const as_key* key,
 	uint64_t ver, uint8_t roll_attr, as_async_write_listener listener, void* udata,
-	as_event_loop* event_loop
+	as_event_loop* event_loop, const bool* batch_sampled
 	)
 {
 	as_cluster* cluster = as->cluster;
@@ -2518,7 +2529,7 @@ as_txn_roll_single_async(
 
 	as_event_command* cmd = as_async_write_command_create(
 		as->cluster, &policy->base, &pi, policy->replica, listener, udata, event_loop,
-		NULL, size, txn_roll_parse, NULL, 0);
+		NULL, size, txn_roll_parse, NULL, 0, batch_sampled);
 
 	uint32_t timeout = as_command_server_timeout(&policy->base);
 	uint8_t* buf = cmd->buf;

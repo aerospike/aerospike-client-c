@@ -16,6 +16,7 @@
  */
 
 #include <aerospike/aerospike.h>
+#include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_query.h>
 #include <aerospike/aerospike_scan.h>
@@ -424,19 +425,22 @@ metrics_read_cluster_line(const char* dir, char* line, size_t line_size)
 #endif
 }
 
+// Return true when the first "<type>[" entry on the line has a nonzero bucket.
 static bool
-metrics_file_line_has_write_latency(const char* line)
+metrics_file_line_has_latency(const char* line, const char* type)
 {
-	const char* write = strstr(line, "write[");
+	char token[16];
+	snprintf(token, sizeof(token), "%s[", type);
+	const char* p = strstr(line, token);
 
-	if (!write) {
+	if (!p) {
 		return false;
 	}
 
-	write += 6;
+	p += strlen(token);
 
-	for (; *write && *write != ']'; write++) {
-		if (*write >= '1' && *write <= '9') {
+	for (; *p && *p != ']'; p++) {
+		if (*p >= '1' && *p <= '9') {
 			return true;
 		}
 	}
@@ -714,16 +718,21 @@ metrics_namespaces_empty(const as_metrics_snapshot* metrics_snapshot)
 }
 
 static uint64_t
-metrics_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
+metrics_command_latency_total(const as_metrics_snapshot* metrics_snapshot, as_latency_type latency_type)
 {
 	uint64_t total = 0;
-	const as_metrics_latency_snapshot* latency_snapshot =
-		&metrics_snapshot->command_latencies[AS_LATENCY_TYPE_WRITE];
+	const as_metrics_latency_snapshot* latency_snapshot = &metrics_snapshot->command_latencies[latency_type];
 
 	for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
 		total += latency_snapshot->buckets[k];
 	}
 	return total;
+}
+
+static uint64_t
+metrics_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
+{
+	return metrics_command_latency_total(metrics_snapshot, AS_LATENCY_TYPE_WRITE);
 }
 
 static uint64_t
@@ -1142,14 +1151,27 @@ metrics_async_get_listener(as_error* err, as_record* rec, void* udata, as_event_
 	as_monitor_notify(udata);
 }
 
-static bool
-metrics_second_client_supported(void)
+// The main client owns its TLS strings and frees them on destroy, so the
+// second client needs its own copies.
+static void
+metrics_copy_tls(as_config* config, const as_config_tls* src)
 {
-	if (as->config.tls.enable) {
-		info("Skip because the second client does not copy the TLS settings");
-		return false;
-	}
-	return true;
+	config->tls.enable = src->enable;
+	config->tls.crl_check = src->crl_check;
+	config->tls.crl_check_all = src->crl_check_all;
+	config->tls.log_session_info = src->log_session_info;
+	config->tls.for_login_only = src->for_login_only;
+	as_config_tls_set_cafile(config, src->cafile);
+	as_config_tls_set_castring(config, src->castring);
+	as_config_tls_set_capath(config, src->capath);
+	as_config_tls_set_protocols(config, src->protocols);
+	as_config_tls_set_cipher_suite(config, src->cipher_suite);
+	as_config_tls_set_cert_blacklist(config, src->cert_blacklist);
+	as_config_tls_set_keyfile(config, src->keyfile);
+	as_config_tls_set_keyfile_pw(config, src->keyfile_pw);
+	as_config_tls_set_keystring(config, src->keystring);
+	as_config_tls_set_certfile(config, src->certfile);
+	as_config_tls_set_certstring(config, src->certstring);
 }
 
 static aerospike*
@@ -1159,6 +1181,7 @@ metrics_connect_client(as_config* config)
 	as_config_set_user(config, as->config.user, as->config.password);
 	config->use_services_alternate = as->config.use_services_alternate;
 	config->auth_mode = as->config.auth_mode;
+	metrics_copy_tls(config, &as->config.tls);
 
 	aerospike* client = aerospike_new(config);
 	as_error err;
@@ -1236,10 +1259,6 @@ TEST(metrics_async_conn_latency, "an async connection open records connection la
 {
 	if (as_event_loop_size == 0) {
 		info("Skip because no event loops are running");
-		return;
-	}
-
-	if (!metrics_second_client_supported()) {
 		return;
 	}
 
@@ -1466,13 +1485,61 @@ TEST(metrics_file_turns_operational_on, "the file exporter turns operational met
 	as_status disable_status = aerospike_disable_metrics(as, &err);
 	char line[65536];
 	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
-		metrics_file_line_has_write_latency(line) &&
+		metrics_file_line_has_latency(line, "write") &&
 		metrics_file_line_has_memory(line);
 	metrics_remove_dir(dir);
 
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_int_eq(put_status, AEROSPIKE_OK);
 	assert_true(operational);
+	assert_int_eq(disable_status, AEROSPIKE_OK);
+	assert_true(line_ok);
+	as_metrics_policy_destroy(&policy);
+}
+
+TEST(metrics_file_writes_node_conn_latency, "the file writes node connection latency as the namespace conn entry")
+{
+	char dir[256];
+	assert_true(metrics_create_temp_dir_path(dir, sizeof(dir)));
+
+	as_config config;
+	as_config_init(&config);
+	aerospike* client = metrics_connect_client(&config);
+	assert_not_null(client);
+
+	as_metrics_policy policy;
+	as_metrics_policy_init(&policy);
+	// Keep the interval thread from exporting before disable.
+	policy.interval = 3600;
+	as_metrics_policy_set_report_dir(&policy, dir);
+
+	as_error err;
+	as_status status = aerospike_enable_metrics(client, &err, &policy);
+	as_status put_status = AEROSPIKE_ERR_CLIENT;
+
+	if (status == AEROSPIKE_OK) {
+		as_key key;
+		as_key_init_str(&key, "test", "metrics", "metrics-file-conn-latency");
+
+		as_record rec;
+		as_record_init(&rec, 1);
+		as_record_set_int64(&rec, "v", 1);
+
+		put_status = aerospike_key_put(client, &err, NULL, &key, &rec);
+		as_record_destroy(&rec);
+		as_key_destroy(&key);
+	}
+
+	as_status disable_status = aerospike_disable_metrics(client, &err);
+	char line[65536];
+	bool line_ok = metrics_read_cluster_line(dir, line, sizeof(line)) &&
+		metrics_file_line_has_latency(line, "conn");
+	metrics_remove_dir(dir);
+	aerospike_close(client, &err);
+	aerospike_destroy(client);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(put_status, AEROSPIKE_OK);
 	assert_int_eq(disable_status, AEROSPIKE_OK);
 	assert_true(line_ok);
 	as_metrics_policy_destroy(&policy);
@@ -1967,10 +2034,6 @@ TEST(metrics_listener_reads_attempt_latency, "deprecated listeners turn operatio
 
 TEST(metrics_dynamic_legacy_enable_turns_operational_on, "legacy metrics.enable turns operational on for aerospike_enable_metrics")
 {
-	if (!metrics_second_client_supported()) {
-		return;
-	}
-
 	bool operational = false;
 	assert_true(metrics_dynamic_enable_operational(
 		"version: 1.2.0\n"
@@ -1983,10 +2046,6 @@ TEST(metrics_dynamic_legacy_enable_turns_operational_on, "legacy metrics.enable 
 
 TEST(metrics_dynamic_enabled_keeps_policy_operational, "metrics.enabled keeps the policy value even with the file exporter")
 {
-	if (!metrics_second_client_supported()) {
-		return;
-	}
-
 	bool operational = true;
 	assert_true(metrics_dynamic_enable_operational(
 		"version: 1.2.0\n"
@@ -1999,10 +2058,6 @@ TEST(metrics_dynamic_enabled_keeps_policy_operational, "metrics.enabled keeps th
 
 TEST(metrics_dynamic_without_enable_uses_file_exporter, "dynamic config that does not enable metrics leaves the file exporter rule in place")
 {
-	if (!metrics_second_client_supported()) {
-		return;
-	}
-
 	bool operational = false;
 	assert_true(metrics_dynamic_enable_operational(
 		"version: 1.2.0\n"
@@ -2015,10 +2070,6 @@ TEST(metrics_dynamic_without_enable_uses_file_exporter, "dynamic config that doe
 
 TEST(metrics_dynamic_operational_key_overrides_file_exporter, "extended.operational.enabled false overrides the file exporter rule")
 {
-	if (!metrics_second_client_supported()) {
-		return;
-	}
-
 	bool operational = true;
 	assert_true(metrics_dynamic_enable_operational(
 		"version: 1.2.0\n"
@@ -2170,6 +2221,155 @@ TEST(metrics_operational_sampler_off, "threshold 0 records no command-path opera
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
+}
+
+typedef struct metrics_command_counts_s {
+	uint64_t commands;
+	uint64_t batch_latency;
+	uint64_t read_latency;
+} metrics_command_counts;
+
+static bool
+metrics_read_command_counts(metrics_command_counts* counts)
+{
+	as_error err;
+	as_metrics_snapshot* metrics_snapshot = NULL;
+
+	if (aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot) != AEROSPIKE_OK) {
+		return false;
+	}
+
+	counts->commands = metrics_snapshot->command_count;
+	counts->batch_latency = metrics_command_latency_total(metrics_snapshot, AS_LATENCY_TYPE_BATCH);
+	counts->read_latency = metrics_command_latency_total(metrics_snapshot, AS_LATENCY_TYPE_READ);
+	as_metrics_snapshot_destroy(metrics_snapshot);
+	return true;
+}
+
+static void
+metrics_batch_reserve_read(as_batch_records* records, const char* key_name)
+{
+	as_batch_read_record* record = as_batch_read_reserve(records);
+	as_key_init_str(&record->key, "test", "metrics", key_name);
+	record->read_all_bins = true;
+}
+
+TEST(metrics_batch_single_key, "a single-key batch counts once as a batch and a later key get counts as a read")
+{
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = true;
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq(metrics_put(&err, "metrics-batch-single-key"), AEROSPIKE_OK);
+
+	metrics_command_counts before;
+	assert_true(metrics_read_command_counts(&before));
+
+	// One key is sent as a key command. It reuses the batch sampler decision.
+	as_batch_records records;
+	as_batch_records_inita(&records, 1);
+	metrics_batch_reserve_read(&records, "metrics-batch-single-key");
+	as_status batch_status = aerospike_batch_read(as, &err, NULL, &records);
+	as_batch_records_destroy(&records);
+	assert_int_eq(batch_status, AEROSPIKE_OK);
+
+	metrics_command_counts after_batch;
+	assert_true(metrics_read_command_counts(&after_batch));
+	assert_true(after_batch.commands == before.commands + 1);
+	assert_true(after_batch.batch_latency == before.batch_latency + 1);
+	assert_true(after_batch.read_latency == before.read_latency);
+
+	as_key key;
+	as_key_init_str(&key, "test", "metrics", "metrics-batch-single-key");
+	as_record* rec = NULL;
+	as_status get_status = aerospike_key_get(as, &err, NULL, &key, &rec);
+	as_record_destroy(rec);
+	as_key_destroy(&key);
+	assert_int_eq(get_status, AEROSPIKE_OK);
+
+	metrics_command_counts after_get;
+	assert_true(metrics_read_command_counts(&after_get));
+	assert_true(after_get.commands == after_batch.commands + 1);
+	assert_true(after_get.batch_latency == after_batch.batch_latency);
+	assert_true(after_get.read_latency == after_batch.read_latency + 1);
+
+	metrics_disable();
+	as_metrics_policy_destroy(&policy);
+}
+
+static void
+metrics_async_batch_listener(as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop)
+{
+	as_batch_records_destroy(records);
+	as_monitor_notify(udata);
+}
+
+TEST(metrics_async_batch_single_key, "an async single-key batch counts once as a batch and a later async key get counts as a read")
+{
+	if (as_event_loop_size == 0) {
+		info("Skip because no event loops are running");
+		return;
+	}
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = true;
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq(metrics_put(&err, "metrics-async-batch-single-key"), AEROSPIKE_OK);
+
+	metrics_command_counts before;
+	assert_true(metrics_read_command_counts(&before));
+
+	as_monitor monitor;
+	as_monitor_init(&monitor);
+
+	// The listener destroys records.
+	as_batch_records* records = as_batch_records_create(1);
+	metrics_batch_reserve_read(records, "metrics-async-batch-single-key");
+	as_monitor_begin(&monitor);
+	as_status batch_status = aerospike_batch_read_async(as, &err, NULL, records, metrics_async_batch_listener,
+		&monitor, NULL);
+
+	if (batch_status == AEROSPIKE_OK) {
+		as_monitor_wait(&monitor);
+	}
+
+	metrics_command_counts after_batch;
+	bool batch_counts_ok = metrics_read_command_counts(&after_batch);
+
+	as_key key;
+	as_key_init_str(&key, "test", "metrics", "metrics-async-batch-single-key");
+	as_monitor_begin(&monitor);
+	as_status get_status = aerospike_key_get_async(as, &err, NULL, &key, metrics_async_get_listener, &monitor,
+		NULL, NULL);
+
+	if (get_status == AEROSPIKE_OK) {
+		as_monitor_wait(&monitor);
+	}
+	as_key_destroy(&key);
+	as_monitor_destroy(&monitor);
+
+	metrics_command_counts after_get;
+	bool get_counts_ok = metrics_read_command_counts(&after_get);
+
+	metrics_disable();
+	as_metrics_policy_destroy(&policy);
+
+	assert_int_eq(batch_status, AEROSPIKE_OK);
+	assert_true(batch_counts_ok);
+	assert_true(after_batch.commands == before.commands + 1);
+	assert_true(after_batch.batch_latency == before.batch_latency + 1);
+	assert_true(after_batch.read_latency == before.read_latency);
+
+	assert_int_eq(get_status, AEROSPIKE_OK);
+	assert_true(get_counts_ok);
+	assert_true(after_get.commands == after_batch.commands + 1);
+	assert_true(after_get.batch_latency == after_batch.batch_latency);
+	assert_true(after_get.read_latency == after_batch.read_latency + 1);
 }
 
 static bool
@@ -2499,6 +2699,7 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_file_opens_on_export);
 	suite_add(metrics_file_header_microseconds);
 	suite_add(metrics_file_turns_operational_on);
+	suite_add(metrics_file_writes_node_conn_latency);
 	suite_add(metrics_file_keeps_usage_columns_when_usage_off);
 	suite_add(metrics_file_writes_feature_api_when_usage_on);
 	suite_add(metrics_empty_report_dir);
@@ -2518,6 +2719,8 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_usage_api_counters);
 	suite_add(metrics_command_count_is_cumulative);
 	suite_add(metrics_operational_sampler_off);
+	suite_add(metrics_batch_single_key);
+	suite_add(metrics_async_batch_single_key);
 	suite_add(metrics_dynamic_config_export);
 	suite_add(metrics_dynamic_config_keeps_export_interval);
 	suite_add(metrics_dynamic_config_rejects_unknown_exporter);

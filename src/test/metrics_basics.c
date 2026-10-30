@@ -16,6 +16,7 @@
  */
 
 #include <aerospike/aerospike.h>
+#include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/aerospike_query.h>
 #include <aerospike/aerospike_scan.h>
@@ -717,16 +718,21 @@ metrics_namespaces_empty(const as_metrics_snapshot* metrics_snapshot)
 }
 
 static uint64_t
-metrics_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
+metrics_command_latency_total(const as_metrics_snapshot* metrics_snapshot, as_latency_type latency_type)
 {
 	uint64_t total = 0;
-	const as_metrics_latency_snapshot* latency_snapshot =
-		&metrics_snapshot->command_latencies[AS_LATENCY_TYPE_WRITE];
+	const as_metrics_latency_snapshot* latency_snapshot = &metrics_snapshot->command_latencies[latency_type];
 
 	for (uint8_t k = 0; k < latency_snapshot->bucket_count; k++) {
 		total += latency_snapshot->buckets[k];
 	}
 	return total;
+}
+
+static uint64_t
+metrics_write_latency_total(const as_metrics_snapshot* metrics_snapshot)
+{
+	return metrics_command_latency_total(metrics_snapshot, AS_LATENCY_TYPE_WRITE);
 }
 
 static uint64_t
@@ -2217,6 +2223,155 @@ TEST(metrics_operational_sampler_off, "threshold 0 records no command-path opera
 	as_metrics_policy_destroy(&policy);
 }
 
+typedef struct metrics_command_counts_s {
+	uint64_t commands;
+	uint64_t batch_latency;
+	uint64_t read_latency;
+} metrics_command_counts;
+
+static bool
+metrics_read_command_counts(metrics_command_counts* counts)
+{
+	as_error err;
+	as_metrics_snapshot* metrics_snapshot = NULL;
+
+	if (aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot) != AEROSPIKE_OK) {
+		return false;
+	}
+
+	counts->commands = metrics_snapshot->command_count;
+	counts->batch_latency = metrics_command_latency_total(metrics_snapshot, AS_LATENCY_TYPE_BATCH);
+	counts->read_latency = metrics_command_latency_total(metrics_snapshot, AS_LATENCY_TYPE_READ);
+	as_metrics_snapshot_destroy(metrics_snapshot);
+	return true;
+}
+
+static void
+metrics_batch_reserve_read(as_batch_records* records, const char* key_name)
+{
+	as_batch_read_record* record = as_batch_read_reserve(records);
+	as_key_init_str(&record->key, "test", "metrics", key_name);
+	record->read_all_bins = true;
+}
+
+TEST(metrics_batch_single_key, "a single-key batch counts once as a batch and a later key get counts as a read")
+{
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = true;
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq(metrics_put(&err, "metrics-batch-single-key"), AEROSPIKE_OK);
+
+	metrics_command_counts before;
+	assert_true(metrics_read_command_counts(&before));
+
+	// One key is sent as a key command. It reuses the batch sampler decision.
+	as_batch_records records;
+	as_batch_records_inita(&records, 1);
+	metrics_batch_reserve_read(&records, "metrics-batch-single-key");
+	as_status batch_status = aerospike_batch_read(as, &err, NULL, &records);
+	as_batch_records_destroy(&records);
+	assert_int_eq(batch_status, AEROSPIKE_OK);
+
+	metrics_command_counts after_batch;
+	assert_true(metrics_read_command_counts(&after_batch));
+	assert_true(after_batch.commands == before.commands + 1);
+	assert_true(after_batch.batch_latency == before.batch_latency + 1);
+	assert_true(after_batch.read_latency == before.read_latency);
+
+	as_key key;
+	as_key_init_str(&key, "test", "metrics", "metrics-batch-single-key");
+	as_record* rec = NULL;
+	as_status get_status = aerospike_key_get(as, &err, NULL, &key, &rec);
+	as_record_destroy(rec);
+	as_key_destroy(&key);
+	assert_int_eq(get_status, AEROSPIKE_OK);
+
+	metrics_command_counts after_get;
+	assert_true(metrics_read_command_counts(&after_get));
+	assert_true(after_get.commands == after_batch.commands + 1);
+	assert_true(after_get.batch_latency == after_batch.batch_latency);
+	assert_true(after_get.read_latency == after_batch.read_latency + 1);
+
+	metrics_disable();
+	as_metrics_policy_destroy(&policy);
+}
+
+static void
+metrics_async_batch_listener(as_error* err, as_batch_records* records, void* udata, as_event_loop* event_loop)
+{
+	as_batch_records_destroy(records);
+	as_monitor_notify(udata);
+}
+
+TEST(metrics_async_batch_single_key, "an async single-key batch counts once as a batch and a later async key get counts as a read")
+{
+	if (as_event_loop_size == 0) {
+		info("Skip because no event loops are running");
+		return;
+	}
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = true;
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq(metrics_put(&err, "metrics-async-batch-single-key"), AEROSPIKE_OK);
+
+	metrics_command_counts before;
+	assert_true(metrics_read_command_counts(&before));
+
+	as_monitor monitor;
+	as_monitor_init(&monitor);
+
+	// The listener destroys records.
+	as_batch_records* records = as_batch_records_create(1);
+	metrics_batch_reserve_read(records, "metrics-async-batch-single-key");
+	as_monitor_begin(&monitor);
+	as_status batch_status = aerospike_batch_read_async(as, &err, NULL, records, metrics_async_batch_listener,
+		&monitor, NULL);
+
+	if (batch_status == AEROSPIKE_OK) {
+		as_monitor_wait(&monitor);
+	}
+
+	metrics_command_counts after_batch;
+	bool batch_counts_ok = metrics_read_command_counts(&after_batch);
+
+	as_key key;
+	as_key_init_str(&key, "test", "metrics", "metrics-async-batch-single-key");
+	as_monitor_begin(&monitor);
+	as_status get_status = aerospike_key_get_async(as, &err, NULL, &key, metrics_async_get_listener, &monitor,
+		NULL, NULL);
+
+	if (get_status == AEROSPIKE_OK) {
+		as_monitor_wait(&monitor);
+	}
+	as_key_destroy(&key);
+	as_monitor_destroy(&monitor);
+
+	metrics_command_counts after_get;
+	bool get_counts_ok = metrics_read_command_counts(&after_get);
+
+	metrics_disable();
+	as_metrics_policy_destroy(&policy);
+
+	assert_int_eq(batch_status, AEROSPIKE_OK);
+	assert_true(batch_counts_ok);
+	assert_true(after_batch.commands == before.commands + 1);
+	assert_true(after_batch.batch_latency == before.batch_latency + 1);
+	assert_true(after_batch.read_latency == before.read_latency);
+
+	assert_int_eq(get_status, AEROSPIKE_OK);
+	assert_true(get_counts_ok);
+	assert_true(after_get.commands == after_batch.commands + 1);
+	assert_true(after_get.batch_latency == after_batch.batch_latency);
+	assert_true(after_get.read_latency == after_batch.read_latency + 1);
+}
+
 static bool
 metrics_read_dynamic_client_config_policy_ex(
 	const char* yaml_body, as_metrics_policy* policy, bool app_report_dir_empty,
@@ -2564,6 +2719,8 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_usage_api_counters);
 	suite_add(metrics_command_count_is_cumulative);
 	suite_add(metrics_operational_sampler_off);
+	suite_add(metrics_batch_single_key);
+	suite_add(metrics_async_batch_single_key);
 	suite_add(metrics_dynamic_config_export);
 	suite_add(metrics_dynamic_config_keeps_export_interval);
 	suite_add(metrics_dynamic_config_rejects_unknown_exporter);

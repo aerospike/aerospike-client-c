@@ -789,35 +789,6 @@ as_cluster_sample_operational(as_cluster* cluster);
 
 /**
  * @private
- * True while this thread is creating the one key command for a single-key
- * batch fallback. That command records batch latency and does not increment
- * command_count again. See as_metrics_batch_sample_begin().
- */
-extern __thread bool as_metrics_batch_sub_command;
-
-/**
- * @private
- * Sampler decision for the single-key batch fallback on this thread.
- * Meaningful while as_metrics_batch_sub_command is true.
- * See as_command_execute_sample() and as_event_command_select_sample().
- */
-extern __thread bool as_metrics_batch_sampled;
-
-static inline void
-as_metrics_batch_sample_begin(bool sampled)
-{
-	as_metrics_batch_sub_command = true;
-	as_metrics_batch_sampled = sampled;
-}
-
-static inline void
-as_metrics_batch_sample_end(void)
-{
-	as_metrics_batch_sub_command = false;
-}
-
-/**
- * @private
  * Draw the sampler once for this user call and increment command count when
  * it is sampled. Returns the sampler decision, so node commands and retries of
  * that same call can reuse it. See as_cluster_sample_operational().

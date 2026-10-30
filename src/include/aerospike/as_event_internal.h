@@ -214,16 +214,6 @@ as_event_command_apply_sample(as_event_command* cmd, bool sampled, bool count_co
 {
 	cmd->metrics_sample_decision = sampled;
 
-	// A single-key batch fallback already counted the batch. Record batch latency.
-	// See as_metrics_batch_sample_begin().
-	if (as_metrics_batch_sub_command) {
-		count_command = false;
-
-		if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-			cmd->latency_type = AS_LATENCY_TYPE_BATCH;
-		}
-	}
-
 	if (cmd->metrics_sample_decision && count_command) {
 		as_incr_uint64(&cmd->cluster->command_count);
 	}
@@ -231,23 +221,36 @@ as_event_command_apply_sample(as_event_command* cmd, bool sampled, bool count_co
 
 /**
  * @private
- * Draw the operational sampler once for this command. A single-key batch
- * fallback reuses the user-batch decision instead of drawing again.
+ * Draw the operational sampler once for this command.
  * See as_event_command_apply_sample().
  */
 static inline void
 as_event_command_select_sample(as_event_command* cmd, bool count_command)
 {
-	bool sampled;
-
-	if (as_metrics_batch_sub_command) {
-		sampled = as_metrics_batch_sampled;
-	}
-	else {
-		sampled = as_cluster_sample_operational(cmd->cluster);
-	}
-
+	bool sampled = as_cluster_sample_operational(cmd->cluster);
 	as_event_command_apply_sample(cmd, sampled, count_command);
+}
+
+/**
+ * @private
+ * Store the sampler decision on a single-key command. batch_sampled is NULL
+ * when this command is its own user call, which draws the sampler and counts
+ * the command. Otherwise, it points to the user-batch decision of a single-key
+ * batch fallback. See as_command_execute_key().
+ */
+static inline void
+as_event_command_sample_key(as_event_command* cmd, const bool* batch_sampled)
+{
+	if (!batch_sampled) {
+		as_event_command_select_sample(cmd, true);
+		return;
+	}
+
+	// A single-key batch fallback already counted the batch. Record batch latency.
+	if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+		cmd->latency_type = AS_LATENCY_TYPE_BATCH;
+	}
+	as_event_command_apply_sample(cmd, *batch_sampled, false);
 }
 
 /**

@@ -42,14 +42,15 @@
 // Sync and async helpers skip feature.api. Transaction monitor cleanup is not a user API call.
 as_status
 aerospike_key_remove_internal(
-	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
+	const bool* batch_sampled
 	);
 
 as_status
 aerospike_key_remove_async_internal(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
 	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener
+	as_pipe_listener pipe_listener, const bool* batch_sampled
 	);
 
 //---------------------------------
@@ -279,7 +280,7 @@ as_txn_monitor_remove(
 	policy.base.sleep_between_retries = base_policy->sleep_between_retries;
 	policy.durable_delete = true;
 
-	return aerospike_key_remove_internal(as, err, &policy, key);
+	return aerospike_key_remove_internal(as, err, &policy, key, NULL);
 }
 
 //---------------------------------
@@ -372,5 +373,5 @@ as_txn_monitor_remove_async(
 	policy.durable_delete = true;
 
 	return aerospike_key_remove_async_internal(as, err, &policy, key, listener, udata,
-		event_loop, NULL);
+		event_loop, NULL, NULL);
 }

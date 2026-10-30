@@ -631,7 +631,8 @@ as_command_compress(as_error* err, uint8_t* cmd, size_t cmd_sz, uint8_t* compres
 
 as_status
 as_command_send(
-	as_command* cmd, as_error* err, uint32_t comp_threshold, as_write_fn write_fn, void* udata
+	as_command* cmd, as_error* err, uint32_t comp_threshold, as_write_fn write_fn, void* udata,
+	const bool* batch_sampled
 	)
 {
 	size_t capacity = cmd->buf_size;
@@ -657,7 +658,7 @@ as_command_send(
 
 	as_command_start_timer(cmd);
 
-	as_status status = as_command_execute(cmd, err);
+	as_status status = as_command_execute_key(cmd, err, batch_sampled);
 	as_command_buffer_free(cmd->buf, capacity);
 	return status;
 }
@@ -718,6 +719,20 @@ as_command_execute(as_command* cmd, as_error* err)
 }
 
 as_status
+as_command_execute_key(as_command* cmd, as_error* err, const bool* batch_sampled)
+{
+	if (!batch_sampled) {
+		return as_command_execute(cmd, err);
+	}
+
+	// A single-key batch fallback already counted the batch. Record batch latency.
+	if (cmd->latency_type != AS_LATENCY_TYPE_NONE) {
+		cmd->latency_type = AS_LATENCY_TYPE_BATCH;
+	}
+	return as_command_execute_sample(cmd, err, true, *batch_sampled);
+}
+
+as_status
 as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, bool metrics_sampled)
 {
 	as_socket_context ctx = {
@@ -732,12 +747,8 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 
 	// One sampler decision for this user call, before retries. Re-sends of this
 	// command reuse it. A user batch draws once and passes that decision here.
-	// See as_command.metrics_sample_decision and as_metrics_batch_sample_begin().
-	if (as_metrics_batch_sub_command) {
-		sampled = as_metrics_batch_sampled;
-		count_command = false;
-	}
-	else if (inherit_sample) {
+	// See as_command.metrics_sample_decision and as_command_execute_key().
+	if (inherit_sample) {
 		sampled = metrics_sampled;
 		count_command = false;
 	}
@@ -749,11 +760,6 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 	cmd->metrics_sample_decision = sampled;
 	// Command latency starts once and includes retries.
 	cmd->command_begin = 0;
-
-	// A single-key batch fallback already counted the batch. Record batch latency.
-	if (as_metrics_batch_sub_command && cmd->latency_type != AS_LATENCY_TYPE_NONE) {
-		cmd->latency_type = AS_LATENCY_TYPE_BATCH;
-	}
 
 	// A null node is a single-record command. Batch, scan, and query set node
 	// on each node command and already counted the user call.

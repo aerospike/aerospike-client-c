@@ -69,57 +69,61 @@ extern bool as_op_is_write[];
 // per key. See aerospike_key_get_internal().
 as_status
 aerospike_key_get_internal(
-	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec,
+	const bool* batch_sampled
 	);
 
 as_status
 aerospike_key_get_async_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener
+	as_pipe_listener pipe_listener, const bool* batch_sampled
 	);
 
 as_status
 aerospike_key_select_bins_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
-	const char* bins[], uint32_t n_bins, as_record** rec
+	const char* bins[], uint32_t n_bins, as_record** rec, const bool* batch_sampled
 	);
 
 as_status
 aerospike_key_select_bins_async_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, const char* bins[],
 	uint32_t n_bins, as_async_record_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener
+	as_pipe_listener pipe_listener, const bool* batch_sampled
 	);
 
 as_status
 aerospike_key_exists_internal(
-	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec
+	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key, as_record** rec,
+	const bool* batch_sampled
 	);
 
 as_status
 aerospike_key_exists_async_internal(
 	aerospike* as, as_error* err, const as_policy_read* policy, const as_key* key,
 	as_async_record_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener
+	as_pipe_listener pipe_listener, const bool* batch_sampled
 	);
 
 as_status
 aerospike_key_operate_internal(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key,
-	const as_operations* ops, as_record** rec
+	const as_operations* ops, as_record** rec, const bool* batch_sampled
 	);
 
 as_status
 aerospike_key_operate_async_internal(
 	aerospike* as, as_error* err, const as_policy_operate* policy, const as_key* key, const as_operations* ops,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, as_pipe_listener pipe_listener,
+	const bool* batch_sampled
 	);
 
 as_status
 aerospike_key_apply_internal(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
-	const char* module, const char* function, as_list* arglist, as_val** result
+	const char* module, const char* function, as_list* arglist, as_val** result,
+	const bool* batch_sampled
 	);
 
 as_status
@@ -127,19 +131,20 @@ aerospike_key_apply_async_internal(
 	aerospike* as, as_error* err, const as_policy_apply* policy, const as_key* key,
 	const char* module, const char* function, as_list* arglist,
 	as_async_value_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener
+	as_pipe_listener pipe_listener, const bool* batch_sampled
 	);
 
 as_status
 aerospike_key_remove_internal(
-	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key
+	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
+	const bool* batch_sampled
 	);
 
 as_status
 aerospike_key_remove_async_internal(
 	aerospike* as, as_error* err, const as_policy_remove* policy, const as_key* key,
 	as_async_write_listener listener, void* udata, as_event_loop* event_loop,
-	as_pipe_listener pipe_listener
+	as_pipe_listener pipe_listener, const bool* batch_sampled
 	);
 
 //---------------------------------
@@ -205,8 +210,8 @@ typedef struct as_batch_task_s {
 	uint8_t type;
 	uint8_t txn_attr;
 	bool has_write;
-	// Sampler decision for this user batch. Node commands and later sub-batches
-	// reuse it. See as_metrics_batch_sample_begin().
+	// Sampler decision for this user batch. Node commands, later sub-batches,
+	// and single-key fallbacks reuse it. See as_command_execute_key().
 	bool metrics_sampled;
 } as_batch_task;
 
@@ -2813,13 +2818,14 @@ as_remove_policy_copy(
 
 as_status
 as_txn_verify_single(
-	aerospike* as, as_error* err, const as_policy_txn_verify* policy, const as_key* key, uint64_t ver
+	aerospike* as, as_error* err, const as_policy_txn_verify* policy, const as_key* key, uint64_t ver,
+	const bool* batch_sampled
 	);
 
 as_status
 as_txn_roll_single(
 	aerospike* as, as_error* err, as_txn* txn, const as_policy_txn_roll* policy, const as_key* key,
-	uint64_t ver, uint8_t roll_attr
+	uint64_t ver, uint8_t roll_attr, const bool* batch_sampled
 	);
 
 static void
@@ -2832,13 +2838,15 @@ as_record_reset(as_record* record, uint32_t capacity)
 }
 
 static as_status
-as_single_execute_command(
+as_single_execute(
 	as_batch_task* task, as_error* err, as_key* key, as_batch_base_record* bb, as_record* record,
 	uint32_t offset
 	)
 {
 	aerospike* as = task->as;
 	const as_policy_batch* pb = task->policy;
+	// The key command reuses the user-batch decision. See as_command_execute_key().
+	const bool* batch_sampled = &task->metrics_sampled;
 
 	switch (bb->type) {
 		case AS_BATCH_READ: {
@@ -2848,22 +2856,23 @@ as_single_execute_command(
 			if (br->n_bin_names > 0) {
 				as_policy_read pr;
 				as_read_policy_copy(&pr, pb, br->policy);
-				status = aerospike_key_select_bins_internal(as, err, &pr, key, (const char**)br->bin_names, br->n_bin_names, &record);
+				status = aerospike_key_select_bins_internal(as, err, &pr, key, (const char**)br->bin_names, br->n_bin_names, &record,
+					batch_sampled);
 			}
 			else if (br->ops) {
 				as_policy_operate po;
 				as_operate_policy_copy_read(&po, pb, br->policy);
-				status = aerospike_key_operate_internal(as, err, &po, key, br->ops, &record);
+				status = aerospike_key_operate_internal(as, err, &po, key, br->ops, &record, batch_sampled);
 			}
 			else {
 				as_policy_read pr;
 				as_read_policy_copy(&pr, pb, br->policy);
 
 				if (br->read_all_bins) {
-					status = aerospike_key_get_internal(as, err, &pr, key, &record);
+					status = aerospike_key_get_internal(as, err, &pr, key, &record, batch_sampled);
 				}
 				else {
-					status = aerospike_key_exists_internal(as, err, &pr, key, &record);
+					status = aerospike_key_exists_internal(as, err, &pr, key, &record, batch_sampled);
 				}
 			}
 			return status;
@@ -2875,7 +2884,7 @@ as_single_execute_command(
 			as_policy_operate po;
 			as_operate_policy_copy_write(as, pb, bw, &po);
 
-			return aerospike_key_operate_internal(as, err, &po, key, bw->ops, &record);
+			return aerospike_key_operate_internal(as, err, &po, key, bw->ops, &record, batch_sampled);
 		}
 
 		case AS_BATCH_APPLY: {
@@ -2885,7 +2894,8 @@ as_single_execute_command(
 			as_apply_policy_copy(as, pb, ba, &pa);
 
 			as_val* val = NULL;
-			as_status status = aerospike_key_apply_internal(as, err, &pa, key, ba->module, ba->function, ba->arglist, &val);
+			as_status status = aerospike_key_apply_internal(as, err, &pa, key, ba->module, ba->function, ba->arglist, &val,
+				batch_sampled);
 
 			if (status == AEROSPIKE_OK) {
 				// Create SUCCESS bin from val.
@@ -2907,37 +2917,21 @@ as_single_execute_command(
 			as_policy_remove pr;
 			as_remove_policy_copy(as, pb, br, &pr);
 
-			return aerospike_key_remove_internal(as, err, &pr, key);
+			return aerospike_key_remove_internal(as, err, &pr, key, batch_sampled);
 		}
 
 		case AS_BATCH_TXN_VERIFY: {
-			return as_txn_verify_single(as, err, pb, key, task->versions[offset]);
+			return as_txn_verify_single(as, err, pb, key, task->versions[offset], batch_sampled);
 		}
 
 		case AS_BATCH_TXN_ROLL: {
-			return as_txn_roll_single(as, err, task->txn, pb, key, task->versions[offset], task->txn_attr);
+			return as_txn_roll_single(as, err, task->txn, pb, key, task->versions[offset], task->txn_attr,
+				batch_sampled);
 		}
 
 		default:
 			return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid batch rec type: %u", bb->type);
 	}
-}
-
-static as_status
-as_single_execute(
-	as_batch_task* task, as_error* err, as_key* key, as_batch_base_record* bb, as_record* record,
-	uint32_t offset
-	)
-{
-	as_status status;
-
-	// The key command is created on this thread. Reuse the user-batch decision
-	// until that command has taken its sample.
-	// See as_metrics_batch_sample_begin().
-	as_metrics_batch_sample_begin(task->metrics_sampled);
-	status = as_single_execute_command(task, err, key, bb, record, offset);
-	as_metrics_batch_sample_end();
-	return status;
 }
 
 static as_status
@@ -3062,14 +3056,14 @@ typedef struct {
 as_status
 as_txn_verify_single_async(
 	aerospike* as, as_error* err, const as_policy_txn_verify* policy, const as_key* key, uint64_t ver,
-	as_async_record_listener listener, void* udata, as_event_loop* event_loop
+	as_async_record_listener listener, void* udata, as_event_loop* event_loop, const bool* batch_sampled
 	);
 
 as_status
 as_txn_roll_single_async(
 	aerospike* as, as_error* err, as_txn* txn, const as_policy_txn_roll* policy, const as_key* key,
 	uint64_t ver, uint8_t roll_attr, as_async_write_listener listener, void* udata,
-	as_event_loop* event_loop
+	as_event_loop* event_loop, const bool* batch_sampled
 	);
 
 static inline void
@@ -3297,11 +3291,9 @@ as_single_execute_record_async(
 	data->executor = executor;
 	data->rec = rec;
 
+	// The key command reuses the user-batch decision. See as_command_execute_key().
+	const bool* batch_sampled = &exec->metrics_sample_decision;
 	as_status status;
-
-	// The async key command is created on this thread before it is queued.
-	// Reuse the user-batch decision. See as_metrics_batch_sample_begin().
-	as_metrics_batch_sample_begin(exec->metrics_sample_decision);
 
 	switch (rec->type) {
 		case AS_BATCH_READ: {
@@ -3311,13 +3303,13 @@ as_single_execute_record_async(
 				as_policy_read pr;
 				as_read_policy_copy(&pr, pb, br->policy);
 				status = aerospike_key_select_bins_async_internal(as, err, &pr, &rec->key, (const char**)br->bin_names,
-					br->n_bin_names, as_single_record_listener, data, exec->event_loop, NULL);
+					br->n_bin_names, as_single_record_listener, data, exec->event_loop, NULL, batch_sampled);
 			}
 			else if (br->ops) {
 				as_policy_operate po;
 				as_operate_policy_copy_read(&po, pb, br->policy);
 				status = aerospike_key_operate_async_internal(as, err, &po, &rec->key, br->ops, as_single_record_listener,
-					data, exec->event_loop, NULL);
+					data, exec->event_loop, NULL, batch_sampled);
 			}
 			else {
 				as_policy_read pr;
@@ -3325,11 +3317,11 @@ as_single_execute_record_async(
 
 				if (br->read_all_bins) {
 					status = aerospike_key_get_async_internal(as, err, &pr, &rec->key, as_single_record_listener, data,
-						exec->event_loop, NULL);
+						exec->event_loop, NULL, batch_sampled);
 				}
 				else {
 					status = aerospike_key_exists_async_internal(as, err, &pr, &rec->key, as_single_record_listener, data,
-						exec->event_loop, NULL);
+						exec->event_loop, NULL, batch_sampled);
 				}
 			}
 			break;
@@ -3342,7 +3334,7 @@ as_single_execute_record_async(
 			as_operate_policy_copy_write(as, pb, bw, &po);
 
 			status = aerospike_key_operate_async_internal(as, err, &po, &rec->key, bw->ops, as_single_record_listener,
-				data, exec->event_loop, NULL);
+				data, exec->event_loop, NULL, batch_sampled);
 			break;
 		}
 
@@ -3353,7 +3345,7 @@ as_single_execute_record_async(
 			as_apply_policy_copy(as, pb, ba, &pa);
 
 			status = aerospike_key_apply_async_internal(as, err, &pa, &rec->key, ba->module, ba->function,
-				ba->arglist, as_single_value_listener, data, exec->event_loop, NULL);
+				ba->arglist, as_single_value_listener, data, exec->event_loop, NULL, batch_sampled);
 			break;
 		}
 
@@ -3364,19 +3356,20 @@ as_single_execute_record_async(
 			as_remove_policy_copy(as, pb, br, &pr);
 
 			status = aerospike_key_remove_async_internal(as, err, &pr, &rec->key, as_single_write_listener, data,
-				exec->event_loop, NULL);
+				exec->event_loop, NULL, batch_sampled);
 			break;
 		}
 
 		case AS_BATCH_TXN_VERIFY: {
 			status = as_txn_verify_single_async(as, err, pb, &rec->key, executor->versions[offset],
-				as_txn_verify_listener, data, exec->event_loop);
+				as_txn_verify_listener, data, exec->event_loop, batch_sampled);
 			break;
 		}
 
 		case AS_BATCH_TXN_ROLL: {
 			status = as_txn_roll_single_async(as, err, executor->txn, pb, &rec->key,
-				executor->versions[offset], executor->txn_attr, as_txn_roll_listener, data, exec->event_loop);
+				executor->versions[offset], executor->txn_attr, as_txn_roll_listener, data, exec->event_loop,
+				batch_sampled);
 			break;
 		}
 
@@ -3384,8 +3377,6 @@ as_single_execute_record_async(
 			status = as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid batch rec type: %u", rec->type);
 			break;
 	}
-
-	as_metrics_batch_sample_end();
 
 	if (status != AEROSPIKE_OK) {
 		rec->result = status;

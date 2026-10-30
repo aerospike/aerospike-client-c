@@ -56,6 +56,8 @@ typedef enum as_vector_element_type_e {
 	/**
 	 * float16: high-density vectors (IEEE 754 half). Since C has no native
 	 * float16 type, each element is represented by its raw 16-bit pattern.
+	 * To convert from and to float, see as_vector_value_new_float16_from_float()
+	 * and as_vector_value_get_float16_as_float().
 	 */
 	AS_VECTOR_ELEMENT_TYPE_FLOAT16 = 0x01,
 
@@ -156,7 +158,9 @@ typedef struct as_vector_value_s {
 /**
  * Create a heap allocated vector of raw float16 (IEEE 754 half precision)
  * elements. Since C has no native float16 type, each element is passed as
- * its raw 16-bit bit pattern. The data array is copied.
+ * its raw 16-bit bit pattern. The data array is copied. Use this for exact
+ * interchange of existing float16 data. To build a float16 vector from float
+ * values, use as_vector_value_new_float16_from_float().
  *
  * @param err		Error detail, set when NULL is returned.
  * @param data		Array of raw float16 bit patterns.
@@ -169,6 +173,33 @@ typedef struct as_vector_value_s {
  */
 AS_EXTERN as_vector_value*
 as_vector_value_new_float16(as_error* err, const uint16_t* data, uint32_t count);
+
+/**
+ * Create a heap allocated float16 vector from float values. Each element is
+ * converted to IEEE 754 half precision with round-ties-to-even. float16 holds
+ * finite values up to 65504 in magnitude. Values too small for float16 become
+ * subnormal or zero.
+ *
+ * ~~~~~~~~~~{.c}
+ * float data[3] = {0.5f, -1.25f, 3.0f};
+ * as_error err;
+ * as_vector_value* vec = as_vector_value_new_float16_from_float(&err, data, 3);
+ * ~~~~~~~~~~
+ *
+ * @param err		Error detail, set when NULL is returned.
+ * @param data		Array of float elements.
+ * @param count		Number of elements in `data`.
+ *
+ * @return New vector, or NULL with `err` set to AEROSPIKE_ERR_PARAM if `data`
+ *		   is NULL, `count` is outside the server's supported range, or an
+ *		   element converts to NaN or infinity. A vector cannot hold non-finite
+ *		   elements, so NaN, infinity, and any magnitude of 65520 or more
+ *		   (which rounds to infinity) are rejected.
+ *
+ * @relatesalso as_vector_value
+ */
+AS_EXTERN as_vector_value*
+as_vector_value_new_float16_from_float(as_error* err, const float* data, uint32_t count);
 
 /**
  * Create a heap allocated vector of int32 elements. The data array is
@@ -337,6 +368,8 @@ as_vector_value_from_bytes(as_error* err, const as_bytes* bytes);
 /**
  * Return the vector's data as a float16 array, or NULL if element_type is not
  * AS_VECTOR_ELEMENT_TYPE_FLOAT16. Has `vec->dimensions` elements, owned by `vec`.
+ * Each element is a raw float16 bit pattern. To read float values, use
+ * as_vector_value_get_float16_as_float().
  *
  * @relatesalso as_vector_value
  */
@@ -345,6 +378,36 @@ as_vector_value_get_float16(const as_vector_value* vec)
 {
 	return (vec && vec->element_type == AS_VECTOR_ELEMENT_TYPE_FLOAT16) ? (const uint16_t*)vec->data : NULL;
 }
+
+/**
+ * Convert the vector's float16 elements to float values. Every float16 value
+ * is exact as a float.
+ *
+ * ~~~~~~~~~~{.c}
+ * float* values = malloc(sizeof(float) * vec->dimensions);
+ * as_error err;
+ *
+ * if (as_vector_value_get_float16_as_float(&err, vec, values, vec->dimensions) == AEROSPIKE_OK) {
+ *     // ... use values ...
+ * }
+ * free(values);
+ * ~~~~~~~~~~
+ *
+ * @param err		Error detail, set when an error is returned.
+ * @param vec		Vector to read.
+ * @param out		Array that receives `vec->dimensions` float values.
+ * @param count		Number of elements `out` can hold.
+ *
+ * @return AEROSPIKE_OK, or AEROSPIKE_ERR_PARAM with `err` set if `vec` is NULL
+ *		   or not AS_VECTOR_ELEMENT_TYPE_FLOAT16, `out` is NULL, or `count` is
+ *		   less than `vec->dimensions`.
+ *
+ * @relatesalso as_vector_value
+ */
+AS_EXTERN as_status
+as_vector_value_get_float16_as_float(
+	as_error* err, const as_vector_value* vec, float* out, uint32_t count
+	);
 
 /**
  * Return the vector's data as an int32 array, or NULL if element_type is not

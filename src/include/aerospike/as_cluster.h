@@ -787,19 +787,13 @@ as_cluster_add_command_latency(as_cluster* cluster, as_latency_type latency_type
 bool
 as_cluster_sample_operational(as_cluster* cluster);
 
-#if defined(_MSC_VER)
-#define AS_METRICS_TLS __declspec(thread)
-#else
-#define AS_METRICS_TLS __thread
-#endif
-
 /**
  * @private
  * True while this thread is creating the one key command for a single-key
  * batch fallback. That command records batch latency and does not increment
  * command_count again. See as_metrics_batch_sample_begin().
  */
-extern AS_METRICS_TLS bool as_metrics_batch_sub_command;
+extern __thread bool as_metrics_batch_sub_command;
 
 /**
  * @private
@@ -807,7 +801,7 @@ extern AS_METRICS_TLS bool as_metrics_batch_sub_command;
  * Meaningful while as_metrics_batch_sub_command is true.
  * See as_command_execute_sample() and as_event_command_select_sample().
  */
-extern AS_METRICS_TLS bool as_metrics_batch_sampled;
+extern __thread bool as_metrics_batch_sampled;
 
 static inline void
 as_metrics_batch_sample_begin(bool sampled)

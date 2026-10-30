@@ -210,7 +210,7 @@ jobs:
     name: macOS arm64 build / ${{ matrix.event_lib }}
     if: inputs.run-mac
     needs: load-matrix
-    runs-on: macos-14
+    runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:

@@ -482,35 +482,31 @@ TEST(query_topk_validate_type_missing, "an order key without a type is rejected"
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
 	assert_string_eq(err.message,
-		"orderBy requires a type declaration (INTEGER or DOUBLE); Aerospike has no schema");
+		"orderBy requires a type declaration (INTEGER, DOUBLE, or BYTES); Aerospike has no schema");
 
 	as_query_destroy(&query);
 }
 
-TEST(query_topk_validate_type_string_bytes, "STRING and BYTES order keys are rejected")
+TEST(query_topk_validate_type_string, "STRING order keys are rejected")
 {
-	as_query_order_by_type types[] = {AS_QUERY_ORDER_BY_STRING, AS_QUERY_ORDER_BY_BYTES};
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_then_order_by(&query, "name", AS_QUERY_ORDER_BY_STRING, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
 
-	for (uint32_t i = 0; i < sizeof(types) / sizeof(types[0]); i++) {
-		as_query query;
-		as_query_init(&query, NAMESPACE, SET);
-		as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
-			AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
-		as_query_then_order_by(&query, "name", types[i], AS_ORDER_ASCENDING,
-			AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
-		as_query_top_k(&query, 5);
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message,
+		"orderBy type STRING is not supported yet; use INTEGER, DOUBLE, or BYTES");
 
-		as_error err;
-		as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
-		assert_int_eq(status, AEROSPIKE_ERR_PARAM);
-		assert_string_eq(err.message,
-			"orderBy types STRING and BYTES are not supported yet; use INTEGER or DOUBLE");
-
-		as_query_destroy(&query);
-	}
+	as_query_destroy(&query);
 }
 
-TEST(query_topk_validate_type_invalid, "an order key type other than INTEGER or DOUBLE is rejected")
+TEST(query_topk_validate_type_invalid, "an order key type other than INTEGER, DOUBLE, or BYTES is rejected")
 {
 	as_query query;
 	as_query_init(&query, NAMESPACE, SET);
@@ -521,7 +517,7 @@ TEST(query_topk_validate_type_invalid, "an order key type other than INTEGER or 
 	as_error err;
 	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
 	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
-	assert_string_eq(err.message, "orderBy type must be INTEGER or DOUBLE; got 9");
+	assert_string_eq(err.message, "orderBy type must be INTEGER, DOUBLE, or BYTES; got 9");
 
 	as_query_destroy(&query);
 }
@@ -910,6 +906,43 @@ TEST(query_topk_merge_string_case_insensitive_asc,
 	assert_int_eq(g_topk_test_count, 2);
 	assert_true(strstr(g_topk_test_last[0], "name=alice") != NULL);
 	assert_true(strstr(g_topk_test_last[1], "name=Bob") != NULL);
+}
+
+TEST(query_topk_merge_bytes_asc, "topk collector orders BYTES by byte order, then by length")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "blob", AS_QUERY_ORDER_BY_BYTES, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 3);
+
+	g_topk_test_count = 0;
+
+	as_query_topk_collector* collector = as_query_topk_collector_create(&query, topk_test_collect_cb, NULL);
+	as_query_destroy(&query);
+
+	uint8_t b1[] = {0x01, 0x02};
+	uint8_t b2[] = {0x01};
+	uint8_t b3[] = {0x00, 0xff};
+	uint8_t b4[] = {0x01, 0x02, 0x00};
+	uint8_t* blobs[] = {b1, b2, b3, b4};
+	uint32_t sizes[] = {sizeof(b1), sizeof(b2), sizeof(b3), sizeof(b4)};
+
+	for (uint8_t i = 0; i < 4; i++) {
+		as_record rec;
+		topk_test_init_rec(&rec, i + 1, 1);
+		as_record_set_raw(&rec, "blob", blobs[i], sizes[i]);
+		topk_test_collect_rec(collector, &rec);
+	}
+
+	as_query_topk_collect(NULL, collector);
+	as_query_topk_collector_destroy(collector);
+
+	// 00 ff < 01 < 01 02, and 01 02 00 is cut by k.
+	assert_int_eq(g_topk_test_count, 3);
+	assert_int_eq(g_topk_test_digests[0], 3);
+	assert_int_eq(g_topk_test_digests[1], 2);
+	assert_int_eq(g_topk_test_digests[2], 1);
 }
 
 TEST(query_topk_merge_double_nan_and_zero,
@@ -1589,7 +1622,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_validate_second_key_bin_name_invalid);
 	suite_add(query_topk_validate_direction_invalid);
 	suite_add(query_topk_validate_type_missing);
-	suite_add(query_topk_validate_type_string_bytes);
+	suite_add(query_topk_validate_type_string);
 	suite_add(query_topk_validate_type_invalid);
 	suite_add(query_topk_validate_flags_wrong_type);
 	suite_add(query_topk_validate_second_key_not_projected);
@@ -1601,6 +1634,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_merge_integer_desc);
 	suite_add(query_topk_merge_bounded);
 	suite_add(query_topk_merge_string_case_insensitive_asc);
+	suite_add(query_topk_merge_bytes_asc);
 	suite_add(query_topk_merge_double_nan_and_zero);
 	suite_add(query_topk_merge_two_keys);
 	suite_add(query_topk_merge_copies_values);

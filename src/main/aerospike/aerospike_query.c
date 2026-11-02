@@ -714,23 +714,23 @@ as_query_validate_order_key(
 	// 0 is not a type, so a zero-initialized type is treated as missing.
 	if ((int)key->type == 0) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"orderBy requires a type declaration (INTEGER or DOUBLE); Aerospike has no schema");
+			"orderBy requires a type declaration (INTEGER, DOUBLE, or BYTES); Aerospike has no schema");
 	}
 
 	switch (key->type) {
 		case AS_QUERY_ORDER_BY_INTEGER:
 		case AS_QUERY_ORDER_BY_DOUBLE:
+		case AS_QUERY_ORDER_BY_BYTES:
 			break;
 
-		// STRING and BYTES order keys are deferred to a later server release.
+		// STRING order keys are deferred to a later server release.
 		case AS_QUERY_ORDER_BY_STRING:
-		case AS_QUERY_ORDER_BY_BYTES:
 			return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-				"orderBy types STRING and BYTES are not supported yet; use INTEGER or DOUBLE");
+				"orderBy type STRING is not supported yet; use INTEGER, DOUBLE, or BYTES");
 
 		default:
 			return as_error_update(err, AEROSPIKE_ERR_PARAM,
-				"orderBy type must be INTEGER or DOUBLE; got %d", (int)key->type);
+				"orderBy type must be INTEGER, DOUBLE, or BYTES; got %d", (int)key->type);
 	}
 
 	// The top-k merge in as_query_topk.c ranks any direction other than DESC as ASC, so an

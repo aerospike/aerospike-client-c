@@ -18,13 +18,13 @@
 #include <aerospike/as_boolean.h>
 #include <aerospike/as_bytes.h>
 #include <aerospike/as_double.h>
+#include <aerospike/as_error.h>
 #include <aerospike/as_geojson.h>
 #include <aerospike/as_integer.h>
 #include <aerospike/as_nil.h>
 #include <aerospike/as_record.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_val.h>
-#include <aerospike/as_vector.h>
 #include <citrusleaf/alloc.h>
 #include <math.h>
 #include <pthread.h>
@@ -39,17 +39,32 @@ struct as_query_topk_collector_s {
 	as_query_order_by_field then_order_by;
 	uint32_t k;
 
+	// Exactly one of callback (synchronous query) and listener (asynchronous
+	// query) is set.
 	aerospike_query_foreach_callback callback;
+	as_async_query_record_listener listener;
 	void* udata;
 
-	// Protects entries. Multiple thread pool workers (one per node) may
-	// append concurrently while the underlying query is in flight.
+	// Protects heap, heap_n and index. Multiple thread pool workers (one per
+	// node) may append concurrently while a synchronous query is in flight. An
+	// asynchronous query runs every node command on one event loop.
 	pthread_mutex_t lock;
 
-	// as_record* - one heap-owned, independently-copied record per
-	// collected candidate. Bounded by (n_nodes * k) since each node's batch
-	// is already trimmed to <= k server-side.
-	as_vector entries;
+	// The best k candidates seen so far, each a heap-owned copy, in a binary heap
+	// with the worst-ranked candidate at the root. Keeping only k candidates, rather
+	// than every node's k, bounds the memory to about k records whatever the
+	// cluster size.
+	as_record** heap;
+	uint32_t heap_n;
+
+	// Open-addressing set of the digests in heap (linear probing, NULL = empty
+	// slot), so a duplicate from another node is found without scanning the heap.
+	as_record** index;
+	uint32_t index_mask;
+
+	// A candidate could not be buffered, so the merged result would be wrong.
+	// Protected by lock. See as_query_topk_collector_status().
+	bool failed;
 };
 
 typedef struct {
@@ -390,7 +405,7 @@ as_query_topk_cmp_rank(const as_record* a, const as_record* b, const as_query_to
 //---------------------------------
 // Merge sort over an array of as_record* - avoids qsort_r/qsort_s, whose
 // signatures diverge across the platforms (Linux/macOS/Windows) this client
-// supports, while still being O(n log n) for the (n <= n_nodes * k) input.
+// supports, while still being O(n log n) for the (n <= k) input.
 //---------------------------------
 
 typedef int (*as_query_topk_cmp_fn)(const as_record* a, const as_record* b, const void* ctx);
@@ -442,82 +457,184 @@ as_query_topk_sort(as_record** arr, uint32_t n, as_query_topk_cmp_fn cmp, const 
 }
 
 static int
-as_query_topk_cmp_digest_fn(const as_record* a, const as_record* b, const void* ctx)
-{
-	(void)ctx;
-	return as_query_topk_cmp_digest(a, b);
-}
-
-static int
 as_query_topk_cmp_rank_fn(const as_record* a, const as_record* b, const void* ctx)
 {
 	return as_query_topk_cmp_rank(a, b, (const as_query_topk_collector*)ctx);
 }
 
 //---------------------------------
-// Finalize: dedup by digest (rare, migration-induced), sort into final rank
-// order, truncate to k. Destroys every buffered record that does not make the cut.
-// Returns a freshly allocated array (caller must cf_free()) of at most k
-// as_record*, each owned by the caller from this point on.
+// Bounded heap of the best k candidates, worst at the root, and its digest index.
+//---------------------------------
+
+static inline uint32_t
+as_query_topk_index_slot(const as_query_topk_collector* collector, const uint8_t* digest)
+{
+	// A digest is a hash, so any 4 of its bytes spread the slots evenly.
+	uint32_t h;
+	memcpy(&h, digest, sizeof(h));
+	return h & collector->index_mask;
+}
+
+// Return the slot that holds digest, or the empty slot where it would go.
+static uint32_t
+as_query_topk_index_find(const as_query_topk_collector* collector, const uint8_t* digest)
+{
+	uint32_t i = as_query_topk_index_slot(collector, digest);
+
+	while (collector->index[i] &&
+		memcmp(collector->index[i]->key.digest.value, digest, AS_DIGEST_VALUE_SIZE) != 0) {
+		i = (i + 1) & collector->index_mask;
+	}
+	return i;
+}
+
+static void
+as_query_topk_index_remove(as_query_topk_collector* collector, const as_record* rec)
+{
+	uint32_t i = as_query_topk_index_find(collector, rec->key.digest.value);
+	collector->index[i] = NULL;
+
+	// Shift back every later record in the probe run that can no longer be reached
+	// from its home slot once slot i is empty.
+	uint32_t j = i;
+
+	while (true) {
+		j = (j + 1) & collector->index_mask;
+
+		as_record* moved = collector->index[j];
+
+		if (! moved) {
+			return;
+		}
+
+		uint32_t home = as_query_topk_index_slot(collector, moved->key.digest.value);
+		bool reachable = (i <= j) ? (i < home && home <= j) : (i < home || home <= j);
+
+		if (! reachable) {
+			collector->index[i] = moved;
+			collector->index[j] = NULL;
+			i = j;
+		}
+	}
+}
+
+static inline void
+as_query_topk_heap_swap(as_record** heap, uint32_t a, uint32_t b)
+{
+	as_record* tmp = heap[a];
+	heap[a] = heap[b];
+	heap[b] = tmp;
+}
+
+static void
+as_query_topk_heap_sift_up(as_query_topk_collector* collector, uint32_t i)
+{
+	as_record** heap = collector->heap;
+
+	while (i > 0) {
+		uint32_t parent = (i - 1) / 2;
+
+		if (as_query_topk_cmp_rank(heap[i], heap[parent], collector) <= 0) {
+			return;
+		}
+		as_query_topk_heap_swap(heap, i, parent);
+		i = parent;
+	}
+}
+
+static void
+as_query_topk_heap_sift_down(as_query_topk_collector* collector, uint32_t i)
+{
+	as_record** heap = collector->heap;
+	uint32_t n = collector->heap_n;
+
+	while (true) {
+		uint32_t worst = i;
+		uint32_t left = 2 * i + 1;
+		uint32_t right = left + 1;
+
+		if (left < n && as_query_topk_cmp_rank(heap[left], heap[worst], collector) > 0) {
+			worst = left;
+		}
+
+		if (right < n && as_query_topk_cmp_rank(heap[right], heap[worst], collector) > 0) {
+			worst = right;
+		}
+
+		if (worst == i) {
+			return;
+		}
+		as_query_topk_heap_swap(heap, i, worst);
+		i = worst;
+	}
+}
+
+// Whether rec would enter the top k: no copy of the record is kept, and it ranks ahead
+// of the worst kept candidate or there is room. A duplicate from another node is
+// dropped, so the copy collected first is kept while it remains in the top k.
+static bool
+as_query_topk_heap_accepts(const as_query_topk_collector* collector, const as_record* rec)
+{
+	uint32_t slot = as_query_topk_index_find(collector, rec->key.digest.value);
+
+	if (collector->index[slot]) {
+		return false;
+	}
+	return collector->heap_n < collector->k ||
+		as_query_topk_cmp_rank(rec, collector->heap[0], collector) < 0;
+}
+
+// Add copy, which as_query_topk_heap_accepts() accepted under the same lock hold.
+static void
+as_query_topk_heap_add(as_query_topk_collector* collector, as_record* copy)
+{
+	if (collector->heap_n == collector->k) {
+		as_record* worst = collector->heap[0];
+
+		as_query_topk_index_remove(collector, worst);
+		as_record_destroy(worst);
+		collector->heap[0] = copy;
+		as_query_topk_heap_sift_down(collector, 0);
+	}
+	else {
+		collector->heap[collector->heap_n] = copy;
+		collector->heap_n++;
+		as_query_topk_heap_sift_up(collector, collector->heap_n - 1);
+	}
+
+	uint32_t slot = as_query_topk_index_find(collector, copy->key.digest.value);
+	collector->index[slot] = copy;
+}
+
+//---------------------------------
+// Finalize: sort the kept candidates into final rank order. Returns the heap array
+// (caller must cf_free()) of the kept as_record*, each owned by the caller from this
+// point on.
 //---------------------------------
 
 static as_record**
 as_query_topk_finalize(as_query_topk_collector* collector, uint32_t* out_count)
 {
-	uint32_t n = collector->entries.size;
+	as_record** results = collector->heap;
+	uint32_t n = collector->heap_n;
 
-	if (n == 0) {
-		*out_count = 0;
-		return NULL;
-	}
+	// The records are now referenced only by results, so a later
+	// as_query_topk_collector_destroy() call must not destroy them a second time.
+	collector->heap = NULL;
+	collector->heap_n = 0;
 
-	as_record** arr = cf_malloc(sizeof(as_record*) * n);
+	as_query_topk_sort(results, n, as_query_topk_cmp_rank_fn, collector);
 
-	for (uint32_t i = 0; i < n; i++) {
-		arr[i] = *(as_record**)as_vector_get(&collector->entries, i);
-	}
-
-	// Every record now referenced only by arr (about to be consumed - either delivered
-	// and destroyed, or destroyed here as a duplicate/truncated-away candidate). Clear
-	// the vector so a later as_query_topk_collector_destroy() call does not try to
-	// destroy these same records a second time.
-	as_vector_clear(&collector->entries);
-
-	// Dedup by digest first: duplicates are not guaranteed to be adjacent once sorted
-	// by rank (the same digest could carry a different observed order-by value across
-	// nodes/rounds if a migration raced with the scan), so group by digest explicitly.
-	as_query_topk_sort(arr, n, as_query_topk_cmp_digest_fn, NULL);
-
-	uint32_t unique_n = 0;
-
-	for (uint32_t i = 0; i < n; i++) {
-		if (unique_n > 0 && as_query_topk_cmp_digest(arr[unique_n - 1], arr[i]) == 0) {
-			as_record_destroy(arr[i]);
-			continue;
-		}
-		arr[unique_n++] = arr[i];
-	}
-
-	as_query_topk_sort(arr, unique_n, as_query_topk_cmp_rank_fn, collector);
-
-	uint32_t final_n = unique_n < collector->k ? unique_n : collector->k;
-
-	for (uint32_t i = final_n; i < unique_n; i++) {
-		as_record_destroy(arr[i]);
-	}
-
-	*out_count = final_n;
-	return arr;
+	*out_count = n;
+	return results;
 }
 
 //---------------------------------
 // Public API
 //---------------------------------
 
-as_query_topk_collector*
-as_query_topk_collector_create(
-	const as_query* query, aerospike_query_foreach_callback callback, void* udata
-	)
+static as_query_topk_collector*
+as_query_topk_collector_new(const as_query* query, void* udata)
 {
 	as_query_topk_collector* collector = cf_malloc(sizeof(as_query_topk_collector));
 	uint32_t k = query->top_k;
@@ -525,36 +642,116 @@ as_query_topk_collector_create(
 	collector->order_by = query->order_by;
 	collector->then_order_by = query->then_order_by;
 	collector->k = k;
-	collector->callback = callback;
+	collector->callback = NULL;
+	collector->listener = NULL;
 	collector->udata = udata;
+	collector->failed = false;
 	pthread_mutex_init(&collector->lock, NULL);
-	as_vector_init(&collector->entries, sizeof(as_record*), k > 64 ? 64 : k);
+	collector->heap = cf_malloc(sizeof(as_record*) * k);
+	collector->heap_n = 0;
+
+	// At least twice k slots keep the probe runs short.
+	uint32_t index_size = 1;
+
+	while (index_size < 2 * k) {
+		index_size <<= 1;
+	}
+	collector->index = cf_calloc(index_size, sizeof(as_record*));
+	collector->index_mask = index_size - 1;
+	return collector;
+}
+
+as_query_topk_collector*
+as_query_topk_collector_create(
+	const as_query* query, aerospike_query_foreach_callback callback, void* udata
+	)
+{
+	as_query_topk_collector* collector = as_query_topk_collector_new(query, udata);
+	collector->callback = callback;
+	return collector;
+}
+
+as_query_topk_collector*
+as_query_topk_collector_create_async(
+	const as_query* query, as_async_query_record_listener listener, void* udata
+	)
+{
+	as_query_topk_collector* collector = as_query_topk_collector_new(query, udata);
+	collector->listener = listener;
 	return collector;
 }
 
 static void
+as_query_topk_set_buffer_error(as_error* err)
+{
+	as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to buffer a Top-K candidate record");
+}
+
+// Return false when this or an earlier candidate could not be buffered.
+static bool
 as_query_topk_collector_append(as_query_topk_collector* collector, const as_record* src)
 {
+	// Skip copying a candidate that can't make the top k, or any candidate once
+	// the query has failed.
+	pthread_mutex_lock(&collector->lock);
+	bool failed = collector->failed;
+	bool accepts = false;
+
+	if (! failed) {
+		accepts = as_query_topk_heap_accepts(collector, src);
+	}
+	pthread_mutex_unlock(&collector->lock);
+
+	if (failed) {
+		return false;
+	}
+
+	if (! accepts) {
+		return true;
+	}
+
+	// Copy outside the lock so node threads do not wait on each other. Another
+	// node thread can fail or add candidates meanwhile, so both are checked
+	// again below.
 	as_record* copy = as_query_topk_copy_record(src);
+
+	pthread_mutex_lock(&collector->lock);
 
 	if (! copy) {
 		// Out of memory, or a bin value type the query parser never produces.
-		// Dropping this one candidate is preferable to aborting the whole query.
-		return;
+		// A missing candidate could belong in the top k, so the query fails.
+		collector->failed = true;
+	}
+	else if (! collector->failed && as_query_topk_heap_accepts(collector, copy)) {
+		as_query_topk_heap_add(collector, copy);
+	}
+	else {
+		as_record_destroy(copy);
 	}
 
-	pthread_mutex_lock(&collector->lock);
-	as_vector_append(&collector->entries, &copy);
+	bool ok = ! collector->failed;
 	pthread_mutex_unlock(&collector->lock);
+	return ok;
+}
+
+as_status
+as_query_topk_collector_status(const as_query_topk_collector* collector, as_error* err)
+{
+	if (collector->failed) {
+		as_query_topk_set_buffer_error(err);
+		return err->code;
+	}
+	return AEROSPIKE_OK;
 }
 
 void
 as_query_topk_collector_destroy(as_query_topk_collector* collector)
 {
-	for (uint32_t i = 0; i < collector->entries.size; i++) {
-		as_record_destroy(*(as_record**)as_vector_get(&collector->entries, i));
+	for (uint32_t i = 0; i < collector->heap_n; i++) {
+		as_record_destroy(collector->heap[i]);
 	}
-	as_vector_destroy(&collector->entries);
+	cf_free(collector->heap);
+	cf_free(collector->index);
 	pthread_mutex_destroy(&collector->lock);
 	cf_free(collector);
 }
@@ -562,6 +759,16 @@ as_query_topk_collector_destroy(as_query_topk_collector* collector)
 static void
 as_query_topk_flush(as_query_topk_collector* collector)
 {
+	// A candidate could not be buffered, so as_query_topk_collect() returned
+	// false. as_query_partitions() treats that like a user abort: it returns
+	// AEROSPIKE_OK and still sends the val == NULL completion that calls this
+	// function. Skip delivery, including the final NULL, so the application
+	// does not get an incomplete top k. as_query_topk_partitions() then
+	// returns the error from as_query_topk_collector_status().
+	if (collector->failed) {
+		return;
+	}
+
 	uint32_t count;
 	as_record** results = as_query_topk_finalize(collector, &count);
 	bool notify = true;
@@ -593,6 +800,60 @@ as_query_topk_collect(const as_val* val, void* udata)
 	}
 
 	as_record* rec = as_record_fromval(val);
-	as_query_topk_collector_append(collector, rec);
+	return as_query_topk_collector_append(collector, rec);
+}
+
+static void
+as_query_topk_flush_async(as_query_topk_collector* collector, as_event_loop* event_loop)
+{
+	uint32_t count;
+	as_record** results = as_query_topk_finalize(collector, &count);
+	bool notify = true;
+
+	for (uint32_t i = 0; i < count; i++) {
+		if (notify && ! collector->listener(NULL, results[i], collector->udata, event_loop)) {
+			notify = false;
+		}
+		as_record_destroy(results[i]);
+	}
+
+	if (results) {
+		cf_free(results);
+	}
+
+	// Like the async query executor, do not notify a listener that returned false again.
+	if (notify) {
+		collector->listener(NULL, NULL, collector->udata, event_loop);
+	}
+}
+
+bool
+as_query_topk_collect_async(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	as_query_topk_collector* collector = (as_query_topk_collector*)udata;
+
+	if (err) {
+		// The buffered records may be missing a node's candidates, so they are not a
+		// valid Top-K result.
+		collector->listener(err, NULL, collector->udata, event_loop);
+		as_query_topk_collector_destroy(collector);
+		return false;
+	}
+
+	if (! record) {
+		as_query_topk_flush_async(collector, event_loop);
+		as_query_topk_collector_destroy(collector);
+		return false;
+	}
+
+	if (! as_query_topk_collector_append(collector, record)) {
+		// Returning false stops the query without notifying the listener again.
+		as_error buffer_err;
+		as_error_init(&buffer_err);
+		as_query_topk_set_buffer_error(&buffer_err);
+		collector->listener(&buffer_err, NULL, collector->udata, event_loop);
+		as_query_topk_collector_destroy(collector);
+		return false;
+	}
 	return true;
 }

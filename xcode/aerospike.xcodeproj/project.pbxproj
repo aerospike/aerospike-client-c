@@ -40,6 +40,7 @@
 		BF2AA7E918BEBFA500E54AF3 /* as_error.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7C318BEBFA400E54AF3 /* as_error.c */; };
 		D15C0A001000000000000002 /* as_discovery.h in Headers */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000001 /* as_discovery.h */; };
 		D15C0A001000000000000004 /* as_discovery.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000003 /* as_discovery.c */; };
+		D15C0A001000000000000006 /* as_seed_manager.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000005 /* as_seed_manager.c */; };
 		BF2AA7EA18BEBFA500E54AF3 /* as_key.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7C418BEBFA400E54AF3 /* as_key.c */; };
 		BF2AA7ED18BEBFA500E54AF3 /* as_operations.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7C718BEBFA400E54AF3 /* as_operations.c */; };
 		BF2AA7EE18BEBFA500E54AF3 /* as_policy.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7C818BEBFA400E54AF3 /* as_policy.c */; };
@@ -436,6 +437,7 @@
 		BFC65B491C921E9E0079DF5A /* as_config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_config.h; path = ../src/include/aerospike/as_config.h; sourceTree = "<group>"; };
 		D15C0A001000000000000001 /* as_discovery.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_discovery.h; path = ../src/include/aerospike/as_discovery.h; sourceTree = "<group>"; };
 		D15C0A001000000000000003 /* as_discovery.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_discovery.c; path = ../src/main/aerospike/as_discovery.c; sourceTree = "<group>"; };
+		D15C0A001000000000000005 /* as_seed_manager.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_seed_manager.c; path = ../src/main/aerospike/as_seed_manager.c; sourceTree = "<group>"; };
 		BFC65B4A1C921E9E0079DF5A /* as_error.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_error.h; path = ../src/include/aerospike/as_error.h; sourceTree = "<group>"; };
 		BFC65B4B1C921E9E0079DF5A /* as_event_internal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_event_internal.h; path = ../src/include/aerospike/as_event_internal.h; sourceTree = "<group>"; };
 		BFC65B4C1C921E9E0079DF5A /* as_event.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_event.h; path = ../src/include/aerospike/as_event.h; sourceTree = "<group>"; };
@@ -620,6 +622,7 @@
 				BF2AA7CB18BEBFA500E54AF3 /* as_record_iterator.c */,
 				BF2AA7CC18BEBFA500E54AF3 /* as_record.c */,
 				BF2AA7CD18BEBFA500E54AF3 /* as_scan.c */,
+				D15C0A001000000000000005 /* as_seed_manager.c */,
 				BF26A38819C2621000AE763C /* as_shm_cluster.c */,
 				BF219F0F1A622C23001E321C /* as_socket.c */,
 				BF8122FF2F00000100000001 /* as_string_operations.c */,
@@ -1130,6 +1133,7 @@
 				BF8EF4D02AE1B47B00FEEC3A /* ltablib.c in Sources */,
 				BF2AA7E818BEBFA500E54AF3 /* as_config.c in Sources */,
 				D15C0A001000000000000004 /* as_discovery.c in Sources */,
+				D15C0A001000000000000006 /* as_seed_manager.c in Sources */,
 				BF2AA7CF18BEBFA500E54AF3 /* _bin.c in Sources */,
 				BFBD205318BC3436009ED931 /* mod_lua_iterator.c in Sources */,
 				BF820B6D21151272006E6CD7 /* mod_lua_system.c in Sources */,

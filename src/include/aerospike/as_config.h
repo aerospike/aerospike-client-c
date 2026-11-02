@@ -466,6 +466,7 @@ typedef struct as_config_s {
 	/**
 	 * Seed hosts. Populate with one or more hosts in the cluster that you intend to connect with.
 	 * Do not set directly.  Use as_config_add_hosts() or as_config_add_host() to add seed hosts.
+	 * May be left empty when a seed provider is registered (see discovery).
 	 */
 	as_vector* hosts;
 	
@@ -533,10 +534,14 @@ typedef struct as_config_s {
 
 	/**
 	 * Pluggable seed discovery configuration. When no provider is registered
-	 * the static provider over the configured seeds is used.
+	 * the static provider over the configured seeds is used, which adds no
+	 * thread and no periodic work.
 	 *
-	 * Seed providers are not yet invoked by the cluster; registration, validation
-	 * and ownership are in effect.
+	 * The provider supplies the hosts used to bootstrap and, when the cluster
+	 * has no active node, to reseed. Cluster membership still comes from the
+	 * servers. Its result is merged with hosts per merge_policy; hosts may be
+	 * empty when a provider is registered. Discovered hosts without a TLS name
+	 * get the same default as configured hosts when TLS is enabled.
 	 */
 	as_discovery_config discovery;
 

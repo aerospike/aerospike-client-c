@@ -33,7 +33,8 @@
 // U-8, U-11 and the static-map/port-map/pass-through/merge L1 translate and
 // merge rows. Pair-collision L1 rows are reported as unsupported by
 // discovery_translation because the shared fixture format cannot express two
-// endpoints. Runtime degradation in U-1 and M-7 is owned by later commits.
+// endpoints. Runtime degradation in U-1 and M-7 is covered by
+// discovery_seed_manager.
 
 extern aerospike* as;
 

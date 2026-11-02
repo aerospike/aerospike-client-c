@@ -15,6 +15,7 @@
  * the License.
  */
 #include <aerospike/as_config.h>
+#include <aerospike/as_cluster.h>
 #include <aerospike/as_discovery.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_log_macros.h>
@@ -49,10 +50,14 @@ static void
 destroy_provider(as_discovery_config* discovery)
 {
 	if (discovery->provider_registered) {
-		if (discovery->provider.destroy) {
-			discovery->provider.destroy(discovery->provider.udata);
+		as_seed_provider* p = &discovery->provider;
+
+		// A refresh still running on a discovery thread destroys udata when it returns.
+		if (p->destroy &&
+			!as_seed_inflight_defer_destroy(discovery->inflight, p->destroy, p->udata)) {
+			p->destroy(p->udata);
 		}
-		cf_free((void*)discovery->provider.name);
+		cf_free((void*)p->name);
 	}
 	memset(&discovery->provider, 0, sizeof(as_seed_provider));
 	discovery->provider_registered = false;
@@ -210,6 +215,8 @@ as_config_destroy(as_config* config) {
 	}
 
 	destroy_provider(&config->discovery);
+	as_seed_inflight_release(config->discovery.inflight);
+	config->discovery.inflight = NULL;
 	destroy_translator(&config->translation);
 
 	as_policies_destroy(&config->policies);

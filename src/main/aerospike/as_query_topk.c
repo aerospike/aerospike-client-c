@@ -753,8 +753,8 @@ as_query_topk_set_buffer_error(as_error* err)
 }
 
 // Return false when this or an earlier candidate could not be buffered.
-static bool
-as_query_topk_collector_append(
+bool
+as_query_topk_collect_record(
 	as_query_topk_collector* collector, const as_record* src, uint64_t last_update_time
 	)
 {
@@ -877,15 +877,7 @@ as_query_topk_collect(const as_val* val, void* udata)
 	}
 
 	as_record* rec = as_record_fromval(val);
-	return as_query_topk_collector_append(collector, rec, 0);
-}
-
-bool
-as_query_topk_collect_record(
-	as_query_topk_collector* collector, const as_record* record, uint64_t last_update_time
-	)
-{
-	return as_query_topk_collector_append(collector, record, last_update_time);
+	return as_query_topk_collect_record(collector, rec, 0);
 }
 
 static void
@@ -912,13 +904,13 @@ as_query_topk_flush_async(as_query_topk_collector* collector, as_event_loop* eve
 	}
 }
 
-static bool
-as_query_topk_append_async(
+bool
+as_query_topk_collect_record_async(
 	as_query_topk_collector* collector, const as_record* record, uint64_t last_update_time,
 	as_event_loop* event_loop
 	)
 {
-	if (as_query_topk_collector_append(collector, record, last_update_time)) {
+	if (as_query_topk_collect_record(collector, record, last_update_time)) {
 		return true;
 	}
 
@@ -950,14 +942,5 @@ as_query_topk_collect_async(as_error* err, as_record* record, void* udata, as_ev
 		return false;
 	}
 
-	return as_query_topk_append_async(collector, record, 0, event_loop);
-}
-
-bool
-as_query_topk_collect_record_async(
-	as_query_topk_collector* collector, const as_record* record, uint64_t last_update_time,
-	as_event_loop* event_loop
-	)
-{
-	return as_query_topk_append_async(collector, record, last_update_time, event_loop);
+	return as_query_topk_collect_record_async(collector, record, 0, event_loop);
 }

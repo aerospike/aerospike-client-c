@@ -129,8 +129,13 @@ typedef enum as_discovery_execution_mode_e {
 	AS_DISCOVERY_EXECUTION_THREAD,
 
 	/**
-	 * Refresh runs on the tend thread under tend_refresh_deadline_ms. Only
-	 * providers whose supports_deadline returns true are eligible.
+	 * Refresh runs on the tend thread every refresh_interval_ms / tender_interval
+	 * tends, after that tend's reseed attempt. Only providers whose
+	 * supports_deadline returns true are eligible. The deadline is measured, not
+	 * enforced: a refresh that exceeds tend_refresh_deadline_ms delays that tend
+	 * and its result is discarded. After three consecutive overruns the provider
+	 * is no longer refreshed and the initialization seeds are restored until the
+	 * client is recreated. An on-time refresh resets the count.
 	 */
 	AS_DISCOVERY_EXECUTION_TEND
 } as_discovery_execution_mode;
@@ -197,7 +202,8 @@ typedef struct as_seed_candidate_context_s {
 	const as_vector* configured_seeds;
 
 	/**
-	 * Monotonic tend iteration. Zero at client initialization.
+	 * Monotonic tend iteration. Zero at client initialization and incremented
+	 * once per tend after it, whether or not the tend succeeded.
 	 */
 	uint64_t tend_iteration;
 } as_seed_candidate_context;
@@ -246,7 +252,10 @@ typedef struct as_seed_provider_s {
 	/**
 	 * Fill candidates with copied hosts using as_seed_candidates_append().
 	 * Return AEROSPIKE_OK (an empty result is a valid answer) or an error set
-	 * on err; on error the previous seeds are kept.
+	 * on err; on error the previous seeds are kept. An error at
+	 * initialization falls back to the configured seeds;
+	 * aerospike_connect() fails with AEROSPIKE_ERR_SEED_DISCOVERY_FAILED only
+	 * when none are configured. Later errors are logged and never stop tend.
 	 *
 	 * Context: a non-binding provider whose needs_periodic_refresh returns false
 	 * runs once, at initialization, on the application thread that connects.
@@ -394,6 +403,8 @@ typedef struct as_address_translator_s {
 	void* udata;
 } as_address_translator;
 
+struct as_seed_inflight_s;
+
 /**
  * Seed discovery configuration owned by as_config. Register a provider with
  * as_config_set_seed_provider() or as_config_set_binding_seed_provider(); when
@@ -421,19 +432,30 @@ typedef struct as_discovery_config_s {
 	as_discovery_execution_mode execution_mode;
 
 	/**
-	 * Periodic refresh interval in milliseconds.
+	 * Periodic refresh interval in milliseconds. When the provider needs
+	 * periodic refresh it must be at least as_config.tender_interval, otherwise
+	 * aerospike_connect() fails with AEROSPIKE_ERR_PARAM. In
+	 * AS_DISCOVERY_EXECUTION_TEND the provider is refreshed every
+	 * refresh_interval_ms / tender_interval tends.
 	 * Default: 30000
 	 */
 	uint32_t refresh_interval_ms;
 
 	/**
-	 * Bound on one refresh in AS_DISCOVERY_EXECUTION_THREAD, in milliseconds.
+	 * Bound on one refresh in AS_DISCOVERY_EXECUTION_THREAD, in milliseconds:
+	 * the longest aerospike_connect() waits for the initial refresh before it
+	 * continues with the configured seeds. A refresh that takes longer is
+	 * logged. Must be > 0 when a discovery thread runs: for a provider that
+	 * needs periodic refresh in AS_DISCOVERY_EXECUTION_THREAD, and for every
+	 * binding provider.
 	 * Default: 10000
 	 */
 	uint32_t refresh_timeout_ms;
 
 	/**
 	 * Deadline for one refresh in AS_DISCOVERY_EXECUTION_TEND, in milliseconds.
+	 * Must be > 0 and <= as_config.tender_interval / 2 for a provider that needs
+	 * periodic refresh.
 	 * Default: 100
 	 */
 	uint32_t tend_refresh_deadline_ms;
@@ -461,6 +483,13 @@ typedef struct as_discovery_config_s {
 	 * translator registration is rejected while set. Do not set directly.
 	 */
 	bool registration_locked;
+
+	/**
+	 * Tracks a discovery-thread refresh that can outlive the connection that
+	 * started it. Created by the first connect that starts a discovery thread
+	 * and released by as_config_destroy(). Do not set directly.
+	 */
+	struct as_seed_inflight_s* inflight;
 } as_discovery_config;
 
 /**

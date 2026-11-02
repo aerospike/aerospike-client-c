@@ -506,6 +506,9 @@
     <ClCompile Include="..\..\src\main\aerospike\as_scan.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_seed_manager.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\main\aerospike\aerospike_scan.c">
       <Filter>Source Files</Filter>
     </ClCompile>

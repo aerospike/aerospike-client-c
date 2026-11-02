@@ -260,8 +260,8 @@ aerospike_connect(aerospike* as, as_error* err)
 	as_config* config = &as->config;
 	as_vector* hosts = config->hosts;
 	
-	// Verify seed hosts are specified.
-	if (hosts == NULL || hosts->size == 0) {
+	// Verify seed hosts are specified. A registered seed provider may supply all of them.
+	if ((hosts == NULL || hosts->size == 0) && ! config->discovery.provider_registered) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No hosts provided");
 	}
 
@@ -276,8 +276,8 @@ aerospike_connect(aerospike* as, as_error* err)
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "max_socket_idle must be <= 86400");
 	}
 
-	// Set TLS names to default when enabled.
-	if (config->tls.enable) {
+	// Set TLS names to default when enabled. Discovered seeds receive the same default.
+	if (config->tls.enable && hosts) {
 		for (uint32_t i = 0; i < hosts->size; i++) {
 			as_host* host = as_vector_get(hosts, i);
 			
@@ -309,15 +309,17 @@ aerospike_connect(aerospike* as, as_error* err)
 	}
 #endif
 
+	// Plugin registrations stay fixed while the cluster may invoke them, starting with the seed
+	// provider calls made by cluster creation.
+	config->discovery.registration_locked = true;
+
 	// Create the cluster object.
 	status = as_cluster_create(as, err);
 
 	if (status != AEROSPIKE_OK) {
+		config->discovery.registration_locked = false;
 		return status;
 	}
-
-	// Plugin registrations stay fixed while the cluster may invoke them.
-	config->discovery.registration_locked = true;
 
 	// Dynamic configuration allows metrics to be enabled from a file.
 	if (as->config.policies.metrics.enable) {

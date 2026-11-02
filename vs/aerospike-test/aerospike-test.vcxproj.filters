@@ -176,6 +176,9 @@
     <ClCompile Include="..\..\src\test\discovery_translation.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\test\discovery_seed_manager.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\test\metrics_basics.c">
       <Filter>Source Files</Filter>
     </ClCompile>

@@ -6,6 +6,7 @@ TEST_AEROSPIKE = aerospike_test.c
 TEST_AEROSPIKE += config_basics.c
 TEST_AEROSPIKE += discovery_contract.c
 TEST_AEROSPIKE += discovery_translation.c
+TEST_AEROSPIKE += discovery_seed_manager.c
 TEST_AEROSPIKE += metrics_basics.c
 TEST_AEROSPIKE += aerospike_batch/*.c
 TEST_AEROSPIKE += aerospike_bit/*.c

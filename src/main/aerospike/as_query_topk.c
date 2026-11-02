@@ -26,7 +26,6 @@
 #include <aerospike/as_string.h>
 #include <aerospike/as_val.h>
 #include <citrusleaf/alloc.h>
-#include <assert.h>
 #include <math.h>
 #include <pthread.h>
 #include <string.h>
@@ -879,8 +878,8 @@ as_query_topk_flush(as_query_topk_collector* collector)
 bool
 as_query_topk_collect(const as_val* val, void* udata)
 {
-	// The query parser passes records to as_query_topk_collect_record() instead.
-	assert(! val);
+	// The query parser passes records to as_query_topk_collect_record() instead, so
+	// val is always NULL. See as_query_topk.h.
 	(void)val;
 
 	as_query_topk_flush((as_query_topk_collector*)udata);
@@ -943,8 +942,8 @@ as_query_topk_collect_async(as_error* err, as_record* record, void* udata, as_ev
 		return false;
 	}
 
-	// The query parser passes records to as_query_topk_collect_record_async() instead.
-	assert(! record);
+	// The query parser passes records to as_query_topk_collect_record_async() instead,
+	// so record is always NULL. See as_query_topk.h.
 	(void)record;
 
 	as_query_topk_flush_async(collector, event_loop);

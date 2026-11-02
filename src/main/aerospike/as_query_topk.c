@@ -26,6 +26,7 @@
 #include <aerospike/as_string.h>
 #include <aerospike/as_val.h>
 #include <citrusleaf/alloc.h>
+#include <assert.h>
 #include <math.h>
 #include <pthread.h>
 #include <string.h>
@@ -845,7 +846,7 @@ as_query_topk_collector_destroy(as_query_topk_collector* collector)
 static void
 as_query_topk_flush(as_query_topk_collector* collector)
 {
-	// A candidate could not be buffered, so as_query_topk_collect() returned
+	// A candidate could not be buffered, so as_query_topk_collect_record() returned
 	// false. as_query_partitions() treats that like a user abort: it returns
 	// AEROSPIKE_OK and still sends the val == NULL completion that calls this
 	// function. Skip delivery, including the final NULL, so the application
@@ -878,15 +879,12 @@ as_query_topk_flush(as_query_topk_collector* collector)
 bool
 as_query_topk_collect(const as_val* val, void* udata)
 {
-	as_query_topk_collector* collector = (as_query_topk_collector*)udata;
+	// The query parser passes records to as_query_topk_collect_record() instead.
+	assert(! val);
+	(void)val;
 
-	if (! val) {
-		as_query_topk_flush(collector);
-		return true;
-	}
-
-	as_record* rec = as_record_fromval(val);
-	return as_query_topk_collect_record(collector, rec, 0);
+	as_query_topk_flush((as_query_topk_collector*)udata);
+	return true;
 }
 
 static void
@@ -945,11 +943,11 @@ as_query_topk_collect_async(as_error* err, as_record* record, void* udata, as_ev
 		return false;
 	}
 
-	if (! record) {
-		as_query_topk_flush_async(collector, event_loop);
-		as_query_topk_collector_destroy(collector);
-		return false;
-	}
+	// The query parser passes records to as_query_topk_collect_record_async() instead.
+	assert(! record);
+	(void)record;
 
-	return as_query_topk_collect_record_async(collector, record, 0, event_loop);
+	as_query_topk_flush_async(collector, event_loop);
+	as_query_topk_collector_destroy(collector);
+	return false;
 }

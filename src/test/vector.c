@@ -41,6 +41,7 @@
 #include <aerospike/as_version.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <float.h>
+#include <math.h>
 #include <string.h>
 
 #include "test.h"
@@ -633,6 +634,136 @@ TEST(vector_empty, "zero-dimension vectors are rejected")
 	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
 	assert_null(as_vector_value_new_float64(&err, float64_data, 0));
 	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+}
+
+TEST(vector_float16_from_float, "float values convert to float16 with round-ties-to-even")
+{
+	float data[] = {
+		0.0f,
+		-0.0f,
+		1.0f,
+		-2.0f,
+		0.5f,
+		65504.0f, // largest finite float16
+		65519.0f, // below the halfway point to infinity, rounds down to 65504
+		6.103515625e-5f, // 2^-14, smallest normal float16
+		5.9604644775390625e-8f, // 2^-24, smallest subnormal float16
+		2.98023223876953125e-8f, // 2^-25, halfway to 2^-24, ties to even (zero)
+		8.94069671630859375e-8f, // 3 * 2^-25, halfway between subnormals 1 and 2, ties to 2
+		1.00048828125f, // 1 + 2^-11, halfway, ties to even (1.0)
+		1.00146484375f, // 1 + 3 * 2^-11, halfway, ties to even (1 + 2^-9)
+		1.0e-10f // too small for float16, becomes zero
+	};
+	uint16_t expected[] = {
+		0x0000, 0x8000, 0x3C00, 0xC000, 0x3800, 0x7BFF, 0x7BFF, 0x0400, 0x0001, 0x0000,
+		0x0002, 0x3C00, 0x3C02, 0x0000
+	};
+	uint32_t count = sizeof(data) / sizeof(data[0]);
+
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float16_from_float(&err, data, count);
+	assert_not_null(vec);
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(vec->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT16);
+	assert_int_eq(vec->dimensions, count);
+
+	const uint16_t* bits = as_vector_value_get_float16(vec);
+
+	for (uint32_t i = 0; i < count; i++) {
+		assert_int_eq(bits[i], expected[i]);
+	}
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_float16_from_float_rejects_non_finite, "float values that are not finite as float16 are rejected")
+{
+	float rejected[] = {NAN, INFINITY, -INFINITY, 65520.0f, -65520.0f, 1.0e10f};
+	uint32_t count = sizeof(rejected) / sizeof(rejected[0]);
+
+	for (uint32_t i = 0; i < count; i++) {
+		float data[2] = {1.0f, rejected[i]};
+		as_error err;
+		assert_null(as_vector_value_new_float16_from_float(&err, data, 2));
+		assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+		assert_not_null(strstr(err.message, "element 1"));
+	}
+
+	as_error err;
+	assert_null(as_vector_value_new_float16_from_float(&err, NULL, 1));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: data is NULL");
+
+	float one[1] = {1.0f};
+	assert_null(as_vector_value_new_float16_from_float(&err, one, 0));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: must have at least 1 dimension");
+}
+
+TEST(vector_float16_as_float, "float16 elements convert back to float values")
+{
+	uint16_t data[] = {0x0000, 0x8000, 0x3C00, 0xC000, 0x7BFF, 0x0400, 0x0001, 0x03FF};
+	float expected[] = {
+		0.0f, -0.0f, 1.0f, -2.0f, 65504.0f, 6.103515625e-5f, 5.9604644775390625e-8f,
+		6.0975551605224609375e-5f // largest subnormal float16, 1023 * 2^-24
+	};
+	uint32_t count = sizeof(data) / sizeof(data[0]);
+
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float16(&err, data, count);
+	float out[8];
+	as_status status = as_vector_value_get_float16_as_float(&err, vec, out, count);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	for (uint32_t i = 0; i < count; i++) {
+		uint32_t out_bits;
+		uint32_t expected_bits;
+		memcpy(&out_bits, &out[i], sizeof(out_bits));
+		memcpy(&expected_bits, &expected[i], sizeof(expected_bits));
+		assert_int_eq(out_bits, expected_bits);
+	}
+
+	status = as_vector_value_get_float16_as_float(&err, vec, out, count - 1);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	status = as_vector_value_get_float16_as_float(&err, vec, NULL, count);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	as_vector_value_destroy(vec);
+
+	float f32[1] = {1.0f};
+	as_vector_value* v32 = as_vector_value_new_float32(&err, f32, 1);
+	status = as_vector_value_get_float16_as_float(&err, v32, out, 1);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: element type is not float16");
+	as_vector_value_destroy(v32);
+
+	status = as_vector_value_get_float16_as_float(&err, NULL, out, 1);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+}
+
+TEST(vector_float16_float_roundtrip, "float values exact in float16 survive a float16 round trip")
+{
+	float data[] = {0.25f, -3.5f, 1024.0f, -65504.0f, 0.0009765625f};
+	uint32_t count = sizeof(data) / sizeof(data[0]);
+
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float16_from_float(&err, data, count);
+	assert_not_null(vec);
+
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+	as_vector_value_destroy(vec);
+
+	as_vector_value* out = as_vector_value_from_bytes(&err, &bytes);
+	as_bytes_destroy(&bytes);
+	assert_not_null(out);
+
+	float values[5];
+	as_status status = as_vector_value_get_float16_as_float(&err, out, values, count);
+	as_vector_value_destroy(out);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	for (uint32_t i = 0; i < count; i++) {
+		assert_true(values[i] == data[i]);
+	}
 }
 
 TEST(vector_from_trailing_bytes, "as_vector_value_from_bytes ignores bytes past the encoded vector")
@@ -1755,6 +1886,10 @@ SUITE(vector, "as_vector_value serialization")
 	suite_add(vector_getter_type_safety);
 	suite_add(vector_null_safety);
 	suite_add(vector_empty);
+	suite_add(vector_float16_from_float);
+	suite_add(vector_float16_from_float_rejects_non_finite);
+	suite_add(vector_float16_as_float);
+	suite_add(vector_float16_float_roundtrip);
 	suite_add(vector_from_trailing_bytes);
 	suite_add(vector_from_overflow);
 	suite_add(vector_constructor_limits);

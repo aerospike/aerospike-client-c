@@ -81,12 +81,13 @@ as_query_is_topk(const as_query* query)
  * callback/udata. The query parser then sends each record to
  * as_query_topk_collect_record().
  *
- * When the underlying call returns AEROSPIKE_OK, the caller must also check
- * as_query_topk_collector_status(), because a candidate that could not be
- * buffered stops the query the same way a user abort does.
+ * When as_query_partitions() returns AEROSPIKE_OK, the caller must also check
+ * as_query_topk_collector_status(), because a candidate that
+ * as_query_topk_collect_record() could not buffer stops the query the same
+ * way a user abort does (see as_query_topk_collect_record()).
  *
  * The caller remains responsible for destroying the collector via
- * as_query_topk_collector_destroy() once the underlying call returns,
+ * as_query_topk_collector_destroy() once as_query_partitions() returns,
  * regardless of the returned status (destroy is safe to call whether or not
  * a flush already happened internally).
  */
@@ -122,8 +123,8 @@ as_query_topk_collector_create_async(
  * Trampoline callback with the same signature as
  * aerospike_query_foreach_callback. The query parser recognizes this callback
  * and passes each record to as_query_topk_collect_record() instead, so val is
- * always NULL. That signals that the underlying query completed across every
- * targeted node: this function synchronously sorts the kept records and
+ * always NULL. as_query_partitions() makes that call once the query completed
+ * across every targeted node: this function synchronously sorts the kept records and
  * replays them to the real callback, followed by one final NULL callback. If
  * a candidate could not be buffered, nothing is delivered, not even the final
  * NULL.
@@ -135,7 +136,7 @@ as_query_topk_collect(const as_val* val, void* udata);
  * @private
  * Return AEROSPIKE_OK, or set err and return AEROSPIKE_ERR_CLIENT when
  * as_query_topk_collect_record() could not buffer a candidate record. Call
- * after the underlying synchronous query returns AEROSPIKE_OK.
+ * after as_query_partitions() returns AEROSPIKE_OK.
  */
 AS_EXTERN as_status
 as_query_topk_collector_status(const as_query_topk_collector* collector, as_error* err);
@@ -155,8 +156,8 @@ as_query_topk_collector_status(const as_query_topk_collector* collector, as_erro
  * memory). Top-K requires a full scan of the candidate set on every targeted
  * node, so the query is not stopped early otherwise. A record that could not
  * be buffered might belong in the top k, so this returns false to stop the
- * query. The parser treats the false return as a user abort, and the
- * underlying query returns AEROSPIKE_OK, so the caller must then call
+ * query. The parser treats the false return as a user abort, and
+ * as_query_partitions() returns AEROSPIKE_OK, so the caller must then call
  * as_query_topk_collector_status() to get the error.
  */
 AS_EXTERN bool
@@ -169,8 +170,8 @@ as_query_topk_collect_record(
  * Trampoline listener with the same signature as
  * as_async_query_record_listener. The query parser recognizes this listener
  * and passes each record to as_query_topk_collect_record_async() instead, so
- * record is always NULL. err NULL signals that the underlying query completed
- * successfully across every targeted node: the buffered records are merged
+ * record is always NULL. err NULL signals that as_query_partition_async()
+ * completed successfully across every targeted node: the buffered records are merged
  * and replayed to the real listener, followed by one final NULL record unless
  * the listener returned false. err set signals a fatal error, which is
  * forwarded to the real listener without delivering the buffered records. In
@@ -197,7 +198,7 @@ as_query_topk_collect_record_async(
 /**
  * @private
  * Destroy the collector and any buffered records it still owns (e.g.
- * because the underlying synchronous query failed before completion, so
+ * because as_query_partitions() failed before completion, so
  * as_query_topk_collect() never observed the val == NULL completion
  * signal, or because an asynchronous query failed to start).
  */

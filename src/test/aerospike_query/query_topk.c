@@ -902,6 +902,38 @@ TEST(query_topk_merge_duplicate_later_update_wins,
 	assert_string_eq(g_topk_test_last[2], "digest=a1 score=10");
 }
 
+TEST(query_topk_merge_duplicate_later_update_ranks_higher,
+	"topk collector reorders the kept candidates when a newer duplicate ranks higher")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 3);
+
+	g_topk_test_count = 0;
+
+	as_query_topk_collector* collector = as_query_topk_collector_create(&query, topk_test_collect_cb, NULL);
+	as_query_destroy(&query);
+
+	topk_test_collect_lut(collector, 0xA1, 10, 100);
+	topk_test_collect_lut(collector, 0xB1, 40, 100);
+	topk_test_collect_lut(collector, 0xC1, 50, 100);
+
+	// The newer copy of 0xA1 moves from worst to best, so 0xB1 becomes the worst kept
+	// candidate and 0xD1 evicts it.
+	topk_test_collect_lut(collector, 0xA1, 60, 200);
+	topk_test_collect_lut(collector, 0xD1, 45, 100);
+
+	as_query_topk_collect(NULL, collector);
+	as_query_topk_collector_destroy(collector);
+
+	assert_int_eq(g_topk_test_count, 3);
+	assert_string_eq(g_topk_test_last[0], "digest=a1 score=60");
+	assert_string_eq(g_topk_test_last[1], "digest=c1 score=50");
+	assert_string_eq(g_topk_test_last[2], "digest=d1 score=45");
+}
+
 TEST(query_topk_merge_string_case_insensitive_asc,
 	"topk collector applies STRING + CASE_INSENSITIVE ascending ordering")
 {
@@ -1696,6 +1728,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_merge_integer_desc);
 	suite_add(query_topk_merge_bounded);
 	suite_add(query_topk_merge_duplicate_later_update_wins);
+	suite_add(query_topk_merge_duplicate_later_update_ranks_higher);
 	suite_add(query_topk_merge_string_case_insensitive_asc);
 	suite_add(query_topk_merge_bytes_asc);
 	suite_add(query_topk_merge_double_nan_and_zero);

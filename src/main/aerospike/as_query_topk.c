@@ -664,8 +664,17 @@ as_query_topk_heap_replace(
 	as_record_destroy(kept);
 	collector->index[slot] = copy;
 	collector->heap[pos] = (as_query_topk_entry){.rec = copy, .last_update_time = last_update_time};
-	as_query_topk_heap_sift_up(collector, pos);
-	as_query_topk_heap_sift_down(collector, pos);
+
+	// The newer copy can rank worse or better than the copy it replaces.
+	bool worse_than_parent = pos > 0 &&
+		as_query_topk_cmp_rank(copy, collector->heap[(pos - 1) / 2].rec, collector) > 0;
+
+	if (worse_than_parent) {
+		as_query_topk_heap_sift_up(collector, pos);
+	}
+	else {
+		as_query_topk_heap_sift_down(collector, pos);
+	}
 }
 
 //---------------------------------

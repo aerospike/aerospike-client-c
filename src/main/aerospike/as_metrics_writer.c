@@ -309,10 +309,19 @@ as_metrics_write_conn_snapshot(as_string_builder* sb, const as_metrics_conn_snap
 }
 
 static void
-as_metrics_write_latencies(as_string_builder* sb, const as_metrics_namespace_snapshot* namespace_snapshot)
+as_metrics_write_latencies(
+	as_string_builder* sb, const as_metrics_node_snapshot* node_snapshot,
+	const as_metrics_namespace_snapshot* namespace_snapshot
+	)
 {
 	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
 		const as_metrics_latency_snapshot* latency_snapshot = &namespace_snapshot->latencies[i];
+
+		// The namespace conn slot is not recorded. Each namespace on the node
+		// writes the node series so the file keeps its conn entry.
+		if (i == AS_LATENCY_TYPE_CONN && node_snapshot->conn_latency.bucket_count > 0) {
+			latency_snapshot = &node_snapshot->conn_latency;
+		}
 
 		if (i > 0) {
 			as_string_builder_append_char(sb, ',');
@@ -372,7 +381,7 @@ as_metrics_write_node_snapshot(as_string_builder* sb, const as_metrics_node_snap
 		as_string_builder_append_char(sb, ',');
 		as_string_builder_append_uint64(sb, namespace_snapshot->bytes_out);
 		as_string_builder_append(sb, ",[");
-		as_metrics_write_latencies(sb, namespace_snapshot);
+		as_metrics_write_latencies(sb, node_snapshot, namespace_snapshot);
 		as_string_builder_append_char(sb, ']');
 	}
 	as_string_builder_append(sb, "]]");

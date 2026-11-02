@@ -245,8 +245,10 @@ typedef struct {
 	 * sample per successful RPC, only when operational metrics are on and the
 	 * command was sampled. A retry is a new RPC, so the sample starts at the
 	 * attempt that succeeded. A batch sub-batch re-sent to its node is one RPC
-	 * that includes the re-sends. Connection-open latency is per node in
-	 * as_node.conn_latency. Same rules as as_metrics_namespace_snapshot.latencies.
+	 * that includes the re-sends. latency[AS_LATENCY_TYPE_CONN] is deprecated
+	 * and not recorded. See AS_LATENCY_TYPE_CONN. Connection-open latency is per
+	 * node in as_node.conn_latency.
+	 * Same rules as as_metrics_namespace_snapshot.latencies.
 	 */
 	as_latency* latency[AS_LATENCY_TYPE_MAX];
 

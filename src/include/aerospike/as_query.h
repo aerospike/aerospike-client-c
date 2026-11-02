@@ -321,8 +321,7 @@ typedef enum as_query_order_by_type_e {
 	AS_QUERY_ORDER_BY_STRING = 3,
 
 	/**
-	 * Order-by bin is a byte array. Upcoming feature: a Top-K query with this
-	 * type fails with AEROSPIKE_ERR_PARAM.
+	 * Order-by bin is a byte array.
 	 */
 	AS_QUERY_ORDER_BY_BYTES = 4
 

@@ -269,7 +269,10 @@ jobs:
     name: macOS arm64 test / ${{ matrix.event_lib }}
     if: inputs.run-mac
     needs: [load-matrix, build-mac]
-    runs-on: [self-hosted, macOS, ARM64]
+    # Shared macOS ARM64 runners managed by the client team for the aerospike org.
+    runs-on:
+      group: client_team_runners
+      labels: [self-hosted, macOS, ARM64]
     strategy:
       fail-fast: false
       matrix:

@@ -243,15 +243,20 @@ jobs:
 
       # install_lib* puts libs in /usr/local/lib. EXT_LDFLAGS is read by project/test.mk
       # as-is; prepend /usr/local so -lev/-luv/-levent resolve there before Homebrew.
+      #
+      # The Makefile defaults to the unversioned /opt/homebrew/opt/openssl, which resolves to
+      # openssl@4 on the macos-15 image. The self-hosted test runner only provides openssl@3,
+      # so pin the build to openssl@3 to avoid a missing libssl.4.dylib at test time.
+      # EXT_CFLAGS must be passed on the make command line because the Makefile assigns it.
       - name: Build macOS arm64 (${{ matrix.event_lib }})
-        env:
-          EXT_LDFLAGS: -L/usr/local/lib -Wl,-rpath,/usr/local/lib
         run: |
+          openssl_prefix="$(brew --prefix openssl@3)"
+          export EXT_LDFLAGS="-L/usr/local/lib -L${openssl_prefix}/lib -Wl,-rpath,/usr/local/lib"
           export MAKEFLAGS="-j$(sysctl -n hw.ncpu)"
           if [ "${{ matrix.event_lib }}" = "sync" ]; then
-            make all test-build
+            make EXT_CFLAGS="-I${openssl_prefix}/include" all test-build
           else
-            make EVENT_LIB=${{ matrix.event_lib }} all test-build
+            make EXT_CFLAGS="-I${openssl_prefix}/include" EVENT_LIB=${{ matrix.event_lib }} all test-build
           fi
 
       - name: Upload build artifact

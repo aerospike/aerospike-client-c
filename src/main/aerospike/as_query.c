@@ -67,6 +67,7 @@ as_query_defaults(as_query* query, bool free, const char* ns, const char* set)
 	query->top_k = 0;
 	query->top_k_defined = false;
 	query->order_by_overflow = false;
+	query->then_order_by_first = false;
 
 	as_udf_call_init(&query->apply, NULL, NULL, NULL);
 
@@ -493,7 +494,7 @@ as_query_then_order_by(
 	}
 
 	if (!query->order_by.defined) {
-		as_query_order_by_field_set(&query->order_by, bin_name, type, direction, flags);
+		query->then_order_by_first = true;
 		return;
 	}
 
@@ -730,6 +731,7 @@ as_query_to_bytes(const as_query* query, uint8_t** bytes, uint32_t* bytes_size)
 	as_pack_uint64(&pk, query->top_k);
 	as_pack_bool(&pk, query->top_k_defined);
 	as_pack_bool(&pk, query->order_by_overflow);
+	as_pack_bool(&pk, query->then_order_by_first);
 
 	as_cdt_end(&pk);
 
@@ -1153,6 +1155,10 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 		goto HandleError;
 	}
 
+	if (as_unpack_boolean(&pk, &query->then_order_by_first) != 0) {
+		goto HandleError;
+	}
+
 	return true;
 
 HandlePredError:
@@ -1531,6 +1537,10 @@ as_query_compare(as_query* q1, as_query* q2) {
 	}
 
 	if (q1->order_by_overflow != q2->order_by_overflow) {
+		as_cmp_error();
+	}
+
+	if (q1->then_order_by_first != q2->then_order_by_first) {
 		as_cmp_error();
 	}
 

@@ -45,6 +45,7 @@
 #include <string.h>
 
 #include "test.h"
+#include "util/udf.h"
 
 extern aerospike* as;
 
@@ -1563,6 +1564,116 @@ TEST(vector_batch_read_server, "a batch read returns records that contain vector
 	as_vector_value_destroy(v2);
 }
 
+#define LUA_FILE AS_START_DIR "src/test/lua/vector_udf.lua"
+#define UDF_MODULE "vector_udf"
+#define LUA_SET "test_vector_lua"
+
+// Assert that a UDF result is the serialized vector `expected`, byte for byte.
+static void
+assert_vector_val_eq(atf_test_result* __result__, const as_val* val, const as_bytes* expected)
+{
+	assert_not_null(val);
+	assert_int_eq(as_val_type(val), AS_BYTES);
+
+	const as_bytes* bytes = (const as_bytes*)val;
+	assert_int_eq(bytes->type, AS_BYTES_VECTOR);
+	assert_int_eq(bytes->size, expected->size);
+	assert_int_eq(memcmp(bytes->value, expected->value, expected->size), 0);
+}
+
+static bool
+vector_aggregate_cb(const as_val* val, void* udata)
+{
+	as_val** out = (as_val**)udata;
+
+	if (val && ! *out) {
+		*out = as_val_reserve(val);
+	}
+	return true;
+}
+
+TEST(vector_lua_aggregate_server, "a client-side Lua reduce stage receives and returns a vector as bytes")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	assert_true(udf_put(LUA_FILE));
+
+	float data[3] = {1.0f, -2.0f, 0.5f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 3);
+	assert_not_null(vec);
+
+	as_bytes expected;
+	assert_true(as_vector_value_to_bytes(vec, &expected));
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, LUA_SET, 1);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	assert_true(as_record_set_vector(&rec, "vec", vec));
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_query query;
+	as_query_init(&query, NAMESPACE, LUA_SET);
+	as_query_apply(&query, UDF_MODULE, "vector_reduce", NULL);
+
+	as_val* result = NULL;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, vector_aggregate_cb, &result);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_vector_val_eq(__result__, result, &expected);
+
+	as_val_destroy(result);
+	as_query_destroy(&query);
+	aerospike_key_remove(as, &err, NULL, &key);
+	as_key_destroy(&key);
+	as_bytes_destroy(&expected);
+	as_vector_value_destroy(vec);
+	udf_remove(LUA_FILE);
+}
+
+TEST(vector_record_udf_return_server, "a vector returned by a record UDF reaches the client as a vector")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	assert_true(udf_put(LUA_FILE));
+
+	int32_t data[2] = {7, -9};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_int32(&err, data, 2);
+	assert_not_null(vec);
+
+	as_bytes expected;
+	assert_true(as_vector_value_to_bytes(vec, &expected));
+
+	as_arraylist args;
+	as_arraylist_init(&args, 1, 0);
+	as_bytes* arg = as_vector_value_to_bytes_new(vec);
+	assert_not_null(arg);
+	as_arraylist_append(&args, (as_val*)arg);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 26);
+
+	as_val* result = NULL;
+	as_status status = aerospike_key_apply(as, &err, NULL, &key, UDF_MODULE, "echo",
+		(as_list*)&args, &result);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_vector_val_eq(__result__, result, &expected);
+
+	as_val_destroy(result);
+	as_arraylist_destroy(&args);
+	as_key_destroy(&key);
+	as_bytes_destroy(&expected);
+	as_vector_value_destroy(vec);
+	udf_remove(LUA_FILE);
+}
+
 TEST(vector_dist_exp_compiles, "vector distance expression compiles and packs (client-side only)")
 {
 	float data[4] = {0.1f, 0.2f, 0.3f, 0.4f};
@@ -1909,6 +2020,8 @@ SUITE(vector, "as_vector_value serialization")
 	suite_add(vector_async_roundtrip);
 #endif
 	suite_add(vector_batch_read_server);
+	suite_add(vector_lua_aggregate_server);
+	suite_add(vector_record_udf_return_server);
 	suite_add(vector_dist_exp_compiles);
 	suite_add(vector_distance_expression_server);
 	suite_add(vector_bin_expression_read_server);

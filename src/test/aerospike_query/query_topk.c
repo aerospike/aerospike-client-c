@@ -372,27 +372,50 @@ TEST(query_topk_validate_third_order_key, "a third order key is rejected")
 }
 
 TEST(query_topk_then_order_by_first,
-	"as_query_then_order_by() before as_query_order_by() sets the first key, which as_query_order_by() replaces")
+	"as_query_then_order_by() before as_query_order_by() is rejected, even after as_query_order_by()")
 {
 	as_query query;
 	as_query_init(&query, NAMESPACE, SET);
 	as_query_then_order_by(&query, "ts", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
 		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
-	as_query_top_k(&query, 5);
-
-	assert_true(query.order_by.defined);
-	assert_string_eq(query.order_by.bin, "ts");
-	assert_int_eq(query.order_by.type, AS_QUERY_ORDER_BY_INTEGER);
-	assert_int_eq(query.order_by.direction, AS_ORDER_ASCENDING);
-	assert_false(query.then_order_by.defined);
-
 	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
 		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 5);
 
-	assert_string_eq(query.order_by.bin, "score");
-	assert_int_eq(query.order_by.direction, AS_ORDER_DESCENDING);
+	assert_true(query.then_order_by_first);
 	assert_false(query.then_order_by.defined);
-	assert_int_eq(query.top_k, 5);
+
+	as_error err;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "thenOrderBy can't be called before orderBy");
+
+	as_query_destroy(&query);
+}
+
+TEST(query_topk_then_order_by_after_reset,
+	"as_query_then_order_by() after a repeated as_query_order_by() adds the second key again")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_then_order_by(&query, "ts", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_order_by(&query, "price", AS_QUERY_ORDER_BY_DOUBLE, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+
+	assert_string_eq(query.order_by.bin, "price");
+	assert_false(query.then_order_by.defined);
+
+	as_query_then_order_by(&query, "ts", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+
+	assert_string_eq(query.order_by.bin, "price");
+	assert_true(query.then_order_by.defined);
+	assert_string_eq(query.then_order_by.bin, "ts");
+	assert_false(query.then_order_by_first);
+	assert_false(query.order_by_overflow);
 
 	as_query_destroy(&query);
 }
@@ -1734,6 +1757,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_validate_max_records);
 	suite_add(query_topk_validate_third_order_key);
 	suite_add(query_topk_then_order_by_first);
+	suite_add(query_topk_then_order_by_after_reset);
 	suite_add(query_topk_setters_invalid_bin_name);
 	suite_add(query_topk_validate_bin_name_too_long);
 	suite_add(query_topk_validate_bin_name_too_long_without_top_k);

@@ -48,10 +48,12 @@ extern "C" {
  * has reported, it delivers the global top-k in final rank order to the
  * caller's real callback or listener.
  *
- * A collector is single-use: create it, then drive one query through
- * as_query_topk_collect() or as_query_topk_collect_async() (used as the
- * query's callback/udata in place of the caller's own callback/udata). A
- * synchronous collector is destroyed by its caller with
+ * A collector is single-use: create it, then run one query with
+ * as_query_topk_complete() or as_query_topk_complete_async() (and the
+ * collector as udata) in place of the caller's own callback/udata. The query
+ * parser sends each record to as_query_topk_collect_record(), and the
+ * completion callback delivers the merged top k once every targeted node has
+ * reported. A synchronous collector is destroyed by its caller with
  * as_query_topk_collector_destroy(). An asynchronous collector destroys
  * itself; see as_query_topk_collector_create_async().
  */
@@ -90,16 +92,14 @@ as_query_is_topk(const as_query* query)
  * aerospike_query_partitions()) Top-K query. The query's order keys and k
  * must already be validated (as_query_validate_topk()) by the caller.
  *
- * Pass as_query_topk_collect() (with the returned collector as udata) to the
+ * Pass as_query_topk_complete() (with the returned collector as udata) to the
  * underlying as_query_partitions() call in place of the caller's own
- * callback/udata.
- *
- * When the underlying call returns AEROSPIKE_OK, the caller must also check
- * as_query_topk_collector_status(), because a candidate that could not be
- * buffered stops the query the same way a user abort does.
+ * callback/udata. The query parser then sends each record to
+ * as_query_topk_collect_record(), and as_query_partitions() returns any
+ * error it reports.
  *
  * The caller remains responsible for destroying the collector via
- * as_query_topk_collector_destroy() once the underlying call returns,
+ * as_query_topk_collector_destroy() once as_query_partitions() returns,
  * regardless of the returned status (destroy is safe to call whether or not
  * a flush already happened internally).
  */
@@ -114,9 +114,11 @@ as_query_topk_collector_create(
  * aerospike_query_partitions_async()) Top-K query. The query's order keys and
  * k must already be validated (as_query_validate_topk()) by the caller.
  *
- * Pass as_query_topk_collect_async() (with the returned collector as udata)
+ * Pass as_query_topk_complete_async() (with the returned collector as udata)
  * to the underlying as_query_partition_async() call in place of the caller's
- * own listener/udata.
+ * own listener/udata. The query parser then sends each record to
+ * as_query_topk_collect_record(), and any error it reports goes to the
+ * listener through as_query_topk_complete_async().
  *
  * The collector destroys itself when the query reports completion or an
  * error, because the query is still running on its event loop after the
@@ -132,63 +134,62 @@ as_query_topk_collector_create_async(
 /**
  * @private
  * Trampoline callback with the same signature as
- * aerospike_query_foreach_callback. If val (assumed to be an as_record) ranks
- * among the best k records seen so far, and no copy of the same record is
- * already kept, deep-copies it so it survives past the lifetime of the
- * caller's stack-allocated record, and drops the worst kept record if there
- * are now more than k. val == NULL signals that the underlying query
- * completed successfully across every targeted node; at that point, this
- * function synchronously sorts the kept records and replays them to the real
+ * aerospike_query_foreach_callback. The query parser recognizes this callback
+ * and passes each record to as_query_topk_collect_record() instead, so val is
+ * always NULL. as_query_partitions() makes that call only once the query
+ * completed successfully across every targeted node: this function
+ * synchronously sorts the kept records and replays them to the real
  * callback, followed by one final NULL callback.
- *
- * Returns true for non-NULL val unless the record could not be buffered (out
- * of memory). Top-K requires a full scan of the candidate set on every
- * targeted node, so the query is not stopped early otherwise. A record that
- * could not be buffered might belong in the top k, so this returns false to
- * stop the query, and nothing is delivered to the real callback, not even the
- * final NULL.
- *
- * A foreach callback can only return a bool, so this function cannot return
- * the error itself. It records the failure in the collector instead. The
- * underlying query treats the false return as a user abort and returns
- * AEROSPIKE_OK, so the caller must then call as_query_topk_collector_status()
- * to get the error.
  */
 AS_EXTERN bool
-as_query_topk_collect(const as_val* val, void* udata);
+as_query_topk_complete(const as_val* val, void* udata);
 
 /**
  * @private
- * Return AEROSPIKE_OK, or set err and return AEROSPIKE_ERR_CLIENT when
- * as_query_topk_collect() could not buffer a candidate record. Call after the
- * underlying synchronous query returns AEROSPIKE_OK.
+ * Collect a record parsed from a synchronous or asynchronous Top-K query
+ * response, along with the record's last-update time from the response (0 if
+ * the server did not send it). If the record ranks among the best k records seen so far,
+ * deep-copies it so it survives past the lifetime of the parser's
+ * stack-allocated record, and drops the worst kept record if there are now
+ * more than k. A record can reach the client from two nodes while its
+ * partition migrates, and the copy with the later last-update time is kept.
+ * On a tie, the copy already kept stays.
+ *
+ * Returns AEROSPIKE_OK unless the record could not be buffered (out of
+ * memory). Top-K requires a full scan of the candidate set on every targeted
+ * node, so the query is not stopped early otherwise. A record that could not
+ * be buffered might belong in the top k, so this sets err and returns
+ * AEROSPIKE_ERR_CLIENT, which the parser returns to fail the query.
  */
 AS_EXTERN as_status
-as_query_topk_collector_status(const as_query_topk_collector* collector, as_error* err);
+as_query_topk_collect_record(
+	as_query_topk_collector* collector, as_error* err, const as_record* record,
+	uint64_t last_update_time
+	);
 
 /**
  * @private
  * Trampoline listener with the same signature as
- * as_async_query_record_listener. Deep-copies record, like
- * as_query_topk_collect(). record == NULL (with err NULL) signals that the
- * underlying query completed successfully across every targeted node: the
- * buffered records are merged and replayed to the real listener, followed by
- * one final NULL record unless the listener returned false. err set signals a
- * fatal error, which is forwarded to the real listener without delivering
- * the buffered records. A record that could not be buffered is reported the
- * same way, with AEROSPIKE_ERR_CLIENT, and stops the query. In each case the
+ * as_async_query_record_listener. The query parser recognizes this listener
+ * and passes each record to as_query_topk_collect_record() instead, so record
+ * is always NULL. err NULL signals that as_query_partition_async() completed
+ * successfully across every targeted node: the buffered records are merged
+ * and replayed to the real listener, followed by one final NULL record unless
+ * the listener returned false. err set signals a fatal error, including one
+ * from as_query_topk_collect_record(), which is forwarded to the real
+ * listener without delivering the buffered records. In each case the
  * collector then destroys itself.
  */
 AS_EXTERN bool
-as_query_topk_collect_async(
+as_query_topk_complete_async(
 	as_error* err, as_record* record, void* udata, as_event_loop* event_loop
 	);
 
 /**
  * @private
  * Destroy the collector and any buffered records it still owns (e.g.
- * because the underlying synchronous query failed before completion, so
- * as_query_topk_collect() never observed the val == NULL completion
+ * because as_query_partitions() failed before completion, so
+ * as_query_topk_complete() never observed the val == NULL completion
  * signal, or because an asynchronous query failed to start).
  */
 AS_EXTERN void

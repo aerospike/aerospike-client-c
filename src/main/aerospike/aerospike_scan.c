@@ -1624,6 +1624,7 @@ aerospike_scan_async_internal(
 		policy->replica, &scan->parts_all, scan->paginate, n_nodes, err);
 
 	if (status != AEROSPIKE_OK) {
+		cf_free(pt);
 		return status;
 	}
 

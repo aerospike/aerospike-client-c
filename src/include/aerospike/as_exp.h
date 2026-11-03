@@ -687,7 +687,9 @@ as_exp_destroy_base64(char* base64)
  * as_bytes_destroy(&qbytes);
  * @endcode
  *
- * @param __metric		Distance metric (as_vector_distance_metric).
+ * @param __metric		Distance metric (as_vector_distance_metric). Any other value
+ *						packs an invalid expression, which the server rejects with
+ *						AEROSPIKE_ERR_REQUEST_INVALID.
  * @param __query		Complete serialized query vector, including its header.
  * @param __query_size	Number of serialized query-vector bytes.
  * @param __bin			Vector bin expression, typically as_exp_bin_vector().

@@ -398,17 +398,16 @@ as_query_parse_record_async(
 		return AEROSPIKE_OK;
 	}
 
-	bool rv;
-
 	if (topk_collect) {
-		rv = as_query_topk_collect_record_async(qe->executor.udata, &rec, last_update_time,
-			qe->executor.event_loop);
-	}
-	else {
-		rv = qe->listener(NULL, &rec, qe->executor.udata, qe->executor.event_loop);
-	}
+		// On an error, the executor reports it through as_query_topk_complete_async().
+		status = as_query_topk_collect_record(qe->executor.udata, err, &rec, last_update_time);
 
-	if (! rv) {
+		if (status != AEROSPIKE_OK) {
+			as_record_destroy(&rec);
+			return status;
+		}
+	}
+	else if (! qe->listener(NULL, &rec, qe->executor.udata, qe->executor.event_loop)) {
 		as_record_destroy(&rec);
 		qe->executor.notify = false;
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT_ABORT, "");
@@ -551,20 +550,18 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 			return AEROSPIKE_OK;
 		}
 
-		if (task->callback) {
-			bool rv;
+		if (topk_collect) {
+			// Unlike a user abort, an error makes as_query_partitions() return it.
+			status = as_query_topk_collect_record(task->udata, err, &rec, last_update_time);
 
-			if (topk_collect) {
-				rv = as_query_topk_collect_record(task->udata, &rec, last_update_time);
-			}
-			else {
-				rv = task->callback((as_val*)&rec, task->udata);
-			}
-
-			if (! rv) {
+			if (status != AEROSPIKE_OK) {
 				as_record_destroy(&rec);
-				return AEROSPIKE_ERR_CLIENT_ABORT;
+				return status;
 			}
+		}
+		else if (task->callback && ! task->callback((as_val*)&rec, task->udata)) {
+			as_record_destroy(&rec);
+			return AEROSPIKE_ERR_CLIENT_ABORT;
 		}
 
 		// Top-K records arrive in rank order, not digest order, so a retry that resumes
@@ -2013,10 +2010,6 @@ as_query_topk_partitions(
 	as_query_topk_collector* collector = as_query_topk_collector_create(query, callback, udata);
 	as_status status = as_query_partitions(cluster, err, policy, query, pt, as_query_topk_complete,
 		collector);
-
-	if (status == AEROSPIKE_OK) {
-		status = as_query_topk_collector_status(collector, err);
-	}
 
 	as_query_topk_collector_destroy(collector);
 	return status;

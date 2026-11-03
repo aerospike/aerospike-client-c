@@ -749,10 +749,18 @@ topk_test_make_int_rec(as_record* rec, uint8_t digest_byte, int64_t score, bool 
 	}
 }
 
+static as_status
+topk_test_collect(as_query_topk_collector* collector, const as_record* rec, uint64_t last_update_time)
+{
+	as_error err;
+	as_error_init(&err);
+	return as_query_topk_collect_record(collector, &err, rec, last_update_time);
+}
+
 static void
 topk_test_collect_rec(as_query_topk_collector* collector, as_record* rec)
 {
-	as_query_topk_collect_record(collector, rec, 0);
+	topk_test_collect(collector, rec, 0);
 	as_record_destroy(rec);
 }
 
@@ -774,9 +782,9 @@ TEST(query_topk_merge_integer_desc,
 	as_record a1; topk_test_make_int_rec(&a1, 0xA1, 50, true);
 	as_record a2; topk_test_make_int_rec(&a2, 0xA2, 30, true);
 	as_record a3; topk_test_make_int_rec(&a3, 0xA3, 10, true);
-	as_query_topk_collect_record(collector, &a1, 0);
-	as_query_topk_collect_record(collector, &a2, 0);
-	as_query_topk_collect_record(collector, &a3, 0);
+	topk_test_collect(collector, &a1, 0);
+	topk_test_collect(collector, &a2, 0);
+	topk_test_collect(collector, &a3, 0);
 	as_record_destroy(&a1);
 	as_record_destroy(&a2);
 	as_record_destroy(&a3);
@@ -786,9 +794,9 @@ TEST(query_topk_merge_integer_desc,
 	as_record b1; topk_test_make_int_rec(&b1, 0xB1, 40, true);
 	as_record b2; topk_test_make_int_rec(&b2, 0xB2, 20, true);
 	as_record b3; topk_test_make_int_rec(&b3, 0xB3, 0, false);
-	as_query_topk_collect_record(collector, &b1, 0);
-	as_query_topk_collect_record(collector, &b2, 0);
-	as_query_topk_collect_record(collector, &b3, 0);
+	topk_test_collect(collector, &b1, 0);
+	topk_test_collect(collector, &b2, 0);
+	topk_test_collect(collector, &b3, 0);
 	as_record_destroy(&b1);
 	as_record_destroy(&b2);
 	as_record_destroy(&b3);
@@ -796,7 +804,7 @@ TEST(query_topk_merge_integer_desc,
 	// Duplicate digest of a1 with a different score (simulates a migration race) - must be
 	// deduped down to a single entry.
 	as_record dup; topk_test_make_int_rec(&dup, 0xA1, 999, true);
-	as_query_topk_collect_record(collector, &dup, 0);
+	topk_test_collect(collector, &dup, 0);
 	as_record_destroy(&dup);
 
 	// Trigger the flush (val == NULL signals every node has reported).
@@ -820,7 +828,7 @@ topk_test_collect_many_rec(as_query_topk_collector* collector, uint32_t id, int6
 	rec.key.digest.value[0] = (uint8_t)(id % 4);
 	rec.key.digest.value[4] = (uint8_t)id;
 	as_record_set_int64(&rec, "score", score);
-	as_query_topk_collect_record(collector, &rec, 0);
+	topk_test_collect(collector, &rec, 0);
 	as_record_destroy(&rec);
 }
 
@@ -865,7 +873,7 @@ topk_test_collect_lut(
 {
 	as_record rec;
 	topk_test_make_int_rec(&rec, digest_byte, score, true);
-	as_query_topk_collect_record(collector, &rec, last_update_time);
+	topk_test_collect(collector, &rec, last_update_time);
 	as_record_destroy(&rec);
 }
 
@@ -969,9 +977,9 @@ TEST(query_topk_merge_string_case_insensitive_asc,
 	s3.key.digest.init = true;
 	as_record_set_str(&s3, "name", "Carol"); // Truncated away - k == 2.
 
-	as_query_topk_collect_record(collector, &s1, 0);
-	as_query_topk_collect_record(collector, &s2, 0);
-	as_query_topk_collect_record(collector, &s3, 0);
+	topk_test_collect(collector, &s1, 0);
+	topk_test_collect(collector, &s2, 0);
+	topk_test_collect(collector, &s3, 0);
 	as_record_destroy(&s1);
 	as_record_destroy(&s2);
 	as_record_destroy(&s3);
@@ -1266,7 +1274,7 @@ topk_test_collect_async_rec(as_query_topk_collector* collector, uint8_t digest_b
 {
 	as_record rec;
 	topk_test_make_int_rec(&rec, digest_byte, score, true);
-	as_query_topk_collect_record_async(collector, &rec, 0, NULL);
+	topk_test_collect(collector, &rec, 0);
 	as_record_destroy(&rec);
 }
 
@@ -1363,27 +1371,24 @@ TEST(query_topk_merge_buffer_failure,
 
 	as_record good;
 	topk_test_make_int_rec(&good, 0xA1, 50, true);
-	bool good_rv = as_query_topk_collect_record(collector, &good, 0);
+	as_status good_status = topk_test_collect(collector, &good, 0);
 	as_record_destroy(&good);
-
-	as_record bad;
-	topk_test_make_unbufferable_rec(&bad, 0xA2);
-	bool bad_rv = as_query_topk_collect_record(collector, &bad, 0);
-	as_record_destroy(&bad);
-
-	// as_query_partitions() still signals completion after the false return.
-	as_query_topk_complete(NULL, collector);
 
 	as_error err;
 	as_error_init(&err);
-	as_status status = as_query_topk_collector_status(collector, &err);
+
+	as_record bad;
+	topk_test_make_unbufferable_rec(&bad, 0xA2);
+	as_status bad_status = as_query_topk_collect_record(collector, &err, &bad, 0);
+	as_record_destroy(&bad);
+
+	// as_query_partitions() returns the error without the completion call.
 	as_query_topk_collector_destroy(collector);
 
-	assert_true(good_rv);
-	assert_false(bad_rv);
-	assert_int_eq(g_topk_test_calls, 0);
-	assert_int_eq(status, AEROSPIKE_ERR_CLIENT);
+	assert_int_eq(good_status, AEROSPIKE_OK);
+	assert_int_eq(bad_status, AEROSPIKE_ERR_CLIENT);
 	assert_int_eq(err.code, AEROSPIKE_ERR_CLIENT);
+	assert_int_eq(g_topk_test_calls, 0);
 }
 
 TEST(query_topk_merge_async_buffer_failure,
@@ -1394,13 +1399,20 @@ TEST(query_topk_merge_async_buffer_failure,
 
 	topk_test_collect_async_rec(collector, 0xA1, 50);
 
-	// The failure destroys the collector, so nothing else is sent to it.
+	as_error err;
+	as_error_init(&err);
+
 	as_record bad;
 	topk_test_make_unbufferable_rec(&bad, 0xA2);
-	bool rv = as_query_topk_collect_record_async(collector, &bad, 0, NULL);
+	as_status status = as_query_topk_collect_record(collector, &err, &bad, 0);
 	as_record_destroy(&bad);
 
-	assert_false(rv);
+	assert_int_eq(status, AEROSPIKE_ERR_CLIENT);
+	assert_int_eq(result.error, AEROSPIKE_OK);
+
+	// The executor reports the parser's error through the completion listener.
+	as_query_topk_complete_async(&err, NULL, collector, NULL);
+
 	assert_int_eq(result.count, 0);
 	assert_int_eq(result.ends, 0);
 	assert_int_eq(result.error, AEROSPIKE_ERR_CLIENT);

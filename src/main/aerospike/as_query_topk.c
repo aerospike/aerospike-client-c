@@ -68,10 +68,6 @@ struct as_query_topk_collector_s {
 	// slot), so a duplicate from another node is found without scanning the heap.
 	as_record** index;
 	uint32_t index_mask;
-
-	// A candidate could not be buffered, so the merged result would be wrong.
-	// Protected by lock. See as_query_topk_collector_status().
-	bool failed;
 };
 
 typedef struct {
@@ -719,7 +715,6 @@ as_query_topk_collector_new(const as_query* query, void* udata)
 	collector->callback = NULL;
 	collector->listener = NULL;
 	collector->udata = udata;
-	collector->failed = false;
 	pthread_mutex_init(&collector->lock, NULL);
 	collector->heap = cf_malloc(sizeof(as_query_topk_entry) * k);
 	collector->heap_n = 0;
@@ -755,78 +750,46 @@ as_query_topk_collector_create_async(
 	return collector;
 }
 
-static void
-as_query_topk_set_buffer_error(as_error* err)
-{
-	as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to buffer a Top-K candidate record");
-}
-
-// Return false when this or an earlier candidate could not be buffered.
-bool
+as_status
 as_query_topk_collect_record(
-	as_query_topk_collector* collector, const as_record* src, uint64_t last_update_time
+	as_query_topk_collector* collector, as_error* err, const as_record* src,
+	uint64_t last_update_time
 	)
 {
-	// Skip copying a candidate that can't make the top k, or any candidate once
-	// the query has failed.
+	// Skip copying a candidate that can't make the top k.
 	pthread_mutex_lock(&collector->lock);
-	bool failed = collector->failed;
-	as_query_topk_action action = AS_QUERY_TOPK_DROP;
-
-	if (! failed) {
-		action = as_query_topk_heap_action(collector, src, last_update_time);
-	}
+	as_query_topk_action action = as_query_topk_heap_action(collector, src, last_update_time);
 	pthread_mutex_unlock(&collector->lock);
 
-	if (failed) {
-		return false;
-	}
-
 	if (action == AS_QUERY_TOPK_DROP) {
-		return true;
+		return AEROSPIKE_OK;
 	}
 
 	// Copy outside the lock so node threads do not wait on each other. Another
-	// node thread can fail or add candidates meanwhile, so both are checked
-	// again below.
+	// node thread can add candidates meanwhile, so the action is checked again
+	// below.
 	as_record* copy = as_query_topk_copy_record(src);
-
-	pthread_mutex_lock(&collector->lock);
 
 	if (! copy) {
 		// Out of memory, or a bin value type the query parser never produces.
 		// A missing candidate could belong in the top k, so the query fails.
-		collector->failed = true;
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to buffer a Top-K candidate record");
 	}
-	else if (collector->failed) {
-		as_record_destroy(copy);
+
+	pthread_mutex_lock(&collector->lock);
+	action = as_query_topk_heap_action(collector, copy, last_update_time);
+
+	if (action == AS_QUERY_TOPK_ADD) {
+		as_query_topk_heap_add(collector, copy, last_update_time);
+	}
+	else if (action == AS_QUERY_TOPK_REPLACE) {
+		as_query_topk_heap_replace(collector, copy, last_update_time);
 	}
 	else {
-		action = as_query_topk_heap_action(collector, copy, last_update_time);
-
-		if (action == AS_QUERY_TOPK_ADD) {
-			as_query_topk_heap_add(collector, copy, last_update_time);
-		}
-		else if (action == AS_QUERY_TOPK_REPLACE) {
-			as_query_topk_heap_replace(collector, copy, last_update_time);
-		}
-		else {
-			as_record_destroy(copy);
-		}
+		as_record_destroy(copy);
 	}
-
-	bool ok = ! collector->failed;
 	pthread_mutex_unlock(&collector->lock);
-	return ok;
-}
-
-as_status
-as_query_topk_collector_status(const as_query_topk_collector* collector, as_error* err)
-{
-	if (collector->failed) {
-		as_query_topk_set_buffer_error(err);
-		return err->code;
-	}
 	return AEROSPIKE_OK;
 }
 
@@ -845,16 +808,6 @@ as_query_topk_collector_destroy(as_query_topk_collector* collector)
 static void
 as_query_topk_flush(as_query_topk_collector* collector)
 {
-	// A candidate could not be buffered, so as_query_topk_collect_record() returned
-	// false. as_query_partitions() treats that like a user abort: it returns
-	// AEROSPIKE_OK and still sends the val == NULL completion that calls this
-	// function. Skip delivery, including the final NULL, so the application
-	// does not get an incomplete top k. as_query_topk_partitions() then
-	// returns the error from as_query_topk_collector_status().
-	if (collector->failed) {
-		return;
-	}
-
 	uint32_t count;
 	as_record** results = as_query_topk_finalize(collector, &count);
 	bool notify = true;
@@ -911,25 +864,6 @@ as_query_topk_flush_async(as_query_topk_collector* collector, as_event_loop* eve
 }
 
 bool
-as_query_topk_collect_record_async(
-	as_query_topk_collector* collector, const as_record* record, uint64_t last_update_time,
-	as_event_loop* event_loop
-	)
-{
-	if (as_query_topk_collect_record(collector, record, last_update_time)) {
-		return true;
-	}
-
-	// Returning false stops the query without notifying the listener again.
-	as_error buffer_err;
-	as_error_init(&buffer_err);
-	as_query_topk_set_buffer_error(&buffer_err);
-	collector->listener(&buffer_err, NULL, collector->udata, event_loop);
-	as_query_topk_collector_destroy(collector);
-	return false;
-}
-
-bool
 as_query_topk_complete_async(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
 {
 	as_query_topk_collector* collector = (as_query_topk_collector*)udata;
@@ -942,8 +876,8 @@ as_query_topk_complete_async(as_error* err, as_record* record, void* udata, as_e
 		return false;
 	}
 
-	// The query parser passes records to as_query_topk_collect_record_async() instead,
-	// so record is always NULL. See as_query_topk.h.
+	// The query parser passes records to as_query_topk_collect_record() instead, so
+	// record is always NULL. See as_query_topk.h.
 	(void)record;
 
 	as_query_topk_flush_async(collector, event_loop);

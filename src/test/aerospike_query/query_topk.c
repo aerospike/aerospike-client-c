@@ -45,6 +45,7 @@
 #include <aerospike/as_version.h>
 
 #include <math.h>
+#include <stdint.h>
 
 #include "../test.h"
 
@@ -228,6 +229,31 @@ TEST(query_topk_validate_k_out_of_range, "top_k > 1000 is rejected")
 	assert_string_eq(err.message, "topK must be in [1, 1000]; got 1001");
 
 	as_query_destroy(&query);
+}
+
+// A huge top_k must fail with the same error as a moderately-out-of-range top_k (e.g. 1001),
+// not hang or allocate gigabytes.
+TEST(query_topk_validate_k_huge, "a huge top_k fails fast instead of hanging or over-allocating")
+{
+	uint32_t huge_values[] = {UINT32_MAX, 1u << 31, 1u << 30};
+
+	for (size_t i = 0; i < sizeof(huge_values) / sizeof(huge_values[0]); i++) {
+		as_query query;
+		as_query_init(&query, NAMESPACE, SET);
+		as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+			AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+		as_query_top_k(&query, huge_values[i]);
+
+		as_error err;
+		as_status status = aerospike_query_foreach(as, &err, NULL, &query, NULL, NULL);
+		assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+
+		char expected[128];
+		snprintf(expected, sizeof(expected), "topK must be in [1, 1000]; got %u", huge_values[i]);
+		assert_string_eq(err.message, expected);
+
+		as_query_destroy(&query);
+	}
 }
 
 TEST(query_topk_validate_k_zero, "a top_k set to 0 is rejected, with or without an order key")
@@ -643,6 +669,36 @@ TEST(query_topk_validate_async, "order_by/top_k is validated on asynchronous que
 	as_query_destroy(&query);
 }
 
+TEST(query_topk_validate_async_k_huge, "a huge top_k fails fast on asynchronous queries too")
+{
+	uint32_t huge_values[] = {UINT32_MAX, 1u << 31, 1u << 30};
+
+	as_partition_filter pf;
+	as_partition_filter_set_all(&pf);
+
+	for (size_t i = 0; i < sizeof(huge_values) / sizeof(huge_values[0]); i++) {
+		as_query query;
+		as_query_init(&query, NAMESPACE, SET);
+		as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+			AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+		as_query_top_k(&query, huge_values[i]);
+
+		char expected[128];
+		snprintf(expected, sizeof(expected), "topK must be in [1, 1000]; got %u", huge_values[i]);
+
+		as_error err;
+		as_status status = aerospike_query_async(as, &err, NULL, &query, NULL, NULL, NULL);
+		assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+		assert_string_eq(err.message, expected);
+
+		status = aerospike_query_partitions_async(as, &err, NULL, &query, &pf, NULL, NULL, NULL);
+		assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+		assert_string_eq(err.message, expected);
+
+		as_query_destroy(&query);
+	}
+}
+
 TEST(query_topk_validate_projection_missing_bin, "order_by bin missing from projection is rejected")
 {
 	as_query query;
@@ -856,6 +912,67 @@ TEST(query_topk_merge_bounded, "topk collector keeps only the best k of many can
 	assert_not_null(strstr(g_topk_test_last[2], "score=198"));
 	assert_not_null(strstr(g_topk_test_last[3], "score=197"));
 	assert_not_null(strstr(g_topk_test_last[4], "score=196"));
+}
+
+static int g_topk_huge_count;
+static int64_t g_topk_huge_first_score;
+
+static bool
+topk_test_huge_cb(const as_val* val, void* udata)
+{
+	(void)udata;
+
+	if (! val) {
+		return true;
+	}
+
+	as_record* rec = as_record_fromval(val);
+	as_integer* score = (as_integer*)as_record_get(rec, "score");
+
+	if (g_topk_huge_count == 0) {
+		g_topk_huge_first_score = score ? as_integer_get(score) : -1;
+	}
+	g_topk_huge_count++;
+	return true;
+}
+
+// Drives the collector directly with top_k = UINT32_MAX: creation must stay cheap, and
+// collector->k must still cap how many candidates the heap accepts.
+TEST(query_topk_collector_new_caps_huge_k,
+	"the collector sizes its heap/index from a capped k, not the raw top_k")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, UINT32_MAX);
+
+	g_topk_huge_count = 0;
+
+	as_query_topk_collector* collector = as_query_topk_collector_create(&query, topk_test_huge_cb, NULL);
+	as_query_destroy(&query);
+
+	// Feed more unique candidates than the 1000-record cap could ever hold. If k were not
+	// capped internally, every one of these would be kept instead of only the best 1000.
+	const uint32_t n = 1005;
+
+	for (uint32_t id = 0; id < n; id++) {
+		as_record rec;
+		as_record_init(&rec, 1);
+		memset(rec.key.digest.value, 0, AS_DIGEST_VALUE_SIZE);
+		memcpy(rec.key.digest.value, &id, sizeof(id));
+		rec.key.digest.init = true;
+		as_record_set_int64(&rec, "score", (int64_t)id);
+		as_query_topk_collect((as_val*)&rec, collector);
+		as_record_destroy(&rec);
+	}
+
+	as_query_topk_collect(NULL, collector);
+	as_query_topk_collector_destroy(collector);
+
+	assert_int_eq(g_topk_huge_count, 1000);
+	// Highest score (descending order) still wins the rank-1 slot.
+	assert_int_eq(g_topk_huge_first_score, (int64_t)(n - 1));
 }
 
 TEST(query_topk_merge_string_case_insensitive_asc,
@@ -1609,6 +1726,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_compare);
 	suite_add(query_topk_validate_top_k_without_order_by);
 	suite_add(query_topk_validate_k_out_of_range);
+	suite_add(query_topk_validate_k_huge);
 	suite_add(query_topk_validate_k_zero);
 	suite_add(query_topk_validate_case_insensitive_wrong_type);
 	suite_add(query_topk_validate_incompatible_with_aggregation);
@@ -1629,10 +1747,12 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_validate_duplicate_projection_op);
 	suite_add(query_topk_validate_resumed_partition_filter);
 	suite_add(query_topk_validate_async);
+	suite_add(query_topk_validate_async_k_huge);
 	suite_add(query_topk_validate_projection_missing_bin);
 	suite_add(query_topk_validate_server_support);
 	suite_add(query_topk_merge_integer_desc);
 	suite_add(query_topk_merge_bounded);
+	suite_add(query_topk_collector_new_caps_huge_k);
 	suite_add(query_topk_merge_string_case_insensitive_asc);
 	suite_add(query_topk_merge_bytes_asc);
 	suite_add(query_topk_merge_double_nan_and_zero);

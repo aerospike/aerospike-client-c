@@ -137,13 +137,6 @@
  */
 #define AS_SUB_PARAM_STRING_UTF8_INVALID                   11
 
-/**
- * Top-K query settings are invalid, such as an order key sent without k.
- * App use: set both as_query_order_by() and as_query_top_k() before running
- * the query.
- */
-#define AS_SUB_PARAM_TOP_K_INVALID                         12
-
 //----------------------------------------------------------------
 // Subcodes paired with AEROSPIKE_ERR_CLUSTER (AS_ERR_UNAVAILABLE)
 //----------------------------------------------------------------

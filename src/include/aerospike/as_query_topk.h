@@ -24,6 +24,19 @@ extern "C" {
 #endif
 
 /******************************************************************************
+ * CONSTANTS
+ *****************************************************************************/
+
+/**
+ * @private
+ * Maximum allowed as_query.top_k. Shared between as_query_validate_topk()
+ * (aerospike_query.c), which rejects a top_k outside [1, AS_QUERY_TOPK_MAX],
+ * and as_query_topk_collector_new() (as_query_topk.c), which must size its
+ * heap/index from a capped k since it runs before that validation.
+ */
+#define AS_QUERY_TOPK_MAX 1000
+
+/******************************************************************************
  * TYPES
  *****************************************************************************/
 

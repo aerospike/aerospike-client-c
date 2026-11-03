@@ -344,6 +344,10 @@ as_vector_value_new_float64(as_error* err, const double* data, uint32_t count)
 void
 as_vector_value_destroy(as_vector_value* vec)
 {
+	if (! vec) {
+		return;
+	}
+
 	if (vec->free_data) {
 		cf_free(vec->data);
 	}

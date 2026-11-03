@@ -605,8 +605,10 @@ TEST(vector_getter_type_safety, "typed accessors only return data for the matchi
 	as_vector_value_destroy(v64);
 }
 
-TEST(vector_null_safety, "accessors and from_bytes tolerate NULL arguments")
+TEST(vector_null_safety, "accessors, from_bytes and destroy tolerate NULL arguments")
 {
+	as_vector_value_destroy(NULL);
+
 	assert_null(as_vector_value_get_float16(NULL));
 	assert_null(as_vector_value_get_int32(NULL));
 	assert_null(as_vector_value_get_float32(NULL));

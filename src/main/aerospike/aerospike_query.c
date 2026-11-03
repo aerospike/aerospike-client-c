@@ -375,7 +375,7 @@ as_query_parse_record_async(
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 
-	bool topk_collect = qe->listener == as_query_topk_collect_async;
+	bool topk_collect = qe->listener == as_query_topk_complete_async;
 	uint64_t last_update_time = 0;
 
 	if (topk_collect) {
@@ -529,7 +529,7 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		rec.gen = msg->generation;
 		rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 
-		bool topk_collect = task->callback == as_query_topk_collect;
+		bool topk_collect = task->callback == as_query_topk_complete;
 		uint64_t last_update_time = 0;
 
 		if (topk_collect) {
@@ -2011,7 +2011,7 @@ as_query_topk_partitions(
 	// replay it to the real callback once, in final merged rank order, instead
 	// of streaming records to it as they arrive. See as_query_topk.h.
 	as_query_topk_collector* collector = as_query_topk_collector_create(query, callback, udata);
-	as_status status = as_query_partitions(cluster, err, policy, query, pt, as_query_topk_collect,
+	as_status status = as_query_partitions(cluster, err, policy, query, pt, as_query_topk_complete,
 		collector);
 
 	if (status == AEROSPIKE_OK) {
@@ -2291,10 +2291,10 @@ as_query_topk_partition_async(
 	as_query_topk_collector* collector = as_query_topk_collector_create_async(query, listener, udata);
 
 	as_status status = as_query_partition_async(cluster, err, policy, query, pt,
-		as_query_topk_collect_async, collector, event_loop);
+		as_query_topk_complete_async, collector, event_loop);
 
 	if (status != AEROSPIKE_OK) {
-		// The query failed to start, so as_query_topk_collect_async() will never run.
+		// The query failed to start, so as_query_topk_complete_async() will never run.
 		as_query_topk_collector_destroy(collector);
 	}
 	return status;

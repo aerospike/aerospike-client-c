@@ -876,7 +876,7 @@ as_query_topk_flush(as_query_topk_collector* collector)
 }
 
 bool
-as_query_topk_collect(const as_val* val, void* udata)
+as_query_topk_complete(const as_val* val, void* udata)
 {
 	// The query parser passes records to as_query_topk_collect_record() instead, so
 	// val is always NULL. See as_query_topk.h.
@@ -930,7 +930,7 @@ as_query_topk_collect_record_async(
 }
 
 bool
-as_query_topk_collect_async(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+as_query_topk_complete_async(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
 {
 	as_query_topk_collector* collector = (as_query_topk_collector*)udata;
 

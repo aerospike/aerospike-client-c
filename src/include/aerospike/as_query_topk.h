@@ -35,9 +35,12 @@ extern "C" {
  * has reported, it delivers the global top-k in final rank order to the
  * caller's real callback or listener.
  *
- * A collector is single-use: create it, then drive one query through
- * as_query_topk_collect() or as_query_topk_collect_async() (used as the
- * query's callback/udata in place of the caller's own callback/udata). A
+ * A collector is single-use: create it, then run one query with
+ * as_query_topk_complete() or as_query_topk_complete_async() (and the
+ * collector as udata) in place of the caller's own callback/udata. The query
+ * parser sends each record to as_query_topk_collect_record() or
+ * as_query_topk_collect_record_async(), and the completion callback delivers
+ * the merged top k once every targeted node has reported. A
  * synchronous collector is destroyed by its caller with
  * as_query_topk_collector_destroy(). An asynchronous collector destroys
  * itself; see as_query_topk_collector_create_async().
@@ -76,7 +79,7 @@ as_query_is_topk(const as_query* query)
  * aerospike_query_partitions()) Top-K query. The query's order keys and k
  * must already be validated (as_query_validate_topk()) by the caller.
  *
- * Pass as_query_topk_collect() (with the returned collector as udata) to the
+ * Pass as_query_topk_complete() (with the returned collector as udata) to the
  * underlying as_query_partitions() call in place of the caller's own
  * callback/udata. The query parser then sends each record to
  * as_query_topk_collect_record().
@@ -102,7 +105,7 @@ as_query_topk_collector_create(
  * aerospike_query_partitions_async()) Top-K query. The query's order keys and
  * k must already be validated (as_query_validate_topk()) by the caller.
  *
- * Pass as_query_topk_collect_async() (with the returned collector as udata)
+ * Pass as_query_topk_complete_async() (with the returned collector as udata)
  * to the underlying as_query_partition_async() call in place of the caller's
  * own listener/udata. The query parser then sends each record to
  * as_query_topk_collect_record_async().
@@ -130,7 +133,7 @@ as_query_topk_collector_create_async(
  * NULL.
  */
 AS_EXTERN bool
-as_query_topk_collect(const as_val* val, void* udata);
+as_query_topk_complete(const as_val* val, void* udata);
 
 /**
  * @private
@@ -178,7 +181,7 @@ as_query_topk_collect_record(
  * each case the collector then destroys itself.
  */
 AS_EXTERN bool
-as_query_topk_collect_async(
+as_query_topk_complete_async(
 	as_error* err, as_record* record, void* udata, as_event_loop* event_loop
 	);
 
@@ -199,7 +202,7 @@ as_query_topk_collect_record_async(
  * @private
  * Destroy the collector and any buffered records it still owns (e.g.
  * because as_query_partitions() failed before completion, so
- * as_query_topk_collect() never observed the val == NULL completion
+ * as_query_topk_complete() never observed the val == NULL completion
  * signal, or because an asynchronous query failed to start).
  */
 AS_EXTERN void

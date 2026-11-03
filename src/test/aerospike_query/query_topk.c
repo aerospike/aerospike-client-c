@@ -800,7 +800,7 @@ TEST(query_topk_merge_integer_desc,
 	as_record_destroy(&dup);
 
 	// Trigger the flush (val == NULL signals every node has reported).
-	as_query_topk_collect(NULL, collector);
+	as_query_topk_complete(NULL, collector);
 	as_query_topk_collector_destroy(collector);
 
 	// Expect the true top 3 by score desc: 50 (0xA1), 40 (0xB1), 30 (0xA2).
@@ -847,7 +847,7 @@ TEST(query_topk_merge_bounded, "topk collector keeps only the best k of many can
 	// duplicate of a kept record.
 	topk_test_collect_many_rec(collector, 0, 500);
 
-	as_query_topk_collect(NULL, collector);
+	as_query_topk_complete(NULL, collector);
 	as_query_topk_collector_destroy(collector);
 
 	assert_int_eq(g_topk_test_count, 5);
@@ -893,7 +893,7 @@ TEST(query_topk_merge_duplicate_later_update_wins,
 	topk_test_collect_lut(collector, 0xC1, 20, 300);
 	topk_test_collect_lut(collector, 0xC1, 60, 150);
 
-	as_query_topk_collect(NULL, collector);
+	as_query_topk_complete(NULL, collector);
 	as_query_topk_collector_destroy(collector);
 
 	assert_int_eq(g_topk_test_count, 3);
@@ -925,7 +925,7 @@ TEST(query_topk_merge_duplicate_later_update_ranks_higher,
 	topk_test_collect_lut(collector, 0xA1, 60, 200);
 	topk_test_collect_lut(collector, 0xD1, 45, 100);
 
-	as_query_topk_collect(NULL, collector);
+	as_query_topk_complete(NULL, collector);
 	as_query_topk_collector_destroy(collector);
 
 	assert_int_eq(g_topk_test_count, 3);
@@ -976,7 +976,7 @@ TEST(query_topk_merge_string_case_insensitive_asc,
 	as_record_destroy(&s2);
 	as_record_destroy(&s3);
 
-	as_query_topk_collect(NULL, collector);
+	as_query_topk_complete(NULL, collector);
 	as_query_topk_collector_destroy(collector);
 
 	assert_int_eq(g_topk_test_count, 2);
@@ -1011,7 +1011,7 @@ TEST(query_topk_merge_bytes_asc, "topk collector orders BYTES by byte order, the
 		topk_test_collect_rec(collector, &rec);
 	}
 
-	as_query_topk_collect(NULL, collector);
+	as_query_topk_complete(NULL, collector);
 	as_query_topk_collector_destroy(collector);
 
 	// 00 ff < 01 < 01 02, and 01 02 00 is cut by k.
@@ -1044,7 +1044,7 @@ TEST(query_topk_merge_double_nan_and_zero,
 		topk_test_collect_rec(collector, &rec);
 	}
 
-	as_query_topk_collect(NULL, collector);
+	as_query_topk_complete(NULL, collector);
 	as_query_topk_collector_destroy(collector);
 
 	// NaN (3), 2.0 (5), 1.0 (1), then 0.0 (2) and -0.0 (4) tie and rank by digest.
@@ -1092,7 +1092,7 @@ TEST(query_topk_merge_two_keys,
 		topk_test_collect_rec(collector, &rec);
 	}
 
-	as_query_topk_collect(NULL, collector);
+	as_query_topk_complete(NULL, collector);
 	as_query_topk_collector_destroy(collector);
 
 	assert_int_eq(g_topk_test_count, 5);
@@ -1176,7 +1176,7 @@ TEST(query_topk_merge_copies_values,
 	as_record_set_map(&r2, "map", (as_map*)map);
 	topk_test_collect_rec(collector, &r2);
 
-	as_query_topk_collect(NULL, collector);
+	as_query_topk_complete(NULL, collector);
 	as_query_topk_collector_destroy(collector);
 
 	as_record* rec = g_topk_test_kept;
@@ -1284,7 +1284,7 @@ TEST(query_topk_merge_async,
 	assert_int_eq(result.count, 0);
 
 	// Completion delivers the merged result, then destroys the collector.
-	as_query_topk_collect_async(NULL, NULL, collector, NULL);
+	as_query_topk_complete_async(NULL, NULL, collector, NULL);
 
 	assert_int_eq(result.count, 3);
 	assert_int_eq(result.scores[0], 50);
@@ -1304,7 +1304,7 @@ TEST(query_topk_merge_async_error,
 
 	as_error err;
 	as_error_set_message(&err, AEROSPIKE_ERR_TIMEOUT, "timeout");
-	as_query_topk_collect_async(&err, NULL, collector, NULL);
+	as_query_topk_complete_async(&err, NULL, collector, NULL);
 
 	assert_int_eq(result.count, 0);
 	assert_int_eq(result.ends, 0);
@@ -1319,7 +1319,7 @@ TEST(query_topk_merge_async_listener_stops,
 
 	topk_test_collect_async_rec(collector, 0xA1, 50);
 	topk_test_collect_async_rec(collector, 0xB1, 40);
-	as_query_topk_collect_async(NULL, NULL, collector, NULL);
+	as_query_topk_complete_async(NULL, NULL, collector, NULL);
 
 	assert_int_eq(result.count, 1);
 	assert_int_eq(result.scores[0], 50);
@@ -1372,7 +1372,7 @@ TEST(query_topk_merge_buffer_failure,
 	as_record_destroy(&bad);
 
 	// as_query_partitions() still signals completion after the false return.
-	as_query_topk_collect(NULL, collector);
+	as_query_topk_complete(NULL, collector);
 
 	as_error err;
 	as_error_init(&err);

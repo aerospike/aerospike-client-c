@@ -738,6 +738,13 @@ typedef struct as_query_s {
 	 */
 	bool order_by_overflow;
 
+	/**
+	 * @private
+	 * Set when as_query_then_order_by() is called before as_query_order_by().
+	 * Not cleared by a later as_query_order_by() call.
+	 */
+	bool then_order_by_first;
+
 } as_query;
 
 //---------------------------------
@@ -1155,10 +1162,9 @@ as_query_order_by(
  * records that tie on the first. Follows the same rules as as_query_order_by().
  * Keeps the k set by as_query_top_k().
  *
- * Calling it before as_query_order_by() is not an error: the key becomes the
- * first order key, and a later as_query_order_by() call replaces it. Adding a
- * third order key is rejected with AEROSPIKE_ERR_PARAM when the query is
- * executed.
+ * Calling it before as_query_order_by(), even if as_query_order_by() is called
+ * later, or adding a third order key, is rejected with AEROSPIKE_ERR_PARAM when
+ * the query is executed.
  *
  * @code
  * as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,

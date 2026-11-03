@@ -71,7 +71,8 @@ typedef struct as_query_topk_collector_s as_query_topk_collector;
 static inline bool
 as_query_has_topk_settings(const as_query* query)
 {
-	return query->order_by.defined || query->top_k_defined || query->top_k > 0;
+	return query->order_by.defined || query->then_order_by_first || query->top_k_defined ||
+		query->top_k > 0;
 }
 
 /**

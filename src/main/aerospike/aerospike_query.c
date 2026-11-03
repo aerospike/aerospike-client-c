@@ -829,7 +829,7 @@ as_query_validate_topk(
 
 	// An order key without k is not checked here: it is sent to the server, which rejects it
 	// with a reason. A k set to 0 is rejected like any other k out of range.
-	if (query->top_k > 1000 || (query->top_k_defined && query->top_k == 0)) {
+	if (query->top_k > AS_QUERY_TOPK_MAX || (query->top_k_defined && query->top_k == 0)) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM, "topK must be in [1, 1000]; got %u",
 			query->top_k);
 	}

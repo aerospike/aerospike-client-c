@@ -637,27 +637,35 @@ static as_query_topk_collector*
 as_query_topk_collector_new(const as_query* query, void* udata)
 {
 	as_query_topk_collector* collector = cf_malloc(sizeof(as_query_topk_collector));
+
+	// A k outside [1, AS_QUERY_TOPK_MAX] is rejected by as_query_validate_topk() before
+	// any record is collected, but that validation runs after this collector already
+	// exists (see as_query_topk_collector_create[_async]() callers). Never size or run
+	// the heap/index from the raw, unvalidated k - clamp here so an absurd k (observed:
+	// up to UINT32_MAX) can't allocate gigabytes or hang the index-size loop below.
 	uint32_t k = query->top_k;
+	uint32_t capped_k = k == 0 ? 1 : (k < AS_QUERY_TOPK_MAX ? k : AS_QUERY_TOPK_MAX);
 
 	collector->order_by = query->order_by;
 	collector->then_order_by = query->then_order_by;
-	collector->k = k;
+	collector->k = capped_k;
 	collector->callback = NULL;
 	collector->listener = NULL;
 	collector->udata = udata;
 	collector->failed = false;
 	pthread_mutex_init(&collector->lock, NULL);
-	collector->heap = cf_malloc(sizeof(as_record*) * k);
+	collector->heap = cf_malloc(sizeof(as_record*) * capped_k);
 	collector->heap_n = 0;
 
-	// At least twice k slots keep the probe runs short.
-	uint32_t index_size = 1;
+	// At least twice k slots keep the probe runs short. Computed in uint64_t so this
+	// can't wrap back to 0 and loop forever even if capped_k's cap is ever raised.
+	uint64_t index_size = 1;
 
-	while (index_size < 2 * k) {
+	while (index_size < 2 * (uint64_t)capped_k) {
 		index_size <<= 1;
 	}
-	collector->index = cf_calloc(index_size, sizeof(as_record*));
-	collector->index_mask = index_size - 1;
+	collector->index = cf_calloc((size_t)index_size, sizeof(as_record*));
+	collector->index_mask = (uint32_t)index_size - 1;
 	return collector;
 }
 

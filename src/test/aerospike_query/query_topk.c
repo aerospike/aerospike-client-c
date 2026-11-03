@@ -231,10 +231,8 @@ TEST(query_topk_validate_k_out_of_range, "top_k > 1000 is rejected")
 	as_query_destroy(&query);
 }
 
-// CLIENT-5856 regression: the Top-K collector used to be sized from top_k before top_k was
-// validated, so a huge top_k hung (2 * UINT32_MAX overflows the index-size doubling loop) or
-// allocated gigabytes, instead of failing fast with the same error as a moderately-out-of-range
-// top_k (e.g. 1001). If this hangs, the collector is once again trusting the raw top_k.
+// A huge top_k must fail with the same error as a moderately-out-of-range top_k (e.g. 1001),
+// not hang or allocate gigabytes.
 TEST(query_topk_validate_k_huge, "a huge top_k fails fast instead of hanging or over-allocating")
 {
 	uint32_t huge_values[] = {UINT32_MAX, 1u << 31, 1u << 30};
@@ -671,8 +669,6 @@ TEST(query_topk_validate_async, "order_by/top_k is validated on asynchronous que
 	as_query_destroy(&query);
 }
 
-// CLIENT-5856 regression, async path: as_query_topk_partition_async() creates its collector
-// before as_query_validate_topk() runs, same as the sync path in query_topk_validate_k_huge.
 TEST(query_topk_validate_async_k_huge, "a huge top_k fails fast on asynchronous queries too")
 {
 	uint32_t huge_values[] = {UINT32_MAX, 1u << 31, 1u << 30};
@@ -940,11 +936,8 @@ topk_test_huge_cb(const as_val* val, void* udata)
 	return true;
 }
 
-// CLIENT-5856 regression: as_query_topk_collector_create() used to size its heap/index
-// straight from the caller's top_k. A huge top_k is always rejected before any record is
-// collected in a real query (see query_topk_validate_k_huge), so this exercises the collector
-// directly: it must still size itself from a capped k, not UINT32_MAX, both so creation stays
-// cheap and so collector->k itself can't let every fed candidate past the (undersized) heap.
+// Drives the collector directly with top_k = UINT32_MAX: creation must stay cheap, and
+// collector->k must still cap how many candidates the heap accepts.
 TEST(query_topk_collector_new_caps_huge_k,
 	"the collector sizes its heap/index from a capped k, not the raw top_k")
 {

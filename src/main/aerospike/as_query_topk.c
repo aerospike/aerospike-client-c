@@ -638,11 +638,9 @@ as_query_topk_collector_new(const as_query* query, void* udata)
 {
 	as_query_topk_collector* collector = cf_malloc(sizeof(as_query_topk_collector));
 
-	// A k outside [1, AS_QUERY_TOPK_MAX] is rejected by as_query_validate_topk() before
-	// any record is collected, but that validation runs after this collector already
-	// exists (see as_query_topk_collector_create[_async]() callers). Never size or run
-	// the heap/index from the raw, unvalidated k - clamp here so an absurd k (observed:
-	// up to UINT32_MAX) can't allocate gigabytes or hang the index-size loop below.
+	// This runs before as_query_validate_topk(), so k may be any uint32_t value. Clamp it
+	// to size the heap/index so an out-of-range k can't allocate gigabytes or hang the
+	// index-size loop below.
 	uint32_t k = query->top_k;
 	uint32_t capped_k = k == 0 ? 1 : (k < AS_QUERY_TOPK_MAX ? k : AS_QUERY_TOPK_MAX);
 

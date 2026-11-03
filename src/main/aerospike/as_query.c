@@ -1130,9 +1130,12 @@ as_query_from_bytes(as_query* query, const uint8_t* bytes, uint32_t bytes_size)
 		goto HandleError;
 	}
 
-	// Order by / top_k. Older serialized queries do not have these fields, but
-	// as_query_from_bytes() is only ever used with buffers produced by this
-	// client's own as_query_to_bytes(), so no version negotiation is needed.
+	// Clients without Top-K end the buffer here, so a query saved by one of them
+	// still decodes, with Top-K unset.
+	if (pk.offset == pk.length) {
+		return true;
+	}
+
 	if (! as_query_unpack_order_by(&pk, &query->order_by)) {
 		goto HandleError;
 	}

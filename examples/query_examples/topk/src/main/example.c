@@ -71,6 +71,7 @@ static void cleanup(aerospike* p_as);
 static bool insert_records(aerospike* p_as);
 static as_status query_top_k_scores(aerospike* p_as, as_error* err);
 static as_status query_top_k_groups(aerospike* p_as, as_error* err);
+static as_status check_record_count(as_error* err, as_status status, int n_records);
 static bool print_record_cb(const as_val* p_val, void* udata);
 
 //==========================================================
@@ -171,10 +172,12 @@ query_top_k_scores(aerospike* p_as, as_error* err)
 
 	LOG("executing query: order by score desc limit %d", TOP_K);
 
-	as_status status = aerospike_query_foreach(p_as, err, NULL, &query, print_record_cb, NULL);
+	int n_records = 0;
+	as_status status = aerospike_query_foreach(p_as, err, NULL, &query, print_record_cb,
+			&n_records);
 
 	as_query_destroy(&query);
-	return status;
+	return check_record_count(err, status, n_records);
 }
 
 // ORDER BY group ASC, score DESC LIMIT 5: every group appears on many
@@ -193,16 +196,30 @@ query_top_k_groups(aerospike* p_as, as_error* err)
 
 	LOG("executing query: order by group asc, score desc limit %d", TOP_K);
 
-	as_status status = aerospike_query_foreach(p_as, err, NULL, &query, print_record_cb, NULL);
+	int n_records = 0;
+	as_status status = aerospike_query_foreach(p_as, err, NULL, &query, print_record_cb,
+			&n_records);
 
 	as_query_destroy(&query);
+	return check_record_count(err, status, n_records);
+}
+
+// Every query in this example has more than TOP_K matching records, so a
+// successful query returns exactly TOP_K.
+static as_status
+check_record_count(as_error* err, as_status status, int n_records)
+{
+	if (status == AEROSPIKE_OK && n_records != TOP_K) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "expected %d records, got %d",
+				TOP_K, n_records);
+	}
 	return status;
 }
 
 static bool
 print_record_cb(const as_val* p_val, void* udata)
 {
-	(void)udata;
+	int* n_records = (int*)udata;
 
 	if (! p_val) {
 		LOG("query callback returned null - query is complete");
@@ -216,6 +233,7 @@ print_record_cb(const as_val* p_val, void* udata)
 		return true;
 	}
 
+	(*n_records)++;
 	example_dump_record(p_rec);
 	return true;
 }

@@ -2733,6 +2733,7 @@ aerospike_query_async(
 			policy->replica, &query->parts_all, query->paginate, n_nodes, err);
 
 		if (status != AEROSPIKE_OK) {
+			cf_free(pt);
 			return status;
 		}
 

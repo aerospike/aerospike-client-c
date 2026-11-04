@@ -259,6 +259,13 @@ query_knn(aerospike* p_as, as_error* err, as_vector_distance_metric metric, as_o
 			print_neighbor_cb, &rank);
 
 	as_query_destroy(&query);
+
+	// The server leaves out a record whose distance can't be computed, so a
+	// short result means the distance failed on the server.
+	if (status == AEROSPIKE_OK && rank != TOP_K) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "expected %d neighbors, got %d",
+				TOP_K, rank);
+	}
 	return status;
 }
 

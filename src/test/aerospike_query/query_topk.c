@@ -153,6 +153,45 @@ TEST(query_topk_serialize, "as_query_to_bytes()/as_query_from_bytes() round-trip
 	as_query_destroy(&query2);
 }
 
+TEST(query_topk_deserialize_without_topk_fields,
+	"as_query_from_bytes() decodes a query serialized by a client without Top-K")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_select_init(&query, 1);
+	as_query_select(&query, "score");
+	query.max_records = 50;
+
+	uint8_t* bytes = NULL;
+	uint32_t bytes_size = 0;
+	assert_true(as_query_to_bytes(&query, &bytes, &bytes_size));
+
+	// Drop the Top-K fields (two undefined order keys, k, and three flags),
+	// which a client without Top-K doesn't write.
+	uint8_t topk_fields[] = {0xc2, 0xc2, 0x00, 0xc2, 0xc2, 0xc2};
+	uint32_t old_size = bytes_size - sizeof(topk_fields);
+	assert_int_eq(memcmp(bytes + old_size, topk_fields, sizeof(topk_fields)), 0);
+
+	as_query query2;
+	bool decoded = as_query_from_bytes(&query2, bytes, old_size);
+	as_query* query3 = as_query_from_bytes_new(bytes, old_size);
+	cf_free(bytes);
+
+	assert_true(decoded);
+	assert_true(as_query_compare(&query, &query2));
+	assert_false(query2.order_by.defined);
+	assert_false(query2.top_k_defined);
+
+	assert_not_null(query3);
+	assert_string_eq(query3->select.entries[0], "score");
+	assert_int_eq(query3->max_records, 50);
+	assert_false(query3->order_by.defined);
+
+	as_query_destroy(&query);
+	as_query_destroy(&query2);
+	as_query_destroy(query3);
+}
+
 TEST(query_topk_compare, "as_query_compare() distinguishes different order_by/top_k")
 {
 	as_query q1;
@@ -1940,6 +1979,7 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 {
 	suite_add(query_topk_setters);
 	suite_add(query_topk_serialize);
+	suite_add(query_topk_deserialize_without_topk_fields);
 	suite_add(query_topk_compare);
 	suite_add(query_topk_validate_top_k_without_order_by);
 	suite_add(query_topk_validate_k_out_of_range);

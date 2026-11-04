@@ -167,7 +167,8 @@ typedef struct as_vector_value_s {
  * @param count		Number of elements in `data`.
  *
  * @return New vector, or NULL with `err` set to AEROSPIKE_ERR_PARAM if `data`
- *		   is NULL or `count` is outside the server's supported range.
+ *		   is NULL, `count` is outside the server's supported range, or an
+ *		   element is a NaN or infinity bit pattern.
  *
  * @relatesalso as_vector_value
  */
@@ -226,7 +227,8 @@ as_vector_value_new_int32(as_error* err, const int32_t* data, uint32_t count);
  * @param count		Number of elements in `data`.
  *
  * @return New vector, or NULL with `err` set to AEROSPIKE_ERR_PARAM if `data`
- *		   is NULL or `count` is outside the server's supported range.
+ *		   is NULL, `count` is outside the server's supported range, or an
+ *		   element is NaN or infinity.
  *
  * @relatesalso as_vector_value
  */
@@ -242,7 +244,8 @@ as_vector_value_new_float32(as_error* err, const float* data, uint32_t count);
  * @param count		Number of elements in `data`.
  *
  * @return New vector, or NULL with `err` set to AEROSPIKE_ERR_PARAM if `data`
- *		   is NULL or `count` is outside the server's supported range.
+ *		   is NULL, `count` is outside the server's supported range, or an
+ *		   element is NaN or infinity.
  *
  * @relatesalso as_vector_value
  */
@@ -300,7 +303,9 @@ as_vector_element_type_max_dimensions(as_vector_element_type type)
  * @param vec		Vector to serialize.
  * @param bytes		Uninitialized as_bytes to initialize with the serialized vector.
  *
- * @return true on success, or false if `vec` is invalid or `bytes` is NULL.
+ * @return true on success, or false if `bytes` is NULL or `vec` is invalid:
+ *		   NULL, or a version, dimension count or element that the
+ *		   constructors reject, including a NaN or infinite element.
  *
  * @relatesalso as_vector_value
  */
@@ -326,8 +331,9 @@ as_vector_value_to_bytes(const as_vector_value* vec, as_bytes* bytes);
  *
  * @param vec		Vector to serialize.
  *
- * @return New as_bytes on success, or NULL if `vec` is invalid. Destroy with
- *		   as_bytes_destroy(), or let the owning collection do so.
+ * @return New as_bytes on success, or NULL if `vec` is invalid, as described
+ *		   in as_vector_value_to_bytes(). Destroy with as_bytes_destroy(), or
+ *		   let the owning collection do so.
  *
  * @relatesalso as_vector_value
  */

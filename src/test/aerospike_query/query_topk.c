@@ -1208,6 +1208,112 @@ TEST(query_topk_merge_bytes_asc, "topk collector orders BYTES by byte order, the
 	assert_int_eq(g_topk_test_digests[2], 1);
 }
 
+// Vectors, HLLs, and language blobs are as_bytes subtypes, but a BYTES order key must treat
+// only AS_BYTES_BLOB as a real key - every other subtype ranks last like a missing bin, tied
+// with it and with each other in digest order, regardless of direction.
+// Collects (and destroys) the record within this frame, while raw/bytes are still live -
+// as_record_set_bytes() stores the as_bytes pointer directly (no deep copy), so the record
+// must not outlive the buffer it points at.
+static void
+topk_test_collect_blob_subtype(as_query_topk_collector* collector, uint8_t digest_byte, as_bytes_type type)
+{
+	as_record rec;
+	topk_test_init_rec(&rec, digest_byte, 1);
+
+	uint8_t raw[] = {0xAA};
+	as_bytes bytes;
+	as_bytes_init_wrap(&bytes, raw, sizeof(raw), false);
+	as_bytes_set_type(&bytes, type);
+	as_record_set_bytes(&rec, "blob", &bytes);
+
+	topk_test_collect_rec(collector, &rec);
+}
+
+static void
+topk_test_collect_bytes_subtypes(as_query_topk_collector* collector)
+{
+	as_record b1;
+	topk_test_init_rec(&b1, 1, 1);
+	uint8_t raw1[] = {0x01};
+	as_record_set_raw(&b1, "blob", raw1, sizeof(raw1));
+	topk_test_collect_rec(collector, &b1);
+
+	as_record b2;
+	topk_test_init_rec(&b2, 2, 1);
+	uint8_t raw2[] = {0x09};
+	as_record_set_raw(&b2, "blob", raw2, sizeof(raw2));
+	topk_test_collect_rec(collector, &b2);
+
+	topk_test_collect_blob_subtype(collector, 3, AS_BYTES_VECTOR);
+	topk_test_collect_blob_subtype(collector, 4, AS_BYTES_HLL);
+
+	as_record missing;
+	topk_test_init_rec(&missing, 5, 0);
+	topk_test_collect_rec(collector, &missing);
+
+	topk_test_collect_blob_subtype(collector, 6, AS_BYTES_JAVA);
+}
+
+TEST(query_topk_merge_bytes_subtypes_rank_last_asc,
+	"topk collector ranks vector/HLL/language-blob subtypes last, tied with a missing key, for a BYTES order key ascending")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "blob", AS_QUERY_ORDER_BY_BYTES, AS_ORDER_ASCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 10);
+
+	g_topk_test_count = 0;
+
+	as_query_topk_collector* collector = as_query_topk_collector_create(&query, topk_test_collect_cb, NULL);
+	as_query_destroy(&query);
+
+	topk_test_collect_bytes_subtypes(collector);
+
+	as_query_topk_complete(NULL, collector);
+	as_query_topk_collector_destroy(collector);
+
+	// Plain blobs rank first in byte order (01 < 09). The vector, HLL, missing-key, and
+	// language-blob candidates all tie at NIL, so they fall back to digest-ascending order.
+	assert_int_eq(g_topk_test_count, 6);
+	assert_int_eq(g_topk_test_digests[0], 1);
+	assert_int_eq(g_topk_test_digests[1], 2);
+	assert_int_eq(g_topk_test_digests[2], 3);
+	assert_int_eq(g_topk_test_digests[3], 4);
+	assert_int_eq(g_topk_test_digests[4], 5);
+	assert_int_eq(g_topk_test_digests[5], 6);
+}
+
+TEST(query_topk_merge_bytes_subtypes_rank_last_desc,
+	"topk collector ranks vector/HLL/language-blob subtypes last, tied with a missing key, for a BYTES order key descending")
+{
+	as_query query;
+	as_query_init(&query, NAMESPACE, SET);
+	as_query_order_by(&query, "blob", AS_QUERY_ORDER_BY_BYTES, AS_ORDER_DESCENDING,
+		AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+	as_query_top_k(&query, 10);
+
+	g_topk_test_count = 0;
+
+	as_query_topk_collector* collector = as_query_topk_collector_create(&query, topk_test_collect_cb, NULL);
+	as_query_destroy(&query);
+
+	topk_test_collect_bytes_subtypes(collector);
+
+	as_query_topk_complete(NULL, collector);
+	as_query_topk_collector_destroy(collector);
+
+	// Direction only flips the plain-blob order (09 before 01). The NIL-tied group still
+	// falls back to digest-ascending order, unaffected by DESC.
+	assert_int_eq(g_topk_test_count, 6);
+	assert_int_eq(g_topk_test_digests[0], 2);
+	assert_int_eq(g_topk_test_digests[1], 1);
+	assert_int_eq(g_topk_test_digests[2], 3);
+	assert_int_eq(g_topk_test_digests[3], 4);
+	assert_int_eq(g_topk_test_digests[4], 5);
+	assert_int_eq(g_topk_test_digests[5], 6);
+}
+
 TEST(query_topk_merge_double_nan_and_zero,
 	"topk collector ranks NaN above every double and -0.0 equal to 0.0")
 {
@@ -1909,6 +2015,8 @@ SUITE(query_topk, "Top-K (order_by/top_k) query tests")
 	suite_add(query_topk_collector_new_caps_huge_k);
 	suite_add(query_topk_merge_string_case_insensitive_asc);
 	suite_add(query_topk_merge_bytes_asc);
+	suite_add(query_topk_merge_bytes_subtypes_rank_last_asc);
+	suite_add(query_topk_merge_bytes_subtypes_rank_last_desc);
 	suite_add(query_topk_merge_double_nan_and_zero);
 	suite_add(query_topk_merge_two_keys);
 	suite_add(query_topk_merge_copies_values);

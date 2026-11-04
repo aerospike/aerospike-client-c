@@ -271,7 +271,8 @@ as_query_topk_extract_key(const as_record* rec, const as_query_order_by_field* o
 			break;
 
 		case AS_QUERY_ORDER_BY_BYTES:
-			if (val->type == AS_BYTES) {
+			// Vector/HLL/language-blob subtypes must not be byte-sorted - only a plain blob is a valid key.
+			if (val->type == AS_BYTES && as_bytes_get_type((as_bytes*)val) == AS_BYTES_BLOB) {
 				key->v.bytes.p = as_bytes_get((as_bytes*)val);
 				key->v.bytes.len = as_bytes_size((as_bytes*)val);
 				key->is_nil = false;

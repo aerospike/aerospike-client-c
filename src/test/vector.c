@@ -864,7 +864,38 @@ TEST(vector_serialization_rejects_invalid_vectors, "serialization rejects vector
 	assert_false(as_vector_value_to_bytes(vec, &bytes));
 	assert_null(as_vector_value_to_bytes_new(vec));
 
+	vec->dimensions = 1;
+	((float*)vec->data)[0] = NAN;
+	assert_false(as_vector_value_to_bytes(vec, &bytes));
+	assert_null(as_vector_value_to_bytes_new(vec));
+
 	as_vector_value_destroy(vec);
+}
+
+TEST(vector_non_finite_rejected, "constructors reject NaN and infinite elements")
+{
+	float f32[3] = {NAN, INFINITY, -INFINITY};
+	double f64[3] = {NAN, INFINITY, -INFINITY};
+	uint16_t f16[3] = {0x7e00, 0x7c00, 0xfc00};
+
+	for (uint32_t i = 0; i < 3; i++) {
+		as_error err;
+
+		float d32[2] = {1.0f, f32[i]};
+		assert_null(as_vector_value_new_float32(&err, d32, 2));
+		assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+		assert_string_eq(err.message, "vector: element 1 is not finite (no NaN or infinity)");
+
+		double d64[2] = {1.0, f64[i]};
+		assert_null(as_vector_value_new_float64(&err, d64, 2));
+		assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+		assert_string_eq(err.message, "vector: element 1 is not finite (no NaN or infinity)");
+
+		uint16_t d16[2] = {0x3c00, f16[i]};
+		assert_null(as_vector_value_new_float16(&err, d16, 2));
+		assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+		assert_string_eq(err.message, "vector: element 1 is not finite (no NaN or infinity)");
+	}
 }
 
 //---------------------------------
@@ -1054,6 +1085,32 @@ put_vector_bin(as_error* err, const as_key* key, as_vector_value* vec)
 	return status;
 }
 
+// Put `vec` with its second element replaced by the little-endian bit pattern
+// `bits`, bypassing the client's finite check so that the server's is reached.
+static as_status
+put_vector_with_bits(as_error* err, const as_key* key, as_vector_value* vec, uint64_t bits)
+{
+	as_bytes bytes;
+	as_vector_value_to_bytes(vec, &bytes);
+
+	uint32_t elem_size = as_vector_element_type_size(vec->element_type);
+	uint8_t* elem = bytes.value + AS_VECTOR_VALUE_HEADER_SIZE + elem_size;
+
+	for (uint32_t b = 0; b < elem_size; b++) {
+		elem[b] = (uint8_t)(bits >> (8 * b));
+	}
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_bytes(&rec, "v", &bytes);
+
+	as_status status = aerospike_key_put(as, err, NULL, key, &rec);
+
+	as_record_destroy(&rec);
+	as_vector_value_destroy(vec);
+	return status;
+}
+
 TEST(vector_non_finite_rejected_server, "the server rejects vectors with NaN or infinite elements")
 {
 	if (! server_supports_vector()) {
@@ -1073,28 +1130,28 @@ TEST(vector_non_finite_rejected_server, "the server rejects vectors with NaN or 
 	as_status status = put_vector_bin(&err, &key, vec);
 	assert_int_eq(status, AEROSPIKE_OK);
 
-	// NaN, +Inf, -Inf for each floating-point element type.
-	float f32[3] = {NAN, INFINITY, -INFINITY};
-	double f64[3] = {NAN, INFINITY, -INFINITY};
-	uint16_t f16[3] = {0x7E00, 0x7C00, 0xFC00};
+	// NaN, +Inf, -Inf bit patterns for each floating-point element type.
+	uint64_t f32[3] = {0x7fc00000, 0x7f800000, 0xff800000};
+	uint64_t f64[3] = {0x7ff8000000000000, 0x7ff0000000000000, 0xfff0000000000000};
+	uint64_t f16[3] = {0x7e00, 0x7c00, 0xfc00};
 
 	for (uint32_t i = 0; i < 3; i++) {
-		float d32[2] = {1.0f, f32[i]};
+		float d32[2] = {1.0f, 2.0f};
 		vec = as_vector_value_new_float32(&err, d32, 2);
 		assert_not_null(vec);
-		status = put_vector_bin(&err, &key, vec);
+		status = put_vector_with_bits(&err, &key, vec, f32[i]);
 		assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
 
-		double d64[2] = {1.0, f64[i]};
+		double d64[2] = {1.0, 2.0};
 		vec = as_vector_value_new_float64(&err, d64, 2);
 		assert_not_null(vec);
-		status = put_vector_bin(&err, &key, vec);
+		status = put_vector_with_bits(&err, &key, vec, f64[i]);
 		assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
 
-		uint16_t d16[2] = {0x3C00, f16[i]};
+		uint16_t d16[2] = {0x3c00, 0x4000};
 		vec = as_vector_value_new_float16(&err, d16, 2);
 		assert_not_null(vec);
-		status = put_vector_bin(&err, &key, vec);
+		status = put_vector_with_bits(&err, &key, vec, f16[i]);
 		assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
 	}
 
@@ -2007,6 +2064,7 @@ SUITE(vector, "as_vector_value serialization")
 	suite_add(vector_from_overflow);
 	suite_add(vector_constructor_limits);
 	suite_add(vector_serialization_rejects_invalid_vectors);
+	suite_add(vector_non_finite_rejected);
 	suite_add(vector_native_bin_roundtrip);
 	suite_add(vector_special_float_bits_server);
 	suite_add(vector_non_finite_rejected_server);

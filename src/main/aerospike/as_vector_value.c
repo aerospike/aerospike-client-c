@@ -17,6 +17,7 @@
 #include <aerospike/as_vector_value.h>
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
+#include <math.h>
 #include <string.h>
 
 //---------------------------------
@@ -37,6 +38,49 @@ as_vector_value_alloc(as_vector_element_type element_type, uint32_t count, uint3
 	return vec;
 }
 
+// An all-ones exponent is infinity or NaN.
+static inline bool
+as_vector_float16_bits_are_finite(uint16_t bits)
+{
+	return (bits & 0x7c00) != 0x7c00;
+}
+
+// Index of the first NaN or infinite element, or count if every element is
+// finite, as the server requires.
+static uint32_t
+as_vector_value_find_non_finite(
+	as_vector_element_type element_type, const void* data, uint32_t count
+	)
+{
+	uint32_t i = 0;
+
+	switch (element_type) {
+	case AS_VECTOR_ELEMENT_TYPE_FLOAT16: {
+		const uint16_t* src = (const uint16_t*)data;
+		while (i < count && as_vector_float16_bits_are_finite(src[i])) {
+			i++;
+		}
+		return i;
+	}
+	case AS_VECTOR_ELEMENT_TYPE_FLOAT32: {
+		const float* src = (const float*)data;
+		while (i < count && isfinite(src[i])) {
+			i++;
+		}
+		return i;
+	}
+	case AS_VECTOR_ELEMENT_TYPE_FLOAT64: {
+		const double* src = (const double*)data;
+		while (i < count && isfinite(src[i])) {
+			i++;
+		}
+		return i;
+	}
+	default:
+		return count;
+	}
+}
+
 static bool
 as_vector_value_is_valid(const as_vector_value* vec)
 {
@@ -44,7 +88,9 @@ as_vector_value_is_valid(const as_vector_value* vec)
 		vec->version == AS_VECTOR_VALUE_VERSION &&
 		vec->data != NULL &&
 		vec->dimensions > 0 &&
-		vec->dimensions <= as_vector_element_type_max_dimensions(vec->element_type);
+		vec->dimensions <= as_vector_element_type_max_dimensions(vec->element_type) &&
+		as_vector_value_find_non_finite(vec->element_type, vec->data, vec->dimensions) ==
+			vec->dimensions;
 }
 
 // Error messages match the server's vector validation messages where one exists.
@@ -90,6 +136,14 @@ as_vector_value_new(
 	)
 {
 	if (! as_vector_value_check_new(err, element_type, count, data)) {
+		return NULL;
+	}
+
+	uint32_t non_finite = as_vector_value_find_non_finite(element_type, data, count);
+
+	if (non_finite < count) {
+		as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"vector: element %u is not finite (no NaN or infinity)", non_finite);
 		return NULL;
 	}
 
@@ -283,8 +337,7 @@ as_vector_value_new_float16_from_float(as_error* err, const float* data, uint32_
 	for (uint32_t i = 0; i < count; i++) {
 		uint16_t bits = as_vector_float32_to_float16_bits(data[i]);
 
-		// An all-ones exponent is infinity or NaN, which a vector cannot hold.
-		if ((bits & 0x7c00) == 0x7c00) {
+		if (! as_vector_float16_bits_are_finite(bits)) {
 			as_vector_value_destroy(vec);
 			as_error_update(err, AEROSPIKE_ERR_PARAM,
 				"vector: element %u (%g) is not finite as float16", i, (double)data[i]);

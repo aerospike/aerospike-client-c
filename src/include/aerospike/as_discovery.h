@@ -48,6 +48,21 @@ extern "C" {
  */
 #define AS_DISCOVERY_API_VERSION 1
 
+/**
+ * Default port of hosts resolved by the DNS seed provider from A and AAAA records.
+ */
+#define AS_DNS_DEFAULT_PORT 3000
+
+/**
+ * Default total time in milliseconds of one DNS seed provider refresh.
+ */
+#define AS_DNS_DEFAULT_TIMEOUT_MS 80
+
+/**
+ * Default port of a DNS resolver.
+ */
+#define AS_DNS_DEFAULT_SERVER_PORT 53
+
 //---------------------------------
 // Types
 //---------------------------------
@@ -132,10 +147,11 @@ typedef enum as_discovery_execution_mode_e {
 	 * Refresh runs on the tend thread every refresh_interval_ms / tender_interval
 	 * tends, after that tend's reseed attempt. Only providers whose
 	 * supports_deadline returns true are eligible. The deadline is measured, not
-	 * enforced: a refresh that exceeds tend_refresh_deadline_ms delays that tend
-	 * and its result is discarded. After three consecutive overruns the provider
-	 * is no longer refreshed and the initialization seeds are restored until the
-	 * client is recreated. An on-time refresh resets the count.
+	 * enforced: a refresh that takes longer than tend_refresh_deadline_ms, counted
+	 * in whole milliseconds, delays that tend and its result is discarded. After
+	 * three consecutive overruns the provider is no longer refreshed and the
+	 * initialization seeds are restored until the client is recreated. An on-time
+	 * refresh resets the count.
 	 */
 	AS_DISCOVERY_EXECUTION_TEND
 } as_discovery_execution_mode;
@@ -150,6 +166,110 @@ typedef enum as_translator_kind_e {
 	AS_TRANSLATOR_PORT_MAP,
 	AS_TRANSLATOR_PASS_THROUGH
 } as_translator_kind;
+
+/**
+ * DNS record type queried by the DNS seed provider for each name.
+ *
+ * Default: AS_DNS_RECORD_A
+ *
+ * @ingroup discovery_api
+ */
+typedef enum as_dns_record_type_e {
+	/**
+	 * A and AAAA records: one host per address with as_dns_seed_provider_config.port.
+	 * All A addresses come first, then all AAAA addresses, each family in sorted order.
+	 * At most the first 256 addresses of each family are used; a warning is logged
+	 * when an answer has more.
+	 */
+	AS_DNS_RECORD_A,
+
+	/**
+	 * SRV records: one host per record with the record's port, ordered by priority
+	 * (lowest first), then weight (highest first), then target and port. At most
+	 * the first 256 records in that order are used; a warning is logged when an
+	 * answer has more. Each target is resolved within the same refresh to one
+	 * address: the first sorted A record of the target in the additional section
+	 * of the SRV answer, otherwise an A query, then an AAAA query when the target
+	 * has no A record. AAAA records in the additional section are not used. A
+	 * target that does not resolve is dropped and logged at warning level; targets
+	 * left without time for a query are logged together. When every resolver is
+	 * silent, each target lookup uses up to 3/4 of the time left, so only the
+	 * first few such targets are queried. Records with port 0 are dropped; the
+	 * first is logged, and the rest are counted in one line.
+	 */
+	AS_DNS_RECORD_SRV
+} as_dns_record_type;
+
+/**
+ * Configuration of the built-in DNS seed provider. Initialize it with
+ * as_dns_seed_provider_config_init(), then set names and any other field.
+ * Every string and array is copied when the provider is created; the caller
+ * keeps ownership of them and may change or release them afterwards.
+ *
+ * @ingroup discovery_api
+ */
+typedef struct as_dns_seed_provider_config_s {
+	/**
+	 * DNS names to resolve, queried in order. Required: one or more names, no
+	 * duplicates (compared case-insensitively). A name is queried as an absolute
+	 * name; a trailing dot is optional. No search domain is appended.
+	 */
+	const char* const* names;
+
+	/**
+	 * Number of names.
+	 */
+	uint32_t names_size;
+
+	/**
+	 * Default: AS_DNS_RECORD_A
+	 */
+	as_dns_record_type record_type;
+
+	/**
+	 * Port of hosts resolved from A and AAAA records. Ignored for
+	 * AS_DNS_RECORD_SRV, which uses each record's port. Must be > 0.
+	 * Default: AS_DNS_DEFAULT_PORT
+	 */
+	uint16_t port;
+
+	/**
+	 * TLS name set on every returned host. NULL leaves the TLS name to be
+	 * defaulted the same way as for configured seeds. Must not be empty.
+	 * Default: NULL
+	 */
+	const char* tls_name;
+
+	/**
+	 * Total time in milliseconds of one refresh, across every name, record type,
+	 * SRV target, resolver and UDP or TCP exchange. Must be > 0. It must not
+	 * exceed discovery.tend_refresh_deadline_ms with AS_DISCOVERY_EXECUTION_TEND,
+	 * or discovery.refresh_timeout_ms with AS_DISCOVERY_EXECUTION_THREAD;
+	 * otherwise aerospike_connect() fails with AEROSPIKE_ERR_PARAM. With the
+	 * default tend deadline of 100 ms only a local resolver answers reliably in
+	 * time.
+	 * Default: AS_DNS_DEFAULT_TIMEOUT_MS
+	 */
+	uint32_t timeout_ms;
+
+	/**
+	 * Resolver addresses. Each query tries them in order, starting with the one
+	 * that last answered in the same refresh; see as_discovery_dns_seed_provider().
+	 * Each is a numeric IP address with an optional port: "ip[:port]", with an
+	 * IPv6 address in brackets when a port is given ("[2001:db8::1]:53"). The port
+	 * defaults to AS_DNS_DEFAULT_SERVER_PORT.
+	 * When none is given, the system resolvers are read once when the provider is
+	 * created: the nameserver entries of /etc/resolv.conf, or the DNS servers of
+	 * the active network adapters on Windows.
+	 * Default: NULL (system resolvers)
+	 */
+	const char* const* servers;
+
+	/**
+	 * Number of servers.
+	 */
+	uint32_t servers_size;
+} as_dns_seed_provider_config;
 
 /**
  * An endpoint advertised by a server. All strings are read-only, owned by the
@@ -447,7 +567,8 @@ typedef struct as_discovery_config_s {
 	 * continues with the configured seeds. A refresh that takes longer is
 	 * logged. Must be > 0 when a discovery thread runs: for a provider that
 	 * needs periodic refresh in AS_DISCOVERY_EXECUTION_THREAD, and for every
-	 * binding provider.
+	 * binding provider. With the built-in DNS seed provider it must be >= its
+	 * timeout_ms.
 	 * Default: 10000
 	 */
 	uint32_t refresh_timeout_ms;
@@ -651,6 +772,66 @@ as_discovery_port_map_translator(as_error* err, const struct as_addr_map_s* entr
  */
 AS_EXTERN void
 as_discovery_pass_through_translator(as_address_translator* translator);
+
+/**
+ * Initialize a DNS seed provider configuration with its defaults: no names,
+ * AS_DNS_RECORD_A, AS_DNS_DEFAULT_PORT, no TLS name, AS_DNS_DEFAULT_TIMEOUT_MS
+ * and the system resolvers.
+ *
+ * @ingroup discovery_api
+ */
+AS_EXTERN void
+as_dns_seed_provider_config_init(as_dns_seed_provider_config* config);
+
+/**
+ * Fill provider with the built-in DNS seed provider named "dns", which resolves
+ * the configured names on every refresh.
+ *
+ * Every returned host is a numeric IPv4 or IPv6 address, never a host name, so
+ * the client does no further name resolution when it seeds from the result.
+ * Queries use classic DNS over UDP, retried over TCP when an answer is
+ * truncated; the system resolver library and getaddrinfo() are not used.
+ * Each query asks every resolver at most once, in order, except that within one
+ * refresh the resolver that last answered (with records, an empty answer or
+ * NXDOMAIN) is asked first; every refresh starts with the first resolver. As in
+ * the Java client, each exchange gets 1/(2 * resolvers) of the time left when
+ * the query starts, at least 1 ms, and a TCP retry of a truncated answer gets
+ * the same share again, so a silent resolver delays a query by one share. No
+ * query starts with less than 1 ms left. When every resolver is silent, one A
+ * and AAAA lookup uses up to 3/4 of the time left, so names and SRV targets
+ * after the first few get no query and fail with a timeout. All I/O of one
+ * refresh is bounded by timeout_ms. An answer with more than 32 CNAME records
+ * is treated as malformed. Hosts are deduplicated by address and port, keeping
+ * the first occurrence, and returned in the same order for the same DNS answers.
+ *
+ * needs_periodic_refresh and supports_deadline return true. The provider
+ * creates no thread; it runs in the context selected by
+ * discovery.execution_mode. timeout_ms must not exceed
+ * discovery.tend_refresh_deadline_ms in AS_DISCOVERY_EXECUTION_TEND, or
+ * discovery.refresh_timeout_ms in AS_DISCOVERY_EXECUTION_THREAD.
+ *
+ * When some names resolve, their hosts are returned and each failed name is
+ * logged at warning level. When no name yields a host (NXDOMAIN, SERVFAIL,
+ * REFUSED, timeout, an empty or malformed answer, or no resolvable SRV target),
+ * refresh returns AEROSPIKE_ERR_SEED_DISCOVERY_FAILED naming each name and its
+ * failure, and the client keeps its previous seeds.
+ *
+ * The configuration is validated and copied, and the system resolvers are read,
+ * once; later changes to the configuration or to the system resolvers have no
+ * effect. An invalid value returns AEROSPIKE_ERR_PARAM with a message naming
+ * it, as does finding no usable system resolver when servers is empty;
+ * provider is then left untouched.
+ *
+ * On success the caller owns provider->udata until it is registered with
+ * as_config_set_seed_provider(), which then takes ownership; release an
+ * unregistered table with provider->destroy(provider->udata). Most callers
+ * should use as_config_set_dns_seed_provider().
+ *
+ * @ingroup discovery_api
+ */
+AS_EXTERN as_status
+as_discovery_dns_seed_provider(as_error* err, const as_dns_seed_provider_config* config,
+	as_seed_provider* provider);
 
 /**
  * Complete one translation: apply the miss policy, validate the mapping and

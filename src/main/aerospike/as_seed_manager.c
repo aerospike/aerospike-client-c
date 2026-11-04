@@ -27,6 +27,8 @@
 #include <limits.h>
 #include <string.h>
 
+#include "as_dns_internal.h"
+
 //---------------------------------
 // Macros
 //---------------------------------
@@ -619,8 +621,9 @@ refresh_thread(void* udata)
 		as_error provider_err;
 		as_seed_candidates candidates;
 		uint64_t begin = cf_getms();
+		uint64_t begin_ns = cf_getns();
 		as_status status = call_provider(m, &provider_err, &candidates);
-		uint64_t elapsed = cf_getms() - begin;
+		uint64_t elapsed = (cf_getns() - begin_ns) / (1000 * 1000);
 		bool released = inflight_end(m->inflight);
 
 		if (elapsed > m->refresh_timeout_ms) {
@@ -759,6 +762,24 @@ start_thread(as_seed_manager* m, as_error* err)
 // Static Functions: validation
 //---------------------------------
 
+// The refresh context carries no deadline, so only the built-in DNS provider, whose timeout is
+// known, can be range checked.
+static as_status
+check_dns_timeout(
+	as_error* err, const as_seed_provider* provider, uint32_t limit, const char* limit_name,
+	const char* advice
+	)
+{
+	uint32_t dns_timeout;
+
+	if (as_dns_seed_provider_timeout(provider, &dns_timeout) && dns_timeout > limit) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"DNS seed provider timeout_ms %u exceeds discovery %s %u. %s", dns_timeout,
+			limit_name, limit, advice);
+	}
+	return AEROSPIKE_OK;
+}
+
 static as_status
 validate(
 	as_error* err, const as_config* config, const as_seed_provider* provider, bool* periodic,
@@ -821,12 +842,16 @@ validate(
 				"Invalid discovery tend_refresh_deadline_ms %u: must be > 0 and <= tend interval / 2 (%u)",
 				d->tend_refresh_deadline_ms, max);
 		}
+		return check_dns_timeout(err, provider, d->tend_refresh_deadline_ms,
+			"tend_refresh_deadline_ms", "Lower timeout_ms or use execution_mode thread");
 	}
-	else if (d->refresh_timeout_ms == 0) {
+
+	if (d->refresh_timeout_ms == 0) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"Invalid discovery refresh_timeout_ms 0: must be > 0");
 	}
-	return AEROSPIKE_OK;
+	return check_dns_timeout(err, provider, d->refresh_timeout_ms, "refresh_timeout_ms",
+		"Lower timeout_ms or raise refresh_timeout_ms");
 }
 
 //---------------------------------
@@ -1067,10 +1092,11 @@ as_seed_manager_tend(as_seed_manager* m)
 	as_seed_candidates candidates;
 	uint64_t begin = cf_getns();
 	as_status status = call_provider(m, &provider_err, &candidates);
-	uint64_t elapsed_ns = cf_getns() - begin;
+	uint64_t elapsed = (cf_getns() - begin) / (1000 * 1000);
 	count_refresh(m);
 
-	if (elapsed_ns > (uint64_t)m->tend_refresh_deadline_ms * 1000 * 1000) {
+	// Whole milliseconds, as in the Java client, so a DNS timeout_ms equal to the deadline holds.
+	if (elapsed > m->tend_refresh_deadline_ms) {
 		as_seed_candidates_destroy(&candidates);
 
 		pthread_mutex_lock(&m->lock);
@@ -1079,7 +1105,7 @@ as_seed_manager_tend(as_seed_manager* m)
 
 		as_log_warn("Seed provider %s refresh took %" PRIu64 " ms, exceeding "
 			"tend_refresh_deadline_ms %u. Result discarded. Consecutive overruns: %u",
-			m->provider.name, elapsed_ns / (1000 * 1000), m->tend_refresh_deadline_ms, overruns);
+			m->provider.name, elapsed, m->tend_refresh_deadline_ms, overruns);
 
 		if (overruns >= AS_SEED_MAX_OVERRUNS) {
 			pthread_mutex_lock(&m->lock);

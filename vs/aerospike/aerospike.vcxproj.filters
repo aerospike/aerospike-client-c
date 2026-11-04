@@ -479,6 +479,9 @@
     <ClCompile Include="..\..\src\main\aerospike\as_discovery.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_dns.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\main\aerospike\as_key.c">
       <Filter>Source Files</Filter>
     </ClCompile>

@@ -24,6 +24,8 @@
 		BF8123042F10000100000001 /* discovery_contract.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000100000002 /* discovery_contract.c */; };
 		BF8123042F10000200000001 /* discovery_translation.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000200000002 /* discovery_translation.c */; };
 		BF8123042F10000300000001 /* discovery_seed_manager.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000300000002 /* discovery_seed_manager.c */; };
+		BF8123042F10000400000001 /* discovery_dns.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000400000002 /* discovery_dns.c */; };
+		BF8123042F10000500000001 /* discovery_fake_node.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000500000002 /* discovery_fake_node.c */; };
 		BF998A25307821E2004E6915 /* metrics_basics.c in Sources */ = {isa = PBXBuildFile; fileRef = BF998A24307821E2004E6915 /* metrics_basics.c */; };
 		BFB5EBE522BC26B400CE6E43 /* bit.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB5EBE422BC26B400CE6E43 /* bit.c */; };
 		BFB8A5E21D0F4DB4007B4E22 /* map_index.c in Sources */ = {isa = PBXBuildFile; fileRef = BFB8A5E11D0F4DB4007B4E22 /* map_index.c */; };
@@ -119,6 +121,9 @@
 		BF8123042F10000100000002 /* discovery_contract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_contract.c; path = ../src/test/discovery_contract.c; sourceTree = SOURCE_ROOT; };
 		BF8123042F10000200000002 /* discovery_translation.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_translation.c; path = ../src/test/discovery_translation.c; sourceTree = SOURCE_ROOT; };
 		BF8123042F10000300000002 /* discovery_seed_manager.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_seed_manager.c; path = ../src/test/discovery_seed_manager.c; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000400000002 /* discovery_dns.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_dns.c; path = ../src/test/discovery_dns.c; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000500000002 /* discovery_fake_node.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_fake_node.c; path = ../src/test/discovery_fake_node.c; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000600000002 /* discovery_fake_node.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = discovery_fake_node.h; path = ../src/test/discovery_fake_node.h; sourceTree = SOURCE_ROOT; };
 		BF998A24307821E2004E6915 /* metrics_basics.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = metrics_basics.c; path = ../src/test/metrics_basics.c; sourceTree = SOURCE_ROOT; };
 		BFB5EBE422BC26B400CE6E43 /* bit.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = bit.c; path = ../src/test/aerospike_bit/bit.c; sourceTree = "<group>"; };
 		BFB7BC6E18CAA88000F0D4A0 /* aerospike-test */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "aerospike-test"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -280,6 +285,9 @@
 				BF8123042F10000100000002 /* discovery_contract.c */,
 				BF8123042F10000200000002 /* discovery_translation.c */,
 				BF8123042F10000300000002 /* discovery_seed_manager.c */,
+				BF8123042F10000400000002 /* discovery_dns.c */,
+				BF8123042F10000500000002 /* discovery_fake_node.c */,
+				BF8123042F10000600000002 /* discovery_fake_node.h */,
 				BF998A24307821E2004E6915 /* metrics_basics.c */,
 				BFCF5E9B302383C9004A0E7A /* config_basics.c */,
 				BFC65BFD1C92250B0079DF5A /* aerospike_test.h */,
@@ -547,6 +555,8 @@
 				BF8123042F10000100000001 /* discovery_contract.c in Sources */,
 				BF8123042F10000200000001 /* discovery_translation.c in Sources */,
 				BF8123042F10000300000001 /* discovery_seed_manager.c in Sources */,
+				BF8123042F10000400000001 /* discovery_dns.c in Sources */,
+				BF8123042F10000500000001 /* discovery_fake_node.c in Sources */,
 				BF998A25307821E2004E6915 /* metrics_basics.c in Sources */,
 				BFC65C1C1C9225AB0079DF5A /* test_aerospike.c in Sources */,
 				BFCF5E9C302383C9004A0E7A /* config_basics.c in Sources */,

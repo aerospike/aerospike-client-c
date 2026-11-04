@@ -498,6 +498,7 @@
     <ClCompile Include="..\..\src\main\aerospike\as_config.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_config_file.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_discovery.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_dns.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_conn_recover.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_error.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_event.c" />

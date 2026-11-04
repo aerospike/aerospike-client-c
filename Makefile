@@ -124,6 +124,7 @@ AEROSPIKE += as_config_file.o
 AEROSPIKE += as_conn_recover.o
 AEROSPIKE += as_cluster.o
 AEROSPIKE += as_discovery.o
+AEROSPIKE += as_dns.o
 AEROSPIKE += as_error.o
 AEROSPIKE += as_event.o
 AEROSPIKE += as_event_ev.o

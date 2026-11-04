@@ -31,16 +31,11 @@
 
 #include "test.h"
 #include "aerospike_test.h"
+#include "discovery_fake_node.h"
 
 #if !defined(_WIN32)
-#include <arpa/inet.h>
 #include <dirent.h>
-#include <errno.h>
-#include <netinet/in.h>
-#include <poll.h>
-#include <sys/socket.h>
 #include <unistd.h>
-#define DISCOVERY_FAKE_SERVERS 1
 #endif
 
 // Coverage: U-1 (runtime degradation), U-3, U-5 (through real publication), M-1 to M-12 and a
@@ -2283,310 +2278,6 @@ TEST(seed_thread_stop_in_flight, "stop waits for an in-flight refresh and no cal
 #ifdef DISCOVERY_FAKE_SERVERS
 
 //---------------------------------
-// Static Functions: restartable loopback fake info server
-//---------------------------------
-
-#define FNODE_MAX_CLIENTS 32
-
-typedef struct fnode_s fnode;
-
-struct fnode_s {
-	int listen_fd;
-	uint16_t port;
-	pthread_t thread;
-	pthread_mutex_t lock;
-	uint8_t stop;
-	bool running;
-	char name[32];
-
-	// Accept and immediately close every connection.
-	bool reject;
-
-	uint32_t requests;
-	uint32_t tends;
-	uint32_t rejects;
-
-	// Called by the server thread before the first request it answers.
-	void (*on_first)(fnode* n);
-	void* udata;
-	bool seen;
-};
-
-static size_t
-fnode_reply(fnode* n, char* body, char* out, size_t cap)
-{
-	size_t len = 0;
-	char* save = NULL;
-
-	for (char* line = strtok_r(body, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
-		const char* value = "";
-
-		if (strcmp(line, "node") == 0) {
-			value = n->name;
-		}
-		else if (strcmp(line, "partition-generation") == 0) {
-			value = "1";
-		}
-		else if (strcmp(line, "build") == 0) {
-			value = "8.1.0.0";
-		}
-		else if (strcmp(line, "peers-generation") == 0) {
-			value = "1";
-			n->tends++;
-		}
-		else if (strcmp(line, "peers-clear-std") == 0) {
-			value = "1,3000,[]";
-		}
-		else if (strcmp(line, "rebalance-generation") == 0) {
-			value = "0";
-		}
-		else if (strncmp(line, "user-agent-set", 14) == 0) {
-			value = "ok";
-		}
-
-		int w = snprintf(out + len, cap - len, "%s\t%s\n", line, value);
-
-		if (w < 0 || (size_t)w >= cap - len) {
-			break;
-		}
-		len += (size_t)w;
-	}
-	return len;
-}
-
-static bool
-fnode_serve(fnode* n, int fd)
-{
-	uint8_t header[8];
-
-	if (recv(fd, header, sizeof(header), MSG_WAITALL) != (ssize_t)sizeof(header) ||
-		header[0] != 2 || header[1] != 1) {
-		return false;
-	}
-
-	size_t len = 0;
-
-	for (int i = 2; i < 8; i++) {
-		len = (len << 8) | header[i];
-	}
-
-	char body[4096];
-
-	if (len >= sizeof(body) || (len > 0 && recv(fd, body, len, MSG_WAITALL) != (ssize_t)len)) {
-		return false;
-	}
-	body[len] = 0;
-
-	pthread_mutex_lock(&n->lock);
-	bool first = !n->seen;
-	n->seen = true;
-	pthread_mutex_unlock(&n->lock);
-
-	if (first && n->on_first) {
-		n->on_first(n);
-	}
-
-	uint8_t reply[8192];
-	pthread_mutex_lock(&n->lock);
-	n->requests++;
-	size_t reply_len = fnode_reply(n, body, (char*)reply + 8, sizeof(reply) - 8);
-	pthread_mutex_unlock(&n->lock);
-
-	reply[0] = 2;
-	reply[1] = 1;
-
-	for (int i = 0; i < 6; i++) {
-		reply[2 + i] = (uint8_t)(reply_len >> (8 * (5 - i)));
-	}
-	return send(fd, reply, reply_len + 8, MSG_NOSIGNAL) == (ssize_t)(reply_len + 8);
-}
-
-static void*
-fnode_run(void* arg)
-{
-	fnode* n = arg;
-	int clients[FNODE_MAX_CLIENTS];
-	int n_clients = 0;
-
-	while (!as_load_uint8(&n->stop)) {
-		pthread_mutex_lock(&n->lock);
-		bool rejecting = n->reject;
-		pthread_mutex_unlock(&n->lock);
-
-		// A rejecting node also drops established connections, including the tend connection.
-		if (rejecting) {
-			for (int i = 0; i < n_clients; i++) {
-				close(clients[i]);
-			}
-			n_clients = 0;
-		}
-
-		struct pollfd pfds[FNODE_MAX_CLIENTS + 1];
-		pfds[0].fd = n->listen_fd;
-		pfds[0].events = POLLIN;
-		pfds[0].revents = 0;
-
-		for (int i = 0; i < n_clients; i++) {
-			pfds[i + 1].fd = clients[i];
-			pfds[i + 1].events = POLLIN;
-			pfds[i + 1].revents = 0;
-		}
-
-		if (poll(pfds, (nfds_t)(n_clients + 1), 20) <= 0) {
-			continue;
-		}
-
-		for (int i = n_clients - 1; i >= 0; i--) {
-			if (pfds[i + 1].revents && !fnode_serve(n, clients[i])) {
-				close(clients[i]);
-				clients[i] = clients[--n_clients];
-			}
-		}
-
-		if ((pfds[0].revents & POLLIN) && n_clients < FNODE_MAX_CLIENTS) {
-			int fd = accept(n->listen_fd, NULL, NULL);
-
-			if (fd < 0) {
-				continue;
-			}
-
-			pthread_mutex_lock(&n->lock);
-			bool reject = n->reject;
-
-			if (reject) {
-				n->rejects++;
-			}
-			pthread_mutex_unlock(&n->lock);
-
-			if (reject) {
-				close(fd);
-				continue;
-			}
-
-			struct timeval tv = {2, 0};
-			setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-			clients[n_clients++] = fd;
-		}
-	}
-
-	for (int i = 0; i < n_clients; i++) {
-		close(clients[i]);
-	}
-	return NULL;
-}
-
-static void
-fnode_init(fnode* n, const char* name)
-{
-	memset(n, 0, sizeof(fnode));
-	n->listen_fd = -1;
-	pthread_mutex_init(&n->lock, NULL);
-	snprintf(n->name, sizeof(n->name), "%s", name);
-}
-
-// Listen on 127.0.0.1:port, or an ephemeral port when port is zero.
-static bool
-fnode_listen(fnode* n, uint16_t port)
-{
-	n->listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-
-	if (n->listen_fd < 0) {
-		return false;
-	}
-
-	int one = 1;
-	setsockopt(n->listen_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
-
-	struct sockaddr_in addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_port = htons(port);
-	addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-	socklen_t addr_len = sizeof(addr);
-
-	if (bind(n->listen_fd, (struct sockaddr*)&addr, sizeof(addr)) != 0 ||
-		listen(n->listen_fd, 16) != 0 ||
-		getsockname(n->listen_fd, (struct sockaddr*)&addr, &addr_len) != 0) {
-		close(n->listen_fd);
-		n->listen_fd = -1;
-		return false;
-	}
-
-	n->port = ntohs(addr.sin_port);
-	as_store_uint8(&n->stop, 0);
-	n->running = pthread_create(&n->thread, NULL, fnode_run, n) == 0;
-	return n->running;
-}
-
-static bool
-fnode_start(fnode* n, const char* name)
-{
-	fnode_init(n, name);
-	return fnode_listen(n, 0);
-}
-
-// Stop serving and close every connection. The port can be listened on again.
-static void
-fnode_halt(fnode* n)
-{
-	if (n->running) {
-		as_store_uint8(&n->stop, 1);
-		pthread_join(n->thread, NULL);
-		n->running = false;
-	}
-
-	if (n->listen_fd >= 0) {
-		close(n->listen_fd);
-		n->listen_fd = -1;
-	}
-}
-
-static void
-fnode_stop(fnode* n)
-{
-	fnode_halt(n);
-	pthread_mutex_destroy(&n->lock);
-}
-
-static uint32_t
-fnode_get(fnode* n, const uint32_t* field)
-{
-	pthread_mutex_lock(&n->lock);
-	uint32_t value = *field;
-	pthread_mutex_unlock(&n->lock);
-	return value;
-}
-
-static void
-fnode_set_reject(fnode* n, bool reject)
-{
-	pthread_mutex_lock(&n->lock);
-	n->reject = reject;
-	pthread_mutex_unlock(&n->lock);
-}
-
-static bool
-fnode_wait(fnode* n, const uint32_t* field, uint32_t target, uint32_t timeout_ms)
-{
-	uint64_t end = cf_getms() + timeout_ms;
-
-	while (fnode_get(n, field) < target) {
-		if (cf_getms() >= end) {
-			return false;
-		}
-		as_sleep(10);
-	}
-	return true;
-}
-
-static const char*
-addr_of(const fnode* n, char* buf, size_t size)
-{
-	snprintf(buf, size, "127.0.0.1:%u", n->port);
-	return buf;
-}
-
-//---------------------------------
 // Static Functions: client helpers
 //---------------------------------
 
@@ -2714,7 +2405,7 @@ TEST(seed_provider_only_bootstrap, "a registered provider may supply every seed;
 	client_close(&c);
 
 	fake_provider fp;
-	fp_init(&fp, false, false, addr_of(&a, addr, sizeof(addr)));
+	fp_init(&fp, false, false, fnode_addr(&a, addr, sizeof(addr)));
 	client_config(&config);
 	as_config_set_cluster_name(&config, NULL);
 	assert_int_eq(fp_register(&config, &fp, &err), AEROSPIKE_OK);
@@ -2799,7 +2490,7 @@ TEST(seed_connect_validation, "M-1/M-10 connect rejects ineligible settings befo
 	fake_provider fp;
 	char addr[64];
 
-	fp_init(&fp, true, false, addr_of(&a, addr, sizeof(addr)));
+	fp_init(&fp, true, false, fnode_addr(&a, addr, sizeof(addr)));
 	client_config(&config);
 	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_TEND;
 	assert_int_eq(fp_register(&config, &fp, &err), AEROSPIKE_OK);
@@ -2864,7 +2555,7 @@ TEST(seed_default_compat, "U-3/M-7 default static seeds keep the ip_map seed rew
 
 	// A periodic thread-mode provider adds exactly one discovery thread.
 	fake_provider fp;
-	fp_init(&fp, true, false, addr_of(&a, buf, sizeof(buf)));
+	fp_init(&fp, true, false, fnode_addr(&a, buf, sizeof(buf)));
 	client_config(&config);
 	config.discovery.refresh_interval_ms = 60000;
 	assert_int_eq(fp_register(&config, &fp, &err), AEROSPIKE_OK);
@@ -2898,7 +2589,7 @@ TEST(seed_thread_mode_tend_continues, "M-5 tend keeps its cadence while a thread
 	fake_provider fp;
 	char addr[64];
 
-	fp_init(&fp, true, false, addr_of(&a, addr, sizeof(addr)));
+	fp_init(&fp, true, false, fnode_addr(&a, addr, sizeof(addr)));
 	fp.gate_call = 2;
 	client_config(&config);
 	assert_int_eq(fp_register(&config, &fp, &err), AEROSPIKE_OK);
@@ -2932,7 +2623,7 @@ TEST(seed_reseed_in_flight, "M-11 zero-node reseed uses the held snapshot while 
 	fake_provider fp;
 	char addr[64];
 
-	fp_init(&fp, true, false, addr_of(&a, addr, sizeof(addr)));
+	fp_init(&fp, true, false, fnode_addr(&a, addr, sizeof(addr)));
 	fp.gate_call = 2;
 	client_config(&config);
 	config.discovery.refresh_interval_ms = 600000;
@@ -3001,7 +2692,7 @@ switch_step(fake_provider* fp, uint32_t call, as_error* err, as_seed_candidates*
 		snprintf(addr, sizeof(addr), "%s", st->b_addr);
 	}
 	else {
-		addr_of(st->a, addr, sizeof(addr));
+		fnode_addr(st->a, addr, sizeof(addr));
 	}
 	pthread_mutex_unlock(&st->lock);
 	return fp_append(err, out, addr);
@@ -3029,7 +2720,7 @@ TEST(seed_reseed_tend_mode, "M-12 a same-tend tend-mode refresh applies only to 
 	b.on_first = switch_first_b;
 	b.udata = &st;
 	assert_true(fnode_listen(&b, 0));
-	addr_of(&b, st.b_addr, sizeof(st.b_addr));
+	fnode_addr(&b, st.b_addr, sizeof(st.b_addr));
 
 	as_config config;
 	as_error err;
@@ -3098,7 +2789,7 @@ reseed_next_tend(as_discovery_execution_mode mode, bool provider, uint64_t* elap
 	char addr[64];
 	bool ok = false;
 
-	fp_init(&fp, true, true, addr_of(&a, addr, sizeof(addr)));
+	fp_init(&fp, true, true, fnode_addr(&a, addr, sizeof(addr)));
 	client_config(&config);
 	config.discovery.execution_mode = mode;
 	config.discovery.refresh_interval_ms = 600000;
@@ -3181,7 +2872,7 @@ TEST(seed_close_in_flight, "close waits for an in-flight refresh; destroy runs o
 	fake_provider fp;
 	char addr[64];
 
-	fp_init(&fp, true, false, addr_of(&a, addr, sizeof(addr)));
+	fp_init(&fp, true, false, fnode_addr(&a, addr, sizeof(addr)));
 	fp.gate_call = 2;
 	client_config(&config);
 	assert_int_eq(fp_register(&config, &fp, &err), AEROSPIKE_OK);
@@ -3221,7 +2912,7 @@ TEST(seed_close_reconnect, "sync close stops discovery and keeps the registratio
 	char addr[64];
 	int before = discovery_thread_count();
 
-	fp_init(&fp, true, false, addr_of(&a, addr, sizeof(addr)));
+	fp_init(&fp, true, false, fnode_addr(&a, addr, sizeof(addr)));
 	client_config(&config);
 	config.discovery.refresh_interval_ms = 600000;
 	assert_int_eq(fp_register(&config, &fp, &err), AEROSPIKE_OK);
@@ -3270,7 +2961,7 @@ TEST(seed_force_single, "force_single_node bootstraps from the provider snapshot
 	char addr[64];
 	int before = discovery_thread_count();
 
-	fp_init(&fp, true, false, addr_of(&a, addr, sizeof(addr)));
+	fp_init(&fp, true, false, fnode_addr(&a, addr, sizeof(addr)));
 	client_config(&config);
 	config.force_single_node = true;
 	config.discovery.refresh_interval_ms = 600000;
@@ -3315,7 +3006,7 @@ TEST(seed_close_bounded, "close waits at most refresh_timeout_ms for a blocked r
 	char addr[64];
 	int before = discovery_thread_count();
 
-	fp_init(&fp, true, false, addr_of(&a, addr, sizeof(addr)));
+	fp_init(&fp, true, false, fnode_addr(&a, addr, sizeof(addr)));
 	fp.gate_call = 2;
 	client_config(&config);
 	config.discovery.refresh_timeout_ms = 300;
@@ -3353,7 +3044,7 @@ TEST(seed_reconnect_in_flight, "reconnect fails naming the provider while the pr
 	char addr[64];
 	int before = discovery_thread_count();
 
-	fp_init(&fp, true, false, addr_of(&a, addr, sizeof(addr)));
+	fp_init(&fp, true, false, fnode_addr(&a, addr, sizeof(addr)));
 	fp.gate_call = 2;
 	client_config(&config);
 	config.discovery.refresh_timeout_ms = 300;
@@ -3443,7 +3134,7 @@ TEST(seed_shm_takeover, "SHM: only the tend master refreshes in tend mode; a pro
 	assert_true(fnode_start(&a, "A"));
 	as_error err;
 	char addr[64];
-	addr_of(&a, addr, sizeof(addr));
+	fnode_addr(&a, addr, sizeof(addr));
 
 	int key = (int)(0xA5D00000 | ((uint32_t)getpid() & 0xFFFF));
 	int probe = shmget(key, 4096, IPC_CREAT | IPC_EXCL | 0666);
@@ -3502,6 +3193,13 @@ TEST(seed_shm_takeover, "SHM: only the tend master refreshes in tend mode; a pro
 }
 #endif
 
+#else
+
+TEST(seed_fake_servers_skipped, "client tests with fake nodes need POSIX loopback servers")
+{
+	info("skipped: the fake node client tests need POSIX sockets");
+}
+
 #endif // DISCOVERY_FAKE_SERVERS
 
 //---------------------------------
@@ -3553,5 +3251,7 @@ SUITE(discovery_seed_manager, "pluggable discovery seed manager and execution mo
 #if !defined(__APPLE__)
 	suite_add(seed_shm_takeover);
 #endif
+#else
+	suite_add(seed_fake_servers_skipped);
 #endif
 }

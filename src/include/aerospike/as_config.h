@@ -1004,6 +1004,23 @@ AS_EXTERN as_status
 as_config_set_pass_through_translator(as_config* config, as_error* err);
 
 /**
+ * Register the built-in DNS seed provider; see as_discovery_dns_seed_provider()
+ * for its behavior. The configuration is validated and copied, and the system
+ * resolvers are read when servers is empty; the caller keeps ownership of dns
+ * and its strings.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for an invalid configuration (the message names
+ * the value), when no system resolver is usable and servers is empty, or while
+ * a client created from this config is connected. On failure the previous
+ * registration is unchanged.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_dns_seed_provider(as_config* config, const as_dns_seed_provider_config* dns,
+	as_error* err);
+
+/**
  * Register a seed provider implemented by a language binding (Python, Node.js).
  * Ownership and replacement rules are those of as_config_set_seed_provider().
  *

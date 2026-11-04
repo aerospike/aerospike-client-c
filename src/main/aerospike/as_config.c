@@ -363,6 +363,34 @@ as_config_set_pass_through_translator(as_config* config, as_error* err)
 }
 
 as_status
+as_config_set_dns_seed_provider(as_config* config, const as_dns_seed_provider_config* dns,
+	as_error* err)
+{
+	if (!config) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid seed provider");
+	}
+
+	if (config->discovery.registration_locked) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Seed provider cannot be replaced while the client is connected");
+	}
+
+	as_seed_provider provider;
+	as_status status = as_discovery_dns_seed_provider(err, dns, &provider);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	status = as_config_set_seed_provider(config, &provider, err);
+
+	if (status != AEROSPIKE_OK) {
+		provider.destroy(provider.udata);
+	}
+	return status;
+}
+
+as_status
 as_config_set_binding_seed_provider(as_config* config, const char* name,
 	as_status (*refresh)(as_error* err, const as_seed_candidate_context* context,
 		as_seed_candidates* candidates, void* udata),

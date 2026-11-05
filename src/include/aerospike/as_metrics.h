@@ -696,9 +696,13 @@ typedef struct as_metrics_policy_s {
 	 *   report_dir.
 	 *
 	 * Default: true, so aerospike_enable_metrics() turns on metrics and
-	 * operational metrics. The dynamic configuration policy in
-	 * `as_config.policies.metrics` defaults to false, so metrics.enabled alone
-	 * does not turn operational metrics on.
+	 * operational metrics, and applications that already call it keep their
+	 * latency and namespace metrics. This intentionally differs from dynamic
+	 * configuration, where extended.operational.enabled defaults to false and
+	 * metrics.enabled alone does not turn operational metrics on.
+	 * `as_config.policies.metrics` uses the dynamic configuration default. Set
+	 * extended.operational.enabled in the dynamic configuration file to make
+	 * both agree.
 	 */
 	bool operational_enabled;
 

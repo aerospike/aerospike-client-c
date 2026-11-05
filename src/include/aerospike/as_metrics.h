@@ -180,6 +180,7 @@ typedef struct as_metrics_namespace_snapshot_s {
 	/**
 	 * Key busy errors for this namespace since the node was initialized.
 	 * Counted once when a sampled user call fails with key busy.
+	 * Not included in errors.
 	 * Not `as_ns_metrics.key_busy_count`. See as_node_stats.key_busy_count.
 	 */
 	uint64_t key_busy;

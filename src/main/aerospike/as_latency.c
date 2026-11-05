@@ -30,18 +30,27 @@ release_latency(void* latency)
 	as_latency_release(latency);
 }
 
+static void
+latency_reset(as_latency* latency)
+{
+	for (uint8_t k = 0; k < latency->size; k++) {
+		as_store_uint64(&latency->buckets[k], 0);
+	}
+	as_store_uint64(&latency->sum, 0);
+	as_store_uint64(&latency->count, 0);
+	as_store_uint64(&latency->min, UINT64_MAX);
+	as_store_uint64(&latency->max, 0);
+}
+
 as_latency*
 as_latency_create(uint8_t columns, uint8_t shift, as_metrics_latency_unit unit)
 {
-	as_latency* latency = cf_calloc(1, sizeof(as_latency) + (sizeof(uint64_t) * columns));
+	as_latency* latency = cf_malloc(sizeof(as_latency) + (sizeof(uint64_t) * columns));
 	latency->ref_count = 1;
 	latency->shift = shift;
 	latency->size = columns;
 	latency->unit = unit;
-	latency->sum = 0;
-	latency->count = 0;
-	latency->min = UINT64_MAX;
-	latency->max = 0;
+	latency_reset(latency);
 	return latency;
 }
 
@@ -68,13 +77,7 @@ as_latency_gc_init(as_cluster* cluster, as_latency** slot, const as_metrics_poli
 
 	if (latency && policy->latency_columns == latency->size && policy->latency_shift == latency->shift &&
 			policy->latency_unit == latency->unit) {
-		for (uint8_t k = 0; k < latency->size; k++) {
-			as_store_uint64(&latency->buckets[k], 0);
-		}
-		as_store_uint64(&latency->sum, 0);
-		as_store_uint64(&latency->count, 0);
-		as_store_uint64(&latency->min, UINT64_MAX);
-		as_store_uint64(&latency->max, 0);
+		latency_reset(latency);
 		return;
 	}
 

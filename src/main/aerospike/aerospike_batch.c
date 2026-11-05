@@ -4499,7 +4499,8 @@ as_batch_retry_node_find(as_vector* bnodes, as_node* node)
 	return NULL;
 }
 
-static size_t
+// Not static so batch_async tests can verify the retry command buffer.
+AS_EXTERN size_t
 as_batch_retry_write(
 	uint8_t* buf, uint8_t* header, uint32_t header_size, uint8_t header_flags, uint8_t* batch_field,
 	as_vector* offsets
@@ -4530,7 +4531,7 @@ as_batch_retry_write(
 			p += off->size;
 		}
 	}
-	return as_batch_trailer_write(buf, p, batch_field);
+	return as_batch_trailer_write(buf, p, buf + (batch_field - header));
 }
 
 static void

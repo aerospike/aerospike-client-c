@@ -38,7 +38,10 @@ as_latency_create(uint8_t columns, uint8_t shift, as_metrics_latency_unit unit)
 	latency->shift = shift;
 	latency->size = columns;
 	latency->unit = unit;
+	latency->sum = 0;
+	latency->count = 0;
 	latency->min = UINT64_MAX;
+	latency->max = 0;
 	return latency;
 }
 

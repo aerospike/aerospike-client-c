@@ -819,6 +819,38 @@ metrics_header_ok(const char* header, const char* latency_token)
 	return true;
 }
 
+// Count the top-level fields of a cluster line. Nested lists such as label[],
+// eventloop[], and node[] count as one field each, matching the header's
+// cluster[...] list.
+static uint32_t
+metrics_cluster_field_count(const char* line)
+{
+	const char* cluster = strstr(line, " cluster[");
+
+	if (!cluster) {
+		return 0;
+	}
+
+	uint32_t count = 1;
+	int depth = 0;
+
+	for (const char* p = cluster + strlen(" cluster["); *p; p++) {
+		if (*p == '[') {
+			depth++;
+		}
+		else if (*p == ']') {
+			if (depth == 0) {
+				return count;
+			}
+			depth--;
+		}
+		else if (*p == ',' && depth == 0) {
+			count++;
+		}
+	}
+	return 0;
+}
+
 static bool
 metrics_suite_cleanup(atf_suite* suite)
 {
@@ -1672,6 +1704,10 @@ TEST(metrics_file_omits_usage_columns, "the header(2) file does not write usage 
 	assert_int_eq(disable_status, AEROSPIKE_OK);
 	assert_true(header_ok);
 	assert_true(line_ok);
+	// header(2) cluster[name,clientType,clientVersion,appId,label[],cpu,mem,
+	// invalidNodeCount,commandCount,retryCount,delayQueueTimeoutCount,
+	// eventloop[],node[]]. The usage counters would add three more.
+	assert_int_eq(metrics_cluster_field_count(line), 13);
 	as_metrics_policy_destroy(&policy);
 }
 

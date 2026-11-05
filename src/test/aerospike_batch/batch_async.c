@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -18,22 +18,24 @@
 #include <aerospike/aerospike_batch.h>
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_arraylist.h>
+#include <aerospike/as_command.h>
 #include <aerospike/as_exp_operations.h>
 #include <aerospike/as_monitor.h>
+#include <aerospike/as_vector.h>
 
 #include "../test.h"
 #include "../util/log_helper.h"
 
-/******************************************************************************
- * GLOBAL VARS
- *****************************************************************************/
+//---------------------------------
+// Globals
+//---------------------------------
 
 extern aerospike* as;
 static as_monitor monitor;
 
-/******************************************************************************
- * MACROS
- *****************************************************************************/
+//---------------------------------
+// Macros
+//---------------------------------
 
 #define NAMESPACE "test"
 #define SET "batchasync"
@@ -44,9 +46,9 @@ static char bin1[] = "bin1";
 static char bin2[] = "bin2";
 static char bin3[] = "bin3";
 
-/******************************************************************************
- * STATIC FUNCTIONS
- *****************************************************************************/
+//---------------------------------
+// Static Functions
+//---------------------------------
 
 static as_status
 insert_record(as_error* err, int i)
@@ -124,9 +126,9 @@ after(atf_suite* suite)
 	return true;
 }
 
-/******************************************************************************
- * TEST CASES
- *****************************************************************************/
+//---------------------------------
+// Tests
+//---------------------------------
 
 static void
 batch_callback(
@@ -469,9 +471,184 @@ TEST(batch_one_record_not_found, "Batch One Record Not Found")
 	as_monitor_wait(&monitor);
 }
 
-/******************************************************************************
- * TEST SUITE
- *****************************************************************************/
+//---------------------------------
+// Batch Retry Write
+//---------------------------------
+
+// Mirrors as_batch_retry_offset in aerospike_batch.c.
+typedef struct {
+	uint8_t* begin;
+	uint8_t* copy;
+	uint32_t size;
+} retry_offset;
+
+// Defined in aerospike_batch.c.
+extern size_t
+as_batch_retry_write(
+	uint8_t* buf, uint8_t* header, uint32_t header_size, uint8_t header_flags, uint8_t* batch_field,
+	as_vector* offsets
+	);
+
+// Batch row types from aerospike_batch.c.
+#define RETRY_MSG_READ 0x0
+#define RETRY_MSG_REPEAT 0x1
+
+#define RETRY_N_ROWS 4
+#define RETRY_N_NODES 3
+
+typedef struct {
+	uint8_t* begin;
+	uint32_t size;
+} retry_row;
+
+static uint8_t*
+retry_row_write(uint8_t* p, uint32_t index, uint8_t type)
+{
+	*(uint32_t*)p = cf_swap_to_be32(index);
+	p += sizeof(uint32_t);
+	memset(p, (int)index + 1, AS_DIGEST_VALUE_SIZE);
+	p += AS_DIGEST_VALUE_SIZE;
+	*p++ = type;
+
+	if (type == RETRY_MSG_REPEAT) {
+		return p;
+	}
+
+	*p++ = AS_MSG_INFO1_READ | AS_MSG_INFO1_GET_ALL;
+	*(uint16_t*)p = cf_swap_to_be16(1); // n_fields
+	p += sizeof(uint16_t);
+	*(uint16_t*)p = cf_swap_to_be16(0); // n_bins
+	p += sizeof(uint16_t);
+
+	uint32_t len = (uint32_t)strlen(NAMESPACE);
+	*(uint32_t*)p = cf_swap_to_be32(len + 1);
+	p += sizeof(uint32_t);
+	*p++ = AS_FIELD_NAMESPACE;
+	memcpy(p, NAMESPACE, len);
+	return p + len;
+}
+
+/**
+ * Build a parent batch command buffer, then split its rows across several retry
+ * nodes the way as_batch_retry_async() does. Each retry command must carry its
+ * own batch field size and the parent buffer must not change.
+ */
+static void
+batch_retry_write_check(atf_test_result* __result__, bool has_filter)
+{
+	uint8_t parent[512];
+	memset(parent, 0, sizeof(parent));
+
+	uint8_t* p = parent + AS_HEADER_SIZE;
+
+	if (has_filter) {
+		// Filter field contents are opaque to the retry writer.
+		uint8_t filter[] = {0x93, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06};
+		*(uint32_t*)p = cf_swap_to_be32((uint32_t)sizeof(filter) + 1);
+		p += sizeof(uint32_t);
+		*p++ = AS_FIELD_FILTER;
+		memcpy(p, filter, sizeof(filter));
+		p += sizeof(filter);
+	}
+
+	uint8_t* batch_field = p;
+	p += AS_FIELD_HEADER_SIZE;
+	*(batch_field + sizeof(uint32_t)) = AS_FIELD_BATCH_INDEX;
+
+	uint32_t header_size = (uint32_t)(p - parent);
+	uint8_t header_flags = 0x8;
+
+	*(uint32_t*)p = cf_swap_to_be32(RETRY_N_ROWS);
+	p += sizeof(uint32_t);
+	*p++ = header_flags;
+
+	// Full, repeat, full, repeat.
+	retry_row rows[RETRY_N_ROWS];
+
+	for (uint32_t i = 0; i < RETRY_N_ROWS; i++) {
+		rows[i].begin = p;
+		p = retry_row_write(p, i, (i % 2 == 0)? RETRY_MSG_READ : RETRY_MSG_REPEAT);
+		rows[i].size = (uint32_t)(p - rows[i].begin);
+	}
+
+	uint32_t parent_bf_size = (uint32_t)(p - batch_field - sizeof(uint32_t));
+	*(uint32_t*)batch_field = cf_swap_to_be32(parent_bf_size);
+	as_command_write_end(parent, p);
+
+	uint8_t snapshot[sizeof(parent)];
+	memcpy(snapshot, parent, sizeof(parent));
+
+	// Node 0: row 0 (full), row 1 (repeat of row 0 on the same node).
+	// Node 1: row 3 (repeat), copied from full row 2 because node 1 has no row 2.
+	// Node 2: row 1 (repeat), copied from full row 0, then row 2 (full).
+	retry_offset node_offsets[RETRY_N_NODES][2] = {
+		{{rows[0].begin, NULL, rows[0].size}, {rows[1].begin, NULL, rows[1].size}},
+		{{rows[3].begin, rows[2].begin, rows[2].size}, {0}},
+		{{rows[1].begin, rows[0].begin, rows[0].size}, {rows[2].begin, NULL, rows[2].size}}
+	};
+	uint32_t node_counts[RETRY_N_NODES] = {2, 1, 2};
+
+	size_t bf_offset = batch_field - parent;
+
+	// Run the retry pass twice so later retry commands copy whatever an earlier
+	// retry command may have left in the parent buffer.
+	for (uint32_t pass = 0; pass < 2; pass++) {
+		for (uint32_t n = 0; n < RETRY_N_NODES; n++) {
+			as_vector offsets;
+			as_vector_inita(&offsets, sizeof(retry_offset), node_counts[n]);
+
+			size_t expected = header_size + sizeof(uint32_t) + 1;
+
+			for (uint32_t i = 0; i < node_counts[n]; i++) {
+				as_vector_append(&offsets, &node_offsets[n][i]);
+				expected += node_offsets[n][i].size;
+			}
+
+			uint8_t buf[512];
+			memset(buf, 0xEE, sizeof(buf));
+
+			size_t size = as_batch_retry_write(buf, parent, header_size, header_flags,
+				batch_field, &offsets);
+
+			as_vector_destroy(&offsets);
+
+			assert_int_eq(size, expected);
+
+			// Proto size covers the retry command.
+			uint64_t proto = cf_swap_from_be64(*(uint64_t*)buf);
+			assert_int_eq(proto & 0xFFFFFFFFFFFFULL, size - 8);
+
+			// Batch field size covers exactly the rest of the retry command.
+			uint8_t* bf = buf + bf_offset;
+			assert_int_eq(*(bf + sizeof(uint32_t)), AS_FIELD_BATCH_INDEX);
+			assert_int_eq(cf_swap_from_be32(*(uint32_t*)bf),
+				size - bf_offset - sizeof(uint32_t));
+			assert_int_eq(cf_swap_from_be32(*(uint32_t*)(bf + AS_FIELD_HEADER_SIZE)),
+				node_counts[n]);
+
+			// Nothing written past the end of the command.
+			assert_int_eq(buf[size], 0xEE);
+
+			// Parent send buffer is untouched.
+			assert_int_eq(memcmp(parent, snapshot, sizeof(parent)), 0);
+			assert_int_eq(cf_swap_from_be32(*(uint32_t*)batch_field), parent_bf_size);
+		}
+	}
+}
+
+TEST(batch_async_retry_write_size, "Batch Async Retry Write Batch Field Size")
+{
+	batch_retry_write_check(__result__, false);
+}
+
+TEST(batch_async_retry_write_size_filter, "Batch Async Retry Write Batch Field Size With Filter")
+{
+	batch_retry_write_check(__result__, true);
+}
+
+//---------------------------------
+// Test Suite
+//---------------------------------
 
 SUITE(batch_async, "aerospike batch async tests")
 {
@@ -481,4 +658,6 @@ SUITE(batch_async, "aerospike batch async tests")
 	suite_add(batch_async_list_operate);
 	suite_add(batch_async_write_complex);
 	suite_add(batch_one_record_not_found);
+	suite_add(batch_async_retry_write_size);
+	suite_add(batch_async_retry_write_size_filter);
 }

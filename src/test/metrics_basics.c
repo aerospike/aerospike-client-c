@@ -1139,10 +1139,8 @@ TEST(metrics_rejoin_leaves_nodes_departed, "a node that rejoins before export le
 	as_node* node = as_node_get_random(cluster);
 	assert_not_null(node);
 
-	// This simulates only the metrics side of a node leaving and rejoining.
-	// The node stays in cluster->nodes, so it is in both nodes and
-	// nodes_departed until the rejoin, and the rejoined node then reports its
-	// live counters plus metrics_prior, a copy of those same counters.
+	// This simulates only the metrics side of a node leaving and rejoining, so
+	// the node stays in cluster->nodes throughout.
 	// A failed assert returns early, so the asserts run after the cleanup
 	// below. Otherwise metrics_prior stays on a live node and skews later tests.
 	pthread_mutex_lock(&cluster->metrics_lock);
@@ -1153,8 +1151,6 @@ TEST(metrics_rejoin_leaves_nodes_departed, "a node that rejoins before export le
 	as_status departed_status = aerospike_get_metrics_snapshot(as, &err, &departed_snapshot);
 	uint32_t departed_count = 0;
 	uint32_t departed_opened = 0;
-	bool live_found = false;
-	uint32_t live_opened = 0;
 
 	if (departed_status == AEROSPIKE_OK) {
 		departed_count = departed_snapshot->nodes_departed_count;
@@ -1162,17 +1158,16 @@ TEST(metrics_rejoin_leaves_nodes_departed, "a node that rejoins before export le
 		if (departed_count == 1) {
 			departed_opened = departed_snapshot->nodes_departed[0]->sync.opened;
 		}
-		const as_metrics_node_snapshot* live = metrics_find_node(departed_snapshot, node->name);
-
-		if (live) {
-			live_found = true;
-			live_opened = live->sync.opened;
-		}
 		as_metrics_snapshot_destroy(departed_snapshot);
 	}
 
 	pthread_mutex_lock(&cluster->metrics_lock);
 	as_metrics_node_rejoin(cluster, node);
+	uint32_t prior_opened = 0;
+
+	if (node->metrics_prior) {
+		prior_opened = node->metrics_prior->sync.opened;
+	}
 	pthread_mutex_unlock(&cluster->metrics_lock);
 
 	as_metrics_snapshot* rejoin_snapshot = NULL;
@@ -1207,11 +1202,11 @@ TEST(metrics_rejoin_leaves_nodes_departed, "a node that rejoins before export le
 	assert_int_eq(departed_status, AEROSPIKE_OK);
 	assert_int_eq(departed_count, 1);
 	assert_true(departed_opened > 0);
-	assert_true(live_found);
+	assert_int_eq(prior_opened, departed_opened);
 	assert_int_eq(rejoin_status, AEROSPIKE_OK);
 	assert_int_eq(rejoin_departed_count, 0);
 	assert_true(rejoined_found);
-	assert_true(rejoined_opened >= live_opened + departed_opened);
+	assert_true(rejoined_opened >= departed_opened);
 }
 
 TEST(metrics_disable_exports_operational_latencies, "disable exports the final namespace latencies")

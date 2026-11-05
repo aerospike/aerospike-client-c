@@ -1103,7 +1103,7 @@ TEST(metrics_latency_summary, "latency histograms carry sum, count, min, and max
 
 	const as_metrics_latency_snapshot* command_write =
 		&metrics_snapshot->command_latencies[AS_LATENCY_TYPE_WRITE];
-	bool command_ok = metrics_latency_summary_ok(command_write) && command_write->count >= 2;
+	bool command_ok = metrics_latency_summary_ok(command_write) && command_write->count == 2;
 	bool namespace_ok = true;
 	uint64_t namespace_write_count = 0;
 
@@ -1124,7 +1124,7 @@ TEST(metrics_latency_summary, "latency histograms carry sum, count, min, and max
 
 	assert_true(command_ok);
 	assert_true(namespace_ok);
-	assert_true(namespace_write_count >= 2);
+	assert_int_eq(namespace_write_count, 2);
 }
 
 TEST(metrics_rejoin_leaves_nodes_departed, "a node that rejoins before export leaves nodes_departed and keeps its counters")

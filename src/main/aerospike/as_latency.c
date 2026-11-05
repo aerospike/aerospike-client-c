@@ -114,19 +114,6 @@ latency_set_min(uint64_t* target, uint64_t value)
 	}
 }
 
-static void
-latency_set_max(uint64_t* target, uint64_t value)
-{
-	uint64_t cur = as_load_uint64(target);
-
-	while (value > cur) {
-		if (as_cas_uint64(target, cur, value)) {
-			return;
-		}
-		cur = as_load_uint64(target);
-	}
-}
-
 void
 as_latency_add(as_latency* latency, uint64_t elapsed_nanos)
 {
@@ -149,7 +136,7 @@ as_latency_add(as_latency* latency, uint64_t elapsed_nanos)
 	as_add_uint64(&latency->sum, (int64_t)elapsed);
 	as_incr_uint64(&latency->count);
 	latency_set_min(&latency->min, elapsed);
-	latency_set_max(&latency->max, elapsed);
+	as_setmax_uint64(&latency->max, elapsed);
 
 	as_latency_release(latency);
 }

@@ -1136,31 +1136,40 @@ TEST(metrics_rejoin_leaves_nodes_departed, "a node that rejoins before export le
 	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
 
 	as_cluster* cluster = as->cluster;
-	as_nodes* nodes = as_nodes_reserve(cluster);
-	assert_true(nodes->size > 0);
-	as_node* node = nodes->array[0];
-	as_node_reserve(node);
-	as_nodes_release(nodes);
+	as_node* node = as_node_get_random(cluster);
+	assert_not_null(node);
 
+	// This simulates only the metrics side of a node leaving and rejoining.
+	// The node stays in cluster->nodes, so it is in both nodes and
+	// nodes_departed until the rejoin, and the rejoined node then reports its
+	// live counters plus metrics_prior, a copy of those same counters.
+	// A failed assert returns early, so the asserts run after the cleanup
+	// below. Otherwise metrics_prior stays on a live node and skews later tests.
 	pthread_mutex_lock(&cluster->metrics_lock);
 	as_status close_status = as_metrics_runtime_node_close(&err, cluster, node);
 	pthread_mutex_unlock(&cluster->metrics_lock);
 
 	as_metrics_snapshot* departed_snapshot = NULL;
 	as_status departed_status = aerospike_get_metrics_snapshot(as, &err, &departed_snapshot);
-	uint32_t departed_count = departed_snapshot->nodes_departed_count;
+	uint32_t departed_count = 0;
 	uint32_t departed_opened = 0;
-
-	if (departed_count == 1) {
-		departed_opened = departed_snapshot->nodes_departed[0]->sync.opened;
-	}
-	const as_metrics_node_snapshot* live = metrics_find_node(departed_snapshot, node->name);
+	bool live_found = false;
 	uint32_t live_opened = 0;
 
-	if (live) {
-		live_opened = live->sync.opened;
+	if (departed_status == AEROSPIKE_OK) {
+		departed_count = departed_snapshot->nodes_departed_count;
+
+		if (departed_count == 1) {
+			departed_opened = departed_snapshot->nodes_departed[0]->sync.opened;
+		}
+		const as_metrics_node_snapshot* live = metrics_find_node(departed_snapshot, node->name);
+
+		if (live) {
+			live_found = true;
+			live_opened = live->sync.opened;
+		}
+		as_metrics_snapshot_destroy(departed_snapshot);
 	}
-	as_metrics_snapshot_destroy(departed_snapshot);
 
 	pthread_mutex_lock(&cluster->metrics_lock);
 	as_metrics_node_rejoin(cluster, node);
@@ -1168,14 +1177,20 @@ TEST(metrics_rejoin_leaves_nodes_departed, "a node that rejoins before export le
 
 	as_metrics_snapshot* rejoin_snapshot = NULL;
 	as_status rejoin_status = aerospike_get_metrics_snapshot(as, &err, &rejoin_snapshot);
-	uint32_t rejoin_departed_count = rejoin_snapshot->nodes_departed_count;
-	const as_metrics_node_snapshot* rejoined = metrics_find_node(rejoin_snapshot, node->name);
+	uint32_t rejoin_departed_count = 0;
+	bool rejoined_found = false;
 	uint32_t rejoined_opened = 0;
 
-	if (rejoined) {
-		rejoined_opened = rejoined->sync.opened;
+	if (rejoin_status == AEROSPIKE_OK) {
+		rejoin_departed_count = rejoin_snapshot->nodes_departed_count;
+		const as_metrics_node_snapshot* rejoined = metrics_find_node(rejoin_snapshot, node->name);
+
+		if (rejoined) {
+			rejoined_found = true;
+			rejoined_opened = rejoined->sync.opened;
+		}
+		as_metrics_snapshot_destroy(rejoin_snapshot);
 	}
-	as_metrics_snapshot_destroy(rejoin_snapshot);
 
 	// The live node in this test never left, so drop the prior stint before
 	// other tests read its counters.
@@ -1192,8 +1207,10 @@ TEST(metrics_rejoin_leaves_nodes_departed, "a node that rejoins before export le
 	assert_int_eq(departed_status, AEROSPIKE_OK);
 	assert_int_eq(departed_count, 1);
 	assert_true(departed_opened > 0);
+	assert_true(live_found);
 	assert_int_eq(rejoin_status, AEROSPIKE_OK);
 	assert_int_eq(rejoin_departed_count, 0);
+	assert_true(rejoined_found);
 	assert_true(rejoined_opened >= live_opened + departed_opened);
 }
 

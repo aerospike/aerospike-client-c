@@ -165,14 +165,14 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * Client timeouts (connect, socket, or total) since the node was initialized.
-	 * Counted once when the user call fails with a client timeout, not on each retry.
+	 * Counted once when a sampled user call fails with a client timeout, not on each retry.
 	 * Not included in errors or server_timeouts.
 	 */
 	uint64_t client_timeouts;
 
 	/**
 	 * Server timeouts since the node was initialized.
-	 * Counted once when the user call fails with a server timeout, not on each retry.
+	 * Counted once when a sampled user call fails with a server timeout, not on each retry.
 	 * Not included in errors or client_timeouts.
 	 */
 	uint64_t server_timeouts;
@@ -187,25 +187,27 @@ typedef struct as_metrics_namespace_snapshot_s {
 
 	/**
 	 * Record too big errors since the node was initialized.
+	 * Counted once when a sampled user call fails with record too big.
 	 * Not included in errors.
 	 */
 	uint64_t record_too_big;
 
 	/**
 	 * Device overload errors since the node was initialized.
+	 * Counted once when a sampled user call fails with device overload.
 	 * Not included in errors.
 	 */
 	uint64_t device_overload;
 
 	/**
-	 * Bytes received from the server for this namespace.
-	 * Same counter as `as_ns_metrics.bytes_in`.
+	 * Bytes received from the server for this namespace by sampled commands,
+	 * on each attempt. Same counter as `as_ns_metrics.bytes_in`.
 	 */
 	uint64_t bytes_in;
 
 	/**
-	 * Bytes sent to the server for this namespace.
-	 * Same counter as `as_ns_metrics.bytes_out`.
+	 * Bytes sent to the server for this namespace by sampled commands, on each
+	 * attempt. Same counter as `as_ns_metrics.bytes_out`.
 	 */
 	uint64_t bytes_out;
 
@@ -390,7 +392,8 @@ typedef struct as_metrics_snapshot_s {
 	char* client_version;
 
 	/**
-	 * Application identifier. Empty string when unset.
+	 * Application identifier. When `as_config.app_id` is unset, this is the
+	 * client user name, or "not-set" without one.
 	 */
 	char* app_id;
 
@@ -439,13 +442,15 @@ typedef struct as_metrics_snapshot_s {
 	uint64_t delay_queue_timeout_count;
 
 	/**
-	 * Commands issued. Cumulative since the cluster started.
+	 * User calls chosen by the operational sampler. Cumulative since the
+	 * cluster started. Increments only while operational metrics are enabled.
 	 */
 	uint64_t command_count;
 
 	/**
-	 * Command retries since the cluster started. There can be multiple retries
-	 * for one command. Same counter as `as_cluster_stats.retry_count`.
+	 * Retries of sampled commands since the cluster started. There can be
+	 * multiple retries for one command. Increments only while operational
+	 * metrics are enabled. Same counter as `as_cluster_stats.retry_count`.
 	 */
 	uint64_t retry_count;
 
@@ -545,7 +550,7 @@ typedef struct as_metrics_snapshot_s {
 
 	/**
 	 * v3 command latency, one entry per `AS_LATENCY_TYPE_*`.
-	 * One sample per command for total elapsed time including retries.
+	 * One sample per sampled command for total elapsed time including retries.
 	 * A retry can move the command to another node, so this series is
 	 * cluster-wide. Recorded while operational metrics are enabled.
 	 * An on-demand snapshot after disable still returns the last values.
@@ -1008,6 +1013,8 @@ aerospike_get_metrics_snapshot(struct aerospike_s* as, as_error* err, as_metrics
 
 /**
  * Disable extended periodic cluster and node latency metrics.
+ * Each exporter receives a final snapshot, then collection and periodic export
+ * stop. Exporters are not destroyed. The application owns them.
  */
 AS_EXTERN as_status
 aerospike_disable_metrics(struct aerospike_s* as, as_error* err);

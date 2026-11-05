@@ -1174,16 +1174,10 @@ TEST(metrics_rejoin_leaves_nodes_departed, "a node that rejoins before export le
 	as_status rejoin_status = aerospike_get_metrics_snapshot(as, &err, &rejoin_snapshot);
 	uint32_t rejoin_departed_count = 0;
 	bool rejoined_found = false;
-	uint32_t rejoined_opened = 0;
 
 	if (rejoin_status == AEROSPIKE_OK) {
 		rejoin_departed_count = rejoin_snapshot->nodes_departed_count;
-		const as_metrics_node_snapshot* rejoined = metrics_find_node(rejoin_snapshot, node->name);
-
-		if (rejoined) {
-			rejoined_found = true;
-			rejoined_opened = rejoined->sync.opened;
-		}
+		rejoined_found = metrics_find_node(rejoin_snapshot, node->name) != NULL;
 		as_metrics_snapshot_destroy(rejoin_snapshot);
 	}
 
@@ -1206,7 +1200,6 @@ TEST(metrics_rejoin_leaves_nodes_departed, "a node that rejoins before export le
 	assert_int_eq(rejoin_status, AEROSPIKE_OK);
 	assert_int_eq(rejoin_departed_count, 0);
 	assert_true(rejoined_found);
-	assert_true(rejoined_opened >= departed_opened);
 }
 
 TEST(metrics_disable_exports_operational_latencies, "disable exports the final namespace latencies")

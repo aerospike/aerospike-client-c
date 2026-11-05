@@ -118,6 +118,27 @@ typedef struct as_metrics_latency_snapshot_s {
 	 * Heap copy of bucket totals. Owned by the snapshot.
 	 */
 	uint64_t* buckets;
+
+	/**
+	 * Sum of all recorded samples, in the histogram unit. See
+	 * as_metrics_snapshot.latency_unit.
+	 */
+	uint64_t sum;
+
+	/**
+	 * Number of recorded samples. Equal to the sum of the bucket totals.
+	 */
+	uint64_t count;
+
+	/**
+	 * Smallest recorded sample, in the histogram unit. Zero when count is zero.
+	 */
+	uint64_t min;
+
+	/**
+	 * Largest recorded sample, in the histogram unit. Zero when count is zero.
+	 */
+	uint64_t max;
 } as_metrics_latency_snapshot;
 
 /**
@@ -307,8 +328,8 @@ typedef struct as_metrics_event_loop_snapshot_s {
  * Enabling metrics does not turn on usage metrics. Set `as_metrics_policy.usage_enabled`
  * for that block. See `as_metrics_policy.operational_enabled` for when operational
  * metrics are on.
- * The metrics file header uses camelCase field names. See usage_metrics_enabled
- * for blockingCount, deferredCount, and backgroundCount.
+ * The metrics file header uses camelCase field names. See as_metrics_file_exporter
+ * for the fields that the file does not write.
  *
  * `as_cluster_stats` fields land here as follows:
  *   recover_queue_size -> recover_queue_size
@@ -343,9 +364,8 @@ typedef struct as_metrics_snapshot_s {
 
 	/**
 	 * True when feature.api usage counters in this snapshot were collected.
-	 * The header(3) cluster line always writes api_blocking, api_deferred, and
-	 * api_background as blockingCount, deferredCount, and backgroundCount after
-	 * commandCount. See as_metrics_file_exporter. OpenTelemetry names for those
+	 * The learn-metrics file does not write them. See as_metrics_file_exporter.
+	 * OpenTelemetry names for those
 	 * fields are aerospike_client_feature_api_blocking,
 	 * aerospike_client_feature_api_deferred, and
 	 * aerospike_client_feature_api_background. Emit those instruments only
@@ -390,7 +410,7 @@ typedef struct as_metrics_snapshot_s {
 	uint32_t recover_queue_size;
 
 	/**
-	 * Add-node failures in the most recent cluster tend iteration.
+	 * Peers that failed node validation. Cumulative since the cluster was created.
 	 */
 	uint32_t invalid_node_count;
 
@@ -490,8 +510,8 @@ typedef struct as_metrics_snapshot_s {
 	 * Final samples for nodes that left, one entry per node name. Included in
 	 * on-demand snapshots and kept when no exporter is installed. Cleared only
 	 * after a successful periodic export.
-	 * A node that rejoins keeps its entry. If it leaves again before that
-	 * export, its counters and histogram buckets are added into the same entry.
+	 * A node that rejoins before that export leaves this list. Its live entry in
+	 * `nodes` continues the counters and histogram buckets from before it left.
 	 */
 	as_metrics_node_snapshot** nodes_departed;
 
@@ -675,7 +695,10 @@ typedef struct as_metrics_policy_s {
 	 *   listeners are used, and leaves it as set for added exporters or an empty
 	 *   report_dir.
 	 *
-	 * Default: false
+	 * Default: true, so aerospike_enable_metrics() turns on metrics and
+	 * operational metrics. The dynamic configuration policy in
+	 * `as_config.policies.metrics` defaults to false, so metrics.enabled alone
+	 * does not turn operational metrics on.
 	 */
 	bool operational_enabled;
 
@@ -951,6 +974,14 @@ as_metrics_runtime_node_close(as_error* err, struct as_cluster_s* cluster, struc
  */
 void
 as_metrics_departed_destroy(struct as_cluster_s* cluster);
+
+/**
+ * @private
+ * Move a rejoined node's nodes_departed entry to as_node.metrics_prior.
+ * Caller holds as_cluster.metrics_lock.
+ */
+AS_EXTERN void
+as_metrics_node_rejoin(struct as_cluster_s* cluster, struct as_node_s* node);
 
 /**
  * Enable periodic metrics collection and the export timer.

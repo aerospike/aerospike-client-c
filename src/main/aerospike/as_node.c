@@ -213,6 +213,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->conn_tls_handshake_failures = 0;
 	node->conn_auth_failures = 0;
 	node->conn_latency = NULL;
+	node->metrics_prior = NULL;
 	node->conn_iter = 0;
 
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;
@@ -323,6 +324,7 @@ as_node_destroy(as_node* node)
 	if (conn_latency) {
 		as_latency_release(conn_latency);
 	}
+	as_metrics_node_snapshot_destroy(node->metrics_prior);
 	cf_free(node);
 }
 

@@ -38,6 +38,7 @@ as_latency_create(uint8_t columns, uint8_t shift, as_metrics_latency_unit unit)
 	latency->shift = shift;
 	latency->size = columns;
 	latency->unit = unit;
+	latency->min = UINT64_MAX;
 	return latency;
 }
 
@@ -67,6 +68,10 @@ as_latency_gc_init(as_cluster* cluster, as_latency** slot, const as_metrics_poli
 		for (uint8_t k = 0; k < latency->size; k++) {
 			as_store_uint64(&latency->buckets[k], 0);
 		}
+		as_store_uint64(&latency->sum, 0);
+		as_store_uint64(&latency->count, 0);
+		as_store_uint64(&latency->min, UINT64_MAX);
+		as_store_uint64(&latency->max, 0);
 		return;
 	}
 
@@ -90,6 +95,32 @@ latency_bucket_index(as_latency* latency, uint64_t elapsed)
 	return last_bucket;
 }
 
+static void
+latency_set_min(uint64_t* target, uint64_t value)
+{
+	uint64_t cur = as_load_uint64(target);
+
+	while (value < cur) {
+		if (as_cas_uint64(target, cur, value)) {
+			return;
+		}
+		cur = as_load_uint64(target);
+	}
+}
+
+static void
+latency_set_max(uint64_t* target, uint64_t value)
+{
+	uint64_t cur = as_load_uint64(target);
+
+	while (value > cur) {
+		if (as_cas_uint64(target, cur, value)) {
+			return;
+		}
+		cur = as_load_uint64(target);
+	}
+}
+
 void
 as_latency_add(as_latency* latency, uint64_t elapsed_nanos)
 {
@@ -109,6 +140,10 @@ as_latency_add(as_latency* latency, uint64_t elapsed_nanos)
 
 	uint8_t index = latency_bucket_index(latency, elapsed);
 	as_incr_uint64(&latency->buckets[index]);
+	as_add_uint64(&latency->sum, (int64_t)elapsed);
+	as_incr_uint64(&latency->count);
+	latency_set_min(&latency->min, elapsed);
+	latency_set_max(&latency->max, elapsed);
 
 	as_latency_release(latency);
 }

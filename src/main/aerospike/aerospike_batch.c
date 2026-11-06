@@ -307,40 +307,52 @@ as_batch_message_free(char** message)
 	}
 }
 
+// The default message names result_code. When a record's error is parsed from a batch
+// response, err->code is still AEROSPIKE_OK, so callers pass the record's own result.
 static as_status
-as_batch_message_copy(as_error* err, as_node* node, char** trg)
+as_batch_message_copy(as_error* err, as_node* node, as_status result_code, char** trg)
 {
 	as_batch_message_free(trg);
 
-	if (err->message[0] == '\0') {
-		as_error_default_message(err, node);
+	const char* src = err->message;
+	as_error default_err;
+
+	if (src[0] == '\0') {
+		as_error_init(&default_err);
+		default_err.code = result_code;
+		as_error_default_message(&default_err, node);
+		src = default_err.message;
 	}
 
-	size_t len = strlen(err->message);
+	size_t len = strlen(src);
 	char* message = cf_malloc(len + 1);
 
 	if (! message) {
 		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to allocate batch error detail message");
 	}
 
-	memcpy(message, err->message, len);
+	memcpy(message, src, len);
 	message[len] = '\0';
 	*trg = message;
 	return AEROSPIKE_OK;
 }
 
 static inline as_status
-as_batch_result_set_error_detail(as_error* err, as_node* node, as_batch_result* result)
+as_batch_result_set_error_detail(
+	as_error* err, as_node* node, as_status result_code, as_batch_result* result
+	)
 {
 	result->subcode = err->subcode;
-	return as_batch_message_copy(err, node, &result->message);
+	return as_batch_message_copy(err, node, result_code, &result->message);
 }
 
 static inline as_status
-as_batch_record_set_error_detail(as_error* err, as_node* node, as_batch_base_record* rec)
+as_batch_record_set_error_detail(
+	as_error* err, as_node* node, as_status result_code, as_batch_base_record* rec
+	)
 {
 	rec->subcode = err->subcode;
-	return as_batch_message_copy(err, node, &rec->message);
+	return as_batch_message_copy(err, node, result_code, &rec->message);
 }
 
 static as_status
@@ -469,7 +481,7 @@ as_batch_result_parse_udf_error(
 	// Pointer pp does not advance in as_command_parse_udf_failure().
 	// Pointer pp will advance in as_batch_parse_record().
 	as_command_parse_udf_failure(*pp, err, node, msg, msg->result_code);
-	as_status status = as_batch_result_set_error_detail(err, node, result);
+	as_status status = as_batch_result_set_error_detail(err, node, msg->result_code, result);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -488,7 +500,7 @@ as_batch_record_parse_udf_error(
 	// Pointer pp does not advance in as_command_parse_udf_failure().
 	// Pointer pp will advance in as_batch_parse_record().
 	as_command_parse_udf_failure(*pp, err, node, msg, msg->result_code);
-	as_status status = as_batch_record_set_error_detail(err, node, rec);
+	as_status status = as_batch_record_set_error_detail(err, node, msg->result_code, rec);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -575,7 +587,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 			case AEROSPIKE_FILTERED_OUT:
 				// Do not set error row boolean for backwards compatibility.
 				// However, the error message needs to include the expression trace.
-				status = as_batch_record_set_error_detail(&err, cmd->node, rec);
+				status = as_batch_record_set_error_detail(&err, cmd->node, msg->result_code, rec);
 
 				if (status != AEROSPIKE_OK) {
 					as_event_response_error(cmd, &err);
@@ -587,7 +599,7 @@ as_batch_async_parse_records(as_event_command* cmd)
 				rec->in_doubt = as_batch_in_doubt(&rec->key, cmd->txn, rec->has_write, cmd->command_sent_counter);
 				executor->error_row = true;
 
-				status = as_batch_record_set_error_detail(&err, cmd->node, rec);
+				status = as_batch_record_set_error_detail(&err, cmd->node, msg->result_code, rec);
 
 				if (status != AEROSPIKE_OK) {
 					as_event_response_error(cmd, &err);
@@ -671,7 +683,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 					case AEROSPIKE_FILTERED_OUT:
 						// Do not set error row boolean for backwards compatibility.
 						// However, the error message needs to include the expression trace.
-						status = as_batch_record_set_error_detail(err, node, rec);
+						status = as_batch_record_set_error_detail(err, node, msg->result_code, rec);
 
 						if (status != AEROSPIKE_OK) {
 							return status;
@@ -682,7 +694,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 						rec->in_doubt = as_batch_in_doubt(&rec->key, txn, rec->has_write, cmd->sent);
 						*task->error_row = true;
 
-						status = as_batch_record_set_error_detail(err, node, rec);
+						status = as_batch_record_set_error_detail(err, node, msg->result_code, rec);
 
 						if (status != AEROSPIKE_OK) {
 							return status;
@@ -730,7 +742,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 					case AEROSPIKE_FILTERED_OUT:
 						// Do not set error row boolean for backwards compatibility.
 						// However, the error message needs to include the expression trace.
-						status = as_batch_result_set_error_detail(err, node, res);
+						status = as_batch_result_set_error_detail(err, node, msg->result_code, res);
 
 						if (status != AEROSPIKE_OK) {
 							return status;
@@ -741,7 +753,7 @@ as_batch_parse_records(as_error* err, as_command* cmd, as_node* node, uint8_t* b
 						res->in_doubt = as_batch_in_doubt(res->key, txn, task->has_write, cmd->sent);
 						*task->error_row = true;
 
-						status = as_batch_result_set_error_detail(err, node, res);
+						status = as_batch_result_set_error_detail(err, node, msg->result_code, res);
 
 						if (status != AEROSPIKE_OK) {
 							return status;
@@ -2956,7 +2968,7 @@ as_single_execute_record(as_batch_task_records* btr, as_error* err)
 		case AEROSPIKE_FILTERED_OUT: {
 			// Do not set error row boolean for backwards compatibility.
 			// However, the error message needs to include the expression trace.
-			as_status detail_status = as_batch_record_set_error_detail(err, btr->base.node, rec);
+			as_status detail_status = as_batch_record_set_error_detail(err, btr->base.node, status, rec);
 
 			if (detail_status != AEROSPIKE_OK) {
 				return detail_status;
@@ -2970,7 +2982,7 @@ as_single_execute_record(as_batch_task_records* btr, as_error* err)
 			rec->in_doubt = err->in_doubt;
 			*btr->base.error_row = true;
 
-			as_status detail_status = as_batch_record_set_error_detail(err, btr->base.node, rec);
+			as_status detail_status = as_batch_record_set_error_detail(err, btr->base.node, status, rec);
 
 			if (detail_status != AEROSPIKE_OK) {
 				return detail_status;
@@ -3011,7 +3023,7 @@ as_single_execute_key(as_batch_task_keys* btk, as_error* err)
 		case AEROSPIKE_FILTERED_OUT: {
 			// Do not set error row boolean for backwards compatibility.
 			// However, the error message needs to include the expression trace.
-			as_status detail_status = as_batch_result_set_error_detail(err, btk->base.node, res);
+			as_status detail_status = as_batch_result_set_error_detail(err, btk->base.node, status, res);
 
 			if (detail_status != AEROSPIKE_OK) {
 				return detail_status;
@@ -3025,7 +3037,7 @@ as_single_execute_key(as_batch_task_keys* btk, as_error* err)
 			res->in_doubt = err->in_doubt;
 			*btk->base.error_row = true;
 
-			as_status detail_status = as_batch_result_set_error_detail(err, btk->base.node, res);
+			as_status detail_status = as_batch_result_set_error_detail(err, btk->base.node, status, res);
 
 			if (detail_status != AEROSPIKE_OK) {
 				return detail_status;
@@ -3095,7 +3107,7 @@ as_single_handle_error(as_batch_base_record* rec, as_single_data* data, as_error
 			// It's okay to pass in NULL for node because single record responses already
 			// set the default error message and the node is only used for the default
 			// error message.
-			as_status detail_status = as_batch_record_set_error_detail(err, NULL, rec);
+			as_status detail_status = as_batch_record_set_error_detail(err, NULL, err->code, rec);
 
 			if (detail_status != AEROSPIKE_OK) {
 				as_single_executor_error(err, data);
@@ -3115,7 +3127,7 @@ as_single_handle_error(as_batch_base_record* rec, as_single_data* data, as_error
 		case AEROSPIKE_FILTERED_OUT: {
 			// Do not set error row boolean for backwards compatibility.
 			// However, the error message needs to include the expression trace.
-			as_status detail_status = as_batch_record_set_error_detail(err, NULL, rec);
+			as_status detail_status = as_batch_record_set_error_detail(err, NULL, err->code, rec);
 
 			if (detail_status != AEROSPIKE_OK) {
 				as_single_executor_error(err, data);
@@ -3133,7 +3145,7 @@ as_single_handle_error(as_batch_base_record* rec, as_single_data* data, as_error
 			// It's okay to pass in NULL for node because single record responses already
 			// set the default error message and the node is only used for the default
 			// error message.
-			as_status detail_status = as_batch_record_set_error_detail(err, NULL, rec);
+			as_status detail_status = as_batch_record_set_error_detail(err, NULL, err->code, rec);
 
 			if (detail_status != AEROSPIKE_OK) {
 				as_single_executor_error(err, data);
@@ -3233,7 +3245,7 @@ as_txn_verify_listener(as_error* err, as_record* record, void* udata, as_event_l
 		case AEROSPIKE_FILTERED_OUT: {
 			// Do not set error row boolean for backwards compatibility.
 			// However, the error message needs to include the expression trace.
-			as_status detail_status = as_batch_record_set_error_detail(err, NULL, rec);
+			as_status detail_status = as_batch_record_set_error_detail(err, NULL, err->code, rec);
 
 			if (detail_status != AEROSPIKE_OK) {
 				as_single_executor_error(err, data);
@@ -3250,7 +3262,7 @@ as_txn_verify_listener(as_error* err, as_record* record, void* udata, as_event_l
 			// It's okay to pass in NULL for node because single record responses already
 			// set the default error message and the node is only used for the default
 			// error message.
-			as_status detail_status = as_batch_record_set_error_detail(err, NULL, rec);
+			as_status detail_status = as_batch_record_set_error_detail(err, NULL, err->code, rec);
 
 			if (detail_status != AEROSPIKE_OK) {
 				as_single_executor_error(err, data);

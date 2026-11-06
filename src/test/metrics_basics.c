@@ -2430,6 +2430,209 @@ TEST(metrics_async_batch_single_key, "an async single-key batch counts once as a
 	assert_true(after_get.read_latency == after_batch.read_latency + 1);
 }
 
+TEST(metrics_attempt_failure_split, "each failed attempt increments one namespace snapshot counter")
+{
+	as_ns_metrics metrics;
+	memset(&metrics, 0, sizeof(metrics));
+
+	as_node_add_attempt_failure(&metrics, AEROSPIKE_ERR_TIMEOUT, false);
+	as_node_add_attempt_failure(&metrics, AEROSPIKE_ERR_TIMEOUT, false);
+	as_node_add_attempt_failure(&metrics, AEROSPIKE_ERR_TIMEOUT, true);
+	as_node_add_attempt_failure(&metrics, AEROSPIKE_ERR_RECORD_BUSY, false);
+	as_node_add_attempt_failure(&metrics, AEROSPIKE_ERR_RECORD_TOO_BIG, false);
+	as_node_add_attempt_failure(&metrics, AEROSPIKE_ERR_DEVICE_OVERLOAD, false);
+	as_node_add_attempt_failure(&metrics, AEROSPIKE_ERR_RECORD_GENERATION, false);
+	as_node_add_attempt_failure(&metrics, AEROSPIKE_ERR_ASYNC_CONNECTION, false);
+
+	// Not failures on the node.
+	as_node_add_attempt_failure(&metrics, AEROSPIKE_OK, false);
+	as_node_add_attempt_failure(&metrics, AEROSPIKE_ERR_RECORD_NOT_FOUND, false);
+	as_node_add_attempt_failure(&metrics, AEROSPIKE_ERR_NO_MORE_CONNECTIONS, false);
+	as_node_add_attempt_failure(&metrics, AEROSPIKE_MAX_ERROR_RATE, false);
+	as_node_add_attempt_failure(&metrics, AEROSPIKE_ERR_INVALID_NODE, false);
+
+	// An unsampled command has no metrics.
+	as_node_add_attempt_failure(NULL, AEROSPIKE_ERR_TIMEOUT, false);
+
+	assert_int_eq(metrics.client_timeout_count, 2);
+	assert_int_eq(metrics.server_timeout_count, 1);
+	assert_int_eq(metrics.snapshot_key_busy_count, 1);
+	assert_int_eq(metrics.record_too_big_count, 1);
+	assert_int_eq(metrics.device_overload_count, 1);
+	assert_int_eq(metrics.snapshot_error_count, 2);
+
+	// as_node_stats counters are recorded separately.
+	assert_int_eq(metrics.error_count, 0);
+	assert_int_eq(metrics.timeout_count, 0);
+	assert_int_eq(metrics.key_busy_count, 0);
+}
+
+typedef struct metrics_namespace_totals_s {
+	uint64_t errors;
+	uint64_t bytes_in;
+	uint64_t bytes_out;
+} metrics_namespace_totals;
+
+// Sums the "test" namespace counters over all nodes.
+static bool
+metrics_read_test_namespace_totals(metrics_namespace_totals* totals)
+{
+	memset(totals, 0, sizeof(*totals));
+
+	as_error err;
+	as_metrics_snapshot* metrics_snapshot = NULL;
+
+	if (aerospike_get_metrics_snapshot(as, &err, &metrics_snapshot) != AEROSPIKE_OK) {
+		return false;
+	}
+
+	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
+		const as_metrics_node_snapshot* node_snapshot = metrics_snapshot->nodes[i];
+
+		for (uint32_t j = 0; j < node_snapshot->namespace_count; j++) {
+			const as_metrics_namespace_snapshot* ns = &node_snapshot->namespaces[j];
+
+			if (strcmp(ns->name, "test") != 0) {
+				continue;
+			}
+			totals->errors += ns->errors;
+			totals->bytes_in += ns->bytes_in;
+			totals->bytes_out += ns->bytes_out;
+		}
+	}
+	as_metrics_snapshot_destroy(metrics_snapshot);
+	return true;
+}
+
+// The record exists with a lower generation, so the server rejects this write.
+static void
+metrics_generation_mismatch_record(as_record* rec, as_policy_write* policy)
+{
+	as_record_init(rec, 1);
+	as_record_set_int64(rec, "v", 2);
+	rec->gen = 60000;
+
+	as_policy_write_init(policy);
+	policy->gen = AS_POLICY_GEN_EQ;
+}
+
+TEST(metrics_failed_attempt_adds_no_bytes, "a failed write adds one namespace error and no bytes")
+{
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq(metrics_put(&err, "metrics-failed-attempt"), AEROSPIKE_OK);
+
+	metrics_namespace_totals before;
+	bool before_ok = metrics_read_test_namespace_totals(&before);
+
+	as_key key;
+	as_key_init_str(&key, "test", "metrics", "metrics-failed-attempt");
+	as_record rec;
+	as_policy_write write_policy;
+	metrics_generation_mismatch_record(&rec, &write_policy);
+	as_status write_status = aerospike_key_put(as, &err, &write_policy, &key, &rec);
+	as_record_destroy(&rec);
+	as_key_destroy(&key);
+
+	metrics_namespace_totals after_failure;
+	bool after_failure_ok = metrics_read_test_namespace_totals(&after_failure);
+
+	as_status put_status = metrics_put(&err, "metrics-failed-attempt");
+
+	metrics_namespace_totals after_success;
+	bool after_success_ok = metrics_read_test_namespace_totals(&after_success);
+
+	metrics_disable();
+	as_metrics_policy_destroy(&policy);
+
+	assert_true(before_ok);
+	assert_int_eq(write_status, AEROSPIKE_ERR_RECORD_GENERATION);
+	assert_true(after_failure_ok);
+	assert_true(after_failure.errors == before.errors + 1);
+	assert_true(after_failure.bytes_in == before.bytes_in);
+	assert_true(after_failure.bytes_out == before.bytes_out);
+
+	assert_int_eq(put_status, AEROSPIKE_OK);
+	assert_true(after_success_ok);
+	assert_true(after_success.errors == after_failure.errors);
+	assert_true(after_success.bytes_in > after_failure.bytes_in);
+	assert_true(after_success.bytes_out > after_failure.bytes_out);
+}
+
+typedef struct metrics_async_write_result_s {
+	as_monitor monitor;
+	as_status status;
+} metrics_async_write_result;
+
+static void
+metrics_async_write_listener(as_error* err, void* udata, as_event_loop* event_loop)
+{
+	metrics_async_write_result* result = udata;
+
+	if (err) {
+		result->status = err->code;
+	}
+	else {
+		result->status = AEROSPIKE_OK;
+	}
+	as_monitor_notify(&result->monitor);
+}
+
+TEST(metrics_async_failed_attempt_adds_no_bytes, "a failed async write adds one namespace error and no bytes")
+{
+	if (as_event_loop_size == 0) {
+		info("Skip because no event loops are running");
+		return;
+	}
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+	assert_int_eq(metrics_put(&err, "metrics-async-failed-attempt"), AEROSPIKE_OK);
+
+	metrics_namespace_totals before;
+	bool before_ok = metrics_read_test_namespace_totals(&before);
+
+	metrics_async_write_result result;
+	as_monitor_init(&result.monitor);
+	result.status = AEROSPIKE_OK;
+
+	as_key key;
+	as_key_init_str(&key, "test", "metrics", "metrics-async-failed-attempt");
+	as_record rec;
+	as_policy_write write_policy;
+	metrics_generation_mismatch_record(&rec, &write_policy);
+	as_monitor_begin(&result.monitor);
+	as_status write_status = aerospike_key_put_async(as, &err, &write_policy, &key, &rec,
+		metrics_async_write_listener, &result, NULL, NULL);
+
+	if (write_status == AEROSPIKE_OK) {
+		as_monitor_wait(&result.monitor);
+	}
+	as_record_destroy(&rec);
+	as_key_destroy(&key);
+	as_monitor_destroy(&result.monitor);
+
+	metrics_namespace_totals after_failure;
+	bool after_failure_ok = metrics_read_test_namespace_totals(&after_failure);
+
+	metrics_disable();
+	as_metrics_policy_destroy(&policy);
+
+	assert_true(before_ok);
+	assert_int_eq(write_status, AEROSPIKE_OK);
+	assert_int_eq(result.status, AEROSPIKE_ERR_RECORD_GENERATION);
+	assert_true(after_failure_ok);
+	assert_true(after_failure.errors == before.errors + 1);
+	assert_true(after_failure.bytes_in == before.bytes_in);
+	assert_true(after_failure.bytes_out == before.bytes_out);
+}
+
 static bool
 metrics_read_dynamic_client_config_policy_ex(
 	const char* yaml_body, as_metrics_policy* policy, bool app_report_dir_empty,
@@ -2781,6 +2984,9 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_operational_sampler_off);
 	suite_add(metrics_batch_single_key);
 	suite_add(metrics_async_batch_single_key);
+	suite_add(metrics_attempt_failure_split);
+	suite_add(metrics_failed_attempt_adds_no_bytes);
+	suite_add(metrics_async_failed_attempt_adds_no_bytes);
 	suite_add(metrics_dynamic_config_export);
 	suite_add(metrics_dynamic_config_keeps_export_interval);
 	suite_add(metrics_dynamic_config_rejects_unknown_exporter);

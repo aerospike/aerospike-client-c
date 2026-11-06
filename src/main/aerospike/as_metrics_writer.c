@@ -364,13 +364,13 @@ as_metrics_write_node_snapshot(as_string_builder* sb, const as_metrics_node_snap
 		as_string_builder_append(sb, namespace_snapshot->name ? namespace_snapshot->name : "");
 		as_string_builder_append_char(sb, ',');
 		// header(2) has one errors column. This is the sampled
-		// terminal series, including record too big and device overload.
+		// per-attempt series, including record too big and device overload.
 		// It is not as_node_stats.error_count. See as_node_stats.
 		as_string_builder_append_uint64(sb, namespace_snapshot->errors +
 			namespace_snapshot->record_too_big + namespace_snapshot->device_overload);
 		as_string_builder_append_char(sb, ',');
 		// header(2) has one timeouts column. This is the sampled
-		// terminal client plus server timeouts. It is not as_node_stats.timeout_count.
+		// per-attempt client plus server timeouts. It is not as_node_stats.timeout_count.
 		// See as_node_stats.
 		as_string_builder_append_uint64(sb,
 			namespace_snapshot->client_timeouts + namespace_snapshot->server_timeouts);

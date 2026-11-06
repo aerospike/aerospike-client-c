@@ -83,6 +83,8 @@ next_reader(as_event_command* reader)
 static void
 cancel_command(as_event_command* cmd, as_error* err, bool retry, bool timeout)
 {
+	as_event_add_attempt_error(cmd, err);
+
 	if (retry && as_event_command_retry(cmd, timeout)) {
 		return;
 	}

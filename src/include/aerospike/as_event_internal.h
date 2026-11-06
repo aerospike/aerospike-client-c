@@ -269,9 +269,32 @@ as_event_conn_begin(as_event_command* cmd)
 	}
 }
 
+/**
+ * @private
+ * Record the failure of this attempt once. Clears cmd->metrics so a later error
+ * path for the same attempt does not count it again. as_event_command_begin()
+ * sets it for the next attempt. See as_node_add_attempt_failure().
+ */
+static inline void
+as_event_add_attempt_failure(as_event_command* cmd, as_status status, bool server_timeout)
+{
+	as_ns_metrics* metrics = cmd->metrics;
+	cmd->metrics = NULL;
+	as_node_add_attempt_failure(metrics, status, server_timeout);
+}
+
 //---------------------------------
 // Common Functions
 //---------------------------------
+
+/**
+ * @private
+ * as_event_add_attempt_failure() for an error. A timeout with an empty message,
+ * or a message that starts with "Client timeout" or "Pipeline timeout", is a
+ * client timeout. Any other timeout came from the server.
+ */
+void
+as_event_add_attempt_error(as_event_command* cmd, as_error* err);
 
 as_status
 as_event_command_execute(as_event_command* cmd, as_error* err);

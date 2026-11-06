@@ -581,6 +581,7 @@ as_uv_connect_error(as_event_command* cmd, as_error* err)
 	uv_close((uv_handle_t*)cmd->conn, as_uv_connection_closed);
 	as_event_decr_conn(cmd);
 	cmd->event_loop->errors++;
+	as_event_add_attempt_error(cmd, err);
 
 	if (! as_event_command_retry(cmd, true)) {
 		as_event_timer_stop(cmd);

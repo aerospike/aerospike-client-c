@@ -1019,7 +1019,7 @@ as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics);
  * do not change as_node_stats.error_count, timeout_count, or key_busy_count.
  * See as_metrics_namespace_snapshot.
  */
-void
+AS_EXTERN void
 as_node_add_attempt_failure(as_ns_metrics* metrics, as_status status, bool server_timeout);
 
 /**

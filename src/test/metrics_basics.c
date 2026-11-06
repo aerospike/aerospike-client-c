@@ -425,24 +425,26 @@ metrics_read_cluster_line(const char* dir, char* line, size_t line_size)
 #endif
 }
 
-// Return true when the first "<type>[" entry on the line has a nonzero bucket.
+// Return true when any "<type>[" entry on the line has a nonzero bucket.
+// Each namespace has its own entry, and the empty namespace used by info and
+// admin commands can be written before the namespace under test.
 static bool
 metrics_file_line_has_latency(const char* line, const char* type)
 {
 	char token[16];
 	snprintf(token, sizeof(token), "%s[", type);
+	size_t token_len = strlen(token);
 	const char* p = strstr(line, token);
 
-	if (!p) {
-		return false;
-	}
+	while (p) {
+		p += token_len;
 
-	p += strlen(token);
-
-	for (; *p && *p != ']'; p++) {
-		if (*p >= '1' && *p <= '9') {
-			return true;
+		for (; *p && *p != ']'; p++) {
+			if (*p >= '1' && *p <= '9') {
+				return true;
+			}
 		}
+		p = strstr(p, token);
 	}
 	return false;
 }

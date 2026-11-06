@@ -685,6 +685,18 @@ as_command_prepare_error(as_command* cmd, as_error* err)
 	}
 }
 
+static inline void
+as_command_add_bytes(as_command* cmd, as_ns_metrics* metrics, uint64_t bytes_in)
+{
+	// Only a successful RPC adds bytes. See as_metrics_namespace_snapshot.bytes_in.
+	if (!metrics) {
+		return;
+	}
+
+	as_node_add_bytes_out(metrics, cmd->buf_size);
+	as_node_add_bytes_in(metrics, bytes_in);
+}
+
 static void
 as_command_add_latencies(as_command* cmd, as_node* node, as_ns_metrics* metrics, uint64_t attempt_begin)
 {
@@ -814,9 +826,10 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 		status = as_node_get_connection(err, node, cmd, cmd->deadline_ms, &socket, &ctx);
 
 		if (status != AEROSPIKE_OK) {
+			// A connection timeout is a client timeout.
+			as_node_add_attempt_failure(metrics, status, false);
+
 			// Timeouts retry. A positive status such as invalid user/password does not.
-			// as_node_stats counts each attempt. The snapshot counts a timeout once
-			// if the user call fails overall. See as_node_add_terminal_result().
 			if (status == AEROSPIKE_ERR_TIMEOUT) {
 				as_node_add_timeout(node, cmd->ns, metrics);
 				goto Retry;
@@ -837,16 +850,14 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 										  cmd->socket_timeout, cmd->deadline_ms);
 		
 		if (status != AEROSPIKE_OK) {
+			as_node_add_attempt_failure(metrics, status, false);
+
 			// Socket errors are considered temporary anomalies.  Retry.
 			// Close socket to flush out possible garbage.	Do not put back in pool.
 			as_node_close_conn_error(node, &socket, socket.pool);
 			goto Retry;
 		}
 		cmd->sent++;
-
-		if (metrics) {
-			as_node_add_bytes_out(metrics, cmd->buf_size);
-		}
 
 		uint64_t bytes_in = 0;
 
@@ -858,11 +869,8 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 			status = as_command_read_messages(err, cmd, &socket, node, &bytes_in, &ctx);
 		}
 
-		if (metrics) {
-			as_node_add_bytes_in(metrics, bytes_in);
-		}
-
 		if (status == AEROSPIKE_OK) {
+			as_command_add_bytes(cmd, metrics, bytes_in);
 			as_command_add_latencies(cmd, node, metrics, attempt_begin);
 
 			// Reset error code if retry had occurred.
@@ -872,6 +880,7 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 		}
 		else {
 			err->code = status;
+			as_node_add_attempt_failure(metrics, status, is_server_timeout(err));
 
 			// Close socket on errors that can leave unread data in socket.
 			switch (status) {
@@ -908,10 +917,6 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 				case AEROSPIKE_ERR_CLIENT_ABORT:
 				case AEROSPIKE_ERR_CLIENT:
 					as_node_add_error(node, cmd->ns, metrics);
-
-					if (cmd->metrics_sample_decision) {
-						as_node_add_terminal_result(node, cmd->ns, metrics, err);
-					}
 					as_node_close_conn_error(node, &socket, socket.pool);
 					if (ctx.is_single) {
 						as_node_release(node);
@@ -921,35 +926,24 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 				
 				case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 					// Do not increment error count on record not found.
-					// Add latency metrics instead.
+					// Add bytes and latency metrics instead.
+					as_command_add_bytes(cmd, metrics, bytes_in);
 					as_command_add_latencies(cmd, node, metrics, attempt_begin);
 					as_command_prepare_error(cmd, err);
 					break;
 
 				case AEROSPIKE_ERR_RECORD_BUSY:
 					as_node_add_key_busy(node, cmd->ns, metrics);
-
-					if (cmd->metrics_sample_decision) {
-						as_node_add_terminal_result(node, cmd->ns, metrics, err);
-					}
 					as_command_prepare_error(cmd, err);
 					break;
 
 				case AEROSPIKE_ERR_RECORD_TOO_BIG:
 					as_node_add_error(node, cmd->ns, metrics);
-
-					if (cmd->metrics_sample_decision) {
-						as_node_add_terminal_result(node, cmd->ns, metrics, err);
-					}
 					as_command_prepare_error(cmd, err);
 					break;
 
 				default:
 					as_node_add_error(node, cmd->ns, metrics);
-
-					if (cmd->metrics_sample_decision) {
-						as_node_add_terminal_result(node, cmd->ns, metrics, err);
-					}
 					as_command_prepare_error(cmd, err);
 					break;
 			}
@@ -1034,19 +1028,11 @@ Retry:
 	// Fill in timeout stats if timeout occurred.
 	if (err->code == AEROSPIKE_ERR_TIMEOUT) {
 		// Server timeouts have a message.  Client timeouts do not have a message.
-		// Record the split before as_error_update() writes a message, which would
-		// make a client timeout look like a server timeout.
-		if (cmd->metrics_sample_decision) {
-			as_node_add_terminal_result(node, cmd->ns, NULL, err);
-		}
 		const char* type = is_server_timeout(err)? "Server" : "Client";
 		as_error_update(err, AEROSPIKE_ERR_TIMEOUT,
 			"%s timeout: socket=%u total=%u iterations=%u lastNode=%s",
 			type, cmd->policy->socket_timeout, cmd->policy->total_timeout, cmd->iteration,
 			as_node_get_address_string(node));
-	}
-	else if (cmd->metrics_sample_decision) {
-		as_node_add_terminal_result(node, cmd->ns, NULL, err);
 	}
 
 	if (ctx.is_single) {

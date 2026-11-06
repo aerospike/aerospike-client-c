@@ -349,7 +349,7 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Count of add node failures in the most recent cluster tend iteration.
+	 * Count of peers that failed node validation. Cumulative since the cluster was created.
 	 */
 	uint32_t invalid_node_count;
 

@@ -211,7 +211,7 @@ as_admin_write_whitelist(uint8_t** p, as_error* err, const char** whitelist, int
 static as_status
 as_admin_send(
 	as_error* err, as_socket* sock, as_node* node, uint8_t* buffer, uint8_t* end,
-	uint32_t socket_timeout, uint64_t deadline_ms, bool sample
+	uint32_t socket_timeout, uint64_t deadline_ms, uint64_t* bytes_out
 	)
 {
 	uint64_t len = end - buffer;
@@ -220,12 +220,8 @@ as_admin_send(
 	
 	as_status status = as_socket_write_deadline(err, sock, node, buffer, len, socket_timeout, deadline_ms);
 
-	if (status == AEROSPIKE_OK && sample && node) {
-		as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);
-
-		if (metrics) {
-			as_node_add_bytes_out(metrics, len);
-		}
+	if (status == AEROSPIKE_OK && bytes_out) {
+		*bytes_out += len;
 	}
 	return status;
 }
@@ -233,20 +229,32 @@ as_admin_send(
 static inline as_status
 as_admin_receive(
 	as_error* err, as_socket* sock, as_node* node, uint8_t* buffer, uint64_t len,
-	uint32_t socket_timeout, uint64_t deadline_ms, as_socket_context* ctx, bool sample
+	uint32_t socket_timeout, uint64_t deadline_ms, as_socket_context* ctx, uint64_t* bytes_in
 	)
 {
 	as_status status = as_socket_read_deadline(err, sock, node, buffer, len, socket_timeout,
 		deadline_ms, ctx);
 
-	if (status == AEROSPIKE_OK && sample && node) {
-		as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);
-
-		if (metrics) {
-			as_node_add_bytes_in(metrics, len);
-		}
+	if (status == AEROSPIKE_OK && bytes_in) {
+		*bytes_in += len;
 	}
 	return status;
+}
+
+static void
+as_admin_add_bytes(as_node* node, uint64_t bytes_out, uint64_t bytes_in)
+{
+	// Admin commands have no user namespace, so the bytes are stored on the
+	// empty-namespace entry. Only a successful admin command adds bytes.
+	// See as_metrics_namespace_snapshot.bytes_in.
+	as_ns_metrics* metrics = as_node_prepare_metrics(node, NULL);
+
+	if (!metrics) {
+		return;
+	}
+
+	as_node_add_bytes_out(metrics, bytes_out);
+	as_node_add_bytes_in(metrics, bytes_in);
 }
 
 static uint32_t
@@ -276,17 +284,18 @@ as_admin_execute_node(
 	}
 
 	// One namespace-bytes decision for this admin command. Send and receive
-	// share it. Admin commands have no user namespace, so the bytes are stored
-	// on the empty-namespace entry.
+	// share it. See as_admin_add_bytes().
 	bool sample = as_cluster_sample_operational(node->cluster);
-	status = as_admin_send(err, &socket, node, buffer, end, 0, deadline_ms, sample);
+	uint64_t bytes_out = 0;
+	status = as_admin_send(err, &socket, node, buffer, end, 0, deadline_ms, &bytes_out);
 	
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
 		return status;
 	}
 
-	status = as_admin_receive(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms, NULL, sample);
+	uint64_t bytes_in = 0;
+	status = as_admin_receive(err, &socket, node, buffer, HEADER_SIZE, 0, deadline_ms, NULL, &bytes_in);
 
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
@@ -299,6 +308,10 @@ as_admin_execute_node(
 	
 	if (status) {
 		return as_error_set_message(err, status, as_error_string(status));
+	}
+
+	if (sample) {
+		as_admin_add_bytes(node, bytes_out, bytes_in);
 	}
 	return status;
 }
@@ -322,7 +335,7 @@ as_admin_execute(
 static as_status
 as_admin_read_blocks(
 	as_error* err, as_socket* sock, as_node* node, uint64_t deadline_ms, as_admin_parse_fn parse_fn,
-	as_vector* list, bool sample
+	as_vector* list, uint64_t* bytes_in
 	)
 {
 	as_status status = AEROSPIKE_OK;
@@ -332,7 +345,7 @@ as_admin_read_blocks(
 	while (true) {
 		// Read header
 		as_proto proto;
-		status = as_admin_receive(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0, deadline_ms, NULL, sample);
+		status = as_admin_receive(err, sock, node, (uint8_t*)&proto, sizeof(as_proto), 0, deadline_ms, NULL, bytes_in);
 
 		if (status) {
 			break;
@@ -355,7 +368,7 @@ as_admin_read_blocks(
 			}
 			
 			// Read remaining message bytes in group
-			status = as_admin_receive(err, sock, node, buf, size, 0, deadline_ms, NULL, sample);
+			status = as_admin_receive(err, sock, node, buf, size, 0, deadline_ms, NULL, bytes_in);
 
 			if (status) {
 				break;
@@ -405,7 +418,8 @@ as_admin_read_list(
 	}
 	
 	bool sample = as_cluster_sample_operational(node->cluster);
-	status = as_admin_send(err, &socket, node, command, end, 0, deadline_ms, sample);
+	uint64_t bytes_out = 0;
+	status = as_admin_send(err, &socket, node, command, end, 0, deadline_ms, &bytes_out);
 	
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
@@ -413,7 +427,8 @@ as_admin_read_list(
 		return status;
 	}
 	
-	status = as_admin_read_blocks(err, &socket, node, deadline_ms, parse_fn, list, sample);
+	uint64_t bytes_in = 0;
+	status = as_admin_read_blocks(err, &socket, node, deadline_ms, parse_fn, list, &bytes_in);
 
 	if (status) {
 		as_node_close_conn_error(node, &socket, socket.pool);
@@ -421,6 +436,9 @@ as_admin_read_list(
 		return status;
 	}
 
+	if (sample) {
+		as_admin_add_bytes(node, bytes_out, bytes_in);
+	}
 	as_node_put_connection(node, &socket);
 	as_node_release(node);
 	return status;
@@ -464,13 +482,13 @@ as_cluster_login(
 		p = as_admin_write_field_string(p, CLEAR_PASSWORD, cluster->password);
 	}
 
-	as_status status = as_admin_send(err, sock, NULL, buffer, p, 0, deadline_ms, false);
+	as_status status = as_admin_send(err, sock, NULL, buffer, p, 0, deadline_ms, NULL);
 
 	if (status) {
 		return status;
 	}
 
-	status = as_admin_receive(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms, NULL, false);
+	status = as_admin_receive(err, sock, NULL, buffer, HEADER_SIZE, 0, deadline_ms, NULL, NULL);
 
 	if (status) {
 		return status;
@@ -503,7 +521,7 @@ as_cluster_login(
 	}
 
 	// Read remaining message bytes in group
-	status = as_admin_receive(err, sock, NULL, buffer, receive_size, 0, deadline_ms, NULL, false);
+	status = as_admin_receive(err, sock, NULL, buffer, receive_size, 0, deadline_ms, NULL, NULL);
 
 	if (status) {
 		return status;
@@ -597,13 +615,15 @@ as_authenticate(
 	p = as_admin_write_field_bytes(p, SESSION_TOKEN, session->token, session->token_length);
 
 	bool sample = node && as_cluster_sample_operational(node->cluster);
-	as_status status = as_admin_send(err, sock, node, buffer, p, socket_timeout, deadline_ms, sample);
+	uint64_t bytes_out = 0;
+	as_status status = as_admin_send(err, sock, node, buffer, p, socket_timeout, deadline_ms, &bytes_out);
 	
 	if (status) {
 		return status;
 	}
 
-	status = as_admin_receive(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms, ctx, sample);
+	uint64_t bytes_in = 0;
+	status = as_admin_receive(err, sock, node, buffer, HEADER_SIZE, socket_timeout, deadline_ms, ctx, &bytes_in);
 
 	if (status) {
 		return status;
@@ -617,6 +637,11 @@ as_authenticate(
 		}
 	
 		as_error_set_message(err, status, as_error_string(status));
+		return status;
+	}
+
+	if (sample) {
+		as_admin_add_bytes(node, bytes_out, bytes_in);
 	}
 	return status;
 }

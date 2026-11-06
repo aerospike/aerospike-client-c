@@ -252,7 +252,7 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->latency_columns = 7;
 	policy->latency_shift = 1;
 	policy->latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
-	policy->operational_enabled = false;
+	policy->operational_enabled = true;
 	policy->usage_enabled = false;
 	policy->sampler_range = 1;
 	policy->sampler_threshold = 1;
@@ -382,7 +382,7 @@ as_metrics_policy_add_label(as_metrics_policy* policy, const char* name, const c
 //---------------------------------
 
 #define AS_METRICS_EXPORTER_MAX_FAILURES 3
-#define AS_METRICS_EXPORTER_SUSPEND_CYCLES 3
+#define AS_METRICS_EXPORTER_RETRY_INTERVALS 10
 
 extern char* aerospike_client_language;
 
@@ -420,6 +420,7 @@ struct as_metrics_runtime_s {
 static as_status as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool force, as_error* err);
 static void as_metrics_runtime_free(as_metrics_runtime* rt);
 static void as_metrics_snapshot_clone_nodes_departed(const as_cluster* cluster, as_metrics_snapshot* snap);
+static void as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, const as_metrics_node_snapshot* prev);
 
 #if defined(__linux__)
 static as_status
@@ -734,6 +735,16 @@ as_metrics_copy_latency(as_metrics_latency_snapshot* dst, as_latency* latency, u
 		dst->buckets = buckets;
 		dst->bucket_count = size;
 	}
+	dst->sum = as_load_uint64(&latency->sum);
+	dst->count = as_load_uint64(&latency->count);
+
+	// A sample being recorded can bump count before it lowers min.
+	uint64_t min = as_load_uint64(&latency->min);
+
+	if (dst->count > 0 && min != UINT64_MAX) {
+		dst->min = min;
+		dst->max = as_load_uint64(&latency->max);
+	}
 	as_latency_release(latency);
 }
 
@@ -824,6 +835,9 @@ as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapsh
 		snap->namespace_count++;
 	}
 
+	if (node->metrics_prior) {
+		as_metrics_node_snapshot_merge(snap, node->metrics_prior);
+	}
 	*snapshot = snap;
 }
 
@@ -1141,6 +1155,10 @@ as_metrics_add_latency_buckets(
 	if (!dst->buckets) {
 		dst->buckets = as_metrics_clone_latency_buckets(src);
 		dst->bucket_count = src->bucket_count;
+		dst->sum = src->sum;
+		dst->count = src->count;
+		dst->min = src->min;
+		dst->max = src->max;
 		return;
 	}
 
@@ -1151,6 +1169,20 @@ as_metrics_add_latency_buckets(
 	for (uint8_t k = 0; k < dst->bucket_count; k++) {
 		dst->buckets[k] += src->buckets[k];
 	}
+
+	if (src->count == 0) {
+		return;
+	}
+
+	if (dst->count == 0 || src->min < dst->min) {
+		dst->min = src->min;
+	}
+
+	if (src->max > dst->max) {
+		dst->max = src->max;
+	}
+	dst->sum += src->sum;
+	dst->count += src->count;
 }
 
 static void
@@ -1195,8 +1227,8 @@ as_metrics_find_namespace_snapshot(as_metrics_node_snapshot* snap, const char* n
 	return NULL;
 }
 
-// A rejoined node is a new as_node with counters at zero. Add the pending final
-// into the new final so the node keeps one entry that spans each stint.
+// A rejoined node is a new as_node with counters at zero. Add its earlier
+// stints, as_node.metrics_prior, so its counters continue across the rejoin.
 // Identity and gauges come from snap.
 static void
 as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, const as_metrics_node_snapshot* prev)
@@ -1236,16 +1268,6 @@ as_metrics_departed_add(as_cluster* cluster, as_node* node)
 	}
 
 	as_vector* departed = cluster->metrics_nodes_departed;
-	int existing_node_idx = as_metrics_departed_find(departed, snap->name);
-
-	if (existing_node_idx >= 0) {
-		as_metrics_node_snapshot* prev = as_vector_get_ptr(departed, (uint32_t)existing_node_idx);
-
-		as_metrics_node_snapshot_merge(snap, prev);
-		as_vector_set(departed, (uint32_t)existing_node_idx, &snap);
-		as_metrics_node_snapshot_destroy(prev);
-		return;
-	}
 
 	if (departed->size >= AS_METRICS_NODES_DEPARTED_MAX) {
 		as_log_warn(
@@ -1256,6 +1278,20 @@ as_metrics_departed_add(as_cluster* cluster, as_node* node)
 	}
 
 	as_vector_append(departed, &snap);
+}
+
+void
+as_metrics_node_rejoin(as_cluster* cluster, as_node* node)
+{
+	as_vector* departed = cluster->metrics_nodes_departed;
+	int idx = as_metrics_departed_find(departed, node->name);
+
+	if (idx < 0) {
+		return;
+	}
+
+	node->metrics_prior = as_vector_get_ptr(departed, (uint32_t)idx);
+	as_vector_remove(departed, (uint32_t)idx);
 }
 
 void
@@ -1298,11 +1334,15 @@ as_metrics_export_slots(as_metrics_runtime* rt, const as_metrics_snapshot* snap,
 			as_log_warn("Metrics exporter error: %s %s", as_error_string(status), err.message);
 			slot->consecutive_failures++;
 
+			// A suspended exporter is offered every 10th interval. Each failed
+			// retry suspends it again until one export succeeds.
 			if (slot->consecutive_failures >= AS_METRICS_EXPORTER_MAX_FAILURES) {
-				slot->suspend_remaining = AS_METRICS_EXPORTER_SUSPEND_CYCLES;
-				slot->consecutive_failures = 0;
-				as_log_warn("Metrics exporter suspended after %u consecutive failures",
-					AS_METRICS_EXPORTER_MAX_FAILURES);
+				slot->suspend_remaining = AS_METRICS_EXPORTER_RETRY_INTERVALS - 1;
+
+				if (slot->consecutive_failures == AS_METRICS_EXPORTER_MAX_FAILURES) {
+					as_log_warn("Metrics exporter suspended after %u consecutive failures",
+						AS_METRICS_EXPORTER_MAX_FAILURES);
+				}
 			}
 		}
 		else {

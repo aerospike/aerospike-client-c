@@ -60,6 +60,15 @@ typedef struct as_latency_s {
 	uint8_t shift;
 	uint8_t size;
 	as_metrics_latency_unit unit;
+
+	/**
+	 * Sum, count, min, and max of the recorded samples, in the histogram unit.
+	 * min is UINT64_MAX until the first sample. See as_metrics_latency_snapshot.
+	 */
+	uint64_t sum;
+	uint64_t count;
+	uint64_t min;
+	uint64_t max;
 	uint64_t buckets[];
 } as_latency;
 

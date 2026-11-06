@@ -235,7 +235,7 @@ typedef struct as_command_s {
 	// False when operational metrics are off, or when the sampler skips this call.
 	// Gates the cluster command_count, the retry counter, v3 command latency, and
 	// per-namespace histograms, bytes, and error counts. Namespace error counters
-	// are recorded once on terminal failure.
+	// are recorded on each failed attempt. See as_node_add_attempt_failure().
 	// See as_cluster_sample_operational() and as_command_execute_key().
 	bool metrics_sample_decision;
 } as_command;

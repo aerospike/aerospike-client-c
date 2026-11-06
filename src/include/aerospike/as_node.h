@@ -212,12 +212,14 @@ typedef struct {
 	const char* ns;
 
 	/**
-	 * Bytes received from the server.
+	 * Bytes received from the server by sampled commands, added only when the
+	 * RPC succeeds. See as_metrics_namespace_snapshot.bytes_in.
 	 */
 	uint64_t bytes_in;
 
 	/**
-	 * Bytes sent to the server.
+	 * Bytes sent to the server by sampled commands, added only when the RPC
+	 * succeeds. See as_metrics_namespace_snapshot.bytes_out.
 	 */
 	uint64_t bytes_out;
 
@@ -255,48 +257,48 @@ typedef struct {
 	/**
 	 * @private
 	 * Client timeouts copied into the metrics snapshot.
-	 * Recorded once for a sampled terminal user-call failure.
-	 * Not included in timeout_count. See as_node_add_terminal_result().
+	 * Recorded on each failed attempt of a sampled command.
+	 * Not included in timeout_count. See as_node_add_attempt_failure().
 	 */
 	uint64_t client_timeout_count;
 
 	/**
 	 * @private
 	 * Server timeouts copied into the metrics snapshot.
-	 * Recorded once for a sampled terminal user-call failure.
-	 * Not included in timeout_count. See as_node_add_terminal_result().
+	 * Recorded on each failed attempt of a sampled command.
+	 * Not included in timeout_count. See as_node_add_attempt_failure().
 	 */
 	uint64_t server_timeout_count;
 
 	/**
 	 * @private
 	 * Record too big errors copied into the metrics snapshot.
-	 * Recorded once for a sampled terminal user-call failure.
-	 * Not included in error_count. See as_node_add_terminal_result().
+	 * Recorded on each failed attempt of a sampled command.
+	 * Not included in error_count. See as_node_add_attempt_failure().
 	 */
 	uint64_t record_too_big_count;
 
 	/**
 	 * @private
 	 * Device overload errors copied into the metrics snapshot.
-	 * Recorded once for a sampled terminal user-call failure.
-	 * Not included in error_count. See as_node_add_terminal_result().
+	 * Recorded on each failed attempt of a sampled command.
+	 * Not included in error_count. See as_node_add_attempt_failure().
 	 */
 	uint64_t device_overload_count;
 
 	/**
 	 * @private
 	 * Remaining command errors copied into the metrics snapshot.
-	 * Recorded once for a sampled terminal user-call failure.
-	 * Not included in error_count. See as_node_add_terminal_result().
+	 * Recorded on each failed attempt of a sampled command.
+	 * Not included in error_count. See as_node_add_attempt_failure().
 	 */
 	uint64_t snapshot_error_count;
 
 	/**
 	 * @private
 	 * Key-busy errors copied into the metrics snapshot.
-	 * Recorded once for a sampled terminal user-call failure.
-	 * Not included in key_busy_count. See as_node_add_terminal_result().
+	 * Recorded on each failed attempt of a sampled command.
+	 * Not included in key_busy_count. See as_node_add_attempt_failure().
 	 */
 	uint64_t snapshot_key_busy_count;
 
@@ -531,6 +533,14 @@ typedef struct as_node_s {
 	 * See as_metrics_node_snapshot.conn_latency.
 	 */
 	as_latency* conn_latency;
+
+	/**
+	 * @private
+	 * Final metrics from earlier stints of this node, moved out of
+	 * as_metrics_snapshot.nodes_departed when the node rejoined. Added into each
+	 * snapshot of this node. Guarded by as_cluster.metrics_lock.
+	 */
+	struct as_metrics_node_snapshot_s* metrics_prior;
 
 } as_node;
 
@@ -1000,15 +1010,17 @@ as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics);
 
 /**
  * @private
- * Record the namespace error or timeout split for a user call that failed
- * overall. A retry that later succeeds does not increment these counters.
- * err->message starting with "Client timeout" or "Pipeline timeout", or an
- * empty timeout message, is a client timeout. Any other timeout message is a
- * server timeout. These counters do not change as_node_stats.error_count or
- * as_node_stats.timeout_count. See the AEROSPIKE_ERR_TIMEOUT case.
+ * Record one failed attempt of a sampled command in the namespace snapshot
+ * counters. Each failed attempt increments one counter, including an attempt
+ * that a later retry recovers. metrics is NULL when the command was not
+ * sampled, and nothing is recorded. Record not found and failures that never
+ * reached the node (no more connections, max error rate, invalid node) are not
+ * counted. server_timeout applies only to AEROSPIKE_ERR_TIMEOUT. These counters
+ * do not change as_node_stats.error_count, timeout_count, or key_busy_count.
+ * See as_metrics_namespace_snapshot.
  */
-void
-as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metrics, as_error* err);
+AS_EXTERN void
+as_node_add_attempt_failure(as_ns_metrics* metrics, as_status status, bool server_timeout);
 
 /**
  * Return command timeout count. The value is cumulative and not reset per metrics interval.

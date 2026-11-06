@@ -213,6 +213,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->conn_tls_handshake_failures = 0;
 	node->conn_auth_failures = 0;
 	node->conn_latency = NULL;
+	node->metrics_prior = NULL;
 	node->conn_iter = 0;
 
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;
@@ -323,6 +324,7 @@ as_node_destroy(as_node* node)
 	if (conn_latency) {
 		as_latency_release(conn_latency);
 	}
+	as_metrics_node_snapshot_destroy(node->metrics_prior);
 	cf_free(node);
 }
 
@@ -1025,10 +1027,6 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 		metrics = as_node_prepare_metrics(node, NULL);
 	}
 
-	if (metrics) {
-		as_node_add_bytes_out(metrics, write_size);
-	}
-
 	// Reuse the buffer, read the response - first 8 bytes contains body size.
 	if (as_socket_read_deadline(err, sock, node, stack_buf, sizeof(as_proto), 0, deadline_ms, NULL) != AEROSPIKE_OK) {
 		return 0;
@@ -1068,8 +1066,10 @@ as_node_get_info(as_error* err, as_node* node, const char* names, size_t names_l
 		return 0;
 	}
 	
+	// Only a successful info request adds bytes. See as_metrics_namespace_snapshot.bytes_in.
 	if (metrics) {
 		bytes_in += proto_sz;
+		as_node_add_bytes_out(metrics, write_size);
 		as_node_add_bytes_in(metrics, bytes_in);
 	}
 
@@ -1688,59 +1688,22 @@ as_node_add_error(as_node* node, const char* ns, as_ns_metrics* metrics)
 	as_incr_uint64(&metrics->error_count);
 }
 
-static bool
-as_node_message_is_client_timeout(const char* message)
-{
-	if (!message) {
-		return false;
-	}
-
-	// See as_event_retry_timeout(), as_event_total_timeout(), and as_pipe_timeout().
-	if (strncmp(message, "Client timeout", sizeof("Client timeout") - 1) == 0) {
-		return true;
-	}
-	return strncmp(message, "Pipeline timeout", sizeof("Pipeline timeout") - 1) == 0;
-}
-
 void
-as_node_add_terminal_result(as_node* node, const char* ns, as_ns_metrics* metrics, as_error* err)
+as_node_add_attempt_failure(as_ns_metrics* metrics, as_status status, bool server_timeout)
 {
-	bool server_timeout;
-
-	if (!node || !err) {
+	if (!metrics) {
 		return;
 	}
 
-	// Return before the lookup below, which can create namespace metrics.
-	switch (err->code) {
+	switch (status) {
 	case AEROSPIKE_OK:
 	case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 	case AEROSPIKE_ERR_NO_MORE_CONNECTIONS:
 	case AEROSPIKE_MAX_ERROR_RATE:
 	case AEROSPIKE_ERR_INVALID_NODE:
-		return;
-
-	default:
 		break;
-	}
 
-	if (!metrics) {
-		metrics = as_node_prepare_metrics(node, ns);
-
-		if (!metrics) {
-			return;
-		}
-	}
-
-	switch (err->code) {
 	case AEROSPIKE_ERR_TIMEOUT:
-		// Sync client timeouts leave the message empty. Async client timeouts
-		// start with "Client timeout", or "Pipeline timeout" for a pipelined
-		// command. Any other timeout text came from the server.
-		// These snapshot counters do not change as_node_stats.timeout_count.
-		server_timeout = err->message[0] != '\0' &&
-			!as_node_message_is_client_timeout(err->message);
-
 		if (server_timeout) {
 			as_incr_uint64(&metrics->server_timeout_count);
 		}

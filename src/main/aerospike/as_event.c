@@ -29,6 +29,7 @@
 #include <aerospike/as_txn.h>
 #include <citrusleaf/alloc.h>
 #include <pthread.h>
+#include <string.h>
 
 //---------------------------------
 // Macros
@@ -582,6 +583,37 @@ as_event_create_connection(as_event_command* cmd, as_async_conn_pool* pool)
 }
 
 static inline void
+as_event_add_bytes(as_event_command* cmd)
+{
+	// Only a successful RPC adds bytes. See as_metrics_namespace_snapshot.bytes_in.
+	if (!cmd->metrics) {
+		return;
+	}
+
+	as_node_add_bytes_out(cmd->metrics, cmd->bytes_out);
+	as_node_add_bytes_in(cmd->metrics, cmd->bytes_in);
+}
+
+static bool
+as_event_message_is_client_timeout(const char* message)
+{
+	// See as_event_retry_timeout(), as_event_total_timeout(), and as_pipe_timeout().
+	if (strncmp(message, "Client timeout", sizeof("Client timeout") - 1) == 0) {
+		return true;
+	}
+	return strncmp(message, "Pipeline timeout", sizeof("Pipeline timeout") - 1) == 0;
+}
+
+void
+as_event_add_attempt_error(as_event_command* cmd, as_error* err)
+{
+	bool server_timeout = err->message[0] != '\0' &&
+		!as_event_message_is_client_timeout(err->message);
+
+	as_event_add_attempt_failure(cmd, err->code, server_timeout);
+}
+
+static inline void
 as_event_add_success_latency(as_event_command* cmd)
 {
 	if (cmd->latency_type == AS_LATENCY_TYPE_NONE || cmd->command_begin == 0) {
@@ -861,11 +893,10 @@ as_event_decompress(as_event_command* cmd)
 static void
 as_event_retry_timeout(as_event_command* cmd)
 {
-	// as_node_stats counts each attempt. See as_node_add_timeout().
 	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
+	as_event_add_attempt_failure(cmd, AEROSPIKE_ERR_TIMEOUT, false);
 
 	if (cmd->pipe_listener) {
-		// A terminal timeout is counted in as_event_error_callback().
 		as_pipe_timeout(cmd, true);
 		return;
 	}
@@ -985,11 +1016,10 @@ void
 as_event_total_timeout(as_event_command* cmd)
 {
 	// Node should not be null at this point.
-	// as_node_stats counts each attempt. See as_node_add_timeout().
 	as_node_add_timeout(cmd->node, cmd->ns, cmd->metrics);
+	as_event_add_attempt_failure(cmd, AEROSPIKE_ERR_TIMEOUT, false);
 
 	if (cmd->pipe_listener) {
-		// See as_event_retry_timeout().
 		as_pipe_timeout(cmd, false);
 		return;
 	}
@@ -1008,11 +1038,7 @@ bool
 as_event_socket_retry(as_event_command* cmd)
 {
 	as_event_add_conn_failure(cmd);
-
-	if (cmd->metrics) {
-		as_node_add_bytes_out(cmd->metrics, cmd->bytes_out);
-		as_node_add_bytes_in(cmd->metrics, cmd->bytes_in);
-	}
+	as_event_add_attempt_failure(cmd, AEROSPIKE_ERR_ASYNC_CONNECTION, false);
 
 	if (cmd->pipe_listener) {
 		return false;
@@ -1070,6 +1096,9 @@ as_event_command_retry(as_event_command* cmd, bool timeout)
 void
 as_event_execute_retry(as_event_command* cmd)
 {
+	// The previous attempt ended, so a total timeout below is not counted on its node.
+	cmd->metrics = NULL;
+
 	// Restore timer that was reset for retry.
 	if (cmd->total_deadline > 0) {
 		// Check total timeout.
@@ -1127,9 +1156,7 @@ void
 as_event_response_complete(as_event_command* cmd)
 {
 	if (cmd->metrics) {
-		as_node_add_bytes_out(cmd->metrics, cmd->bytes_out);
-		as_node_add_bytes_in(cmd->metrics, cmd->bytes_in);
-
+		as_event_add_bytes(cmd);
 		as_event_add_success_latency(cmd);
 	}
 
@@ -1320,6 +1347,9 @@ bool as_async_query_should_retry(as_event_command* cmd, as_status status);
 void
 as_event_error_callback(as_event_command* cmd, as_error* err)
 {
+	// Records an attempt that no earlier error path for it recorded.
+	as_event_add_attempt_error(cmd, err);
+
 	if ((cmd->type == AS_ASYNC_TYPE_SCAN_PARTITION &&
 		as_async_scan_should_retry(cmd, err->code)) ||
 	    (cmd->type == AS_ASYNC_TYPE_QUERY_PARTITION &&
@@ -1328,12 +1358,6 @@ as_event_error_callback(as_event_command* cmd, as_error* err)
 		as_event_command_release(cmd);
 		as_event_executor_complete(executor);
 		return;
-	}
-	// One namespace error or timeout for the failure returned to the caller.
-	// A retry that later succeeds does not get here. An unsampled call does not
-	// increment the counters. See as_command.metrics_sample_decision.
-	if (cmd->metrics_sample_decision) {
-		as_node_add_terminal_result(cmd->node, cmd->ns, cmd->metrics, err);
 	}
 	as_event_notify_error(cmd, err);
 	as_event_command_release(cmd);
@@ -1532,11 +1556,6 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 	as_event_timer_stop(cmd);
 	as_event_stop_watcher(cmd, cmd->conn);
 
-	if (cmd->metrics) {
-		as_node_add_bytes_out(cmd->metrics, cmd->bytes_out);
-		as_node_add_bytes_in(cmd->metrics, cmd->bytes_in);
-	}
-
 	as_async_conn_pool* pool = &cmd->node->async_conn_pools[cmd->event_loop->index];
 
 	// Close socket on errors that can leave unread data in socket.
@@ -1572,7 +1591,8 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 			
 		case AEROSPIKE_ERR_RECORD_NOT_FOUND:
 			// Do not increment error count on record not found.
-			// Add latency metrics instead.
+			// Add bytes and latency metrics instead.
+			as_event_add_bytes(cmd);
 			as_event_add_success_latency(cmd);
 			as_event_put_connection(cmd, pool);
 			break;
@@ -1592,6 +1612,8 @@ as_event_response_error(as_event_command* cmd, as_error* err)
 			as_event_put_connection(cmd, pool);
 			break;
 	}
+	// The server sent this error, so a timeout is a server timeout.
+	as_event_add_attempt_failure(cmd, err->code, true);
 	as_event_error_callback(cmd, err);
 }
 

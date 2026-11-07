@@ -123,6 +123,8 @@ AEROSPIKE += as_config.o
 AEROSPIKE += as_config_file.o
 AEROSPIKE += as_conn_recover.o
 AEROSPIKE += as_cluster.o
+AEROSPIKE += as_discovery.o
+AEROSPIKE += as_dns.o
 AEROSPIKE += as_error.o
 AEROSPIKE += as_event.o
 AEROSPIKE += as_event_ev.o
@@ -157,6 +159,7 @@ AEROSPIKE += as_record.o
 AEROSPIKE += as_record_hooks.o
 AEROSPIKE += as_record_iterator.o
 AEROSPIKE += as_scan.o
+AEROSPIKE += as_seed_manager.o
 AEROSPIKE += as_shm_cluster.o
 AEROSPIKE += as_socket.o
 AEROSPIKE += as_string_operations.o
@@ -273,4 +276,3 @@ $(TARGET_INCL)/aerospike/%.h: $(SOURCE_INCL)/aerospike/%.h
 
 ###############################################################################
 include project/modules.mk project/test.mk project/rules.mk
-

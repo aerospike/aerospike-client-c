@@ -28,6 +28,7 @@
 #include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <ctype.h>
+#include <string.h>
 #include <pthread.h>
 #include <signal.h>
 
@@ -325,6 +326,235 @@ as_tls_thread_cleanup(void)
 #endif
 }
 
+//---------------------------------
+// Certificate identity matching
+//---------------------------------
+
+static inline unsigned char
+tls_ascii_lower(unsigned char c)
+{
+	return (c >= 'A' && c <= 'Z') ? (unsigned char)(c + ('a' - 'A')) : c;
+}
+
+static bool
+tls_ascii_equals(const char* a, size_t a_len, const char* b, size_t b_len)
+{
+	if (a_len != b_len) {
+		return false;
+	}
+
+	for (size_t i = 0; i < a_len; i++) {
+		if (tls_ascii_lower((unsigned char)a[i]) != tls_ascii_lower((unsigned char)b[i])) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// Strict dotted-quad parse. Rejects leading zeros, missing octets and values above 255.
+static bool
+tls_parse_ipv4(const char* s, uint8_t* out)
+{
+	for (int i = 0; i < 4; i++) {
+		if (*s < '0' || *s > '9') {
+			return false;
+		}
+
+		const char* start = s;
+		uint32_t val = 0;
+
+		while (*s >= '0' && *s <= '9') {
+			val = val * 10 + (uint32_t)(*s - '0');
+
+			if (val > 255) {
+				return false;
+			}
+			s++;
+		}
+
+		if (s - start > 1 && *start == '0') {
+			return false;
+		}
+
+		out[i] = (uint8_t)val;
+
+		if (i < 3) {
+			if (*s != '.') {
+				return false;
+			}
+			s++;
+		}
+	}
+	return *s == 0;
+}
+
+typedef enum {
+	TLS_ID_DNS,
+	TLS_ID_IP,
+	TLS_ID_INVALID_IP
+} tls_id_kind;
+
+// Classify the reference identifier without resolving it. A dotted or colon shaped identifier
+// that is not a valid literal is an IP identifier that can never match.
+static tls_id_kind
+tls_classify_identifier(const char* id, uint8_t* ip, int* ip_len)
+{
+	if (tls_parse_ipv4(id, ip)) {
+		*ip_len = 4;
+		return TLS_ID_IP;
+	}
+
+	if (strchr(id, ':')) {
+		if (inet_pton(AF_INET6, id, ip) == 1) {
+			*ip_len = 16;
+			return TLS_ID_IP;
+		}
+		return TLS_ID_INVALID_IP;
+	}
+
+	bool digits_and_dots = *id != 0;
+
+	for (const char* p = id; *p; p++) {
+		if ((*p < '0' || *p > '9') && *p != '.') {
+			digits_and_dots = false;
+			break;
+		}
+	}
+	return (digits_and_dots && strchr(id, '.')) ? TLS_ID_INVALID_IP : TLS_ID_DNS;
+}
+
+static bool
+tls_match_dns_san(const char* pattern, size_t plen, const char* id)
+{
+	if (plen == 0 || memchr(pattern, 0, plen) != NULL) {
+		return false;
+	}
+
+	size_t id_len = strlen(id);
+
+	if (id_len == 0) {
+		return false;
+	}
+
+	const char* star = memchr(pattern, '*', plen);
+
+	if (! star) {
+		return tls_ascii_equals(pattern, plen, id, id_len);
+	}
+
+	// Only a sole '*' as the whole left-most label is allowed.
+	if (star != pattern || plen < 3 || pattern[1] != '.' || memchr(pattern + 1, '*', plen - 1) != NULL) {
+		return false;
+	}
+
+	// The wildcard matches exactly one non-empty label.
+	const char* dot = strchr(id, '.');
+
+	if (! dot || dot == id) {
+		return false;
+	}
+	return tls_ascii_equals(pattern + 1, plen - 1, dot, id_len - (size_t)(dot - id));
+}
+
+bool
+as_tls_match_identity_strict(X509* cert, const char* identifier)
+{
+	if (! cert || ! identifier || *identifier == 0) {
+		return false;
+	}
+
+	uint8_t ip[16];
+	int ip_len = 0;
+	tls_id_kind kind = tls_classify_identifier(identifier, ip, &ip_len);
+
+	if (kind == TLS_ID_INVALID_IP) {
+		return false;
+	}
+
+	GENERAL_NAMES* sans = X509_get_ext_d2i(cert, NID_subject_alt_name, NULL, NULL);
+
+	if (! sans) {
+		return false;
+	}
+
+	bool matched = false;
+	int n = sk_GENERAL_NAME_num(sans);
+
+	for (int i = 0; i < n && ! matched; i++) {
+		GENERAL_NAME* gn = sk_GENERAL_NAME_value(sans, i);
+
+		if (kind == TLS_ID_IP) {
+			if (gn->type == GEN_IPADD) {
+				ASN1_OCTET_STRING* addr = gn->d.iPAddress;
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+				const unsigned char* data = ASN1_STRING_data(addr);
+#else
+				const unsigned char* data = ASN1_STRING_get0_data(addr);
+#endif
+				matched = ASN1_STRING_length(addr) == ip_len && memcmp(data, ip, (size_t)ip_len) == 0;
+			}
+		}
+		else if (gn->type == GEN_DNS) {
+			ASN1_IA5STRING* dns = gn->d.dNSName;
+#if OPENSSL_VERSION_NUMBER < 0x10100000L
+			const char* data = (const char*)ASN1_STRING_data(dns);
+#else
+			const char* data = (const char*)ASN1_STRING_get0_data(dns);
+#endif
+			int len = ASN1_STRING_length(dns);
+			matched = len > 0 && tls_match_dns_san(data, (size_t)len, identifier);
+		}
+	}
+	GENERAL_NAMES_free(sans);
+	return matched;
+}
+
+// Names already warned about. The set lives for the process.
+static pthread_mutex_t s_legacy_lock = PTHREAD_MUTEX_INITIALIZER;
+static char** s_legacy_warned = NULL;
+static uint32_t s_legacy_warned_size = 0;
+static uint32_t s_legacy_warned_capacity = 0;
+
+static void
+tls_warn_legacy_once(const char* identifier)
+{
+	pthread_mutex_lock(&s_legacy_lock);
+
+	for (uint32_t i = 0; i < s_legacy_warned_size; i++) {
+		if (strcmp(s_legacy_warned[i], identifier) == 0) {
+			pthread_mutex_unlock(&s_legacy_lock);
+			return;
+		}
+	}
+
+	if (s_legacy_warned_size == s_legacy_warned_capacity) {
+		s_legacy_warned_capacity = s_legacy_warned_capacity ? s_legacy_warned_capacity * 2 : 16;
+		s_legacy_warned = cf_realloc(s_legacy_warned, s_legacy_warned_capacity * sizeof(char*));
+	}
+	s_legacy_warned[s_legacy_warned_size++] = cf_strdup(identifier);
+	pthread_mutex_unlock(&s_legacy_lock);
+
+	as_log_warn("TLS certificate matched '%s' only through the legacy name check, which is not "
+		"RFC 9525 compliant (for example CN matching or non-conforming wildcards). This "
+		"fallback is deprecated and will be rejected in the next major release. Issue a "
+		"certificate with a matching SAN dNSName or iPAddress entry", identifier);
+}
+
+as_tls_match_kind
+as_tls_match_identity(X509* cert, const char* identifier)
+{
+	if (as_tls_match_identity_strict(cert, identifier)) {
+		return AS_TLS_MATCH_STRICT;
+	}
+
+	// Deprecated compatibility fallback, identical to the matching before FR-45.
+	if (cert && identifier && as_tls_match_name(cert, identifier, true)) {
+		tls_warn_legacy_once(identifier);
+		return AS_TLS_MATCH_LEGACY;
+	}
+	return AS_TLS_MATCH_NONE;
+}
+
 static int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
 {
 	// If the cert has already failed we're done.
@@ -389,8 +619,7 @@ static int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
 			return 0;
 		}
 
-		bool allow_wildcard = true;
-		bool matched = as_tls_match_name(cert, hostname, allow_wildcard);
+		bool matched = as_tls_match_identity(cert, hostname) != AS_TLS_MATCH_NONE;
 
 		if (matched) {
 			as_log_debug("TLS name '%s' matches", hostname);

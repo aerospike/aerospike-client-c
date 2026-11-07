@@ -235,6 +235,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\test\aerospike_test.h" />
+    <ClInclude Include="..\..\src\test\discovery_fake_node.h" />
     <ClInclude Include="..\..\src\test\test.h" />
     <ClInclude Include="..\..\src\test\util\consumer_stream.h" />
     <ClInclude Include="..\..\src\test\util\index_util.h" />
@@ -247,6 +248,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\test\config_basics.c" />
+    <ClCompile Include="..\..\src\test\discovery_contract.c" />
+    <ClCompile Include="..\..\src\test\discovery_dns.c" />
+    <ClCompile Include="..\..\src\test\discovery_fake_node.c" />
+    <ClCompile Include="..\..\src\test\discovery_translation.c" />
+    <ClCompile Include="..\..\src\test\discovery_seed_manager.c" />
     <ClCompile Include="..\..\src\test\metrics_basics.c" />
     <ClCompile Include="..\..\src\test\aerospike_batch\batch.c" />
     <ClCompile Include="..\..\src\test\aerospike_batch\batch_async.c" />

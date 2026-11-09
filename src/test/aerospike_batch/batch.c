@@ -34,6 +34,7 @@
 #include <aerospike/as_tls.h>
 #include <aerospike/as_val.h>
 #include <pthread.h>
+#include <string.h>
 #include "../test.h"
 #include "../util/log_helper.h"
 
@@ -695,6 +696,56 @@ TEST(batch_write_complex, "Batch write complex")
 	as_batch_records_destroy(&recs);
 }
 
+TEST(batch_write_error_message, "Batch write record error message names the record's result")
+{
+	as_key key1;
+	as_key_init_int64(&key1, NAMESPACE, SET, 20001);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_str(&rec, bin1, "not an integer");
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key1, &rec);
+	as_record_destroy(&rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	as_operations bad_ops;
+	as_operations_inita(&bad_ops, 1);
+	as_operations_add_incr(&bad_ops, bin1, 1);
+
+	as_operations good_ops;
+	as_operations_inita(&good_ops, 1);
+	as_operations_add_write_int64(&good_ops, bin1, 1);
+
+	as_batch_records recs;
+	as_batch_records_inita(&recs, 2);
+
+	as_batch_write_record* bad = as_batch_write_reserve(&recs);
+	as_key_init_int64(&bad->key, NAMESPACE, SET, 20001);
+	bad->ops = &bad_ops;
+
+	as_batch_write_record* good = as_batch_write_reserve(&recs);
+	as_key_init_int64(&good->key, NAMESPACE, SET, 20002);
+	good->ops = &good_ops;
+
+	status = aerospike_batch_write(as, &err, NULL, &recs);
+
+	as_operations_destroy(&bad_ops);
+	as_operations_destroy(&good_ops);
+
+	assert_int_eq(status, AEROSPIKE_BATCH_FAILED);
+	assert_int_eq(good->result, AEROSPIKE_OK);
+	assert_int_eq(bad->result, AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE);
+	assert_not_null(bad->message);
+
+	const char* expected = as_error_string(AEROSPIKE_ERR_BIN_INCOMPATIBLE_TYPE);
+	assert_not_null(strstr(bad->message, expected));
+	assert_null(strstr(bad->message, "AEROSPIKE_OK"));
+
+	as_batch_records_destroy(&recs);
+}
+
 static bool
 batch_write_read_all_cb(const as_batch_result* results, uint32_t n, void* udata)
 {
@@ -1263,6 +1314,7 @@ SUITE(batch, "aerospike batch tests")
 	suite_add(batch_read_list_operate);
 	suite_add(batch_write_list_operate);
 	suite_add(batch_write_complex);
+	suite_add(batch_write_error_message);
 	suite_add(batch_write_read_all_bins);
 	suite_add(batch_remove);
 	suite_add(batch_write_with_cluster_send_key);

@@ -27,7 +27,7 @@
 //---------------------------------
 
 static void
-as_peers_record_error(as_peers* peers, const as_error* err);
+as_peers_record_error(as_peers* peers, const as_error* err, bool alternate);
 
 //---------------------------------
 // Functions
@@ -284,11 +284,10 @@ as_peer_records_destroy(as_vector* records)
 	as_vector_destroy(records);
 }
 
+// alternate is true when err reports a missing alternate address.
 static void
-as_peers_record_error(as_peers* peers, const as_error* err)
+as_peers_record_error(as_peers* peers, const as_error* err, bool alternate)
 {
-	bool alternate = err->code == AEROSPIKE_ERR_INVALID_NODE;
-
 	if (! peers->has_topology_error || (alternate && ! peers->alternate_missing)) {
 		peers->topology_error = *err;
 		peers->has_topology_error = true;
@@ -441,7 +440,7 @@ as_peers_record_collision(
 		"Give each node its own reachable address or mapping",
 		as_peers_translator_name(cluster), name1, name2, host, (unsigned)port);
 	as_log_warn("%s", err.message);
-	as_peers_record_error(peers, &err);
+	as_peers_record_error(peers, &err, false);
 }
 
 //---------------------------------
@@ -679,7 +678,7 @@ as_peers_alt_missing_error(as_peers* peers, as_cluster* cluster, const char* nam
 		"Configure alternate-access-address on the server or set use_services_alternate to false",
 		name);
 	as_log_error("%s", err.message);
-	as_peers_record_error(peers, &err);
+	as_peers_record_error(peers, &err, true);
 }
 
 //---------------------------------
@@ -847,9 +846,10 @@ as_peers_validate_node(
 	struct sockaddr* addr;
 	char other[AS_NODE_NAME_SIZE];
 	as_peers_validation result = AS_PEERS_FAILED;
+	bool alternate_missing;
 
 	while (as_lookup_next(&iter, &addr)) {
-		status = as_lookup_node(cluster, &err, host, addr, false, &node_info);
+		status = as_lookup_node(cluster, &err, host, addr, false, &node_info, &alternate_missing);
 
 		if (status == AEROSPIKE_OK) {
 			if (as_peers_find_validated_collision(peers, cluster, node, records, index, &node_info,
@@ -877,8 +877,8 @@ as_peers_validate_node(
 						host->name, host->port, as_error_string(status), err.message);
 
 			// Keep an actionable error, such as missing alternate addresses, for initialization.
-			if (as_peers_is_topology_error(status)) {
-				as_peers_record_error(peers, &err);
+			if (alternate_missing || as_peers_is_topology_error(status)) {
+				as_peers_record_error(peers, &err, alternate_missing);
 			}
 		}
 	}
@@ -929,7 +929,7 @@ as_peers_validate_record(
 	if (rec->hosts.size == 0) {
 		if (rec->error) {
 			as_log_warn("%s", rec->error->message);
-			as_peers_record_error(peers, rec->error);
+			as_peers_record_error(peers, rec->error, false);
 		}
 		return false;
 	}
@@ -940,7 +940,7 @@ as_peers_validate_record(
 		// A collision has already logged its own warning.
 		if (result == AS_PEERS_FAILED && rec->error) {
 			as_log_warn("%s", rec->error->message);
-			as_peers_record_error(peers, rec->error);
+			as_peers_record_error(peers, rec->error, false);
 		}
 		return false;
 	}

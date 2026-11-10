@@ -83,14 +83,14 @@ as_peers_parse_peers(
 	);
 
 /**
- * Return true if the status is a translation, collision or alternate address error that
- * initialization should report instead of a generic connection failure.
+ * Return true if the status is a translation or collision error that initialization should
+ * report instead of a generic connection failure. A missing alternate address is reported too,
+ * but it is recognized by the alternate_missing flag of as_lookup_node(), not by its status.
  */
 static inline bool
 as_peers_is_topology_error(as_status status)
 {
-	return status == AEROSPIKE_ERR_TRANSLATION_MISS || status == AEROSPIKE_ERR_TRANSLATION_COLLISION ||
-		status == AEROSPIKE_ERR_INVALID_NODE;
+	return status == AEROSPIKE_ERR_TRANSLATION_MISS || status == AEROSPIKE_ERR_TRANSLATION_COLLISION;
 }
 
 bool

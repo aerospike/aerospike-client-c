@@ -47,8 +47,14 @@ as_lookup_destroy_hosts(as_vector* hosts)
 }
 
 static as_status
-as_lookup_alternate_missing(as_error* err, const char* node_name, const char* where)
+as_lookup_alternate_missing(
+	as_error* err, const char* node_name, const char* where, bool* alternate_missing
+	)
 {
+	if (alternate_missing) {
+		*alternate_missing = true;
+	}
+
 	return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
 		"Node %s%s%s has no alternate-access-address and use_services_alternate is true. "
 		"Configure alternate-access-address on the server or set use_services_alternate to false",
@@ -97,7 +103,10 @@ as_lookup_translate_services(
 }
 
 static as_status
-as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node_info, uint64_t deadline)
+as_switch_to_clear_socket(
+	as_cluster* cluster, as_error* err, as_node_info* node_info, uint64_t deadline,
+	bool* alternate_missing
+	)
 {
 	// Obtain the node name and non-TLS addresses. The node name is needed to translate addresses.
 	bool alt = cluster->use_services_alternate;
@@ -137,7 +146,8 @@ as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node
 
 	if (! node_name || *node_name == 0 || ! service || *service == 0) {
 		if (alt) {
-			status = as_lookup_alternate_missing(err, node_name ? node_name : "", "");
+			status = as_lookup_alternate_missing(err, node_name ? node_name : "", "",
+				alternate_missing);
 		}
 		else {
 			status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid service hosts string: '%s'", response);
@@ -377,9 +387,13 @@ as_lookup_host(as_address_iterator* iter, as_error* err, const char* hostname, u
 as_status
 as_lookup_node(
 	as_cluster* cluster, as_error* err, as_host* host, struct sockaddr* addr,
-	bool detect_load_balancer, as_node_info* node_info
+	bool detect_load_balancer, as_node_info* node_info, bool* alternate_missing
 	)
 {
+	if (alternate_missing) {
+		*alternate_missing = false;
+	}
+
 	uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
 	
 	bool alt_validated = false;
@@ -410,7 +424,8 @@ as_lookup_node(
 
 		if (cluster->tls_ctx && cluster->tls_ctx->for_login_only) {
 			// Switch to using non-TLS socket.
-			status = as_switch_to_clear_socket(cluster, err, node_info, deadline);
+			status = as_switch_to_clear_socket(cluster, err, node_info, deadline,
+				alternate_missing);
 
 			if (status) {
 				cf_free(node_info->session);
@@ -582,7 +597,7 @@ as_lookup_node(
 		if (cluster->use_services_alternate && (! service_value || *service_value == 0)) {
 			char addr_name[AS_IP_ADDRESS_SIZE];
 			as_address_name((struct sockaddr*)&node_info->addr, addr_name, sizeof(addr_name));
-			as_lookup_alternate_missing(err, node_info->name, addr_name);
+			as_lookup_alternate_missing(err, node_info->name, addr_name, alternate_missing);
 			cf_free(response);
 			as_node_info_destroy(node_info);
 			return err->code;

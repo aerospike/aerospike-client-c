@@ -1240,6 +1240,67 @@ TEST(translation_alt_empty_service, "N-14 empty service-clear-alt fails alternat
 	fake_node_stop(&s);
 }
 
+TEST(translation_alt_empty_service_no_fail, "N-14 without fail_if_not_connected an empty service-clear-alt connects with no nodes and warns")
+{
+	fake_node s;
+	assert_true(fake_node_start(&s, "S"));
+	fake_node_set_service(&s, "127.0.0.1:1", "");
+
+	as_config config;
+	fake_client c;
+	fake_config(&config, &s, true);
+	config.fail_if_not_connected = false;
+
+	log_capture_start();
+	as_status status = fake_client_connect(&c, &config);
+	log_capture_stop();
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(node_count(c.as), 0);
+	assert_true(log_capture_count(AS_LOG_LEVEL_WARN, "use_services_alternate", NULL) > 0);
+	fake_client_close(&c);
+
+	fake_node_stop(&s);
+}
+
+TEST(translation_alt_missing_after_init, "N-14 without fail_if_not_connected a peer missing from the alternate list is logged on every tend")
+{
+	fake_node s, b;
+	assert_true(fake_node_start(&s, "S"));
+	assert_true(fake_node_start(&b, "B"));
+
+	char std[128];
+	format(std, sizeof(std), "[[B,,[127.0.0.1:%u]]]", b.port);
+	fake_node_set_peers(&s, 1, std, "[]");
+
+	as_config config;
+	fake_client c;
+	fake_config(&config, &s, true);
+	config.fail_if_not_connected = false;
+
+	log_capture_start();
+	assert_int_eq(fake_client_connect(&c, &config), AEROSPIKE_OK);
+	assert_int_eq(node_count(c.as), 1);
+	assert_true(has_node(c.as, "S"));
+
+	// The peers generation is not advanced, so every tend reports B again.
+	uint64_t end = cf_getms() + 3000;
+	uint32_t errors = 0;
+
+	while ((errors = log_capture_count(AS_LOG_LEVEL_ERROR, "Node B", "use_services_alternate",
+		NULL)) < 2 && cf_getms() < end) {
+		as_sleep(20);
+	}
+	log_capture_stop();
+
+	assert_true(errors >= 2);
+	assert_false(has_node(c.as, "B"));
+	fake_client_close(&c);
+
+	fake_node_stop(&b);
+	fake_node_stop(&s);
+}
+
 TEST(translation_standard_mode_compat, "standard mode keeps the single-command peers path")
 {
 	fake_node s, b;
@@ -2538,6 +2599,8 @@ SUITE(discovery_translation, "pluggable discovery translation, topology and TLS 
 	suite_add(translation_alt_peer_only_in_standard);
 	suite_add(translation_alt_empty_host_list);
 	suite_add(translation_alt_empty_service);
+	suite_add(translation_alt_empty_service_no_fail);
+	suite_add(translation_alt_missing_after_init);
 	suite_add(translation_standard_mode_compat);
 	suite_add(translation_peers_default_port);
 	suite_add(translation_alt_peer_empty_service);

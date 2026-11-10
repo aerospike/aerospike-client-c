@@ -801,6 +801,18 @@ typedef struct as_config_s {
 	 * Peers addresses: peers-clear-alt
 	 * Peers TLS addresses: peers-tls-alt
 	 *
+	 * When true, every node must have an alternate address:
+	 * - A seed whose service-*-alt reply is empty is not used. If no seed is
+	 *   usable, aerospike_connect() fails with AEROSPIKE_ERR_INVALID_NODE when
+	 *   fail_if_not_connected is true; otherwise it logs a warning and connects
+	 *   with no nodes.
+	 * - A peer that is missing from the alternate peers list, or listed with no
+	 *   hosts, is not added. It is logged at error level on every tend until it
+	 *   is fixed. During aerospike_connect() with fail_if_not_connected, when only
+	 *   the seed node is found, connect fails with AEROSPIKE_ERR_INVALID_NODE.
+	 *
+	 * Each such error names use_services_alternate and alternate-access-address.
+	 *
 	 * Default: false
 	 */
 	bool use_services_alternate;

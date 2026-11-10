@@ -437,9 +437,11 @@ as_cluster_seed_node(
 
 		struct sockaddr* addr;
 		bool found_node = false;
+		bool alternate_missing;
 
 		while (as_lookup_next(&iter, &addr)) {
-			status = as_lookup_node(cluster, &error_local, &host, addr, true, &node_info);
+			status = as_lookup_node(cluster, &error_local, &host, addr, true, &node_info,
+				&alternate_missing);
 			
 			if (status == AEROSPIKE_OK) {
 				node = as_node_create(cluster, &node_info);
@@ -489,7 +491,8 @@ as_cluster_seed_node(
 				}
 				conn_status = status;
 
-				if (! has_topology_error && as_peers_is_topology_error(status)) {
+				if (! has_topology_error &&
+					(alternate_missing || as_peers_is_topology_error(status))) {
 					topology_error = error_local;
 					has_topology_error = true;
 				}
@@ -1495,7 +1498,7 @@ as_cluster_force_single_node(as_cluster* cluster, as_error* err)
 
 	while (as_lookup_next(&iter, &addr)) {
 		as_error_reset(err);
-		status = as_lookup_node(cluster, err, host, addr, true, &node_info);
+		status = as_lookup_node(cluster, err, host, addr, true, &node_info, NULL);
 
 		if (status == AEROSPIKE_OK) {
 			node = as_node_create(cluster, &node_info);

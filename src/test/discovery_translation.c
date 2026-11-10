@@ -2435,6 +2435,81 @@ TEST(translation_view_not_tracked, "no snapshots or notifications without a call
 	}
 }
 
+TEST(translation_ip_map_ignored, "ip_map is ignored and a warning logged while a translator is registered")
+{
+	fake_node s;
+	assert_true(fake_node_start(&s, "S"));
+	as_error err;
+
+	// The seed is not rewritten: nothing listens on 127.0.0.2.
+	{
+		as_addr_map map[] = {{"127.0.0.1", "127.0.0.2"}};
+		as_config config;
+		fake_client c;
+		fake_config(&config, &s, false);
+		assert_int_eq(as_config_set_pass_through_translator(&config, &err), AEROSPIKE_OK);
+		config.ip_map = map;
+		config.ip_map_size = 1;
+
+		log_capture_start();
+		as_status status = fake_client_connect(&c, &config);
+		log_capture_stop();
+
+		assert_int_eq(status, AEROSPIKE_OK);
+		assert_true(has_node(c.as, "S"));
+		assert_null(c.as->cluster->ip_map);
+		assert_int_eq(log_capture_count(AS_LOG_LEVEL_WARN, "ip_map is ignored", "pass-through",
+			NULL), 1);
+		fake_client_close(&c);
+	}
+
+	// Without a translator ip_map rewrites the seed, which is never resolved, and nothing warns.
+	{
+		as_addr_map map[] = {{"seed.invalid", "127.0.0.1"}};
+		as_config config;
+		fake_client c;
+		as_config_init(&config);
+		as_config_add_host(&config, "seed.invalid", s.port);
+		config.tender_interval = AS_TEND_INTERVAL_MIN;
+		config.conn_timeout_ms = 1000;
+		config.fail_if_not_connected = true;
+		config.ip_map = map;
+		config.ip_map_size = 1;
+
+		log_capture_start();
+		as_status status = fake_client_connect(&c, &config);
+		log_capture_stop();
+
+		assert_int_eq(status, AEROSPIKE_OK);
+		assert_true(has_node(c.as, "S"));
+		assert_not_null(c.as->cluster->ip_map);
+		assert_int_eq(log_capture_count(AS_LOG_LEVEL_WARN, "ip_map", NULL), 0);
+		fake_client_close(&c);
+	}
+
+	// An empty ip_map is not reported.
+	{
+		as_addr_map map[] = {{"127.0.0.1", "127.0.0.2"}};
+		as_config config;
+		fake_client c;
+		fake_config(&config, &s, false);
+		assert_int_eq(as_config_set_pass_through_translator(&config, &err), AEROSPIKE_OK);
+		config.ip_map = map;
+		config.ip_map_size = 0;
+
+		log_capture_start();
+		as_status status = fake_client_connect(&c, &config);
+		log_capture_stop();
+
+		assert_int_eq(status, AEROSPIKE_OK);
+		assert_null(c.as->cluster->ip_map);
+		assert_int_eq(log_capture_count(AS_LOG_LEVEL_WARN, "ip_map", NULL), 0);
+		fake_client_close(&c);
+	}
+
+	fake_node_stop(&s);
+}
+
 #endif // DISCOVERY_FAKE_SERVERS
 
 //---------------------------------
@@ -2487,5 +2562,6 @@ SUITE(discovery_translation, "pluggable discovery translation, topology and TLS 
 	suite_add(translation_service_strict_miss);
 	suite_add(translation_view_notifications);
 	suite_add(translation_view_not_tracked);
+	suite_add(translation_ip_map_ignored);
 #endif
 }

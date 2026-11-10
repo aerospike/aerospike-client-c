@@ -521,6 +521,14 @@ typedef struct as_config_s {
 	 * The key is the IP address returned from friend info requests to other servers.  The
 	 * value is the real IP address used to connect to the server.
 	 *
+	 * The match is exact and host-only, and the port is unchanged. It applies to
+	 * configured seeds, as_cluster_add_seed() hosts, node addresses used to reseed,
+	 * and advertised peer and service addresses. Seeds returned by a seed provider
+	 * are used as returned, unless one equals a configured seed by name and port.
+	 *
+	 * Ignored while an address translator is registered, configured seeds included;
+	 * aerospike_connect() then logs a warning.
+	 *
 	 * A deep copy of ip_map is performed in aerospike_connect().  The caller is
 	 * responsible for memory deallocation of the original data structure.
 	 */
@@ -551,8 +559,8 @@ typedef struct as_config_s {
 	 * seeds.
 	 *
 	 * A registered translator is invoked for every peer and service endpoint a
-	 * server advertises, never for configured seeds. The implicit static map
-	 * over ip_map also translates configured seeds.
+	 * server advertises, never for configured seeds. While a translator is
+	 * registered, ip_map is ignored and configured seeds are used as configured.
 	 */
 	as_translation_config translation;
 	
@@ -965,6 +973,9 @@ as_config_set_seed_provider(as_config* config, const as_seed_provider* provider,
  * A successful registration also ends a release by aerospike_close() of an
  * unconnected async client (as_translation_config.provider_released).
  *
+ * While a translator is registered, as_config.ip_map is ignored, configured
+ * seeds included.
+ *
  * Returns AEROSPIKE_ERR_PARAM for an invalid table or while a client created
  * from this config is connected.
  *
@@ -978,7 +989,8 @@ as_config_set_address_translator(as_config* config, const as_address_translator*
  * Register the built-in port-map translator. entries maps an advertised
  * host:port, or a node name, to the host:port to connect to; see
  * as_discovery_port_map_translator() for the grammar. The entries are
- * validated and copied; the caller keeps ownership of its strings.
+ * validated and copied; the caller keeps ownership of its strings. As with
+ * as_config_set_address_translator(), ip_map is then ignored.
  *
  * Returns AEROSPIKE_ERR_PARAM for an invalid entry (the message names it) or
  * while a client created from this config is connected. On failure the
@@ -993,7 +1005,8 @@ as_config_set_port_map_translator(as_config* config, const as_addr_map* entries,
 /**
  * Register the built-in pass-through translator, which returns every advertised
  * endpoint unchanged as a successful mapping, so it succeeds even with
- * translation.on_miss set to AS_TRANSLATION_STRICT.
+ * translation.on_miss set to AS_TRANSLATION_STRICT. As with
+ * as_config_set_address_translator(), ip_map is then ignored.
  *
  * Returns AEROSPIKE_ERR_PARAM while a client created from this config is
  * connected.

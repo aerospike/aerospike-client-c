@@ -251,6 +251,8 @@ typedef struct as_cluster_s {
 	 *
 	 * The key is the IP address returned from friend info requests to other servers.  The
 	 * value is the real IP address used to connect to the server.
+	 *
+	 * NULL when a translator is registered: ip_map is then ignored, configured seeds included.
 	 */
 	as_vector* /* <as_addr_map> */ ip_map;
 

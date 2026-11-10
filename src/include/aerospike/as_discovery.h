@@ -616,7 +616,7 @@ typedef struct as_discovery_config_s {
 /**
  * Address translation configuration owned by as_config. Register a translator
  * with as_config_set_address_translator(); when none is registered the static
- * map over as_config.ip_map is used.
+ * map over as_config.ip_map is used; while one is registered ip_map is ignored.
  *
  * @ingroup discovery_api
  */

@@ -278,7 +278,7 @@ const char*
 as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname)
 {
 	// Configured seeds are only rewritten by the implicit static map over ip_map.
-	// A registered translator never rewrites configured seeds.
+	// A registered translator never rewrites configured seeds, and ip_map is then NULL.
 	// Useful when there are both internal and external addresses for the same node.
 	const char* alt = hostname;
 
@@ -1761,16 +1761,24 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->seed_manager = seed_manager;
 	pthread_mutex_init(&cluster->metrics_lock, NULL);
 
-	// Initialize IP map translation if provided.
+	// Initialize IP map translation if provided. ip_map is ignored while a translator is
+	// registered, configured seeds included.
 	if (config->ip_map && config->ip_map_size > 0) {
-		cluster->ip_map = as_vector_create(sizeof(as_addr_map), config->ip_map_size);
+		if (cluster->translator_registered) {
+			as_log_warn("ip_map is ignored while address translator %s is registered, configured "
+				"seeds included. Move the mappings into the translator (for example port-map "
+				"entries) and configure seeds with reachable addresses", cluster->translator.name);
+		}
+		else {
+			cluster->ip_map = as_vector_create(sizeof(as_addr_map), config->ip_map_size);
 
-		for (uint32_t i = 0; i < config->ip_map_size; i++) {
-			as_addr_map* src_addr = &config->ip_map[i];
-			as_addr_map* trg_addr = as_vector_reserve(cluster->ip_map);
+			for (uint32_t i = 0; i < config->ip_map_size; i++) {
+				as_addr_map* src_addr = &config->ip_map[i];
+				as_addr_map* trg_addr = as_vector_reserve(cluster->ip_map);
 
-			trg_addr->orig = cf_strdup(src_addr->orig);
-			trg_addr->alt = cf_strdup(src_addr->alt);
+				trg_addr->orig = cf_strdup(src_addr->orig);
+				trg_addr->alt = cf_strdup(src_addr->alt);
+			}
 		}
 	}
 

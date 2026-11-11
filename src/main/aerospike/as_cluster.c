@@ -1761,6 +1761,22 @@ as_cluster_create(aerospike* as, as_error* err)
 		}
 	}
 
+	// Dynamic configuration allows metrics to be enabled from a file. Enable
+	// before the first tend so a failure can still destroy the cluster here.
+	if (config->policies.metrics.enable) {
+		as_log_info("Enable metrics");
+		// Call as_cluster_enable_metrics() instead of aerospike_enable_metrics() to avoid
+		// the uneccessary policy merge with the default metrics policy.
+		pthread_mutex_lock(&cluster->metrics_lock);
+		as_status status = as_cluster_enable_metrics(err, cluster, &config->policies.metrics);
+		pthread_mutex_unlock(&cluster->metrics_lock);
+
+		if (status != AEROSPIKE_OK) {
+			as_cluster_destroy(cluster);
+			return status;
+		}
+	}
+
 	if (config->force_single_node) {
 		if (config->use_shm) {
 			as_cluster_destroy(cluster);

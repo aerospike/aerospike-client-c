@@ -103,8 +103,10 @@ typedef enum as_seed_merge_policy_e {
 	AS_SEED_REPLACE,
 
 	/**
-	 * Discovered seeds only. Static seeds are used only when discovery returns
-	 * an empty result. Use when the static seeds are an emergency fallback.
+	 * Discovered seeds only. Static seeds are used when discovery returns an
+	 * empty result, and at initialization also when it fails. A failed refresh
+	 * after initialization keeps the previous seeds. Use when the static seeds
+	 * are an emergency fallback.
 	 */
 	AS_SEED_DISCOVERY_ONLY
 } as_seed_merge_policy;
@@ -123,7 +125,14 @@ typedef enum as_translation_miss_policy_e {
 	AS_TRANSLATION_PASS_THROUGH,
 
 	/**
-	 * Drop the endpoint and report AEROSPIKE_ERR_TRANSLATION_MISS.
+	 * Drop the endpoint; the node can still be reached through its other
+	 * endpoints. A peer that cannot be added is not created: the miss is logged
+	 * at warning level as an AEROSPIKE_ERR_TRANSLATION_MISS message naming the
+	 * translator, the node, the advertised host:port and the source list, and
+	 * the peer is retried on every tend. A miss alone does not fail
+	 * aerospike_connect(). When initialization fails for another reason, such
+	 * as no reachable seed, a recorded translation error is returned instead of
+	 * the generic connection error.
 	 */
 	AS_TRANSLATION_STRICT
 } as_translation_miss_policy;

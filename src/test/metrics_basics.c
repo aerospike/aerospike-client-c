@@ -1174,14 +1174,20 @@ metrics_copy_tls(as_config* config, const as_config_tls* src)
 	as_config_tls_set_certstring(config, src->certstring);
 }
 
-static aerospike*
-metrics_connect_client(as_config* config)
+static void
+metrics_set_connect_config(as_config* config)
 {
 	as_config_add_hosts(config, g_host, (uint16_t)g_port);
 	as_config_set_user(config, as->config.user, as->config.password);
 	config->use_services_alternate = as->config.use_services_alternate;
 	config->auth_mode = as->config.auth_mode;
 	metrics_copy_tls(config, &as->config.tls);
+}
+
+static aerospike*
+metrics_connect_client(as_config* config)
+{
+	metrics_set_connect_config(config);
 
 	aerospike* client = aerospike_new(config);
 	as_error err;
@@ -1972,6 +1978,37 @@ TEST(metrics_listeners_require_all_callbacks, "a partial metrics listener is rej
 	as_metrics_policy_destroy(&policy);
 }
 
+TEST(metrics_connect_enable_failure, "connect that fails to enable metrics leaves no cluster and can be retried")
+{
+	as_config config;
+	as_config_init(&config);
+	metrics_set_connect_config(&config);
+	config.policies.metrics.enable = true;
+	// Empty report_dir installs no file exporter.
+	config.policies.metrics.report_dir[0] = '\0';
+	// Metrics enable rejects the sampler after the cluster object is created.
+	config.policies.metrics.sampler_range = 0;
+
+	aerospike* client = aerospike_new(&config);
+	as_error err;
+	as_status status = aerospike_connect(client, &err);
+	bool no_cluster = client->cluster == NULL;
+
+	client->config.policies.metrics.sampler_range = 1;
+	as_status retry_status = aerospike_connect(client, &err);
+	bool metrics_enabled = client->cluster && client->cluster->metrics_enabled;
+
+	if (retry_status == AEROSPIKE_OK) {
+		aerospike_close(client, &err);
+	}
+	aerospike_destroy(client);
+
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_true(no_cluster);
+	assert_int_eq(retry_status, AEROSPIKE_OK);
+	assert_true(metrics_enabled);
+}
+
 TEST(metrics_deprecated_listeners, "deprecated listeners still run on enable and disable")
 {
 	char dir[256];
@@ -2710,6 +2747,7 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_periodic_export_stops_on_disable);
 	suite_add(metrics_invalid_report_dir);
 	suite_add(metrics_listeners_require_all_callbacks);
+	suite_add(metrics_connect_enable_failure);
 	suite_add(metrics_deprecated_listeners);
 	suite_add(metrics_listener_reads_attempt_latency);
 	suite_add(metrics_dynamic_legacy_enable_turns_operational_on);

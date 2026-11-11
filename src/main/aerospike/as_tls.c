@@ -275,6 +275,12 @@ as_tls_check_init(void)
 }
 
 void
+as_tls_manage_sigpipe(void)
+{
+	manage_sigpipe();
+}
+
+void
 as_tls_cleanup(void)
 {
 	// Skip if we were never initialized.

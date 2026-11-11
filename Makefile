@@ -114,6 +114,10 @@ AEROSPIKE += aerospike_udf.o
 AEROSPIKE += as_address.o
 AEROSPIKE += as_admin.o
 AEROSPIKE += as_async.o
+AEROSPIKE += as_aws.o
+AEROSPIKE += as_aws_http.o
+AEROSPIKE += as_aws_parse.o
+AEROSPIKE += as_aws_sigv4.o
 AEROSPIKE += as_batch.o
 AEROSPIKE += as_bit_operations.o
 AEROSPIKE += as_cdt_ctx.o
@@ -195,6 +199,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_ll.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_queue.h
 
 EXCLUDE-HEADERS = $(SOURCE_INCL)/aerospike/as_metrics_internal.h
+EXCLUDE-HEADERS += $(SOURCE_INCL)/aerospike/as_aws_internal.h
 
 AEROSPIKE-HEADERS := $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/*.h))
 

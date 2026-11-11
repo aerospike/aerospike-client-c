@@ -554,6 +554,18 @@
     <ClCompile Include="..\..\src\main\aerospike\as_async.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_aws.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_aws_http.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_aws_parse.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_aws_sigv4.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\main\aerospike\as_cluster.c">
       <Filter>Source Files</Filter>
     </ClCompile>

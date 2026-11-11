@@ -489,6 +489,10 @@
     <ClCompile Include="..\..\src\main\aerospike\as_address.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_admin.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_async.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_aws.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_aws_http.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_aws_parse.c" />
+    <ClCompile Include="..\..\src\main\aerospike\as_aws_sigv4.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_batch.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_bit_operations.c" />
     <ClCompile Include="..\..\src\main\aerospike\as_cdt_ctx.c" />

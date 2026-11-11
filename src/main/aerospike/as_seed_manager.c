@@ -27,6 +27,7 @@
 #include <limits.h>
 #include <string.h>
 
+#include "as_aws_private.h"
 #include "as_dns_internal.h"
 
 //---------------------------------
@@ -762,19 +763,30 @@ start_thread(as_seed_manager* m, as_error* err)
 // Static Functions: validation
 //---------------------------------
 
-// The refresh context carries no deadline, so only the built-in DNS provider, whose timeout is
-// known, can be range checked.
+// The refresh context carries no deadline, so only the built-in DNS and AWS EC2 providers, whose
+// timeouts are known, can be range checked.
 static as_status
-check_dns_timeout(
+check_builtin_timeout(
 	as_error* err, const as_seed_provider* provider, uint32_t limit, const char* limit_name,
 	const char* advice
 	)
 {
-	uint32_t dns_timeout;
+	uint32_t timeout;
+	const char* label;
 
-	if (as_dns_seed_provider_timeout(provider, &dns_timeout) && dns_timeout > limit) {
+	if (as_dns_seed_provider_timeout(provider, &timeout)) {
+		label = "DNS";
+	}
+	else if (as_aws_seed_provider_timeout(provider, &timeout)) {
+		label = "AWS EC2";
+	}
+	else {
+		return AEROSPIKE_OK;
+	}
+
+	if (timeout > limit) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
-			"DNS seed provider timeout_ms %u exceeds discovery %s %u. %s", dns_timeout,
+			"%s seed provider timeout_ms %u exceeds discovery %s %u. %s", label, timeout,
 			limit_name, limit, advice);
 	}
 	return AEROSPIKE_OK;
@@ -842,7 +854,7 @@ validate(
 				"Invalid discovery tend_refresh_deadline_ms %u: must be > 0 and <= tend interval / 2 (%u)",
 				d->tend_refresh_deadline_ms, max);
 		}
-		return check_dns_timeout(err, provider, d->tend_refresh_deadline_ms,
+		return check_builtin_timeout(err, provider, d->tend_refresh_deadline_ms,
 			"tend_refresh_deadline_ms", "Lower timeout_ms or use execution_mode thread");
 	}
 
@@ -850,7 +862,7 @@ validate(
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"Invalid discovery refresh_timeout_ms 0: must be > 0");
 	}
-	return check_dns_timeout(err, provider, d->refresh_timeout_ms, "refresh_timeout_ms",
+	return check_builtin_timeout(err, provider, d->refresh_timeout_ms, "refresh_timeout_ms",
 		"Lower timeout_ms or raise refresh_timeout_ms");
 }
 

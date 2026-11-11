@@ -1046,6 +1046,26 @@ as_config_set_dns_seed_provider(as_config* config, const as_dns_seed_provider_co
 	as_error* err);
 
 /**
+ * Register the built-in AWS EC2 seed provider; see as_discovery_aws_seed_provider() for its
+ * behavior. The configuration is validated and copied and the TLS context created; the caller
+ * keeps ownership of aws and its strings.
+ *
+ * The provider is thread-only: registration fails while discovery.execution_mode is
+ * AS_DISCOVERY_EXECUTION_TEND, and aerospike_connect() fails if execution_mode is changed to it
+ * afterwards. Set execution_mode before registering.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for an invalid configuration (the message names the value), in
+ * tend mode, or while a client created from this config is connected,
+ * AEROSPIKE_ERR_TLS_ERROR when ca_file or ca_path cannot be loaded, and AEROSPIKE_ERR_CLIENT
+ * when memory runs out. On failure the previous registration is unchanged.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_aws_seed_provider(as_config* config, const as_aws_seed_provider_config* aws,
+	as_error* err);
+
+/**
  * Register a seed provider implemented by a language binding (Python, Node.js).
  * Ownership and replacement rules are those of as_config_set_seed_provider().
  *

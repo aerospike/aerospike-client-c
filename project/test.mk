@@ -4,6 +4,8 @@
 
 TEST_AEROSPIKE = aerospike_test.c
 TEST_AEROSPIKE += config_basics.c
+TEST_AEROSPIKE += discovery_aws.c
+TEST_AEROSPIKE += discovery_aws_stub.c
 TEST_AEROSPIKE += discovery_contract.c
 TEST_AEROSPIKE += discovery_dns.c
 TEST_AEROSPIKE += discovery_fake_node.c

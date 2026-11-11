@@ -63,6 +63,16 @@ extern "C" {
  */
 #define AS_DNS_DEFAULT_SERVER_PORT 53
 
+/**
+ * Default port of hosts returned by the AWS EC2 seed provider.
+ */
+#define AS_AWS_DEFAULT_PORT 3000
+
+/**
+ * Default total time in milliseconds of one AWS EC2 seed provider refresh.
+ */
+#define AS_AWS_DEFAULT_TIMEOUT_MS 5000
+
 //---------------------------------
 // Types
 //---------------------------------
@@ -279,6 +289,162 @@ typedef struct as_dns_seed_provider_config_s {
 	 */
 	uint32_t servers_size;
 } as_dns_seed_provider_config;
+
+/**
+ * EC2 instance field returned as the seed address by the AWS EC2 seed provider.
+ *
+ * Default: AS_AWS_ADDRESS_PRIVATE_IP
+ *
+ * @ingroup discovery_api
+ */
+typedef enum as_aws_address_field_e {
+	/**
+	 * Primary private IPv4 address (privateIpAddress).
+	 */
+	AS_AWS_ADDRESS_PRIVATE_IP,
+
+	/**
+	 * Public IPv4 address (ipAddress).
+	 */
+	AS_AWS_ADDRESS_PUBLIC_IP,
+
+	/**
+	 * Private DNS name (privateDnsName). The client resolves it when it seeds.
+	 */
+	AS_AWS_ADDRESS_PRIVATE_DNS,
+
+	/**
+	 * Public DNS name (dnsName). The client resolves it when it seeds.
+	 */
+	AS_AWS_ADDRESS_PUBLIC_DNS
+} as_aws_address_field;
+
+/**
+ * One EC2 DescribeInstances filter. An instance matches when it matches one of the values of
+ * every filter.
+ *
+ * @ingroup discovery_api
+ */
+typedef struct as_aws_filter_s {
+	/**
+	 * Filter name, passed to EC2 as given: "tag:<key>" or any other EC2 filter name. Must not be
+	 * empty, must not be "instance-state-name", which the provider sets to running, and must not
+	 * repeat an earlier filter name (compared case-sensitively).
+	 */
+	const char* name;
+
+	/**
+	 * Filter values. Required: one or more non-empty values.
+	 */
+	const char* const* values;
+
+	/**
+	 * Number of values.
+	 */
+	uint32_t values_size;
+} as_aws_filter;
+
+/**
+ * Configuration of the built-in AWS EC2 seed provider. Initialize it with
+ * as_aws_seed_provider_config_init(), then set region, filters, the credentials and any other
+ * field. Every string and array is copied when the provider is created; the caller keeps
+ * ownership of them and may change or release them afterwards.
+ *
+ * @ingroup discovery_api
+ */
+typedef struct as_aws_seed_provider_config_s {
+	/**
+	 * AWS region of the instances and of the default endpoint, such as "us-east-1". Required;
+	 * must match [a-z0-9]+(-[a-z0-9]+)+.
+	 */
+	const char* region;
+
+	/**
+	 * DescribeInstances filters, sent in order. Required: one or more filters.
+	 */
+	const as_aws_filter* filters;
+
+	/**
+	 * Number of filters.
+	 */
+	uint32_t filters_size;
+
+	/**
+	 * Instance field returned as the seed address.
+	 * Default: AS_AWS_ADDRESS_PRIVATE_IP
+	 */
+	as_aws_address_field address_field;
+
+	/**
+	 * Port set on every returned host. Must be > 0.
+	 * Default: AS_AWS_DEFAULT_PORT
+	 */
+	uint16_t port;
+
+	/**
+	 * TLS name set on every returned host. NULL leaves the TLS name to be defaulted the same way
+	 * as for configured seeds. Must not be empty.
+	 * Default: NULL
+	 */
+	const char* tls_name;
+
+	/**
+	 * Total time in milliseconds of one refresh, across every connect, TLS handshake, write, read
+	 * and page. Must be > 0, and must not exceed discovery.refresh_timeout_ms, otherwise
+	 * aerospike_connect() fails with AEROSPIKE_ERR_PARAM.
+	 * Default: AS_AWS_DEFAULT_TIMEOUT_MS
+	 */
+	uint32_t timeout_ms;
+
+	/**
+	 * EC2 endpoint URL, such as a VPC interface endpoint: "http" or "https", a host (an IPv6
+	 * address in brackets), an optional port and path, and no query, fragment or userinfo.
+	 * NULL uses the regional endpoint https://ec2.<region>.amazonaws.com, or
+	 * https://ec2.<region>.amazonaws.com.cn for cn-* regions.
+	 * Default: NULL
+	 */
+	const char* endpoint;
+
+	/**
+	 * PEM file of the certificate authorities trusted for HTTPS endpoints. When ca_file and
+	 * ca_path are both NULL, the OpenSSL default verify paths are trusted, which honour the
+	 * SSL_CERT_FILE and SSL_CERT_DIR environment variables. When neither variable is set and
+	 * the default certificate file of the OpenSSL build does not exist, as happens with an
+	 * OpenSSL bundled into a prebuilt package, the first existing system bundle among
+	 * /etc/ssl/certs/ca-certificates.crt, /etc/pki/tls/certs/ca-bundle.crt,
+	 * /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem, /etc/ssl/ca-bundle.pem,
+	 * /etc/ssl/cert.pem and /usr/local/etc/ssl/cert.pem is also trusted. On Windows the OpenSSL
+	 * defaults are not the system certificate store, so set ca_file (or SSL_CERT_FILE) there.
+	 * The file is loaded for any endpoint scheme. Must not be empty. A C client extension.
+	 * Default: NULL
+	 */
+	const char* ca_file;
+
+	/**
+	 * Directory of hashed certificate authority files (see openssl rehash) trusted for HTTPS
+	 * endpoints, with or instead of ca_file. Must not be empty. A C client extension.
+	 * Default: NULL
+	 */
+	const char* ca_path;
+
+	/**
+	 * AWS access key id used to sign requests. Required; letters and digits only.
+	 */
+	const char* access_key_id;
+
+	/**
+	 * AWS secret access key. Required; visible ASCII characters only. Never logged or put in a
+	 * message.
+	 */
+	const char* secret_access_key;
+
+	/**
+	 * Session token of temporary credentials, sent as x-amz-security-token. NULL or empty for
+	 * none; otherwise visible ASCII characters only. Never logged or put in a message.
+	 * Default: NULL
+	 */
+	const char* session_token;
+} as_aws_seed_provider_config;
 
 /**
  * An endpoint advertised by a server. All strings are read-only, owned by the
@@ -576,8 +742,8 @@ typedef struct as_discovery_config_s {
 	 * continues with the configured seeds. A refresh that takes longer is
 	 * logged. Must be > 0 when a discovery thread runs: for a provider that
 	 * needs periodic refresh in AS_DISCOVERY_EXECUTION_THREAD, and for every
-	 * binding provider. With the built-in DNS seed provider it must be >= its
-	 * timeout_ms.
+	 * binding provider. With the built-in DNS or AWS EC2 seed provider it must be
+	 * >= that provider's timeout_ms.
 	 * Default: 10000
 	 */
 	uint32_t refresh_timeout_ms;
@@ -840,6 +1006,92 @@ as_dns_seed_provider_config_init(as_dns_seed_provider_config* config);
  */
 AS_EXTERN as_status
 as_discovery_dns_seed_provider(as_error* err, const as_dns_seed_provider_config* config,
+	as_seed_provider* provider);
+
+/**
+ * Initialize an AWS EC2 seed provider configuration with its defaults: no region, filters or
+ * credentials, AS_AWS_ADDRESS_PRIVATE_IP, AS_AWS_DEFAULT_PORT, no TLS name,
+ * AS_AWS_DEFAULT_TIMEOUT_MS, the regional endpoint and the OpenSSL default trust.
+ *
+ * @ingroup discovery_api
+ */
+AS_EXTERN void
+as_aws_seed_provider_config_init(as_aws_seed_provider_config* config);
+
+/**
+ * Fill provider with the built-in AWS EC2 seed provider named "aws-tags", which lists the
+ * running EC2 instances matching the configured filters, usually a tag, and returns one seed
+ * host per instance. Use it for a self-managed Aerospike cluster on EC2 whose nodes carry a
+ * known tag. It sees only the instances of the credentials' own account and region, so it is
+ * for self-managed clusters on EC2, not Aerospike Cloud.
+ *
+ * Each refresh sends one SigV4-signed EC2 Query API DescribeInstances request (API version
+ * 2016-11-15) with the filters in order plus instance-state-name=running, and follows NextToken
+ * pagination. It returns one host per instance with a non-empty address_field, with port and
+ * tls_name, sorted by address and deduplicated. Instances without that field, or whose value is
+ * longer than 255 bytes or contains whitespace or control characters, are skipped and counted
+ * at debug level. An empty result is a success. Any failed page, HTTP error, timeout, response
+ * whose root element is not DescribeInstancesResponse or allocation failure fails the refresh
+ * with AEROSPIKE_ERR_SEED_DISCOVERY_FAILED and a message that starts with
+ * "AWS EC2 seed provider: " and includes the AWS error code and request id when EC2 returns
+ * them; the client then keeps its previous seeds. Seeds returned by a seed provider are used as
+ * returned, unless one equals a configured seed by name and port, so rewriting provider seeds
+ * needs an address translator. The secret access key, the session token and request
+ * signatures are never logged or put in a message.
+ *
+ * Minimum IAM policy of the credentials:
+ * @code
+ * {
+ *   "Version": "2012-10-17",
+ *   "Statement": [
+ *     {"Effect": "Allow", "Action": ["ec2:DescribeInstances"], "Resource": "*"}
+ *   ]
+ * }
+ * @endcode
+ *
+ * Credentials: this release of the API signs with access_key_id, secret_access_key and the
+ * optional session_token of the configuration, which are required.
+ *
+ * Threads and timeouts: a cold EC2 call takes several hundred milliseconds, more than a tend
+ * can give, so the provider is thread-only: needs_periodic_refresh returns true and
+ * supports_deadline false. With AS_DISCOVERY_EXECUTION_TEND,
+ * as_config_set_aws_seed_provider() and aerospike_connect() fail with AEROSPIKE_ERR_PARAM, the
+ * latter before any request. timeout_ms bounds every connect, TLS handshake, write, read and
+ * page of one refresh and must not exceed discovery.refresh_timeout_ms; aerospike_connect()
+ * fails with AEROSPIKE_ERR_PARAM otherwise. The endpoint host name is resolved with the system
+ * resolver (getaddrinfo()), which timeout_ms cannot bound; every resolved address is tried in
+ * order within the same timeout_ms, so an address that never answers uses up the time left for
+ * the next ones. The provider creates no thread, timer or pooled connection: each request uses
+ * a new connection that is closed when the response is read. No HTTP proxy is used and
+ * redirects are not followed.
+ *
+ * HTTPS: TLS 1.2 or later with SNI, the peer certificate verified against ca_file and ca_path
+ * when either is set, otherwise against the OpenSSL default verify paths (and SSL_CERT_FILE or
+ * SSL_CERT_DIR) plus, when those find no certificate file, the first existing system CA bundle
+ * (see as_aws_seed_config.ca_file), and the endpoint host matched against its subject
+ * alternative names. On Windows the OpenSSL defaults are not the system certificate store; set
+ * ca_file there. The TLS context is created, ca_file and ca_path loaded, and SIGPIPE set to
+ * SIG_IGN process-wide when it still has the default handler (as cluster TLS does, because
+ * OpenSSL can raise it while writing) for any endpoint scheme, including http.
+ *
+ * The provider keeps state across refreshes, so a provider value belongs to exactly one
+ * registration: register it with one config only.
+ *
+ * The configuration is validated and copied, the endpoint parsed and the TLS context created
+ * once; later changes to the configuration have no effect. An invalid value returns
+ * AEROSPIKE_ERR_PARAM with a message naming it, an unreadable ca_file or ca_path
+ * AEROSPIKE_ERR_TLS_ERROR, and an allocation failure AEROSPIKE_ERR_CLIENT; provider is then
+ * left untouched.
+ *
+ * On success the caller owns provider->udata until it is registered with
+ * as_config_set_seed_provider(), which then takes ownership; release an unregistered table with
+ * provider->destroy(provider->udata). Most callers should use
+ * as_config_set_aws_seed_provider().
+ *
+ * @ingroup discovery_api
+ */
+AS_EXTERN as_status
+as_discovery_aws_seed_provider(as_error* err, const as_aws_seed_provider_config* config,
 	as_seed_provider* provider);
 
 /**

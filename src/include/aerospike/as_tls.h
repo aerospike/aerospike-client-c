@@ -28,6 +28,12 @@ extern "C" {
 
 void as_tls_check_init(void);
 
+/**
+ * @private
+ * Set SIGPIPE to SIG_IGN process-wide when it still has the default handler. No-op on Windows.
+ */
+void as_tls_manage_sigpipe(void);
+
 void as_tls_cleanup(void);
 
 AS_EXTERN void as_tls_thread_cleanup(void);

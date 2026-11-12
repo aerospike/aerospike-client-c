@@ -460,8 +460,8 @@ typedef struct as_aws_seed_provider_config_s {
 	/**
 	 * EC2 endpoint URL, such as a VPC interface endpoint: "http" or "https", a host (an IPv6
 	 * address in brackets), an optional port and path, and no query, fragment or userinfo.
-	 * NULL uses the regional endpoint https://ec2.<region>.amazonaws.com, or
-	 * https://ec2.<region>.amazonaws.com.cn for cn-* regions.
+	 * NULL uses the regional endpoint https://ec2.&lt;region&gt;.amazonaws.com, or
+	 * https://ec2.&lt;region&gt;.amazonaws.com.cn for cn-* regions.
 	 * Default: NULL
 	 */
 	const char* endpoint;
@@ -1159,10 +1159,10 @@ as_aws_seed_provider_config_init(as_aws_seed_provider_config* config);
  * - the environment variables AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_SESSION_TOKEN;
  * - the static keys (aws_access_key_id, aws_secret_access_key, aws_session_token) of profile
  *   AWS_PROFILE (default "default") in the shared credentials file AWS_SHARED_CREDENTIALS_FILE
- *   (a leading "~/" is expanded) or <home>/.aws/credentials; a missing, unreadable or
+ *   (a leading "~/" is expanded) or &lt;home&gt;/.aws/credentials; a missing, unreadable or
  *   non-regular file, or a profile without both keys, is skipped;
  * - EKS web identity, when AWS_WEB_IDENTITY_TOKEN_FILE and AWS_ROLE_ARN are set: STS
- *   AssumeRoleWithWebIdentity on https://sts.<region>.amazonaws.com (.com.cn for cn-*
+ *   AssumeRoleWithWebIdentity on https://sts.&lt;region&gt;.amazonaws.com (.com.cn for cn-*
  *   regions), with RoleSessionName AWS_ROLE_SESSION_NAME or "aerospike-client-<epoch ms>";
  * - ECS container credentials, when AWS_CONTAINER_CREDENTIALS_RELATIVE_URI (appended to
  *   http://169.254.170.2; it must start with "/") or AWS_CONTAINER_CREDENTIALS_FULL_URI is

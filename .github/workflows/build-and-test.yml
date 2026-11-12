@@ -266,6 +266,8 @@ jobs:
           path: |
             target/
             src/test/**/*.lua
+            src/include/aerospike/as_config.h
+            src/include/aerospike/as_discovery.h
           retention-days: 1
 
   # macOS ARM64 test
@@ -417,6 +419,8 @@ jobs:
           path: |
             vs\x64\${{ matrix.config }}\
             src\test\**\*.lua
+            src\include\aerospike\as_config.h
+            src\include\aerospike\as_discovery.h
           retention-days: 1
 
   # Windows x64 test

@@ -765,7 +765,7 @@ as_nodes_release(as_nodes* nodes)
  * tls_name: translation never changes the TLS identity. A strict miss returns
  * AEROSPIKE_ERR_TRANSLATION_MISS. Performs no I/O.
  */
-as_status
+AS_EXTERN as_status
 as_cluster_translate_address(
 	as_cluster* cluster, as_error* err, const char* node_name, const char* tls_name,
 	const char* host, uint16_t port, as_endpoint_source source, as_host* out

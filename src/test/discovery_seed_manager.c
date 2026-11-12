@@ -822,6 +822,12 @@ TEST(seed_snapshot_atomic, "M-6 concurrent reads and refresh publications never 
 			discarded++;
 		}
 		overruns = current;
+
+		// A scheduler that runs one thread at a time, such as valgrind's, can keep running this
+		// thread. Past the stress phase, yield so the readers observe the swaps.
+		if (tends >= STRESS_TENDS) {
+			as_sleep(0);
+		}
 	}
 	as_store_uint8(&st.done, 1);
 

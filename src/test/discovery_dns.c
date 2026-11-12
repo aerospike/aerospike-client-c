@@ -590,32 +590,6 @@ settle(int (*count)(void), int expected)
 	return value;
 }
 
-// Number of open descriptors of this process, or -1 when unknown.
-static int
-fd_count(void)
-{
-#if defined(__linux__)
-	DIR* dir = opendir("/proc/self/fd");
-#else
-	DIR* dir = opendir("/dev/fd");
-#endif
-
-	if (!dir) {
-		return -1;
-	}
-
-	int count = 0;
-	struct dirent* entry;
-
-	while ((entry = readdir(dir)) != NULL) {
-		if (entry->d_name[0] != '.') {
-			count++;
-		}
-	}
-	closedir(dir);
-	return count;
-}
-
 //---------------------------------
 // Static Functions: loopback stub resolver
 //---------------------------------
@@ -2347,7 +2321,9 @@ TEST(dns_deadline_unanswered, "an unanswered refresh returns within timeout_ms f
 		dns_setup d;
 		as_dns_seed_provider_config* cfg = setup_init(&d, names, 3, &silent,
 			servers == 2 ? &silent2 : NULL);
-		cfg->timeout_ms = 80;
+
+		// The last name gets 1/16 of the budget, enough to outlast scheduling delays.
+		cfg->timeout_ms = 400;
 		as_seed_provider provider;
 		as_error err;
 		assert_int_eq(as_discovery_dns_seed_provider(&err, cfg, &provider), AEROSPIKE_OK);
@@ -2358,12 +2334,12 @@ TEST(dns_deadline_unanswered, "an unanswered refresh returns within timeout_ms f
 			assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)),
 				AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
 			uint64_t elapsed = (cf_getns() - begin) / 1000000;
-			info("unanswered servers=%d elapsed=%llu ms timeout=80 ms", servers,
+			info("unanswered servers=%d elapsed=%llu ms timeout=400 ms", servers,
 				(unsigned long long)elapsed);
-			assert_true(elapsed <= 80 + DNS_MARGIN_MS);
+			assert_true(elapsed <= 400 + DNS_MARGIN_MS);
 
 			// The first name alone takes 3/4 of the budget.
-			assert_true(elapsed >= 60);
+			assert_true(elapsed >= 300);
 			assert_string_eq(err.message, "DNS seed discovery failed for every name: "
 				"a.example.com: timeout; b.example.com: timeout; c.example.com: timeout");
 		}
@@ -2502,7 +2478,9 @@ TEST(dns_deadline_srv_targets, "unanswered SRV targets share the refresh budget 
 	dns_setup d;
 	as_dns_seed_provider_config* cfg = setup_init(&d, names, 1, &s, NULL);
 	cfg->record_type = AS_DNS_RECORD_SRV;
-	cfg->timeout_ms = 60;
+
+	// The last target gets 1/16 of the budget, enough to outlast scheduling delays.
+	cfg->timeout_ms = 300;
 	as_seed_provider provider;
 	as_error err;
 	assert_int_eq(as_discovery_dns_seed_provider(&err, cfg, &provider), AEROSPIKE_OK);
@@ -2513,8 +2491,8 @@ TEST(dns_deadline_srv_targets, "unanswered SRV targets share the refresh budget 
 	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
 	uint64_t elapsed = cf_getms() - begin;
 	log_stop();
-	info("unanswered SRV targets elapsed=%llu ms timeout=60 ms", (unsigned long long)elapsed);
-	assert_true(elapsed <= 60 + DNS_MARGIN_MS);
+	info("unanswered SRV targets elapsed=%llu ms timeout=300 ms", (unsigned long long)elapsed);
+	assert_true(elapsed <= 300 + DNS_MARGIN_MS);
 	assert_string_eq(err.message, "DNS seed discovery failed for every name: "
 		"_aerospike._tcp.example.com: no SRV target resolved");
 	assert_int_eq(log_size(), 3);
@@ -2653,7 +2631,7 @@ TEST(dns_no_thread, "the provider creates no thread across repeated refreshes")
 
 TEST(dns_no_leaked_descriptors, "every transport path, error and failed construction releases its sockets")
 {
-	int before = fd_count();
+	int before = discovery_fd_count();
 	assert_true(before > 0);
 
 	dns_stub good;
@@ -2725,7 +2703,7 @@ TEST(dns_no_leaked_descriptors, "every transport path, error and failed construc
 	stub_stop(&tc);
 	stub_stop(&silent);
 	stub_stop(&good);
-	assert_int_eq(settle(fd_count, before), before);
+	assert_int_eq(settle(discovery_fd_count, before), before);
 }
 
 //---------------------------------
@@ -3257,7 +3235,7 @@ n4_bootstrap(n4_env* env, bool srv, as_discovery_execution_mode mode, char* msg,
 
 TEST(dns_n4_bootstrap, "N-4 precursor: a DNS-published seed bootstraps the client in both modes; membership comes from peers")
 {
-	int fds = fd_count();
+	int fds = discovery_fd_count();
 	n4_env env;
 	assert_true(n4_start(&env));
 
@@ -3278,7 +3256,7 @@ TEST(dns_n4_bootstrap, "N-4 precursor: a DNS-published seed bootstraps the clien
 		}
 	}
 	n4_stop(&env);
-	assert_int_eq(settle(fd_count, fds), fds);
+	assert_int_eq(settle(discovery_fd_count, fds), fds);
 }
 
 static const char*
@@ -3367,7 +3345,7 @@ n4_close_reconnect(n4_env* env)
 
 TEST(dns_n4_close_reconnect, "N-4 precursor: sync close keeps the DNS registration and reconnect resolves again; destroy releases it")
 {
-	int fds = fd_count();
+	int fds = discovery_fd_count();
 	n4_env env;
 	assert_true(n4_start(&env));
 	const char* failure = n4_close_reconnect(&env);
@@ -3376,7 +3354,7 @@ TEST(dns_n4_close_reconnect, "N-4 precursor: sync close keeps the DNS registrati
 	if (failure) {
 		fail("%s", failure);
 	}
-	assert_int_eq(settle(fd_count, fds), fds);
+	assert_int_eq(settle(discovery_fd_count, fds), fds);
 }
 
 #else

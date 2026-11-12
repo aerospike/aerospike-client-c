@@ -87,4 +87,9 @@ fnode_wait(fnode* n, const uint32_t* field, uint32_t target, uint32_t timeout_ms
 const char*
 fnode_addr(const fnode* n, char* buf, size_t size);
 
+// Number of open descriptors of this process, or -1 when unknown. Sockets connected to a node of
+// the shared test client are not counted: its tend thread trims idle ones at any time.
+int
+discovery_fd_count(void);
+
 #endif // !_WIN32

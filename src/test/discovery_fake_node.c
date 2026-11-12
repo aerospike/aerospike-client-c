@@ -18,14 +18,19 @@
 
 #ifdef DISCOVERY_FAKE_SERVERS
 
+#include <aerospike/aerospike.h>
 #include <aerospike/as_atomic.h>
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_node.h>
 #include <aerospike/as_sleep.h>
 #include <citrusleaf/cf_clock.h>
 
 #include <arpa/inet.h>
+#include <dirent.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -33,9 +38,56 @@
 
 #define FNODE_MAX_CLIENTS 32
 
+extern aerospike* as;
+
 //---------------------------------
 // Static Functions
 //---------------------------------
+
+static bool
+same_endpoint(const struct sockaddr_storage* a, const struct sockaddr_storage* b)
+{
+	if (a->ss_family != b->ss_family) {
+		return false;
+	}
+
+	if (a->ss_family == AF_INET) {
+		const struct sockaddr_in* x = (const struct sockaddr_in*)a;
+		const struct sockaddr_in* y = (const struct sockaddr_in*)b;
+		return x->sin_port == y->sin_port && x->sin_addr.s_addr == y->sin_addr.s_addr;
+	}
+
+	if (a->ss_family == AF_INET6) {
+		const struct sockaddr_in6* x = (const struct sockaddr_in6*)a;
+		const struct sockaddr_in6* y = (const struct sockaddr_in6*)b;
+		return x->sin6_port == y->sin6_port &&
+			memcmp(&x->sin6_addr, &y->sin6_addr, sizeof(x->sin6_addr)) == 0;
+	}
+	return false;
+}
+
+// Is fd connected to a node of the shared test client.
+static bool
+is_client_socket(int fd, as_nodes* nodes)
+{
+	if (!nodes) {
+		return false;
+	}
+
+	struct sockaddr_storage peer;
+	socklen_t len = sizeof(peer);
+
+	if (getpeername(fd, (struct sockaddr*)&peer, &len) != 0) {
+		return false;
+	}
+
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		if (same_endpoint(&as_node_get_address(nodes->array[i])->addr, &peer)) {
+			return true;
+		}
+	}
+	return false;
+}
 
 static size_t
 fnode_reply(fnode* n, char* body, char* out, size_t cap)
@@ -319,6 +371,36 @@ fnode_addr(const fnode* n, char* buf, size_t size)
 {
 	snprintf(buf, size, "127.0.0.1:%u", n->port);
 	return buf;
+}
+
+int
+discovery_fd_count(void)
+{
+#if defined(__linux__)
+	DIR* dir = opendir("/proc/self/fd");
+#else
+	DIR* dir = opendir("/dev/fd");
+#endif
+
+	if (!dir) {
+		return -1;
+	}
+
+	as_nodes* nodes = (as && as->cluster) ? as_nodes_reserve(as->cluster) : NULL;
+	int count = 0;
+	struct dirent* entry;
+
+	while ((entry = readdir(dir)) != NULL) {
+		if (entry->d_name[0] != '.' && !is_client_socket(atoi(entry->d_name), nodes)) {
+			count++;
+		}
+	}
+
+	if (nodes) {
+		as_nodes_release(nodes);
+	}
+	closedir(dir);
+	return count;
 }
 
 #endif // DISCOVERY_FAKE_SERVERS

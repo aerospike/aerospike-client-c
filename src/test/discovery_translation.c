@@ -26,6 +26,7 @@
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_discovery.h>
+#include <aerospike/as_event.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_tls.h>
@@ -983,15 +984,26 @@ fake_client_connect(fake_client* c, as_config* config)
 	return c->status;
 }
 
+void
+aerospike_destroy_internal(aerospike* as);
+
+// Close and destroy the client. Async close also destroys it; a client that never connected
+// is destroyed directly so its registrations are released in every mode.
 static void
 fake_client_close(fake_client* c)
 {
 	as_error err;
 
-	if (c->status == AEROSPIKE_OK) {
+	if (c->as->cluster) {
 		aerospike_close(c->as, &err);
+
+		if (as_event_loop_size == 0 || as_event_single_thread) {
+			aerospike_destroy(c->as);
+		}
 	}
-	aerospike_destroy(c->as);
+	else {
+		aerospike_destroy_internal(c->as);
+	}
 }
 
 static uint32_t

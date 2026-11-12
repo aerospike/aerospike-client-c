@@ -24,6 +24,7 @@
 #ifdef DISCOVERY_FAKE_SERVERS
 #include <aerospike/as_atomic.h>
 #include <aerospike/as_sleep.h>
+#include <citrusleaf/cf_clock.h>
 
 #include <openssl/err.h>
 #include <openssl/evp.h>
@@ -214,11 +215,19 @@ stub_stopping(aws_stub* s)
 	return as_load_uint8(&s->stop) != 0;
 }
 
+// Sleep against a deadline: short sleeps overshoot, so a count of them would add up late.
 static void
 stub_sleep(aws_stub* s, uint32_t ms)
 {
-	for (uint32_t i = 0; i < ms && !stub_stopping(s); i += 5) {
-		as_sleep(ms - i < 5 ? ms - i : 5);
+	uint64_t end = cf_getms() + ms;
+
+	while (!stub_stopping(s)) {
+		uint64_t now = cf_getms();
+
+		if (now >= end) {
+			break;
+		}
+		as_sleep(end - now < 5 ? (uint32_t)(end - now) : 5);
 	}
 }
 

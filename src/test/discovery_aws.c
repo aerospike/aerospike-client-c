@@ -1636,32 +1636,6 @@ settle(int (*count)(void), int expected)
 	return value;
 }
 
-// Number of open descriptors of this process, or -1 when unknown.
-static int
-fd_count(void)
-{
-#if defined(__linux__)
-	DIR* dir = opendir("/proc/self/fd");
-#else
-	DIR* dir = opendir("/dev/fd");
-#endif
-
-	if (!dir) {
-		return -1;
-	}
-
-	int count = 0;
-	struct dirent* entry;
-
-	while ((entry = readdir(dir)) != NULL) {
-		if (entry->d_name[0] != '.') {
-			count++;
-		}
-	}
-	closedir(dir);
-	return count;
-}
-
 //---------------------------------
 // Static Functions: stub helpers
 //---------------------------------
@@ -3919,7 +3893,7 @@ TEST(aws_no_leaked_descriptors, "every transport path, error and failed construc
 	assert_int_eq(stub_refresh(&tls, true, "localhost", certs.ca_file, 2000, buf, sizeof(buf)),
 		AEROSPIKE_OK);
 
-	int before = fd_count();
+	int before = discovery_fd_count();
 	assert_true(before > 0);
 
 	for (int round = 0; round < 2; round++) {
@@ -3962,7 +3936,7 @@ TEST(aws_no_leaked_descriptors, "every transport path, error and failed construc
 
 	aws_stub_reset(&plain);
 	aws_stub_reset(&tls);
-	assert_int_eq(settle(fd_count, before), before);
+	assert_int_eq(settle(discovery_fd_count, before), before);
 	aws_stub_stop(&tls);
 	aws_stub_stop(&plain);
 	aws_certs_destroy(&certs);
@@ -4046,6 +4020,28 @@ fake_refresh(as_error* err, const as_seed_candidate_context* context, as_seed_ca
 	return AEROSPIKE_OK;
 }
 
+void
+aerospike_destroy_internal(aerospike* as);
+
+// Close and destroy the client. Async close also destroys it; a client that never connected
+// is destroyed directly so its registrations are released in every mode.
+static void
+client_close(aerospike* as)
+{
+	as_error err;
+
+	if (as->cluster) {
+		aerospike_close(as, &err);
+
+		if (as_event_loop_size == 0 || as_event_single_thread) {
+			aerospike_destroy(as);
+		}
+	}
+	else {
+		aerospike_destroy_internal(as);
+	}
+}
+
 //---------------------------------
 // Tests: seed manager integration
 //---------------------------------
@@ -4098,7 +4094,7 @@ TEST(aws_thread_validation, "thread mode rejects timeout_ms above refresh_timeou
 	assert_int_eq(aerospike_connect(&as, &err), AEROSPIKE_ERR_PARAM);
 	assert_not_null(strstr(err.message, "AWS EC2 seed provider timeout_ms 2000 exceeds"));
 	assert_null(as.cluster);
-	aerospike_destroy(&as);
+	client_close(&as);
 
 	assert_int_eq(aws_stub_accepts(&s), 0);
 	aws_stub_stop(&s);
@@ -4141,7 +4137,7 @@ TEST(aws_tend_rejected, "M-10 tend mode is rejected at registration and at conne
 		"use discovery execution_mode tend. Use execution_mode thread");
 	assert_null(as.cluster);
 	assert_false(as.config.discovery.registration_locked);
-	aerospike_destroy(&as);
+	client_close(&as);
 
 	as_sleep(50);
 	assert_int_eq(aws_stub_accepts(&s), 0);
@@ -4275,9 +4271,6 @@ TEST(aws_init_failure, "an initial failure falls back to configured seeds, or re
 // Static Functions: client helpers
 //---------------------------------
 
-void
-aerospike_destroy_internal(aerospike* as);
-
 static void
 client_config(as_config* config)
 {
@@ -4287,25 +4280,6 @@ client_config(as_config* config)
 	config->fail_if_not_connected = true;
 	config->discovery.execution_mode = AS_DISCOVERY_EXECUTION_THREAD;
 	config->discovery.refresh_interval_ms = AS_TEND_INTERVAL_MIN;
-}
-
-// Close and destroy the client. Async close also destroys it; a client that never connected
-// is destroyed directly so its registrations are released in every mode.
-static void
-client_close(aerospike* as)
-{
-	as_error err;
-
-	if (as->cluster) {
-		aerospike_close(as, &err);
-
-		if (as_event_loop_size == 0 || as_event_single_thread) {
-			aerospike_destroy(as);
-		}
-	}
-	else {
-		aerospike_destroy_internal(as);
-	}
 }
 
 // What a sync-only aerospike_close() does, also when async event loops exist.
@@ -4458,7 +4432,7 @@ boot_once(boot_env* env, char* msg, size_t size)
 
 TEST(aws_bootstrap, "an EC2-published seed bootstraps the client in thread mode with no static seeds; membership comes from peers")
 {
-	int fds = fd_count();
+	int fds = discovery_fd_count();
 	boot_env env;
 	assert_true(boot_start(&env));
 
@@ -4472,7 +4446,7 @@ TEST(aws_bootstrap, "an EC2-published seed bootstraps the client in thread mode 
 		fail("%s (A requests %u, B requests %u)", failure, a_requests, b_requests);
 	}
 	boot_stop(&env);
-	assert_int_eq(settle(fd_count, fds), fds);
+	assert_int_eq(settle(discovery_fd_count, fds), fds);
 }
 
 static const char*
@@ -4537,7 +4511,7 @@ boot_close_reconnect(boot_env* env, hook_state* hook)
 
 TEST(aws_close_reconnect, "sync close keeps the aws-tags registration and reconnect calls EC2 again; destroy releases it and runs the hook destroy once")
 {
-	int fds = fd_count();
+	int fds = discovery_fd_count();
 	boot_env env;
 	assert_true(boot_start(&env));
 	hook_state hook;
@@ -4552,7 +4526,7 @@ TEST(aws_close_reconnect, "sync close keeps the aws-tags registration and reconn
 
 	// The credentials have no expiry, so the reconnect reused them without calling get.
 	assert_int_eq(as_load_uint32_acq(&hook.gets), 1);
-	assert_int_eq(settle(fd_count, fds), fds);
+	assert_int_eq(settle(discovery_fd_count, fds), fds);
 }
 
 TEST(aws_hook_deferred_destroy, "a hook blocked in get past refresh_timeout_ms blocks neither close nor destroy; its destroy runs once, on the discovery thread, after get returns")

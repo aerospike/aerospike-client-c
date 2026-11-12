@@ -24,6 +24,7 @@
 #include <aerospike/as_config.h>
 #include <aerospike/as_discovery.h>
 #include <aerospike/as_event.h>
+#include <aerospike/as_sleep.h>
 #include <citrusleaf/cf_clock.h>
 
 #include "test.h"
@@ -176,6 +177,22 @@ thread_count(void)
 #endif
 }
 
+// A thread joined by an earlier test still counts for a moment after
+// pthread_join() returns, so a baseline is only taken once the count holds.
+static int
+stable_thread_count(void)
+{
+	int count = thread_count();
+
+	for (int i = 0, same = 0; count >= 0 && i < 200 && same < 5; i++) {
+		as_sleep(10);
+		int next = thread_count();
+		same = next == count ? same + 1 : 0;
+		count = next;
+	}
+	return count;
+}
+
 static int
 cmp_u64(const void* a, const void* b)
 {
@@ -249,7 +266,7 @@ TEST(discovery_topology_neutral_names, "U-11 public discovery surface has no top
 
 TEST(discovery_defaults, "U-3 defaults are static seeds, static map, merge, pass-through, thread")
 {
-	int threads = thread_count();
+	int threads = stable_thread_count();
 	as_config config;
 	as_config_init(&config);
 

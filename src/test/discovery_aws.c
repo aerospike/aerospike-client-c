@@ -1636,6 +1636,32 @@ settle(int (*count)(void), int expected)
 	return value;
 }
 
+// A bounded close detaches the discovery thread, which destroys the provider once its call
+// returns and only then exits, so it can outlive the previous test. Count from zero once it is
+// gone, or from what is left after two seconds.
+static int
+discovery_baseline(void)
+{
+	return settle(discovery_thread_count, 0);
+}
+
+// A thread joined by an earlier test still counts for a moment after
+// pthread_join() returns, so a baseline is only taken once the count holds.
+static int
+stable_thread_count(void)
+{
+	discovery_baseline();
+	int count = thread_count();
+
+	for (int i = 0, same = 0; count >= 0 && i < 200 && same < 5; i++) {
+		as_sleep(10);
+		int next = thread_count();
+		same = next == count ? same + 1 : 0;
+		count = next;
+	}
+	return count;
+}
+
 //---------------------------------
 // Static Functions: stub helpers
 //---------------------------------
@@ -3852,7 +3878,7 @@ TEST(aws_no_thread, "D-14 construction and ten refreshes create no thread")
 	aws_stub s;
 	assert_true(aws_stub_start(&s, false));
 	stub_one(&s, "10.0.0.1");
-	int before = thread_count();
+	int before = stable_thread_count();
 	assert_true(before > 0);
 
 	as_aws_seed_provider_config cfg;
@@ -4149,7 +4175,7 @@ TEST(aws_thread_mode, "thread mode runs aws-tags on the one client-owned discove
 	aws_stub s;
 	assert_true(aws_stub_start(&s, false));
 	stub_one(&s, "10.0.0.1");
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	as_config config;
 	as_error err;
@@ -4452,7 +4478,7 @@ TEST(aws_bootstrap, "an EC2-published seed bootstraps the client in thread mode 
 static const char*
 boot_close_reconnect(boot_env* env, hook_state* hook)
 {
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	as_config config;
 	as_error err;

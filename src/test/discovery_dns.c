@@ -590,6 +590,32 @@ settle(int (*count)(void), int expected)
 	return value;
 }
 
+// A bounded close detaches the discovery thread, which destroys the provider once its call
+// returns and only then exits, so it can outlive the previous test. Count from zero once it is
+// gone, or from what is left after two seconds.
+static int
+discovery_baseline(void)
+{
+	return settle(discovery_thread_count, 0);
+}
+
+// A thread joined by an earlier test still counts for a moment after
+// pthread_join() returns, so a baseline is only taken once the count holds.
+static int
+stable_thread_count(void)
+{
+	discovery_baseline();
+	int count = thread_count();
+
+	for (int i = 0, same = 0; count >= 0 && i < 200 && same < 5; i++) {
+		as_sleep(10);
+		int next = thread_count();
+		same = next == count ? same + 1 : 0;
+		count = next;
+	}
+	return count;
+}
+
 //---------------------------------
 // Static Functions: loopback stub resolver
 //---------------------------------
@@ -2615,7 +2641,7 @@ TEST(dns_no_thread, "the provider creates no thread across repeated refreshes")
 
 	char buf[256];
 	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_OK);
-	int before = thread_count();
+	int before = stable_thread_count();
 
 	for (int i = 0; i < 10; i++) {
 		assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_OK);
@@ -2966,7 +2992,7 @@ TEST(dns_thread_mode, "thread mode runs DNS on the one client-owned discovery th
 	dns_stub s;
 	assert_true(stub_start(&s));
 	stub_a(&s, "seeds.example.com", "10.0.0.1");
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	as_config config;
 	as_error err;
@@ -3262,7 +3288,7 @@ TEST(dns_n4_bootstrap, "N-4 precursor: a DNS-published seed bootstraps the clien
 static const char*
 n4_close_reconnect(n4_env* env)
 {
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	as_config config;
 	as_error err;

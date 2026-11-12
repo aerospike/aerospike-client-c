@@ -169,6 +169,15 @@ settle(int (*count)(void), int expected)
 	return value;
 }
 
+// A bounded close detaches the discovery thread, which destroys the provider once its call
+// returns and only then exits, so it can outlive the previous test. Count from zero once it is
+// gone, or from what is left after two seconds.
+static int
+discovery_baseline(void)
+{
+	return settle(discovery_thread_count, 0);
+}
+
 //---------------------------------
 // Static Functions: log capture
 //---------------------------------
@@ -856,7 +865,7 @@ TEST(seed_default_no_thread, "U-3/M-7 static and non-periodic providers add no t
 	as_error err;
 	as_seed_manager* m;
 	char buf[256];
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	// Static default. Refresh settings are not validated because they are unused.
 	mgr_config(&config, AS_DISCOVERY_EXECUTION_THREAD, 1000);
@@ -1532,7 +1541,7 @@ TEST(seed_thread_context, "thread mode runs every refresh on one refresh thread,
 	as_error err;
 	as_seed_manager* m;
 	fake_provider fp;
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	fp_init(&fp, true, false, "p:1");
 	mgr_config(&config, AS_DISCOVERY_EXECUTION_THREAD, AS_TEND_INTERVAL_MIN);
@@ -1936,7 +1945,7 @@ TEST(seed_thread_stop_bounded, "stop waits at most refresh_timeout_ms for a bloc
 	as_error err;
 	as_seed_manager* m;
 	fake_provider fp;
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	fp_init(&fp, true, false, "p:1");
 	fp.gate_call = 2;
@@ -2007,7 +2016,7 @@ TEST(seed_reconnect_wait, "a new manager waits at most refresh_timeout_ms for a 
 	as_error err;
 	as_seed_manager* m;
 	fake_provider fp;
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	assert_true(strand_call(&config, &fp));
 
@@ -2049,7 +2058,7 @@ TEST(seed_deferred_destroy_sites, "a registration that ends during its call is d
 	as_error err;
 	fake_provider fp;
 	fake_provider fp2;
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	// Replaced by another provider: the old destroy is handed over, the new provider is untouched.
 	assert_true(strand_call(&config, &fp));
@@ -2118,7 +2127,7 @@ TEST(seed_binding_thread, "a non-periodic binding provider runs its single call 
 	as_seed_manager* m;
 	fake_provider fp;
 	char buf[256];
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	fp_init(&fp, false, false, "b:1");
 	mgr_config(&config, AS_DISCOVERY_EXECUTION_THREAD, AS_TEND_INTERVAL_MIN);
@@ -2528,7 +2537,7 @@ TEST(seed_default_compat, "U-3/M-7 default static seeds keep the ip_map seed rew
 	as_config config;
 	as_error err;
 	fclient c;
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	client_config(&config);
 	as_config_add_host(&config, "seed-alias.invalid", a.port);
@@ -2916,7 +2925,7 @@ TEST(seed_close_reconnect, "sync close stops discovery and keeps the registratio
 	fclient c;
 	fake_provider fp;
 	char addr[64];
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	fp_init(&fp, true, false, fnode_addr(&a, addr, sizeof(addr)));
 	client_config(&config);
@@ -2965,7 +2974,7 @@ TEST(seed_force_single, "force_single_node bootstraps from the provider snapshot
 	fclient c;
 	fake_provider fp;
 	char addr[64];
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	fp_init(&fp, true, false, fnode_addr(&a, addr, sizeof(addr)));
 	client_config(&config);
@@ -3010,7 +3019,7 @@ TEST(seed_close_bounded, "close waits at most refresh_timeout_ms for a blocked r
 	fclient c;
 	fake_provider fp;
 	char addr[64];
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	fp_init(&fp, true, false, fnode_addr(&a, addr, sizeof(addr)));
 	fp.gate_call = 2;
@@ -3048,7 +3057,7 @@ TEST(seed_reconnect_in_flight, "reconnect fails naming the provider while the pr
 	fclient c;
 	fake_provider fp;
 	char addr[64];
-	int before = discovery_thread_count();
+	int before = discovery_baseline();
 
 	fp_init(&fp, true, false, fnode_addr(&a, addr, sizeof(addr)));
 	fp.gate_call = 2;

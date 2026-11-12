@@ -41,9 +41,11 @@
 #include <aerospike/as_version.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <float.h>
+#include <math.h>
 #include <string.h>
 
 #include "test.h"
+#include "util/udf.h"
 
 extern aerospike* as;
 
@@ -603,8 +605,10 @@ TEST(vector_getter_type_safety, "typed accessors only return data for the matchi
 	as_vector_value_destroy(v64);
 }
 
-TEST(vector_null_safety, "accessors and from_bytes tolerate NULL arguments")
+TEST(vector_null_safety, "accessors, from_bytes and destroy tolerate NULL arguments")
 {
+	as_vector_value_destroy(NULL);
+
 	assert_null(as_vector_value_get_float16(NULL));
 	assert_null(as_vector_value_get_int32(NULL));
 	assert_null(as_vector_value_get_float32(NULL));
@@ -633,6 +637,136 @@ TEST(vector_empty, "zero-dimension vectors are rejected")
 	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
 	assert_null(as_vector_value_new_float64(&err, float64_data, 0));
 	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+}
+
+TEST(vector_float16_from_float, "float values convert to float16 with round-ties-to-even")
+{
+	float data[] = {
+		0.0f,
+		-0.0f,
+		1.0f,
+		-2.0f,
+		0.5f,
+		65504.0f, // largest finite float16
+		65519.0f, // below the halfway point to infinity, rounds down to 65504
+		6.103515625e-5f, // 2^-14, smallest normal float16
+		5.9604644775390625e-8f, // 2^-24, smallest subnormal float16
+		2.98023223876953125e-8f, // 2^-25, halfway to 2^-24, ties to even (zero)
+		8.94069671630859375e-8f, // 3 * 2^-25, halfway between subnormals 1 and 2, ties to 2
+		1.00048828125f, // 1 + 2^-11, halfway, ties to even (1.0)
+		1.00146484375f, // 1 + 3 * 2^-11, halfway, ties to even (1 + 2^-9)
+		1.0e-10f // too small for float16, becomes zero
+	};
+	uint16_t expected[] = {
+		0x0000, 0x8000, 0x3C00, 0xC000, 0x3800, 0x7BFF, 0x7BFF, 0x0400, 0x0001, 0x0000,
+		0x0002, 0x3C00, 0x3C02, 0x0000
+	};
+	uint32_t count = sizeof(data) / sizeof(data[0]);
+
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float16_from_float(&err, data, count);
+	assert_not_null(vec);
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(vec->element_type, AS_VECTOR_ELEMENT_TYPE_FLOAT16);
+	assert_int_eq(vec->dimensions, count);
+
+	const uint16_t* bits = as_vector_value_get_float16(vec);
+
+	for (uint32_t i = 0; i < count; i++) {
+		assert_int_eq(bits[i], expected[i]);
+	}
+	as_vector_value_destroy(vec);
+}
+
+TEST(vector_float16_from_float_rejects_non_finite, "float values that are not finite as float16 are rejected")
+{
+	float rejected[] = {NAN, INFINITY, -INFINITY, 65520.0f, -65520.0f, 1.0e10f};
+	uint32_t count = sizeof(rejected) / sizeof(rejected[0]);
+
+	for (uint32_t i = 0; i < count; i++) {
+		float data[2] = {1.0f, rejected[i]};
+		as_error err;
+		assert_null(as_vector_value_new_float16_from_float(&err, data, 2));
+		assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+		assert_not_null(strstr(err.message, "element 1"));
+	}
+
+	as_error err;
+	assert_null(as_vector_value_new_float16_from_float(&err, NULL, 1));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: data is NULL");
+
+	float one[1] = {1.0f};
+	assert_null(as_vector_value_new_float16_from_float(&err, one, 0));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: must have at least 1 dimension");
+}
+
+TEST(vector_float16_as_float, "float16 elements convert back to float values")
+{
+	uint16_t data[] = {0x0000, 0x8000, 0x3C00, 0xC000, 0x7BFF, 0x0400, 0x0001, 0x03FF};
+	float expected[] = {
+		0.0f, -0.0f, 1.0f, -2.0f, 65504.0f, 6.103515625e-5f, 5.9604644775390625e-8f,
+		6.0975551605224609375e-5f // largest subnormal float16, 1023 * 2^-24
+	};
+	uint32_t count = sizeof(data) / sizeof(data[0]);
+
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float16(&err, data, count);
+	float out[8];
+	as_status status = as_vector_value_get_float16_as_float(&err, vec, out, count);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	for (uint32_t i = 0; i < count; i++) {
+		uint32_t out_bits;
+		uint32_t expected_bits;
+		memcpy(&out_bits, &out[i], sizeof(out_bits));
+		memcpy(&expected_bits, &expected[i], sizeof(expected_bits));
+		assert_int_eq(out_bits, expected_bits);
+	}
+
+	status = as_vector_value_get_float16_as_float(&err, vec, out, count - 1);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	status = as_vector_value_get_float16_as_float(&err, vec, NULL, count);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	as_vector_value_destroy(vec);
+
+	float f32[1] = {1.0f};
+	as_vector_value* v32 = as_vector_value_new_float32(&err, f32, 1);
+	status = as_vector_value_get_float16_as_float(&err, v32, out, 1);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "vector: element type is not float16");
+	as_vector_value_destroy(v32);
+
+	status = as_vector_value_get_float16_as_float(&err, NULL, out, 1);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+}
+
+TEST(vector_float16_float_roundtrip, "float values exact in float16 survive a float16 round trip")
+{
+	float data[] = {0.25f, -3.5f, 1024.0f, -65504.0f, 0.0009765625f};
+	uint32_t count = sizeof(data) / sizeof(data[0]);
+
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float16_from_float(&err, data, count);
+	assert_not_null(vec);
+
+	as_bytes bytes;
+	assert_true(as_vector_value_to_bytes(vec, &bytes));
+	as_vector_value_destroy(vec);
+
+	as_vector_value* out = as_vector_value_from_bytes(&err, &bytes);
+	as_bytes_destroy(&bytes);
+	assert_not_null(out);
+
+	float values[5];
+	as_status status = as_vector_value_get_float16_as_float(&err, out, values, count);
+	as_vector_value_destroy(out);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	for (uint32_t i = 0; i < count; i++) {
+		assert_true(values[i] == data[i]);
+	}
 }
 
 TEST(vector_from_trailing_bytes, "as_vector_value_from_bytes ignores bytes past the encoded vector")
@@ -730,7 +864,38 @@ TEST(vector_serialization_rejects_invalid_vectors, "serialization rejects vector
 	assert_false(as_vector_value_to_bytes(vec, &bytes));
 	assert_null(as_vector_value_to_bytes_new(vec));
 
+	vec->dimensions = 1;
+	((float*)vec->data)[0] = NAN;
+	assert_false(as_vector_value_to_bytes(vec, &bytes));
+	assert_null(as_vector_value_to_bytes_new(vec));
+
 	as_vector_value_destroy(vec);
+}
+
+TEST(vector_non_finite_rejected, "constructors reject NaN and infinite elements")
+{
+	float f32[3] = {NAN, INFINITY, -INFINITY};
+	double f64[3] = {NAN, INFINITY, -INFINITY};
+	uint16_t f16[3] = {0x7e00, 0x7c00, 0xfc00};
+
+	for (uint32_t i = 0; i < 3; i++) {
+		as_error err;
+
+		float d32[2] = {1.0f, f32[i]};
+		assert_null(as_vector_value_new_float32(&err, d32, 2));
+		assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+		assert_string_eq(err.message, "vector: element 1 is not finite (no NaN or infinity)");
+
+		double d64[2] = {1.0, f64[i]};
+		assert_null(as_vector_value_new_float64(&err, d64, 2));
+		assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+		assert_string_eq(err.message, "vector: element 1 is not finite (no NaN or infinity)");
+
+		uint16_t d16[2] = {0x3c00, f16[i]};
+		assert_null(as_vector_value_new_float16(&err, d16, 2));
+		assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+		assert_string_eq(err.message, "vector: element 1 is not finite (no NaN or infinity)");
+	}
 }
 
 //---------------------------------
@@ -920,6 +1085,32 @@ put_vector_bin(as_error* err, const as_key* key, as_vector_value* vec)
 	return status;
 }
 
+// Put `vec` with its second element replaced by the little-endian bit pattern
+// `bits`, bypassing the client's finite check so that the server's is reached.
+static as_status
+put_vector_with_bits(as_error* err, const as_key* key, as_vector_value* vec, uint64_t bits)
+{
+	as_bytes bytes;
+	as_vector_value_to_bytes(vec, &bytes);
+
+	uint32_t elem_size = as_vector_element_type_size(vec->element_type);
+	uint8_t* elem = bytes.value + AS_VECTOR_VALUE_HEADER_SIZE + elem_size;
+
+	for (uint32_t b = 0; b < elem_size; b++) {
+		elem[b] = (uint8_t)(bits >> (8 * b));
+	}
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_bytes(&rec, "v", &bytes);
+
+	as_status status = aerospike_key_put(as, err, NULL, key, &rec);
+
+	as_record_destroy(&rec);
+	as_vector_value_destroy(vec);
+	return status;
+}
+
 TEST(vector_non_finite_rejected_server, "the server rejects vectors with NaN or infinite elements")
 {
 	if (! server_supports_vector()) {
@@ -939,28 +1130,28 @@ TEST(vector_non_finite_rejected_server, "the server rejects vectors with NaN or 
 	as_status status = put_vector_bin(&err, &key, vec);
 	assert_int_eq(status, AEROSPIKE_OK);
 
-	// NaN, +Inf, -Inf for each floating-point element type.
-	float f32[3] = {NAN, INFINITY, -INFINITY};
-	double f64[3] = {NAN, INFINITY, -INFINITY};
-	uint16_t f16[3] = {0x7E00, 0x7C00, 0xFC00};
+	// NaN, +Inf, -Inf bit patterns for each floating-point element type.
+	uint64_t f32[3] = {0x7fc00000, 0x7f800000, 0xff800000};
+	uint64_t f64[3] = {0x7ff8000000000000, 0x7ff0000000000000, 0xfff0000000000000};
+	uint64_t f16[3] = {0x7e00, 0x7c00, 0xfc00};
 
 	for (uint32_t i = 0; i < 3; i++) {
-		float d32[2] = {1.0f, f32[i]};
+		float d32[2] = {1.0f, 2.0f};
 		vec = as_vector_value_new_float32(&err, d32, 2);
 		assert_not_null(vec);
-		status = put_vector_bin(&err, &key, vec);
+		status = put_vector_with_bits(&err, &key, vec, f32[i]);
 		assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
 
-		double d64[2] = {1.0, f64[i]};
+		double d64[2] = {1.0, 2.0};
 		vec = as_vector_value_new_float64(&err, d64, 2);
 		assert_not_null(vec);
-		status = put_vector_bin(&err, &key, vec);
+		status = put_vector_with_bits(&err, &key, vec, f64[i]);
 		assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
 
-		uint16_t d16[2] = {0x3C00, f16[i]};
+		uint16_t d16[2] = {0x3c00, 0x4000};
 		vec = as_vector_value_new_float16(&err, d16, 2);
 		assert_not_null(vec);
-		status = put_vector_bin(&err, &key, vec);
+		status = put_vector_with_bits(&err, &key, vec, f16[i]);
 		assert_int_eq(status, AEROSPIKE_ERR_REQUEST_INVALID);
 	}
 
@@ -1432,6 +1623,116 @@ TEST(vector_batch_read_server, "a batch read returns records that contain vector
 	as_vector_value_destroy(v2);
 }
 
+#define LUA_FILE AS_START_DIR "src/test/lua/vector_udf.lua"
+#define UDF_MODULE "vector_udf"
+#define LUA_SET "test_vector_lua"
+
+// Assert that a UDF result is the serialized vector `expected`, byte for byte.
+static void
+assert_vector_val_eq(atf_test_result* __result__, const as_val* val, const as_bytes* expected)
+{
+	assert_not_null(val);
+	assert_int_eq(as_val_type(val), AS_BYTES);
+
+	const as_bytes* bytes = (const as_bytes*)val;
+	assert_int_eq(bytes->type, AS_BYTES_VECTOR);
+	assert_int_eq(bytes->size, expected->size);
+	assert_int_eq(memcmp(bytes->value, expected->value, expected->size), 0);
+}
+
+static bool
+vector_aggregate_cb(const as_val* val, void* udata)
+{
+	as_val** out = (as_val**)udata;
+
+	if (val && ! *out) {
+		*out = as_val_reserve(val);
+	}
+	return true;
+}
+
+TEST(vector_lua_aggregate_server, "a client-side Lua reduce stage receives and returns a vector as bytes")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	assert_true(udf_put(LUA_FILE));
+
+	float data[3] = {1.0f, -2.0f, 0.5f};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_float32(&err, data, 3);
+	assert_not_null(vec);
+
+	as_bytes expected;
+	assert_true(as_vector_value_to_bytes(vec, &expected));
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, LUA_SET, 1);
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	assert_true(as_record_set_vector(&rec, "vec", vec));
+	assert_int_eq(aerospike_key_put(as, &err, NULL, &key, &rec), AEROSPIKE_OK);
+	as_record_destroy(&rec);
+
+	as_query query;
+	as_query_init(&query, NAMESPACE, LUA_SET);
+	as_query_apply(&query, UDF_MODULE, "vector_reduce", NULL);
+
+	as_val* result = NULL;
+	as_status status = aerospike_query_foreach(as, &err, NULL, &query, vector_aggregate_cb, &result);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_vector_val_eq(__result__, result, &expected);
+
+	as_val_destroy(result);
+	as_query_destroy(&query);
+	aerospike_key_remove(as, &err, NULL, &key);
+	as_key_destroy(&key);
+	as_bytes_destroy(&expected);
+	as_vector_value_destroy(vec);
+	udf_remove(LUA_FILE);
+}
+
+TEST(vector_record_udf_return_server, "a vector returned by a record UDF reaches the client as a vector")
+{
+	if (! server_supports_vector()) {
+		return;
+	}
+
+	assert_true(udf_put(LUA_FILE));
+
+	int32_t data[2] = {7, -9};
+	as_error err;
+	as_vector_value* vec = as_vector_value_new_int32(&err, data, 2);
+	assert_not_null(vec);
+
+	as_bytes expected;
+	assert_true(as_vector_value_to_bytes(vec, &expected));
+
+	as_arraylist args;
+	as_arraylist_init(&args, 1, 0);
+	as_bytes* arg = as_vector_value_to_bytes_new(vec);
+	assert_not_null(arg);
+	as_arraylist_append(&args, (as_val*)arg);
+
+	as_key key;
+	as_key_init_int64(&key, NAMESPACE, SET, 26);
+
+	as_val* result = NULL;
+	as_status status = aerospike_key_apply(as, &err, NULL, &key, UDF_MODULE, "echo",
+		(as_list*)&args, &result);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_vector_val_eq(__result__, result, &expected);
+
+	as_val_destroy(result);
+	as_arraylist_destroy(&args);
+	as_key_destroy(&key);
+	as_bytes_destroy(&expected);
+	as_vector_value_destroy(vec);
+	udf_remove(LUA_FILE);
+}
+
 TEST(vector_dist_exp_compiles, "vector distance expression compiles and packs (client-side only)")
 {
 	float data[4] = {0.1f, 0.2f, 0.3f, 0.4f};
@@ -1755,10 +2056,15 @@ SUITE(vector, "as_vector_value serialization")
 	suite_add(vector_getter_type_safety);
 	suite_add(vector_null_safety);
 	suite_add(vector_empty);
+	suite_add(vector_float16_from_float);
+	suite_add(vector_float16_from_float_rejects_non_finite);
+	suite_add(vector_float16_as_float);
+	suite_add(vector_float16_float_roundtrip);
 	suite_add(vector_from_trailing_bytes);
 	suite_add(vector_from_overflow);
 	suite_add(vector_constructor_limits);
 	suite_add(vector_serialization_rejects_invalid_vectors);
+	suite_add(vector_non_finite_rejected);
 	suite_add(vector_native_bin_roundtrip);
 	suite_add(vector_special_float_bits_server);
 	suite_add(vector_non_finite_rejected_server);
@@ -1774,6 +2080,8 @@ SUITE(vector, "as_vector_value serialization")
 	suite_add(vector_async_roundtrip);
 #endif
 	suite_add(vector_batch_read_server);
+	suite_add(vector_lua_aggregate_server);
+	suite_add(vector_record_udf_return_server);
 	suite_add(vector_dist_exp_compiles);
 	suite_add(vector_distance_expression_server);
 	suite_add(vector_bin_expression_read_server);

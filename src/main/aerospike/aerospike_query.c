@@ -130,6 +130,7 @@ typedef struct as_async_query_executor {
 	uint16_t n_fields;
 	bool deserialize;
 	bool has_where;
+	bool is_topk;
 } as_async_query_executor;
 
 typedef struct as_async_query_command {
@@ -346,6 +347,22 @@ as_query_partition_complete_async(as_event_executor* ee)
 	as_query_partition_retry_async(qe, &err);
 }
 
+// Return a Top-K record's last-update time, which the server sends in a field that
+// as_command_parse_key() skips, or 0 if the record has none.
+static uint64_t
+as_query_parse_last_update_time(const uint8_t* p, uint32_t n_fields)
+{
+	for (uint32_t i = 0; i < n_fields; i++) {
+		uint32_t field_sz = cf_swap_from_be32(*(uint32_t*)p);
+
+		if (p[4] == AS_FIELD_LUT && field_sz == 1 + sizeof(uint64_t)) {
+			return cf_swap_from_be64(*(uint64_t*)(p + AS_FIELD_HEADER_SIZE));
+		}
+		p += 4 + field_sz;
+	}
+	return 0;
+}
+
 static as_status
 as_query_parse_record_async(
 	as_async_query_executor* qe, as_async_query_command* qc, uint8_t** pp, as_msg* msg,
@@ -357,6 +374,13 @@ as_query_parse_record_async(
 	
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
+
+	bool topk_collect = qe->listener == as_query_topk_complete_async;
+	uint64_t last_update_time = 0;
+
+	if (topk_collect) {
+		last_update_time = as_query_parse_last_update_time(*pp, msg->n_fields);
+	}
 
 	uint64_t bval = 0;
 	*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, &bval);
@@ -374,15 +398,23 @@ as_query_parse_record_async(
 		return AEROSPIKE_OK;
 	}
 
-	bool rv = qe->listener(NULL, &rec, qe->executor.udata, qe->executor.event_loop);
+	if (topk_collect) {
+		// On an error, the executor reports it through as_query_topk_complete_async().
+		status = as_query_topk_collect_record(qe->executor.udata, err, &rec, last_update_time);
 
-	if (! rv) {
+		if (status != AEROSPIKE_OK) {
+			as_record_destroy(&rec);
+			return status;
+		}
+	}
+	else if (! qe->listener(NULL, &rec, qe->executor.udata, qe->executor.event_loop)) {
 		as_record_destroy(&rec);
 		qe->executor.notify = false;
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT_ABORT, "");
 	}
 
-	if (qc->np) {
+	// See the Top-K resume point comment in as_query_parse_record().
+	if (qc->np && ! qe->is_topk) {
 		as_partition_tracker_set_last(qe->pt, qc->np, &rec.key.digest, bval,
 			qc->command.cluster->n_partitions);
 	}
@@ -496,6 +528,13 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 		rec.gen = msg->generation;
 		rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
 
+		bool topk_collect = task->callback == as_query_topk_complete;
+		uint64_t last_update_time = 0;
+
+		if (topk_collect) {
+			last_update_time = as_query_parse_last_update_time(*pp, msg->n_fields);
+		}
+
 		uint64_t bval = 0;
 		*pp = as_command_parse_key(*pp, msg->n_fields, &rec.key, &bval);
 
@@ -511,17 +550,23 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 			return AEROSPIKE_OK;
 		}
 
-		if (task->callback) {
-			bool rv = task->callback((as_val*)&rec, task->udata);
+		if (topk_collect) {
+			// Unlike a user abort, an error makes as_query_partitions() return it.
+			status = as_query_topk_collect_record(task->udata, err, &rec, last_update_time);
 
-			if (! rv) {
+			if (status != AEROSPIKE_OK) {
 				as_record_destroy(&rec);
-				return AEROSPIKE_ERR_CLIENT_ABORT;
+				return status;
 			}
+		}
+		else if (task->callback && ! task->callback((as_val*)&rec, task->udata)) {
+			as_record_destroy(&rec);
+			return AEROSPIKE_ERR_CLIENT_ABORT;
 		}
 
 		// Top-K records arrive in rank order, not digest order, so a retry that resumes
 		// after the last digest would skip candidates. Retry the whole partition instead.
+		// as_query_parse_record_async() does the same.
 		if (task->pt && ! as_query_is_topk(task->query)) {
 			as_partition_tracker_set_last(task->pt, task->np, &rec.key.digest, bval,
 				task->cluster->n_partitions);
@@ -694,37 +739,63 @@ as_query_is_integer_dtype(as_index_datatype dtype)
 // Top-K (order_by / top_k) validation
 //---------------------------------
 
+// Messages shared by the checks that run in more than one place. Messages follow the request-time
+// validation table of the Top-K developer API design, which also sets the orderBy/topK naming for
+// the checks it doesn't list.
+#define AS_QUERY_TOPK_ERR_FOREGROUND_ONLY "orderBy/topK is only valid on foreground (SELECT-style) " \
+	"queries; background (UPDATE-style) queries do not produce a result stream"
+#define AS_QUERY_TOPK_ERR_RESUME "Top-K can't resume a partition filter from an earlier query"
+#define AS_QUERY_TOPK_ERR_PARTITION_QUERY \
+	"orderBy/topK requires server support for partition queries (server too old)"
+
 static as_status
 as_query_validate_order_key(
 	const as_query* query, const as_query_order_by_field* key, as_error* err
 	)
 {
+	// 0 is not a type, so a zero-initialized type is treated as missing.
+	if ((int)key->type == 0) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"orderBy requires a type declaration (INTEGER, DOUBLE, or BYTES); Aerospike has no schema");
+	}
+
 	switch (key->type) {
 		case AS_QUERY_ORDER_BY_INTEGER:
 		case AS_QUERY_ORDER_BY_DOUBLE:
-		case AS_QUERY_ORDER_BY_STRING:
 		case AS_QUERY_ORDER_BY_BYTES:
 			break;
 
-		default:
+		// STRING order keys are deferred to a later server release.
+		case AS_QUERY_ORDER_BY_STRING:
 			return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-				"order_by type must be one of INTEGER, DOUBLE, STRING, BYTES");
+				"orderBy type STRING is not supported yet; use INTEGER, DOUBLE, or BYTES");
+
+		default:
+			return as_error_update(err, AEROSPIKE_ERR_PARAM,
+				"orderBy type must be INTEGER, DOUBLE, or BYTES; got %d", (int)key->type);
 	}
 
+	// The top-k merge in as_query_topk.c ranks any direction other than DESC as ASC, so an
+	// unchecked value could rank differently there than on the server.
+	if (key->direction != AS_ORDER_ASCENDING && key->direction != AS_ORDER_DESCENDING) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "orderBy direction must be ASC or DESC");
+	}
+
+	// as_query_order_by() and as_query_then_order_by() store a NULL or too-long name as empty.
 	size_t bin_len = strlen(key->bin);
 
 	if (bin_len == 0 || bin_len > AS_BIN_NAME_MAX_LEN) {
-		return as_error_update(err, AEROSPIKE_ERR_PARAM, "order_by bin name exceeds %d-character limit",
-			AS_BIN_NAME_MAX_LEN);
+		return as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"Top-K order-by bin name must be 1-%d UTF-8 bytes without NUL", AS_BIN_NAME_MAX_LEN);
+	}
+
+	if (key->flags != AS_QUERY_ORDER_BY_FLAGS_DEFAULT && key->type != AS_QUERY_ORDER_BY_STRING) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"orderBy flags are only valid with type STRING");
 	}
 
 	if (key->flags & ~(as_query_order_by_flags)AS_QUERY_ORDER_BY_CASE_INSENSITIVE) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "order_by has unknown flag bits set");
-	}
-
-	if ((key->flags & AS_QUERY_ORDER_BY_CASE_INSENSITIVE) && key->type != AS_QUERY_ORDER_BY_STRING) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by flag CASE_INSENSITIVE is only valid with type STRING");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "orderBy has unknown flag bits set");
 	}
 
 	// Order key must be one of the projected names, if a projection is set. Two operations
@@ -741,13 +812,13 @@ as_query_validate_order_key(
 
 		if (n_found > 1) {
 			return as_error_update(err, AEROSPIKE_ERR_PARAM,
-				"order_by bin '%s' is produced by %u projection operations; it must be produced by one",
-				key->bin, n_found);
+				"orderBy bin '%s' is produced by more than one operation", key->bin);
 		}
 
 		if (n_found == 0) {
 			return as_error_update(err, AEROSPIKE_ERR_PARAM,
-				"order_by bin '%s' is not in projection; add it to ops or remove projection", key->bin);
+				"orderBy bin '%s' is not in projection; add it to the projection or remove the "
+				"projection", key->bin);
 		}
 		return AEROSPIKE_OK;
 	}
@@ -760,7 +831,8 @@ as_query_validate_order_key(
 
 	if (query->select.size > 0) {
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
-			"order_by bin '%s' is not in projection; add it to select or remove projection", key->bin);
+			"orderBy bin '%s' is not in projection; add it to the projection or remove the "
+			"projection", key->bin);
 	}
 	return AEROSPIKE_OK;
 }
@@ -774,8 +846,8 @@ as_query_validate_order_key(
  * means order_by/top_k can never reach convert_query_to_scan() or the old
  * broadcast path without being rejected first: qb->is_new is already false
  * on old clusters, background queries always pass query_policy == NULL, and
- * both are checked below. The public entry points reject asynchronous and
- * aggregation Top-K queries, and resumed partition filters set with
+ * both are checked below. The public entry points reject aggregation Top-K
+ * queries, and resumed partition filters set with
  * as_partition_filter_set_after(), before reaching this point.
  */
 static as_status
@@ -789,19 +861,23 @@ as_query_validate_topk(
 		return AEROSPIKE_OK;
 	}
 
+	if (query->then_order_by_first) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"thenOrderBy can't be called before orderBy");
+	}
+
 	if (!query->order_by.defined) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "top_k requires order_by to be set");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "topK requires orderBy to be set");
 	}
 
 	if (query->order_by_overflow) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k allows at most two order keys");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "orderBy supports at most two keys");
 	}
 
-	// An order key without k (top_k == 0) is not checked here: it is sent to the server,
-	// which rejects it with a reason.
-	if (query->top_k > 1000) {
-		return as_error_update(err, AEROSPIKE_ERR_PARAM, "top_k must be in [1, 1000]; got %u",
+	// An order key without k is not checked here: it is sent to the server, which rejects it
+	// with a reason. A k set to 0 is rejected like any other k out of range.
+	if (query->top_k > AS_QUERY_TOPK_MAX || (query->top_k_defined && query->top_k == 0)) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "topK must be in [1, 1000]; got %u",
 			query->top_k);
 	}
 
@@ -820,39 +896,35 @@ as_query_validate_topk(
 	}
 
 	if (! query_policy) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k is only valid on foreground queries");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_FOREGROUND_ONLY);
 	}
 
 	if (query->no_bins) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k cannot be combined with a metadata-only (no-bins) query");
+			"orderBy/topK cannot be combined with a metadata-only (no-bins) query");
 	}
 
 	if (query->paginate) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k does not support pagination in this client version");
+			"orderBy/topK does not support pagination in this client version");
 	}
 
 	// A resumed query would rank only the rest of the scan.
 	if (query->parts_all) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k cannot resume an earlier query");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_RESUME);
 	}
 
 	if (query->max_records > 0) {
-		return as_error_update(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k cannot be combined with max_records(%" PRIu64 ")", query->max_records);
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Top-K is incompatible with maxRecords");
 	}
 
 	if (! qb->cluster->has_order_by) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k is not supported by all nodes in the cluster");
+			"orderBy/topK is not supported by all nodes in the cluster");
 	}
 
 	if (! qb->is_new) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k requires server support for partition queries (server too old)");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_PARTITION_QUERY);
 	}
 	return AEROSPIKE_OK;
 }
@@ -1932,6 +2004,23 @@ as_query_partitions(
 }
 
 static as_status
+as_query_topk_partitions(
+	as_cluster* cluster, as_error* err, const as_policy_query* policy, const as_query* query,
+	as_partition_tracker* pt, aerospike_query_foreach_callback callback, void* udata
+	)
+{
+	// Top-K: buffer every targeted node's (already server-ranked) batch and
+	// replay it to the real callback once, in final merged rank order, instead
+	// of streaming records to it as they arrive. See as_query_topk.h.
+	as_query_topk_collector* collector = as_query_topk_collector_create(query, callback, udata);
+	as_status status = as_query_partitions(cluster, err, policy, query, pt, as_query_topk_complete,
+		collector);
+
+	as_query_topk_collector_destroy(collector);
+	return status;
+}
+
+static as_status
 as_query_partition_execute_async(
 	as_async_query_executor* qe, as_partition_tracker* pt, as_error* err
 	)
@@ -2164,6 +2253,7 @@ as_query_partition_async(
 	qe->n_fields = qb.n_fields;
 	qe->deserialize = policy->deserialize;
 	qe->has_where = query->where.size > 0;
+	qe->is_topk = as_query_is_topk(query);
 
 	uint32_t n_nodes = pt->node_parts.size;
 
@@ -2188,6 +2278,27 @@ as_query_partition_async(
 }
 
 static as_status
+as_query_topk_partition_async(
+	as_cluster* cluster, as_error* err, const as_policy_query* policy, const as_query* query,
+	as_partition_tracker* pt, as_async_query_record_listener listener, void* udata,
+	as_event_loop* event_loop
+	)
+{
+	// Buffer every targeted node's (already server-ranked) batch and replay it to the
+	// listener once, in final merged rank order. See as_query_topk.h.
+	as_query_topk_collector* collector = as_query_topk_collector_create_async(query, listener, udata);
+
+	as_status status = as_query_partition_async(cluster, err, policy, query, pt,
+		as_query_topk_complete_async, collector, event_loop);
+
+	if (status != AEROSPIKE_OK) {
+		// The query failed to start, so as_query_topk_complete_async() will never run.
+		as_query_topk_collector_destroy(collector);
+	}
+	return status;
+}
+
+static as_status
 as_query_partition_retry_async(as_async_query_executor* qe_old, as_error* err)
 {
 	as_async_query_executor* qe = cf_malloc(sizeof(as_async_query_executor));
@@ -2204,6 +2315,7 @@ as_query_partition_retry_async(as_async_query_executor* qe_old, as_error* err)
 	qe->n_fields = qe_old->n_fields;
 	qe->deserialize = qe_old->deserialize;
 	qe->has_where = qe_old->has_where;
+	qe->is_topk = qe_old->is_topk;
 
 	// Must change task_id each round. Otherwise, server rejects command.
 	uint64_t task_id = as_random_get_uint64();
@@ -2357,7 +2469,7 @@ aerospike_query_foreach_internal(
 	// as_query_execute() never closes the aggregation input stream.
 	if (query->apply.function[0] && as_query_has_topk_settings(query)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k is incompatible with aggregate UDFs");
+			"orderBy is incompatible with aggregate UDFs; use the UDF's own reduce stage");
 	}
 
 	as_error_reset(err);
@@ -2371,9 +2483,9 @@ aerospike_query_foreach_internal(
 	// order_by/top_k requires the partition-query wire path (needs AS_FIELD_PID_ARRAY and
 	// AS_MSG_INFO3_PARTITION_DONE). Reject explicitly here so it can never silently fall
 	// through to convert_query_to_scan() below, which would drop both fields on the floor.
+	// aerospike_query_async() does the same.
 	if (as_query_has_topk_settings(query) && ! cluster->has_partition_query) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k requires server support for partition queries (server too old)");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_PARTITION_QUERY);
 	}
 
 	if (cluster->has_partition_query && ! query->apply.function[0]) {
@@ -2394,14 +2506,7 @@ aerospike_query_foreach_internal(
 		}
 
 		if (as_query_is_topk(query)) {
-			// Top-K: buffer every targeted node's (already server-ranked) batch and
-			// replay it to the real callback once, in final merged rank order, instead
-			// of streaming records to it as they arrive. See as_query_topk.h.
-			as_query_topk_collector* collector = as_query_topk_collector_create(query, callback, udata);
-
-			status = as_query_partitions(cluster, err, policy, query, &pt, as_query_topk_collect,
-				collector);
-			as_query_topk_collector_destroy(collector);
+			status = as_query_topk_partitions(cluster, err, policy, query, &pt, callback, udata);
 		}
 		else {
 			status = as_query_partitions(cluster, err, policy, query, &pt, callback, udata);
@@ -2553,9 +2658,9 @@ aerospike_query_partitions(
 
 	// A query that resumes after a digest would rank only the rest of the scan.
 	// as_query_validate_topk() rejects the other resume points (pf->parts_all).
+	// aerospike_query_partitions_async() does the same.
 	if (as_query_has_topk_settings(query) && pf->digest.init) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k cannot resume an earlier query");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_RESUME);
 	}
 
 	if (pf->parts_all && ! query->parts_all) {
@@ -2571,10 +2676,7 @@ aerospike_query_partitions(
 	}
 
 	if (as_query_is_topk(query)) {
-		as_query_topk_collector* collector = as_query_topk_collector_create(query, callback, udata);
-
-		status = as_query_partitions(cluster, err, policy, query, &pt, as_query_topk_collect, collector);
-		as_query_topk_collector_destroy(collector);
+		status = as_query_topk_partitions(cluster, err, policy, query, &pt, callback, udata);
 	}
 	else {
 		status = as_query_partitions(cluster, err, policy, query, &pt, callback, udata);
@@ -2599,11 +2701,6 @@ aerospike_query_async(
 			"Async aggregation or background queries are not supported");
 	}
 
-	if (as_query_has_topk_settings(query)) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k is not supported on asynchronous queries");
-	}
-
 	as_error_reset(err);
 
 	as_policy_query merged;
@@ -2616,6 +2713,11 @@ aerospike_query_async(
 	
 	as_cluster* cluster = as->cluster;
 	as_status status;
+
+	// See the partition-query check in aerospike_query_foreach_internal().
+	if (as_query_has_topk_settings(query) && ! cluster->has_partition_query) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_PARTITION_QUERY);
+	}
 
 	if (cluster->has_partition_query) {
 		// Partition query.
@@ -2631,9 +2733,14 @@ aerospike_query_async(
 			policy->replica, &query->parts_all, query->paginate, n_nodes, err);
 
 		if (status != AEROSPIKE_OK) {
+			cf_free(pt);
 			return status;
 		}
 
+		if (as_query_is_topk(query)) {
+			return as_query_topk_partition_async(cluster, err, policy, query, pt, listener, udata,
+				event_loop);
+		}
 		return as_query_partition_async(cluster, err, policy, query, pt, listener, udata, event_loop);
 	}
 
@@ -2795,11 +2902,6 @@ aerospike_query_partitions_async(
 			"Aggregation or background queries cannot query by partition");
 	}
 
-	if (as_query_has_topk_settings(query)) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k is not supported on asynchronous queries");
-	}
-
 	as_cluster* cluster = as->cluster;
 
 	if (! cluster->has_partition_query) {
@@ -2824,6 +2926,11 @@ aerospike_query_partitions_async(
 		return status;
 	}
 
+	// See the resume check in aerospike_query_partitions().
+	if (as_query_has_topk_settings(query) && pf->digest.init) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_RESUME);
+	}
+
 	if (pf->parts_all && ! query->parts_all) {
 		as_query_set_partitions(query, pf->parts_all);
 	}
@@ -2835,6 +2942,11 @@ aerospike_query_partitions_async(
 	if (status != AEROSPIKE_OK) {
 		cf_free(pt);
 		return status;
+	}
+
+	if (as_query_is_topk(query)) {
+		return as_query_topk_partition_async(cluster, err, policy, query, pt, listener, udata,
+			event_loop);
 	}
 	return as_query_partition_async(cluster, err, policy, query, pt, listener, udata, event_loop);
 }
@@ -2858,8 +2970,7 @@ aerospike_query_background(
 	policy = as_policy_write_merge(as, policy, &merged, &pkey);
 
 	if (as_query_has_topk_settings(query)) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"order_by/top_k is only valid on foreground queries");
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, AS_QUERY_TOPK_ERR_FOREGROUND_ONLY);
 	}
 
 	if (! (query->apply.function[0] || query->ops)) {

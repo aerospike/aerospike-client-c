@@ -586,7 +586,14 @@ static int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
 	if (asctxt->cert_blacklist) {
 		// Is this cert blacklisted?
 		char name[256];
+		// OpenSSL 4.0 made X509_get_issuer_name() return a const pointer.
+		// X509_NAME_oneline() accepts a const pointer, so use const from
+		// OpenSSL 3.0 onward to cover both 3.x and 4.x.
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+		const X509_NAME* iname = X509_get_issuer_name(current_cert);
+#else
 		X509_NAME* iname = X509_get_issuer_name(current_cert);
+#endif
 		X509_NAME_oneline(iname, name, sizeof(name));
 		
 		ASN1_INTEGER* sn = X509_get_serialNumber(current_cert);

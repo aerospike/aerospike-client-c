@@ -315,7 +315,8 @@ typedef enum as_query_order_by_type_e {
 	AS_QUERY_ORDER_BY_DOUBLE = 2,
 
 	/**
-	 * Order-by bin is a string.
+	 * Order-by bin is a string. Upcoming feature: a Top-K query with this
+	 * type fails with AEROSPIKE_ERR_PARAM.
 	 */
 	AS_QUERY_ORDER_BY_STRING = 3,
 
@@ -339,7 +340,7 @@ typedef uint32_t as_query_order_by_flags;
 
 /**
  * Perform a case-insensitive comparison. Only valid when the order-by type
- * is AS_QUERY_ORDER_BY_STRING.
+ * is AS_QUERY_ORDER_BY_STRING, which is an upcoming feature.
  */
 #define AS_QUERY_ORDER_BY_CASE_INSENSITIVE (1 << 0)
 
@@ -568,15 +569,17 @@ typedef struct as_query_predicates_s {
  * as_query_top_k(query, 10);
  * @endcode
  *
- * Top-K is only supported on synchronous foreground queries
- * (aerospike_query_foreach() and aerospike_query_partitions()). It is
- * rejected on asynchronous, background and aggregation UDF queries. See
- * as_query_top_k() for the full list of incompatible settings.
+ * Top-K is supported on foreground queries, both synchronous
+ * (aerospike_query_foreach() and aerospike_query_partitions()) and
+ * asynchronous (aerospike_query_async() and
+ * aerospike_query_partitions_async()). It is rejected on background and
+ * aggregation UDF queries. See as_query_top_k() for the full list of
+ * incompatible settings.
  *
  * **Important:** Setting order_by/top_k changes the foreground query
- * callback from "streaming as records arrive" to "buffered until every
- * targeted node has returned its results, then delivered once in final rank
- * order." This is inherent: the global top-k cannot be known until every
+ * callback or listener from "streaming as records arrive" to "buffered until
+ * every targeted node has returned its results, then delivered once in final
+ * rank order." This is inherent: the global top-k cannot be known until every
  * targeted node has reported. The memory bound is at most `n_nodes * k`
  * records buffered at once (k capped at 1000).
  *
@@ -723,10 +726,24 @@ typedef struct as_query_s {
 
 	/**
 	 * @private
+	 * Set by as_query_top_k(), so that a k set to 0 is rejected while a query
+	 * without k is not. Set/cleared internally; do not set directly.
+	 */
+	bool top_k_defined;
+
+	/**
+	 * @private
 	 * Set when as_query_then_order_by() is called with two order keys already
 	 * set. Cleared by as_query_order_by().
 	 */
 	bool order_by_overflow;
+
+	/**
+	 * @private
+	 * Set when as_query_then_order_by() is called before as_query_order_by().
+	 * Not cleared by a later as_query_order_by() call.
+	 */
+	bool then_order_by_first;
 
 } as_query;
 
@@ -1109,14 +1126,15 @@ as_query_apply(as_query* query, const char* module, const char* function, const 
  * An order key without k is sent to the server as is, and the server rejects
  * the query with AEROSPIKE_ERR_REQUEST_INVALID.
  *
- * If bin_name is longer than AS_BIN_NAME_MAX_LEN characters, the order-by
- * clause is not set and this call is a no-op. This is validated again
- * (and reported via as_error) when the query is executed.
+ * The order key is still set if bin_name is NULL, empty or longer than
+ * AS_BIN_NAME_MAX_LEN bytes, or if direction is not AS_ORDER_ASCENDING or
+ * AS_ORDER_DESCENDING. Executing the query then fails with AEROSPIKE_ERR_PARAM.
  *
  * IMPORTANT: setting order_by/top_k changes aerospike_query_foreach()/
- * aerospike_query_partitions() from streaming-as-records-arrive to
- * buffering until every targeted node has returned its results, then
- * delivering them once in final rank order. See as_query_top_k().
+ * aerospike_query_partitions() and their asynchronous variants from
+ * streaming-as-records-arrive to buffering until every targeted node has
+ * returned its results, then delivering them once in final rank order. See
+ * as_query_top_k().
  *
  * @code
  * as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_DOUBLE, AS_ORDER_DESCENDING,
@@ -1144,10 +1162,9 @@ as_query_order_by(
  * records that tie on the first. Follows the same rules as as_query_order_by().
  * Keeps the k set by as_query_top_k().
  *
- * Calling it before as_query_order_by() is not an error: the key becomes the
- * first order key, and a later as_query_order_by() call replaces it. Adding a
- * third order key is rejected with AEROSPIKE_ERR_PARAM when the query is
- * executed.
+ * Calling it before as_query_order_by(), even if as_query_order_by() is called
+ * later, or adding a third order key, is rejected with AEROSPIKE_ERR_PARAM when
+ * the query is executed.
  *
  * @code
  * as_query_order_by(&query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
@@ -1174,14 +1191,14 @@ as_query_then_order_by(
 
 /**
  * Set the global Top-K limit for a Top-K query. Replaces any k already set.
- * k must be in [1, 1000]; this is validated at query execution time
- * (mirroring as_query_where()/as_query_select(), which also defer validation
- * to command-build time).
+ * k must be in [1, 1000], so a k of 0 is also rejected; this is validated at
+ * query execution time (mirroring as_query_where()/as_query_select(), which
+ * also defer validation to command-build time).
  *
  * Top-K always runs as a long query. The server ignores a short-query hint
  * (as_policy_query.short_query / AS_QUERY_DURATION_SHORT).
  *
- * Incompatible with: asynchronous queries, background queries, aggregate UDFs
+ * Incompatible with: background queries, aggregate UDFs
  * (as_query_apply), metadata-only projection (as_query.no_bins), query
  * pagination (as_query_set_paginate()), a partition filter that resumes an
  * earlier query, any query->max_records, and an order key that is not in the

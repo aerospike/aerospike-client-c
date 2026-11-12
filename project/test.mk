@@ -121,6 +121,11 @@ test-gdb: test-build
 .PHONY: test-build
 test-build: $(TARGET_TEST)/aerospike_test
 
+# The aws-real probe is built against installed headers only, so it has its own recipe: the
+# object and executable macros add every INC_PATH entry, including src/include.
+.PHONY: aws-real-probe
+aws-real-probe: $(TARGET_TEST)/aws_real_probe
+
 .PHONY: test-clean
 test-clean:
 	@rm -rf $(TARGET_TEST)
@@ -138,3 +143,7 @@ $(TARGET_TEST)/%.o: $(SOURCE_TEST)/%.c
 $(TARGET_TEST)/aerospike_test: CFLAGS += $(TEST_CFLAGS)
 $(TARGET_TEST)/aerospike_test: $(TEST_OBJECT) $(TARGET_TEST)/test.o $(TARGET_LIB)/libaerospike.a | build prepare
 	$(executable) $(TEST_LDFLAGS)
+
+$(TARGET_TEST)/aws_real_probe: $(SOURCE_TEST)/aws_real/aws_real_probe.c $(TARGET_LIB)/libaerospike.a | build prepare
+	@mkdir -p $(dir $@)
+	$(CC) $(CC_FLAGS) -I$(TARGET_INCL) -o $@ $< $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)

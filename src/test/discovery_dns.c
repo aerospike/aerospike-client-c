@@ -2875,10 +2875,11 @@ TEST(dns_tend_validation, "execution-mode validation rejects a DNS timeout above
 
 TEST(dns_tend_silent_resolver, "timeout_ms equal to tend_refresh_deadline_ms with silent resolvers ends before the deadline and never trips")
 {
-	// This checks the budget shape: 1 name and 1 silent resolver end at about 60 ms, 2 names and
-	// 2 silent resolvers at about 75 ms. 4 names and 1 silent resolver use up the budget, so that
-	// variant only guards against tripping. Whole-millisecond rounding of the waits and of the
-	// overrun check cannot be told apart from nanoseconds here.
+	// This checks the budget shape: 1 name and 1 silent resolver end at about 300 ms, 2 names and
+	// 2 silent resolvers at about 375 ms. 4 names and 1 silent resolver use up the budget, so that
+	// variant only guards against tripping. Each wait can overshoot its share by about 10% (timer
+	// leeway on macOS), which eats into the 2-resolver slack, so the budget must stay large enough
+	// for that slack to outlast scheduling delays.
 	dns_stub s1, s2;
 	assert_true(stub_start(&s1));
 	assert_true(stub_start(&s2));
@@ -2894,12 +2895,12 @@ TEST(dns_tend_silent_resolver, "timeout_ms equal to tend_refresh_deadline_ms wit
 		as_error err;
 		as_seed_manager* m = NULL;
 		mgr_config(&config, AS_DISCOVERY_EXECUTION_TEND, 1000);
-		config.discovery.tend_refresh_deadline_ms = 80;
+		config.discovery.tend_refresh_deadline_ms = 400;
 		as_config_add_host(&config, "10.9.9.9", 3000);
 
 		dns_setup d;
 		as_dns_seed_provider_config* cfg = setup_init(&d, names, names_sizes[v], &s1, seconds[v]);
-		cfg->timeout_ms = 80;
+		cfg->timeout_ms = 400;
 		assert_int_eq(as_config_set_dns_seed_provider(&config, cfg, &err), AEROSPIKE_OK);
 		assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_OK);
 		assert_int_eq(as_seed_manager_start(m, &err), AEROSPIKE_OK);
@@ -2910,9 +2911,9 @@ TEST(dns_tend_silent_resolver, "timeout_ms equal to tend_refresh_deadline_ms wit
 			uint64_t begin = cf_getns();
 			as_seed_manager_tend(m);
 			uint64_t elapsed = (cf_getns() - begin) / 1000000;
-			info("silent variant=%u names=%u tend=%d elapsed=%llu ms deadline=80 ms", v,
+			info("silent variant=%u names=%u tend=%d elapsed=%llu ms deadline=400 ms", v,
 				names_sizes[v], i, (unsigned long long)elapsed);
-			assert_true(elapsed <= 80 + DNS_MARGIN_MS);
+			assert_true(elapsed <= 400 + DNS_MARGIN_MS);
 		}
 
 		as_seed_manager_stats stats = stats_of(m);

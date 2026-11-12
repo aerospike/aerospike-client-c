@@ -345,10 +345,71 @@ typedef struct as_aws_filter_s {
 } as_aws_filter;
 
 /**
+ * AWS credentials returned by an as_aws_credentials_hook. The fields are owned by the client
+ * and read-only for the hook: set them only with as_aws_credentials_set(), which copies its
+ * arguments and is the only allocator the client frees them with.
+ *
+ * @ingroup discovery_api
+ */
+typedef struct as_aws_credentials_s {
+	/**
+	 * AWS access key id. Letters and digits only.
+	 */
+	char* access_key_id;
+
+	/**
+	 * AWS secret access key. Visible ASCII characters only.
+	 */
+	char* secret_access_key;
+
+	/**
+	 * Session token of temporary credentials, or NULL. Visible ASCII characters only.
+	 */
+	char* session_token;
+
+	/**
+	 * Expiry in milliseconds since the epoch (UTC), or 0 when the credentials do not expire.
+	 */
+	uint64_t expiration_ms;
+} as_aws_credentials;
+
+/**
+ * Source of AWS credentials that replaces the built-in credential chain of the AWS EC2 seed
+ * provider, for example to wrap the application's own AWS SDK credentials provider (SSO,
+ * credential_process, role_arn profiles, cross-account roles). The hook is present when any of
+ * get, destroy or udata is set; a present hook requires get. See as_discovery_aws_seed_provider()
+ * for the contract.
+ *
+ * @ingroup discovery_api
+ */
+typedef struct as_aws_credentials_hook_s {
+	/**
+	 * Fill credentials with as_aws_credentials_set() and return AEROSPIKE_OK, or return another
+	 * status with a message in err. Runs on the discovery thread. timeout_ms is the time left of
+	 * the refresh's timeout_ms (at least 1); the DescribeInstances requests share what is left
+	 * after the hook returns. The message in err must not contain a secret.
+	 */
+	as_status (*get)(as_error* err, uint32_t timeout_ms, as_aws_credentials* credentials,
+		void* udata);
+
+	/**
+	 * Release udata, or NULL. Called exactly once when the provider is destroyed, possibly on the
+	 * discovery thread, so it must not block or wait for another thread.
+	 */
+	void (*destroy)(void* udata);
+
+	/**
+	 * Passed to get and destroy. A successful provider construction takes ownership of it.
+	 */
+	void* udata;
+} as_aws_credentials_hook;
+
+/**
  * Configuration of the built-in AWS EC2 seed provider. Initialize it with
- * as_aws_seed_provider_config_init(), then set region, filters, the credentials and any other
- * field. Every string and array is copied when the provider is created; the caller keeps
- * ownership of them and may change or release them afterwards.
+ * as_aws_seed_provider_config_init(), then set region, filters and any other field. Every
+ * string and array is copied when the provider is created; the caller keeps ownership of them
+ * and may change or release them afterwards. The exception is credentials_hook.udata, which a
+ * successful construction takes over.
  *
  * @ingroup discovery_api
  */
@@ -406,11 +467,13 @@ typedef struct as_aws_seed_provider_config_s {
 	const char* endpoint;
 
 	/**
-	 * PEM file of the certificate authorities trusted for HTTPS endpoints. When ca_file and
-	 * ca_path are both NULL, the OpenSSL default verify paths are trusted, which honour the
-	 * SSL_CERT_FILE and SSL_CERT_DIR environment variables. When neither variable is set and
-	 * the default certificate file of the OpenSSL build does not exist, as happens with an
-	 * OpenSSL bundled into a prebuilt package, the first existing system bundle among
+	 * PEM file of the certificate authorities trusted for HTTPS endpoints: EC2, STS and an https
+	 * ECS full URI. A file that holds only a private CA, for example for an EC2 VPC endpoint,
+	 * therefore also breaks web identity credentials unless it includes the public roots. When
+	 * ca_file and ca_path are both NULL, the OpenSSL default verify paths are trusted, which
+	 * honour the SSL_CERT_FILE and SSL_CERT_DIR environment variables. When neither variable is
+	 * set and the default certificate file of the OpenSSL build does not exist, as happens with
+	 * an OpenSSL bundled into a prebuilt package, the first existing system bundle among
 	 * /etc/ssl/certs/ca-certificates.crt, /etc/pki/tls/certs/ca-bundle.crt,
 	 * /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem, /etc/ssl/ca-bundle.pem,
 	 * /etc/ssl/cert.pem and /usr/local/etc/ssl/cert.pem is also trusted. On Windows the OpenSSL
@@ -428,22 +491,34 @@ typedef struct as_aws_seed_provider_config_s {
 	const char* ca_path;
 
 	/**
-	 * AWS access key id used to sign requests. Required; letters and digits only.
+	 * AWS access key id of static credentials, the first source of the credential chain. Set
+	 * both access_key_id and secret_access_key or neither, and neither with credentials_hook.
+	 * Letters and digits only.
+	 * Default: NULL
 	 */
 	const char* access_key_id;
 
 	/**
-	 * AWS secret access key. Required; visible ASCII characters only. Never logged or put in a
-	 * message.
+	 * AWS secret access key of static credentials; see access_key_id. Visible ASCII characters
+	 * only. Never logged or put in a message.
+	 * Default: NULL
 	 */
 	const char* secret_access_key;
 
 	/**
-	 * Session token of temporary credentials, sent as x-amz-security-token. NULL or empty for
-	 * none; otherwise visible ASCII characters only. Never logged or put in a message.
+	 * Session token of static temporary credentials, sent as x-amz-security-token. NULL or empty
+	 * for none; otherwise only with access_key_id and secret_access_key, and visible ASCII
+	 * characters only. Never logged or put in a message.
 	 * Default: NULL
 	 */
 	const char* session_token;
+
+	/**
+	 * Credentials hook that replaces the credential chain. Cannot be combined with
+	 * access_key_id, secret_access_key or session_token.
+	 * Default: none (all members NULL)
+	 */
+	as_aws_credentials_hook credentials_hook;
 } as_aws_seed_provider_config;
 
 /**
@@ -1049,8 +1124,66 @@ as_aws_seed_provider_config_init(as_aws_seed_provider_config* config);
  * }
  * @endcode
  *
- * Credentials: this release of the API signs with access_key_id, secret_access_key and the
- * optional session_token of the configuration, which are required.
+ * Credentials: credentials_hook, when set, replaces the credential chain. Otherwise the first
+ * source found, in this order, is used:
+ * - access_key_id, secret_access_key and session_token of the configuration;
+ * - the environment variables AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY and AWS_SESSION_TOKEN;
+ * - the static keys (aws_access_key_id, aws_secret_access_key, aws_session_token) of profile
+ *   AWS_PROFILE (default "default") in the shared credentials file AWS_SHARED_CREDENTIALS_FILE
+ *   (a leading "~/" is expanded) or <home>/.aws/credentials; a missing, unreadable or
+ *   non-regular file, or a profile without both keys, is skipped;
+ * - EKS web identity, when AWS_WEB_IDENTITY_TOKEN_FILE and AWS_ROLE_ARN are set: STS
+ *   AssumeRoleWithWebIdentity on https://sts.<region>.amazonaws.com (.com.cn for cn-*
+ *   regions), with RoleSessionName AWS_ROLE_SESSION_NAME or "aerospike-client-<epoch ms>";
+ * - ECS container credentials, when AWS_CONTAINER_CREDENTIALS_RELATIVE_URI (appended to
+ *   http://169.254.170.2; it must start with "/") or AWS_CONTAINER_CREDENTIALS_FULL_URI is
+ *   set, sending AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE's contents, else
+ *   AWS_CONTAINER_AUTHORIZATION_TOKEN, as the authorization header;
+ * - the EC2 instance profile through IMDSv2 on http://169.254.169.254 (a session token, the
+ *   role name, then the role credentials), unless AWS_EC2_METADATA_DISABLED is "true" (any
+ *   case).
+ *
+ * The home directory is HOME, or the passwd entry of the process user when HOME is unset or
+ * empty (POSIX), or USERPROFILE (Windows). The environment variables and the home directory are
+ * read once, when the provider is created, and only when neither static keys nor a hook are
+ * configured; later changes have no effect. Token files are read at each load and the shared
+ * credentials file once; credential files must be regular files of at most 1 MiB. Tokens and
+ * IMDS responses are trimmed. Access key ids must be letters and digits, secret access keys and
+ * tokens visible ASCII characters (the ECS authorization token may also contain spaces, as in
+ * "Bearer <token>"), and the IMDS role name IAM role-name characters, otherwise the load fails.
+ * A section header of the shared credentials file may be followed by a '#' or ';' comment. SSO,
+ * credential_process, role_arn profiles and cross-account roles are not in the chain; use the
+ * hook, which may wrap the application's own AWS SDK credentials provider.
+ *
+ * The chain resolves at the first refresh and later refreshes reuse the source that answered;
+ * a failed resolution is retried at the next refresh. The source is logged once at info level
+ * as "AWS EC2 seed provider credentials from <label>" (config, environment, profile,
+ * web-identity, ecs, imds or hook); no key, token or role name is logged. STS, ECS and IMDS
+ * credentials must carry an Expiration. Credentials are cached and reloaded on the refreshing
+ * thread, never on a timer, when they are within five minutes of their expiry; when a reload
+ * fails while they are still unexpired, a warning is logged and they are used until they
+ * expire. Credentials without an expiry (config, environment, profile, or a hook result with
+ * expiration_ms 0) are used for the life of the provider.
+ *
+ * Credentials hook: get runs on the discovery thread with timeout_ms, the time left of
+ * timeout_ms for this refresh (at least 1), which DescribeInstances then shares; it should
+ * return well within it, and a binding uses it to bound its wait on its own runtime. get fills
+ * credentials only with as_aws_credentials_set(): the fields are owned by the client and freed
+ * with its allocator, so strings assigned by the hook would be freed by another allocator. It
+ * may call as_aws_credentials_set() more than once; the last value wins. An error is returned as
+ * a status other than AEROSPIKE_OK with a message in err, a local error the provider resets
+ * before the call; the refresh fails with "AWS EC2 seed provider: credentials hook failed:
+ * <message>" (known secrets redacted), so the message must not contain a secret. A get that
+ * returns after the time is up fails the refresh with "credentials hook timed out after
+ * <timeout_ms>ms", but a successful result is still cached for the next refresh. A hook that
+ * rotates keys must set an expiry: without one, get is not called again. A get that never
+ * returns blocks the discovery thread; aerospike_close() then waits at most
+ * discovery.refresh_timeout_ms. destroy, when set, runs exactly once when the provider is
+ * destroyed, possibly on the discovery thread when a refresh is still running, so it follows
+ * the as_seed_provider destroy rules: it must not block or wait for another thread. A
+ * successful construction takes ownership of udata, so one config's hook must construct one
+ * provider only (destroy would otherwise run twice); a failed construction leaves udata with the
+ * caller.
  *
  * Threads and timeouts: a cold EC2 call takes several hundred milliseconds, more than a tend
  * can give, so the provider is thread-only: needs_periodic_refresh returns true and
@@ -1068,7 +1201,7 @@ as_aws_seed_provider_config_init(as_aws_seed_provider_config* config);
  * HTTPS: TLS 1.2 or later with SNI, the peer certificate verified against ca_file and ca_path
  * when either is set, otherwise against the OpenSSL default verify paths (and SSL_CERT_FILE or
  * SSL_CERT_DIR) plus, when those find no certificate file, the first existing system CA bundle
- * (see as_aws_seed_config.ca_file), and the endpoint host matched against its subject
+ * (see as_aws_seed_provider_config.ca_file), and the endpoint host matched against its subject
  * alternative names. On Windows the OpenSSL defaults are not the system certificate store; set
  * ca_file there. The TLS context is created, ca_file and ca_path loaded, and SIGPIPE set to
  * SIG_IGN process-wide when it still has the default handler (as cluster TLS does, because
@@ -1081,18 +1214,39 @@ as_aws_seed_provider_config_init(as_aws_seed_provider_config* config);
  * once; later changes to the configuration have no effect. An invalid value returns
  * AEROSPIKE_ERR_PARAM with a message naming it, an unreadable ca_file or ca_path
  * AEROSPIKE_ERR_TLS_ERROR, and an allocation failure AEROSPIKE_ERR_CLIENT; provider is then
- * left untouched.
+ * left untouched. The credential messages are, checked in this order:
+ * "Invalid AWS EC2 seed provider credentials: access_key_id is empty" (a secret without a key),
+ * "...: secret_access_key is empty" (a key without a secret),
+ * "...: session_token requires access_key_id and secret_access_key",
+ * "...: static keys and credentials_hook cannot both be set",
+ * "Invalid AWS EC2 seed provider credentials_hook: get is required", then the character checks
+ * of access_key_id, secret_access_key and session_token.
  *
  * On success the caller owns provider->udata until it is registered with
  * as_config_set_seed_provider(), which then takes ownership; release an unregistered table with
- * provider->destroy(provider->udata). Most callers should use
- * as_config_set_aws_seed_provider().
+ * provider->destroy(provider->udata), which also runs the hook destroy. On failure the caller
+ * keeps credentials_hook.udata. Most callers should use as_config_set_aws_seed_provider().
  *
  * @ingroup discovery_api
  */
 AS_EXTERN as_status
 as_discovery_aws_seed_provider(as_error* err, const as_aws_seed_provider_config* config,
 	as_seed_provider* provider);
+
+/**
+ * Set the credentials a credentials hook returns. access_key_id (letters and digits) and
+ * secret_access_key (visible ASCII characters) are required; session_token may be NULL or
+ * empty for none, otherwise visible ASCII characters. expiration_ms is the expiry in
+ * milliseconds since the epoch, or 0 for none. Every string is copied, and any value set
+ * before is cleansed and released, so the hook may call this more than once.
+ *
+ * Returns false on invalid input or allocation failure, leaving the earlier value unchanged.
+ *
+ * @ingroup discovery_api
+ */
+AS_EXTERN bool
+as_aws_credentials_set(as_aws_credentials* credentials, const char* access_key_id,
+	const char* secret_access_key, const char* session_token, uint64_t expiration_ms);
 
 /**
  * Complete one translation: apply the miss policy, validate the mapping and

@@ -105,7 +105,43 @@ typedef struct as_aws_http_response_s {
 	size_t body_size;
 } as_aws_http_response;
 
-// Immutable after creation except source_logged, which only refresh writes.
+typedef enum as_aws_source_e {
+	AS_AWS_SOURCE_NONE,
+	AS_AWS_SOURCE_CONFIG,
+	AS_AWS_SOURCE_ENVIRONMENT,
+	AS_AWS_SOURCE_PROFILE,
+	AS_AWS_SOURCE_WEB_IDENTITY,
+	AS_AWS_SOURCE_ECS,
+	AS_AWS_SOURCE_IMDS,
+	AS_AWS_SOURCE_HOOK
+} as_aws_source;
+
+// Credential-chain variables snapshotted at construction.
+typedef enum as_aws_var_e {
+	AS_AWS_VAR_ACCESS_KEY_ID,
+	AS_AWS_VAR_SECRET_ACCESS_KEY,
+	AS_AWS_VAR_SESSION_TOKEN,
+	AS_AWS_VAR_SHARED_CREDENTIALS_FILE,
+	AS_AWS_VAR_PROFILE,
+	AS_AWS_VAR_WEB_IDENTITY_TOKEN_FILE,
+	AS_AWS_VAR_ROLE_ARN,
+	AS_AWS_VAR_ROLE_SESSION_NAME,
+	AS_AWS_VAR_CONTAINER_RELATIVE_URI,
+	AS_AWS_VAR_CONTAINER_FULL_URI,
+	AS_AWS_VAR_CONTAINER_TOKEN_FILE,
+	AS_AWS_VAR_CONTAINER_TOKEN,
+	AS_AWS_VAR_EC2_METADATA_DISABLED,
+	AS_AWS_VAR_SIZE
+} as_aws_var;
+
+// A credential endpoint parsed at construction. A parse failure is reported when it is loaded.
+typedef struct as_aws_endpoint_s {
+	as_aws_url url;
+	bool valid;
+} as_aws_endpoint;
+
+// Immutable after creation except the credential cache, the resolved source and the cached IMDS
+// role, which only refresh writes.
 typedef struct as_aws_state_s {
 	uint32_t magic;
 	char* region;
@@ -119,10 +155,36 @@ typedef struct as_aws_state_s {
 
 	as_aws_url endpoint;
 	as_aws_tls tls;
+
+	// Static keys of the configuration; access_key_id is NULL when there are none.
 	char* access_key_id;
 	char* secret_access_key;
 	char* session_token;
-	bool source_logged;
+
+	// Copied after the last construction failure path; get is NULL when there is no hook.
+	as_aws_credentials_hook hook;
+
+	uint64_t (*now_ms)(void* udata);
+	void* now_udata;
+
+	// Non-empty values only; NULL otherwise.
+	char* vars[AS_AWS_VAR_SIZE];
+	char* home;
+
+	as_aws_endpoint sts;
+	as_aws_endpoint ecs;
+	as_aws_endpoint imds_token;
+	as_aws_endpoint imds_roles;
+
+	// Text of imds_roles, which the role name is appended to.
+	char* imds_roles_text;
+
+	as_aws_source source;
+
+	// access_key_id is NULL while nothing is cached.
+	as_aws_credentials cache;
+
+	char* imds_role;
 } as_aws_state;
 
 //---------------------------------
@@ -213,6 +275,48 @@ as_aws_http_request(as_error* err, const as_aws_tls* tls, const char* action, co
  */
 void
 as_aws_http_response_destroy(as_aws_http_response* response, bool sensitive);
+
+/**
+ * Return true when s is one or more ASCII letters and digits.
+ */
+bool
+as_aws_valid_key(const char* s);
+
+/**
+ * Return true when every byte of s is visible ASCII (0x21-0x7e). Empty is visible.
+ */
+bool
+as_aws_visible(const char* s);
+
+/**
+ * Return the wall-clock time in milliseconds since the epoch, from the injected clock if any.
+ */
+uint64_t
+as_aws_now_ms(const as_aws_state* st);
+
+/**
+ * Snapshot the credential-chain environment and build the STS, ECS and IMDS URLs into st, unless
+ * the configuration has static keys or a hook. Fails only on allocation failure, with
+ * AEROSPIKE_ERR_CLIENT; aws_destroy() releases what was built.
+ */
+as_status
+as_aws_chain_init(as_error* err, as_aws_state* st, const as_aws_seed_provider_config* config,
+	const as_aws_env* env);
+
+/**
+ * Release the snapshot, the URLs, the cache and the IMDS role of st, cleansing secrets.
+ */
+void
+as_aws_chain_destroy(as_aws_state* st);
+
+/**
+ * Return the credentials of this refresh, loading them when none are cached or the cached ones
+ * are within five minutes of their expiry. Every request is bounded by deadline_ns
+ * (cf_getns()). *out points into st and stays valid until the next call.
+ */
+as_status
+as_aws_credentials_get(as_error* err, as_aws_state* st, uint64_t deadline_ns,
+	const as_aws_credentials** out);
 
 /**
  * Return true and set timeout_ms to the configured refresh timeout when provider is the built-in

@@ -1048,7 +1048,9 @@ as_config_set_dns_seed_provider(as_config* config, const as_dns_seed_provider_co
 /**
  * Register the built-in AWS EC2 seed provider; see as_discovery_aws_seed_provider() for its
  * behavior. The configuration is validated and copied and the TLS context created; the caller
- * keeps ownership of aws and its strings.
+ * keeps ownership of aws and its strings. On success the registration owns
+ * aws->credentials_hook.udata and runs the hook destroy when it is released; on any failure the
+ * caller keeps it.
  *
  * The provider is thread-only: registration fails while discovery.execution_mode is
  * AS_DISCOVERY_EXECUTION_TEND, and aerospike_connect() fails if execution_mode is changed to it

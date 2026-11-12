@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include <aerospike/aerospike.h>
+#include <aerospike/as_atomic.h>
 #include <aerospike/as_aws_internal.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_config.h>
@@ -41,6 +42,9 @@
 #include <dirent.h>
 #include <netdb.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 #endif
 
 // Coverage: the aws-tags seed provider of D-14 (SigV4 against the AWS test vectors, no new
@@ -132,6 +136,195 @@ sha256(const char* text, char* out)
 {
 	as_aws_sha256_hex(text, strlen(text), out);
 	return out;
+}
+
+//---------------------------------
+// Static Functions: fake environment and hook
+//---------------------------------
+
+#define FAKE_VARS 16
+
+// A fake credential-chain environment. Every base URL points at a stub or at a loopback port with
+// no listener, so no test reaches a real AWS or metadata address.
+typedef struct fake_env_s {
+	const char* names[FAKE_VARS];
+	const char* values[FAKE_VARS];
+	uint32_t size;
+	uint32_t calls;
+
+	// Fixed wall clock in ms; 0 reads the real clock.
+	uint64_t now_ms;
+
+	char sts[64];
+	char ecs[64];
+	char imds[64];
+	as_aws_env env;
+} fake_env;
+
+static const char*
+fake_getenv(const char* name, void* udata)
+{
+	fake_env* f = udata;
+	f->calls++;
+
+	for (uint32_t i = 0; i < f->size; i++) {
+		if (strcmp(f->names[i], name) == 0) {
+			return f->values[i];
+		}
+	}
+	return NULL;
+}
+
+static uint64_t
+fake_now(void* udata)
+{
+	fake_env* f = udata;
+	return f->now_ms ? f->now_ms : cf_clock_getabsolute();
+}
+
+static void
+fake_set(fake_env* f, const char* name, const char* value)
+{
+	for (uint32_t i = 0; i < f->size; i++) {
+		if (strcmp(f->names[i], name) == 0) {
+			f->values[i] = value;
+			return;
+		}
+	}
+
+	if (f->size < FAKE_VARS) {
+		f->names[f->size] = name;
+		f->values[f->size++] = value;
+	}
+}
+
+// Ports 0 mean no listener. IMDS is disabled unless imds_port is set.
+static void
+fake_init(fake_env* f, uint16_t sts_port, uint16_t ecs_port, uint16_t imds_port)
+{
+	memset(f, 0, sizeof(fake_env));
+	snprintf(f->sts, sizeof(f->sts), "http://127.0.0.1:%u/sts", sts_port ? sts_port : 1);
+	snprintf(f->ecs, sizeof(f->ecs), "http://127.0.0.1:%u/ecs", ecs_port ? ecs_port : 1);
+	snprintf(f->imds, sizeof(f->imds), "http://127.0.0.1:%u", imds_port ? imds_port : 1);
+
+	if (!imds_port) {
+		fake_set(f, "AWS_EC2_METADATA_DISABLED", "true");
+	}
+	f->env.getenv = fake_getenv;
+	f->env.sts_base = f->sts;
+	f->env.ecs_base = f->ecs;
+	f->env.imds_base = f->imds;
+	f->env.now_ms = fake_now;
+	f->env.udata = f;
+}
+
+static as_status
+hook_never(as_error* err, uint32_t timeout_ms, as_aws_credentials* credentials, void* udata)
+{
+	(void)timeout_ms;
+	(void)credentials;
+	(void)udata;
+	return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "never called");
+}
+
+static void
+hook_noop(void* udata)
+{
+	(void)udata;
+}
+
+// Behavior and record of one test hook. Counters are atomic because get and destroy may run on
+// the discovery thread.
+typedef struct hook_state_s {
+	const char* key;
+	const char* secret;
+	const char* token;
+	uint64_t expiration_ms;
+
+	// Expiration from the second call on, when not 0.
+	uint64_t later_expiration_ms;
+
+	as_status status;
+	const char* message;
+	uint32_t sleep_ms;
+
+	// Sleep only from this call on (1-based), when not 0.
+	uint32_t sleep_from;
+
+	uint32_t gets;
+	uint32_t destroys;
+	uint32_t last_timeout_ms;
+	uint8_t get_returned;
+	uint8_t destroyed_after_get;
+	pthread_t get_thread;
+	pthread_t destroy_thread;
+} hook_state;
+
+static as_status
+hook_get(as_error* err, uint32_t timeout_ms, as_aws_credentials* credentials, void* udata)
+{
+	hook_state* h = udata;
+	uint32_t call = as_aaf_uint32(&h->gets, 1);
+
+	h->last_timeout_ms = timeout_ms;
+	h->get_thread = pthread_self();
+	as_store_uint8(&h->get_returned, 0);
+
+	if (h->key) {
+		uint64_t expiration = call > 1 && h->later_expiration_ms ? h->later_expiration_ms :
+			h->expiration_ms;
+		as_aws_credentials_set(credentials, h->key, h->secret, h->token, expiration);
+	}
+
+	if (h->sleep_ms && (h->sleep_from == 0 || call >= h->sleep_from)) {
+		as_sleep(h->sleep_ms);
+	}
+
+	as_status status = h->status;
+
+	if (status != AEROSPIKE_OK && h->message) {
+		as_error_set_message(err, status, h->message);
+	}
+	as_store_uint8_rls(&h->get_returned, 1);
+	return status;
+}
+
+static void
+hook_destroy(void* udata)
+{
+	hook_state* h = udata;
+	h->destroy_thread = pthread_self();
+	h->destroyed_after_get = as_load_uint8_acq(&h->get_returned);
+	as_aaf_uint32(&h->destroys, 1);
+}
+
+static void
+hook_init(hook_state* h, as_aws_seed_provider_config* cfg)
+{
+	memset(h, 0, sizeof(hook_state));
+	h->key = "AKIDHOOK";
+	h->secret = "hook/secret+key";
+	h->token = "hook-session-token";
+	cfg->access_key_id = NULL;
+	cfg->secret_access_key = NULL;
+	cfg->session_token = NULL;
+	cfg->credentials_hook.get = hook_get;
+	cfg->credentials_hook.destroy = hook_destroy;
+	cfg->credentials_hook.udata = h;
+}
+
+static bool
+wait_count(uint32_t* counter, uint32_t target, uint32_t timeout_ms)
+{
+	uint64_t end = cf_getms() + timeout_ms;
+
+	while (as_load_uint32_acq(counter) < target) {
+		if (cf_getms() >= end) {
+			return false;
+		}
+		as_sleep(5);
+	}
+	return true;
 }
 
 //---------------------------------
@@ -256,6 +449,9 @@ TEST(aws_config_defaults, "defaults are private IP, port 3000, no TLS name, 5000
 	assert_null(cfg.access_key_id);
 	assert_null(cfg.secret_access_key);
 	assert_null(cfg.session_token);
+	assert_null(cfg.credentials_hook.get);
+	assert_null(cfg.credentials_hook.destroy);
+	assert_null(cfg.credentials_hook.udata);
 
 	char* endpoint = as_aws_ec2_endpoint("us-east-1");
 	assert_string_eq(endpoint, "https://ec2.us-east-1.amazonaws.com");
@@ -277,6 +473,18 @@ TEST(aws_config_defaults, "defaults are private IP, port 3000, no TLS name, 5000
 	assert_true(provider.needs_periodic_refresh(provider.udata));
 	assert_not_null(provider.supports_deadline);
 	assert_false(provider.supports_deadline(provider.udata));
+
+	// The seam with a NULL environment builds the same provider as the public factory.
+	as_seed_provider seam;
+	assert_int_eq(as_discovery_aws_seed_provider_env(&err, &cfg, NULL, &seam), AEROSPIKE_OK);
+	assert_int_eq(seam.size, provider.size);
+	assert_int_eq(seam.api_version, provider.api_version);
+	assert_string_eq(seam.name, provider.name);
+	assert_true(seam.refresh == provider.refresh);
+	assert_true(seam.destroy == provider.destroy);
+	assert_true(seam.needs_periodic_refresh == provider.needs_periodic_refresh);
+	assert_true(seam.supports_deadline == provider.supports_deadline);
+	seam.destroy(seam.udata);
 	provider.destroy(provider.udata);
 
 	cfg.region = "cn-north-1";
@@ -380,20 +588,16 @@ invalid_case(uint32_t i, as_aws_seed_provider_config* cfg, as_aws_filter* filter
 		return "Invalid AWS EC2 seed provider ca_path: empty";
 	case 17:
 		cfg->access_key_id = NULL;
-		return "Invalid AWS EC2 seed provider credentials: access_key_id and secret_access_key "
-			"are required";
+		return "Invalid AWS EC2 seed provider credentials: access_key_id is empty";
 	case 18:
 		cfg->access_key_id = "";
-		return "Invalid AWS EC2 seed provider credentials: access_key_id and secret_access_key "
-			"are required";
+		return "Invalid AWS EC2 seed provider credentials: access_key_id is empty";
 	case 19:
 		cfg->secret_access_key = NULL;
-		return "Invalid AWS EC2 seed provider credentials: access_key_id and secret_access_key "
-			"are required";
+		return "Invalid AWS EC2 seed provider credentials: secret_access_key is empty";
 	case 20:
 		cfg->secret_access_key = "";
-		return "Invalid AWS EC2 seed provider credentials: access_key_id and secret_access_key "
-			"are required";
+		return "Invalid AWS EC2 seed provider credentials: secret_access_key is empty";
 	case 21:
 		cfg->access_key_id = "AKID-1";
 		return "Invalid AWS EC2 seed provider access_key_id: expected letters and digits";
@@ -412,10 +616,52 @@ invalid_case(uint32_t i, as_aws_seed_provider_config* cfg, as_aws_filter* filter
 	case 26:
 		cfg->session_token = "tok\x7f";
 		return "Invalid AWS EC2 seed provider session_token: invalid character";
+	case 27:
+		cfg->access_key_id = NULL;
+		cfg->secret_access_key = NULL;
+		cfg->session_token = "tok";
+		return "Invalid AWS EC2 seed provider credentials: session_token requires access_key_id "
+			"and secret_access_key";
+	case 28:
+		cfg->credentials_hook.get = hook_never;
+		return "Invalid AWS EC2 seed provider credentials: static keys and credentials_hook "
+			"cannot both be set";
+	case 29:
+		cfg->access_key_id = NULL;
+		cfg->secret_access_key = NULL;
+		cfg->session_token = "tok";
+		cfg->credentials_hook.get = hook_never;
+		return "Invalid AWS EC2 seed provider credentials: session_token requires access_key_id "
+			"and secret_access_key";
+	case 30:
+		cfg->access_key_id = NULL;
+		cfg->secret_access_key = NULL;
+		cfg->credentials_hook.destroy = hook_noop;
+		return "Invalid AWS EC2 seed provider credentials_hook: get is required";
+	case 31:
+		cfg->access_key_id = NULL;
+		cfg->secret_access_key = NULL;
+		cfg->credentials_hook.udata = cfg;
+		return "Invalid AWS EC2 seed provider credentials_hook: get is required";
+	case 32:
+		// The table rows come before the character checks.
+		cfg->access_key_id = "AKID-1";
+		cfg->credentials_hook.get = hook_never;
+		return "Invalid AWS EC2 seed provider credentials: static keys and credentials_hook "
+			"cannot both be set";
+	case 33:
+		cfg->access_key_id = NULL;
+		cfg->secret_access_key = "a b";
+		return "Invalid AWS EC2 seed provider credentials: access_key_id is empty";
+	case 34:
+		cfg->session_token = "tok";
+		cfg->credentials_hook.destroy = hook_noop;
+		return "Invalid AWS EC2 seed provider credentials: static keys and credentials_hook "
+			"cannot both be set";
 	default:
 		break;
 	}
-	i -= 27;
+	i -= 35;
 
 	if (i < sizeof(bad_endpoints) / sizeof(bad_endpoints[0])) {
 		cfg->endpoint = bad_endpoints[i];
@@ -492,6 +738,31 @@ TEST(aws_config_invalid, "invalid values are rejected at creation with a message
 		assert_int_eq(as_discovery_aws_seed_provider(&err, &cfg, &provider), AEROSPIKE_OK);
 		provider.destroy(provider.udata);
 	}
+
+	// Static keys are optional: no keys (the chain), empty keys, or a hook alone.
+	as_aws_seed_provider_config cfg;
+	as_seed_provider provider;
+	as_error err;
+	fake_env f;
+	fake_init(&f, 0, 0, 0);
+	aws_cfg(&cfg, NULL);
+	cfg.access_key_id = NULL;
+	cfg.secret_access_key = NULL;
+	assert_int_eq(as_discovery_aws_seed_provider_env(&err, &cfg, &f.env, &provider), AEROSPIKE_OK);
+	provider.destroy(provider.udata);
+	assert_true(f.calls > 0);
+
+	cfg.access_key_id = "";
+	cfg.secret_access_key = "";
+	cfg.session_token = "";
+	assert_int_eq(as_discovery_aws_seed_provider_env(&err, &cfg, &f.env, &provider), AEROSPIKE_OK);
+	provider.destroy(provider.udata);
+
+	f.calls = 0;
+	cfg.credentials_hook.get = hook_never;
+	assert_int_eq(as_discovery_aws_seed_provider_env(&err, &cfg, &f.env, &provider), AEROSPIKE_OK);
+	provider.destroy(provider.udata);
+	assert_int_eq(f.calls, 0);
 }
 
 TEST(aws_config_trust_files, "an unreadable ca_file or ca_path fails creation with AEROSPIKE_ERR_TLS_ERROR")
@@ -567,6 +838,314 @@ TEST(aws_config_registration, "the config helper copies its input, replaces a pr
 	assert_true(config.discovery.provider.udata == second);
 	assert_string_eq(config.discovery.provider.name, "aws-tags");
 	as_config_destroy(&config);
+}
+
+TEST(aws_hook_ownership, "the hook destroy runs once with the provider, on replacement and with the config, never after a failed construction or setter rejection; construction reads no environment")
+{
+	as_aws_seed_provider_config cfg;
+	as_seed_provider provider;
+	as_error err;
+	hook_state a;
+	hook_state b;
+	hook_state c;
+
+	aws_cfg(&cfg, NULL);
+	hook_init(&a, &cfg);
+	assert_int_eq(as_discovery_aws_seed_provider(&err, &cfg, &provider), AEROSPIKE_OK);
+	assert_int_eq(a.destroys, 0);
+	provider.destroy(provider.udata);
+	assert_int_eq(a.destroys, 1);
+	assert_int_eq(a.gets, 0);
+
+	// Failed constructions, including an unreadable ca_file, the last failure path.
+	hook_init(&a, &cfg);
+	cfg.timeout_ms = 0;
+	assert_int_eq(as_discovery_aws_seed_provider(&err, &cfg, &provider), AEROSPIKE_ERR_PARAM);
+	cfg.timeout_ms = 1000;
+	cfg.ca_file = "/nonexistent/as-aws-ca.pem";
+	assert_int_eq(as_discovery_aws_seed_provider(&err, &cfg, &provider), AEROSPIKE_ERR_TLS_ERROR);
+	cfg.ca_file = NULL;
+	assert_int_eq(a.destroys, 0);
+
+	// With a hook or static keys the environment is never read.
+	fake_env f;
+	fake_init(&f, 0, 0, 0);
+	assert_int_eq(as_discovery_aws_seed_provider_env(&err, &cfg, &f.env, &provider), AEROSPIKE_OK);
+	provider.destroy(provider.udata);
+	assert_int_eq(a.destroys, 1);
+	aws_cfg(&cfg, NULL);
+	assert_int_eq(as_discovery_aws_seed_provider_env(&err, &cfg, &f.env, &provider), AEROSPIKE_OK);
+	provider.destroy(provider.udata);
+	assert_int_eq(f.calls, 0);
+
+	// Each registration owns its own udata; replacement destroys the previous one.
+	as_config config;
+	as_config_init(&config);
+	hook_init(&a, &cfg);
+	assert_int_eq(as_config_set_aws_seed_provider(&config, &cfg, &err), AEROSPIKE_OK);
+	hook_init(&b, &cfg);
+	assert_int_eq(as_config_set_aws_seed_provider(&config, &cfg, &err), AEROSPIKE_OK);
+	assert_int_eq(a.destroys, 1);
+	assert_int_eq(b.destroys, 0);
+
+	// Setter rejections leave the udata with the caller.
+	hook_init(&c, &cfg);
+	cfg.ca_file = "/nonexistent/as-aws-ca.pem";
+	assert_int_eq(as_config_set_aws_seed_provider(&config, &cfg, &err), AEROSPIKE_ERR_TLS_ERROR);
+	cfg.ca_file = NULL;
+	cfg.timeout_ms = 0;
+	assert_int_eq(as_config_set_aws_seed_provider(&config, &cfg, &err), AEROSPIKE_ERR_PARAM);
+	cfg.timeout_ms = 1000;
+	config.discovery.registration_locked = true;
+	assert_int_eq(as_config_set_aws_seed_provider(&config, &cfg, &err), AEROSPIKE_ERR_PARAM);
+	config.discovery.registration_locked = false;
+	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_TEND;
+	assert_int_eq(as_config_set_aws_seed_provider(&config, &cfg, &err), AEROSPIKE_ERR_PARAM);
+	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_THREAD;
+	assert_int_eq(c.destroys, 0);
+	assert_int_eq(b.destroys, 0);
+
+	as_config_destroy(&config);
+	assert_int_eq(a.destroys, 1);
+	assert_int_eq(b.destroys, 1);
+	assert_int_eq(c.destroys, 0);
+	assert_int_eq(a.gets + b.gets + c.gets, 0);
+}
+
+TEST(aws_credentials_set, "as_aws_credentials_set() validates and copies; invalid input keeps the earlier value; a second call replaces it")
+{
+	as_aws_credentials c;
+	memset(&c, 0, sizeof(c));
+	char key[16] = "AKID1";
+	char secret[16] = "secret/1+x";
+	char token[16] = "token-1";
+	assert_true(as_aws_credentials_set(&c, key, secret, token, 1000));
+	strcpy(key, "changed");
+	strcpy(secret, "changed");
+	strcpy(token, "changed");
+	assert_string_eq(c.access_key_id, "AKID1");
+	assert_string_eq(c.secret_access_key, "secret/1+x");
+	assert_string_eq(c.session_token, "token-1");
+	assert_int_eq(c.expiration_ms, 1000);
+
+	static const struct {
+		const char* key;
+		const char* secret;
+		const char* token;
+	} invalid[] = {
+		{NULL, "s", NULL}, {"", "s", NULL}, {"AKID-1", "s", NULL}, {"AKID\x80", "s", NULL},
+		{"AKID", NULL, NULL}, {"AKID", "", NULL}, {"AKID", "a b", NULL}, {"AKID", "s\n", NULL},
+		{"AKID", "s", "tok\r\nx: 1"}, {"AKID", "s", "tok\x7f"}, {"AKID", "s", "tok en"}
+	};
+
+	for (uint32_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
+		if (as_aws_credentials_set(&c, invalid[i].key, invalid[i].secret, invalid[i].token, 5)) {
+			fail("case %u was accepted", i);
+		}
+		assert_string_eq(c.access_key_id, "AKID1");
+		assert_string_eq(c.session_token, "token-1");
+		assert_int_eq(c.expiration_ms, 1000);
+	}
+	assert_false(as_aws_credentials_set(NULL, "AKID", "s", NULL, 0));
+
+	// An empty token is no token.
+	assert_true(as_aws_credentials_set(&c, "AKID2", "secret2", "", 0));
+	assert_string_eq(c.access_key_id, "AKID2");
+	assert_string_eq(c.secret_access_key, "secret2");
+	assert_null(c.session_token);
+	assert_int_eq(c.expiration_ms, 0);
+	cf_free(c.access_key_id);
+	cf_free(c.secret_access_key);
+	cf_free(c.session_token);
+}
+
+// The map as Java's AbstractMap.toString() prints it.
+static const char*
+json_str(const char* text, char* buf, size_t size)
+{
+	as_aws_json json;
+
+	if (!as_aws_json_parse((const uint8_t*)text, strlen(text), &json)) {
+		snprintf(buf, size, "rejected");
+		return buf;
+	}
+
+	size_t len = (size_t)snprintf(buf, size, "{");
+
+	for (uint32_t i = 0; i < json.size && len < size; i++) {
+		len += (size_t)snprintf(buf + len, size - len, "%s%s=%s", i ? ", " : "",
+			json.entries[i].key, json.entries[i].value);
+	}
+
+	if (len < size) {
+		snprintf(buf + len, size - len, "}");
+	}
+	as_aws_json_destroy(&json);
+	return buf;
+}
+
+TEST(aws_json_reader, "the JSON reader keeps flat strings, numbers and booleans as Java does, skips nesting to depth 64 and rejects bad escapes, surrogates, NUL and trailing data")
+{
+	char buf[256];
+	assert_string_eq(json_str("{\"a\":\"x\\\"y\", \"n\": 12, \"o\": {\"k\": [1, {\"z\": \"}\"}]}, "
+		"\"b\":true, \"nil\": null, \"s\": \"\\u00e9\\n\"}", buf, sizeof(buf)),
+		"{a=x\"y, n=12, b=true, s=\xc3\xa9\n}");
+	assert_string_eq(json_str(" { } ", buf, sizeof(buf)), "{}");
+	assert_string_eq(json_str("{\"a\" 1}", buf, sizeof(buf)), "rejected");
+
+	// A repeated key keeps the last value in the first position; null, objects and arrays are
+	// dropped and leave the earlier value, as in Java.
+	assert_string_eq(json_str("{\"a\":\"1\",\"b\":\"2\",\"a\":\"3\"}", buf, sizeof(buf)),
+		"{a=3, b=2}");
+	assert_string_eq(json_str("{\"a\":\"1\",\"a\":null,\"a\":{},\"a\":[]}", buf, sizeof(buf)),
+		"{a=1}");
+	assert_string_eq(json_str("{\"a\":\"1\"} \r\n\t", buf, sizeof(buf)), "{a=1}");
+	assert_string_eq(json_str("{\"e\":\"\\\\\\/\\b\\f\\r\\t\",\"f\":false,\"n\":-1.5e+3}", buf,
+		sizeof(buf)), "{e=\\/\b\f\r\t, f=false, n=-1.5e+3}");
+	assert_string_eq(json_str("{\"p\":\"\\ud83d\\ude00\"}", buf, sizeof(buf)),
+		"{p=\xf0\x9f\x98\x80}");
+
+	static const char* const rejected[] = {
+		"", "[1]", "\"a\"", "{\"a\":\"1\"}x", "{\"a\":\"1\"}{}", "{\"a\":\"\\u0000\"}",
+		"{\"a\":\"\\ud800\"}", "{\"a\":\"\\udc00\"}", "{\"a\":\"\\ud800\\u0041\"}",
+		"{\"a\":\"\\ud800x\"}", "{\"a\":\"\\x\"}", "{\"a\":\"\\u12\"}", "{\"a\":\"\\u12g4\"}",
+		"{\"a\":\"1\"", "{\"a\":\"1", "{\"a\":", "{\"a\"", "{\"a", "{", "{\"a\":\"1\",}",
+		"{,}", "{\"a\":01}", "{\"a\":1.}", "{\"a\":.5}", "{\"a\":1e}", "{\"a\":-}", "{\"a\":tru}",
+		"{\"a\":nul}", "{\"a\":True}", "{\"a\":[1,2}", "{\"a\":{\"b\":\"}}", "{1:2}",
+		"{\"a\":1 2}"
+	};
+
+	for (uint32_t i = 0; i < sizeof(rejected) / sizeof(rejected[0]); i++) {
+		if (strcmp(json_str(rejected[i], buf, sizeof(buf)), "rejected") != 0) {
+			fail("%s parsed as %s", rejected[i], buf);
+		}
+	}
+
+	// A NUL byte anywhere, and no data.
+	as_aws_json json;
+	assert_false(as_aws_json_parse((const uint8_t*)"{\"a\":\"1\0\"}", 10, &json));
+	assert_false(as_aws_json_parse((const uint8_t*)"{}\0", 3, &json));
+	assert_false(as_aws_json_parse(NULL, 0, &json));
+	assert_int_eq(json.size, 0);
+
+	// Nesting up to depth 64 is skipped; 65 is rejected.
+	for (uint32_t depth = 64; depth <= 65; depth++) {
+		char open[66];
+		char close[66];
+		memset(open, '[', depth);
+		open[depth] = 0;
+		memset(close, ']', depth);
+		close[depth] = 0;
+		char* text = aws_strf("{\"a\":%s%s,\"b\":\"2\"}", open, close);
+		assert_string_eq(json_str(text, buf, sizeof(buf)), depth == 64 ? "{b=2}" : "rejected");
+		free(text);
+	}
+}
+
+static const char*
+ini_str(const char* text, const char* profile, char* buf, size_t size)
+{
+	as_aws_profile p;
+
+	if (!as_aws_ini_profile(text, strlen(text), profile, &p)) {
+		snprintf(buf, size, "failed");
+		return buf;
+	}
+	snprintf(buf, size, "%s|%s|%s", p.access_key_id ? p.access_key_id : "-",
+		p.secret_access_key ? p.secret_access_key : "-", p.session_token ? p.session_token : "-");
+	as_aws_profile_destroy(&p);
+	return buf;
+}
+
+#define JAVA_PROFILE "# shared credentials\n[default]\naws_access_key_id = AKIADEFAULT\n" \
+	"aws_secret_access_key = SECRET\n\n[seed]\naws_access_key_id=AKIASEEDPROFILE\n" \
+	"aws_secret_access_key=SECRET\naws_session_token=TOKEN\n\n[sso-only]\nsso_session = corp\n"
+
+TEST(aws_ini_reader, "the INI reader selects a trimmed section, allows a comment after a header, ends the section at a malformed one, skips a BOM and comments, splits at the first '=', merges repeated sections and keeps the last repeated key")
+{
+	char buf[256];
+	assert_string_eq(ini_str(JAVA_PROFILE, "default", buf, sizeof(buf)), "AKIADEFAULT|SECRET|-");
+	assert_string_eq(ini_str(JAVA_PROFILE, "seed", buf, sizeof(buf)),
+		"AKIASEEDPROFILE|SECRET|TOKEN");
+	assert_string_eq(ini_str(JAVA_PROFILE, "sso-only", buf, sizeof(buf)), "-|-|-");
+	assert_string_eq(ini_str(JAVA_PROFILE, "missing", buf, sizeof(buf)), "-|-|-");
+	assert_string_eq(ini_str("", "default", buf, sizeof(buf)), "-|-|-");
+
+	const char* text = "aws_access_key_id = OUTSIDE\n[a]\n; aws_access_key_id = SEMI\n"
+		"  # aws_access_key_id = HASH\naws_access_key_id = K1\n[b]\naws_access_key_id = B\n"
+		"[ a ]\r\n\taws_access_key_id = K2 # inline\r\naws_secret_access_key=S=1\n=novalue\n"
+		"noequals\nregion = us-east-1\n";
+	assert_string_eq(ini_str(text, "a", buf, sizeof(buf)), "K2 # inline|S=1|-");
+	assert_string_eq(ini_str(text, "b", buf, sizeof(buf)), "B|-|-");
+
+	// A lone CR ends a line, as Java's readAllLines() does.
+	assert_string_eq(ini_str("[c]\raws_access_key_id=C\raws_session_token = TO\rKEN\r", "c", buf,
+		sizeof(buf)), "C|-|TO");
+	assert_string_eq(ini_str("[d]\naws_access_key_id=\n", "d", buf, sizeof(buf)), "|-|-");
+
+	// A header may carry a trailing comment; any other '[' line ends the section and starts none,
+	// so its keys never reach the previous profile.
+	text = "[other]\naws_access_key_id=OTHER\n[default] # main account\naws_access_key_id=DEFAULT\n"
+		"[semi] ; note\naws_access_key_id=SEMI\n[junk] text\naws_access_key_id=JUNK\n"
+		"[unclosed\naws_access_key_id=UNCLOSED\n[a]]\naws_access_key_id=BRACKET\n";
+	assert_string_eq(ini_str(text, "other", buf, sizeof(buf)), "OTHER|-|-");
+	assert_string_eq(ini_str(text, "default", buf, sizeof(buf)), "DEFAULT|-|-");
+	assert_string_eq(ini_str(text, "semi", buf, sizeof(buf)), "SEMI|-|-");
+	assert_string_eq(ini_str(text, "junk", buf, sizeof(buf)), "-|-|-");
+	assert_string_eq(ini_str(text, "a", buf, sizeof(buf)), "-|-|-");
+	assert_string_eq(ini_str(text, "a]", buf, sizeof(buf)), "-|-|-");
+
+	// A leading UTF-8 byte order mark is skipped.
+	assert_string_eq(ini_str("\xEF\xBB\xBF[default]\naws_access_key_id=BOM\n", "default", buf,
+		sizeof(buf)), "BOM|-|-");
+}
+
+TEST(aws_iso8601, "ISO-8601 accepts AWS forms with fractions and offsets and rejects other forms, out-of-range fields and times at or before the epoch")
+{
+	static const struct {
+		const char* text;
+		uint64_t ms;
+	} good[] = {
+		{"2015-08-30T12:36:00Z", 1440938160000ULL},
+		{"2015-08-30T12:36:00.123Z", 1440938160123ULL},
+		{"2015-08-30T12:36:00.5Z", 1440938160500ULL},
+		{"2015-08-30T12:36:00.123456789Z", 1440938160123ULL},
+		{"2015-08-30T12:36:00+00:00", 1440938160000ULL},
+		{"2015-08-30T14:36:00+02:00", 1440938160000ULL},
+		{"2015-08-30T10:06:00-02:30", 1440938160000ULL},
+		{"2016-02-29T00:00:00Z", 1456704000000ULL},
+		{"2000-02-29T23:59:59Z", 951868799000ULL},
+		{"1970-01-01T00:00:00.001Z", 1},
+		{"2100-12-31T23:59:59.999Z", 4133980799999ULL}
+	};
+
+	for (uint32_t i = 0; i < sizeof(good) / sizeof(good[0]); i++) {
+		uint64_t ms = 0;
+
+		if (!as_aws_iso8601(good[i].text, &ms) || ms != good[i].ms) {
+			fail("%s: got %" PRIu64 ", expected %" PRIu64, good[i].text, ms, good[i].ms);
+		}
+	}
+
+	static const char* const bad[] = {
+		"", "2015-08-30T12:36:00", "2015-08-30T12:36:00.1234567890Z", "2015-08-30t12:36:00Z",
+		"2015-08-30T12:36:00z", "2015-08-30T12:36:60Z", "2015-08-30T24:00:00Z",
+		"2015-08-30T12:60:00Z", "2015-13-01T00:00:00Z", "2015-00-01T00:00:00Z",
+		"2015-01-32T00:00:00Z", "2015-01-00T00:00:00Z", "2015-02-29T00:00:00Z",
+		"1900-02-29T00:00:00Z", "1970-01-01T00:00:00Z", "1969-12-31T23:59:59Z",
+		"2015-08-30T12:36:00.Z", "2015-08-30T12:36:00+02:00:00", "2015-08-30T12:36:00+19:00",
+		"2015-08-30T12:36:00+02:60", "2015-08-30T12:36:00+0200", "2015-08-30T12:36:00Zx",
+		"2015-8-30T12:36:00Z", "2015-08-30 12:36:00Z", "2015-08-30T12:36Z", "+2015-08-30T12:36:00Z",
+		"2015-08-30T12:36:00 Z", "1970-01-01T01:00:00+01:00"
+	};
+
+	for (uint32_t i = 0; i < sizeof(bad) / sizeof(bad[0]); i++) {
+		uint64_t ms = 0;
+
+		if (as_aws_iso8601(bad[i], &ms)) {
+			fail("%s accepted as %" PRIu64, bad[i], ms);
+		}
+	}
 }
 
 //---------------------------------
@@ -1160,6 +1739,245 @@ stub_refresh(aws_stub* s, bool tls, const char* host, const char* ca_file, uint3
 	}
 	provider.destroy(provider.udata);
 	return status;
+}
+
+//---------------------------------
+// Static Functions: credential chain helpers
+//---------------------------------
+
+// 2015-08-30T12:36:00Z, the date of the AWS SigV4 test suite.
+#define CRED_NOW_MS 1440938160000ULL
+#define CRED_DATE "20150830T123600Z"
+#define CRED_EXPIRATION "2015-08-30T13:36:00Z"
+#define CRED_EXPIRATION_MS (CRED_NOW_MS + 3600000)
+#define CRED_KEY "AKIDTEMPORARY"
+#define CRED_SECRET "temporary/secret+key"
+#define CRED_TOKEN "temporary-session-token"
+#define CRED_NO_SOURCE "AWS EC2 seed provider: no AWS credentials found in config, environment, " \
+	"shared credentials file, web identity or ECS, and "
+#define CRED_DISABLED CRED_NO_SOURCE "IMDS is disabled"
+#define WEB_TOKEN "eyJhbGciOiJSUzI1NiIsImtpZCI6IkVYQU1QTEUifQ.web-identity-token"
+#define ROLE_ARN "arn:aws:iam::123456789012:role/seed-role"
+#define ECS_AUTHORIZATION "ecs-authorization-token"
+#define IMDS_ROLES_PATH "/latest/meta-data/iam/security-credentials/"
+
+static uint32_t
+log_matches(const char* text)
+{
+	uint32_t count = 0;
+	pthread_mutex_lock(&log_lock);
+
+	for (uint32_t i = 0; i < log_count; i++) {
+		if (strstr(log_lines[i], text)) {
+			count++;
+		}
+	}
+	pthread_mutex_unlock(&log_lock);
+	return count;
+}
+
+// Temporary directory and the entries a test creates in it, removed in reverse order.
+typedef struct tmp_dir_s {
+	char path[64];
+	char entries[16][192];
+	uint32_t size;
+} tmp_dir;
+
+static bool
+tmp_create(tmp_dir* d)
+{
+	d->size = 0;
+	snprintf(d->path, sizeof(d->path), "/tmp/as-aws-cred-XXXXXX");
+	return mkdtemp(d->path) != NULL;
+}
+
+static const char*
+tmp_path(tmp_dir* d, const char* name)
+{
+	char full[sizeof(d->entries[0])];
+	snprintf(full, sizeof(full), "%s/%s", d->path, name);
+
+	char* path = d->entries[d->size++];
+	memcpy(path, full, sizeof(full));
+	return path;
+}
+
+static const char*
+tmp_file(tmp_dir* d, const char* name, const char* data, size_t size)
+{
+	const char* path = tmp_path(d, name);
+	FILE* f = fopen(path, "wb");
+
+	if (f) {
+		fwrite(data, 1, size, f);
+		fclose(f);
+	}
+	return path;
+}
+
+static const char*
+tmp_text(tmp_dir* d, const char* name, const char* text)
+{
+	return tmp_file(d, name, text, strlen(text));
+}
+
+static const char*
+tmp_mkdir(tmp_dir* d, const char* name)
+{
+	const char* path = tmp_path(d, name);
+	mkdir(path, 0700);
+	return path;
+}
+
+static const char*
+tmp_fifo(tmp_dir* d, const char* name)
+{
+	const char* path = tmp_path(d, name);
+	mkfifo(path, 0600);
+	return path;
+}
+
+// A file one byte over the 1 MiB cap.
+static const char*
+tmp_big(tmp_dir* d, const char* name)
+{
+	size_t size = 1024 * 1024 + 1;
+	char* data = malloc(size);
+	memset(data, 'a', size);
+	const char* path = tmp_file(d, name, data, size);
+	free(data);
+	return path;
+}
+
+static void
+tmp_destroy(tmp_dir* d)
+{
+	while (d->size > 0) {
+		remove(d->entries[--d->size]);
+	}
+	rmdir(d->path);
+}
+
+// Chain configuration for the EC2 stub: no static keys.
+static void
+cred_cfg(as_aws_seed_provider_config* cfg, aws_stub* ec2, char* url, size_t size)
+{
+	aws_cfg(cfg, stub_url(ec2, false, "127.0.0.1", url, size));
+	cfg->access_key_id = NULL;
+	cfg->secret_access_key = NULL;
+}
+
+// Refresh once; the hosts or the error message go to buf.
+static as_status
+cred_refresh(as_seed_provider* provider, char* buf, size_t size)
+{
+	as_error err;
+	as_status status = refresh_str(provider, &err, buf, size);
+
+	if (status != AEROSPIKE_OK) {
+		snprintf(buf, size, "%s", err.message);
+	}
+	return status;
+}
+
+static as_status
+cred_provider(aws_stub* ec2, fake_env* f, as_seed_provider* provider, char* buf, size_t size)
+{
+	char url[64];
+	as_aws_seed_provider_config cfg;
+	cred_cfg(&cfg, ec2, url, sizeof(url));
+	as_error err;
+	as_status status = as_discovery_aws_seed_provider_env(&err, &cfg, &f->env, provider);
+
+	if (status != AEROSPIKE_OK) {
+		snprintf(buf, size, "create: %.400s", err.message);
+	}
+	return status;
+}
+
+// Create a chain provider, refresh it once and destroy it.
+static as_status
+cred_once(aws_stub* ec2, fake_env* f, char* buf, size_t size)
+{
+	as_seed_provider provider;
+	as_status status = cred_provider(ec2, f, &provider, buf, size);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+	status = cred_refresh(&provider, buf, size);
+	provider.destroy(provider.udata);
+	return status;
+}
+
+// Request i of s on the heap, or NULL. The caller frees it.
+static aws_request*
+cred_request(aws_stub* s, uint32_t i)
+{
+	aws_request* r = malloc(sizeof(aws_request));
+
+	if (!aws_stub_request(s, i, r)) {
+		free(r);
+		return NULL;
+	}
+	return r;
+}
+
+// True when DescribeInstances request i was signed with these credentials: the authorization
+// equals a SigV4 signature recomputed from the recorded x-amz-date.
+static bool
+signed_with(aws_stub* ec2, uint32_t i, const char* key, const char* secret, const char* token)
+{
+	aws_request* r = cred_request(ec2, i);
+
+	if (!r) {
+		return false;
+	}
+
+	char host[64];
+	char date[64];
+	char auth[512];
+	char value[512];
+	bool ok = aws_request_header(r, "host", host, sizeof(host)) == 1 &&
+		aws_request_header(r, "x-amz-date", date, sizeof(date)) == 1 &&
+		aws_request_header(r, "authorization", auth, sizeof(auth)) == 1;
+	uint32_t tokens = aws_request_header(r, "x-amz-security-token", value, sizeof(value));
+
+	ok = ok && (token ? tokens == 1 && strcmp(value, token) == 0 : tokens == 0);
+
+	if (ok) {
+		as_aws_header headers[] = {
+			{"content-type", AWS_FORM},
+			{"host", host},
+			{"x-amz-date", date},
+			{"x-amz-security-token", token}
+		};
+		char* expected = as_aws_sigv4_authorization(key, secret, "POST", "/", "", headers,
+			token ? 4 : 3, (const uint8_t*)r->body, r->body_size, "us-east-1", "ec2", date);
+		ok = expected && strcmp(expected, auth) == 0;
+		cf_free(expected);
+	}
+	free(r);
+	return ok;
+}
+
+static bool
+request_is(aws_stub* s, uint32_t i, const char* method, const char* target)
+{
+	aws_request* r = cred_request(s, i);
+	bool ok = r && strcmp(r->method, method) == 0 && strcmp(r->target, target) == 0;
+	free(r);
+	return ok;
+}
+
+// Number of headers named name in request i, with the first value in out.
+static uint32_t
+request_header(aws_stub* s, uint32_t i, const char* name, char* out, size_t size)
+{
+	aws_request* r = cred_request(s, i);
+	uint32_t count = r ? aws_request_header(r, name, out, size) : 0;
+	free(r);
+	return count;
 }
 
 //---------------------------------
@@ -1918,6 +2736,1008 @@ TEST(aws_trust_bundle, "without ca_file or ca_path a system CA bundle is chosen 
 }
 
 //---------------------------------
+// Tests: credential chain
+//---------------------------------
+
+TEST(aws_cred_config, "D-14 config keys sign DescribeInstances with the injected clock, read no environment and log the config source once")
+{
+	aws_stub ec2;
+	assert_true(aws_stub_start(&ec2, false));
+	stub_one(&ec2, "10.0.0.1");
+	fake_env f;
+	fake_init(&f, 0, 0, 0);
+	f.now_ms = CRED_NOW_MS;
+
+	char url[64];
+	as_aws_seed_provider_config cfg;
+	aws_cfg(&cfg, stub_url(&ec2, false, "127.0.0.1", url, sizeof(url)));
+	cfg.session_token = AWS_TOKEN;
+	as_seed_provider provider;
+	as_error err;
+	assert_int_eq(as_discovery_aws_seed_provider_env(&err, &cfg, &f.env, &provider), AEROSPIKE_OK);
+	assert_int_eq(f.calls, 0);
+
+	char buf[256];
+	log_start();
+	as_status first = cred_refresh(&provider, buf, sizeof(buf));
+	as_status second = cred_refresh(&provider, buf, sizeof(buf));
+	log_stop();
+	provider.destroy(provider.udata);
+	assert_int_eq(first, AEROSPIKE_OK);
+	assert_int_eq(second, AEROSPIKE_OK);
+	assert_string_eq(buf, "10.0.0.1:3000");
+	assert_true(log_find(AS_LOG_LEVEL_INFO, "AWS EC2 seed provider credentials from config") >= 0);
+	assert_int_eq(log_matches("credentials from"), 1);
+
+	char date[64];
+	assert_int_eq(request_header(&ec2, 0, "x-amz-date", date, sizeof(date)), 1);
+	assert_string_eq(date, CRED_DATE);
+	assert_true(signed_with(&ec2, 0, AWS_KEY, AWS_SECRET, AWS_TOKEN));
+	assert_true(signed_with(&ec2, 1, AWS_KEY, AWS_SECRET, AWS_TOKEN));
+	aws_stub_stop(&ec2);
+}
+
+TEST(aws_cred_environment, "D-14 environment keys are snapshotted at construction and sign; a key without a secret is skipped; invalid values fail before any request")
+{
+	aws_stub ec2;
+	assert_true(aws_stub_start(&ec2, false));
+	stub_one(&ec2, "10.0.0.1");
+	fake_env f;
+	fake_init(&f, 0, 0, 0);
+
+	char key[32] = "AKIDENVIRONMENT";
+	char secret[32] = "environment/secret";
+	fake_set(&f, "AWS_ACCESS_KEY_ID", key);
+	fake_set(&f, "AWS_SECRET_ACCESS_KEY", secret);
+	fake_set(&f, "AWS_SESSION_TOKEN", "environment-token");
+
+	char buf[256];
+	as_seed_provider provider;
+	assert_int_eq(cred_provider(&ec2, &f, &provider, buf, sizeof(buf)), AEROSPIKE_OK);
+
+	// Changes after construction are ignored.
+	strcpy(key, "CHANGED");
+	strcpy(secret, "changed");
+	fake_set(&f, "AWS_SESSION_TOKEN", NULL);
+	f.calls = 0;
+
+	log_start();
+	as_status status = cred_refresh(&provider, buf, sizeof(buf));
+	log_stop();
+	provider.destroy(provider.udata);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(f.calls, 0);
+	assert_true(signed_with(&ec2, 0, "AKIDENVIRONMENT", "environment/secret",
+		"environment-token"));
+	assert_true(log_find(AS_LOG_LEVEL_INFO, "AWS EC2 seed provider credentials from environment")
+		>= 0);
+
+	// A key without a secret is not a source.
+	fake_init(&f, 0, 0, 0);
+	fake_set(&f, "AWS_ACCESS_KEY_ID", "AKIDENVIRONMENT");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, CRED_DISABLED);
+	fake_set(&f, "AWS_SECRET_ACCESS_KEY", "");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, CRED_DISABLED);
+
+	fake_set(&f, "AWS_ACCESS_KEY_ID", "AKID-1");
+	fake_set(&f, "AWS_SECRET_ACCESS_KEY", "s");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: environment returned an invalid access key id");
+
+	fake_set(&f, "AWS_ACCESS_KEY_ID", "AKIDENVIRONMENT");
+	fake_set(&f, "AWS_SECRET_ACCESS_KEY", "env secret");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf,
+		"AWS EC2 seed provider: environment returned an invalid secret access key");
+
+	fake_set(&f, "AWS_SECRET_ACCESS_KEY", "s");
+	fake_set(&f, "AWS_SESSION_TOKEN", "tok\r\nhost: evil");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: environment returned an invalid session token");
+	assert_int_eq(aws_stub_requests(&ec2), 1);
+	aws_stub_stop(&ec2);
+}
+
+TEST(aws_cred_profile, "D-14 the shared credentials file: default and AWS_PROFILE sections, explicit and ~/ paths; missing, FIFO and directory skipped; over 1 MiB and invalid values fail")
+{
+	aws_stub ec2;
+	assert_true(aws_stub_start(&ec2, false));
+	stub_one(&ec2, "10.0.0.1");
+	tmp_dir d;
+	assert_true(tmp_create(&d));
+	const char* aws_dir = tmp_mkdir(&d, ".aws");
+	tmp_text(&d, ".aws/credentials", JAVA_PROFILE);
+
+	fake_env f;
+	fake_init(&f, 0, 0, 0);
+	f.env.home = d.path;
+	char buf[512];
+
+	log_start();
+	as_status status = cred_once(&ec2, &f, buf, sizeof(buf));
+	log_stop();
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(signed_with(&ec2, 0, "AKIADEFAULT", "SECRET", NULL));
+	assert_true(log_find(AS_LOG_LEVEL_INFO, "AWS EC2 seed provider credentials from profile") >= 0);
+
+	fake_set(&f, "AWS_PROFILE", "seed");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_true(signed_with(&ec2, 1, "AKIASEEDPROFILE", "SECRET", "TOKEN"));
+
+	// A profile without static keys is not a source.
+	fake_set(&f, "AWS_PROFILE", "sso-only");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, CRED_DISABLED);
+	fake_set(&f, "AWS_PROFILE", NULL);
+
+	const char* other = tmp_text(&d, "other", "[default]\naws_access_key_id=AKIAOTHER\n"
+		"aws_secret_access_key=OTHER\n");
+	fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", other);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_true(signed_with(&ec2, 2, "AKIAOTHER", "OTHER", NULL));
+	fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", "~/other");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_true(signed_with(&ec2, 3, "AKIAOTHER", "OTHER", NULL));
+
+	// A missing file, a FIFO and a directory are skipped at once.
+	const char* fifo = tmp_fifo(&d, "fifo");
+	const char* skipped[] = {"~/missing", fifo, aws_dir};
+
+	for (uint32_t i = 0; i < 3; i++) {
+		fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", skipped[i]);
+		uint64_t start = cf_getms();
+		status = cred_once(&ec2, &f, buf, sizeof(buf));
+		uint64_t elapsed = cf_getms() - start;
+
+		if (status != AEROSPIKE_ERR_SEED_DISCOVERY_FAILED || strcmp(buf, CRED_DISABLED) != 0 ||
+			elapsed > 1000) {
+			fail("%s: %d \"%s\" after %" PRIu64 " ms", skipped[i], status, buf, elapsed);
+		}
+	}
+
+	// A file over 1 MiB fails the resolution.
+	const char* big = tmp_big(&d, "big");
+	fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", big);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	char expected[300];
+	snprintf(expected, sizeof(expected), "AWS EC2 seed provider: failed to read %s: larger than "
+		"1 MiB", big);
+	assert_string_eq(buf, expected);
+
+	// Without a home there is no default path and no ~/ expansion.
+	f.env.home = NULL;
+	fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", NULL);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, CRED_DISABLED);
+	fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", "~/other");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, CRED_DISABLED);
+
+	// Invalid values. A CR ends the line, as in Java, so it cannot reach the token.
+	const char* bad = tmp_text(&d, "bad", "[default]\naws_access_key_id=AKIABAD\n"
+		"aws_secret_access_key=S\naws_session_token=TO\tKEN\n");
+	fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", bad);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: shared credentials file returned an invalid "
+		"session token");
+
+	const char* bad_key = tmp_text(&d, "bad-key", "[default]\naws_access_key_id=AKIA/BAD\n"
+		"aws_secret_access_key=S\n");
+	fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", bad_key);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: shared credentials file returned an invalid "
+		"access key id");
+
+	const char* cr = tmp_text(&d, "cr", "[default]\r\naws_access_key_id=AKIACR\r"
+		"aws_secret_access_key=S\naws_session_token=TO\rKEN\n");
+	fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", cr);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_true(signed_with(&ec2, 4, "AKIACR", "S", "TO"));
+	assert_int_eq(aws_stub_requests(&ec2), 5);
+
+	tmp_destroy(&d);
+	aws_stub_stop(&ec2);
+}
+
+TEST(aws_cred_web_identity, "D-14 web identity: unsigned STS form POST with the trimmed token; temporary credentials sign; STS errors redact the token; token file failures never fall through")
+{
+	aws_stub ec2;
+	aws_stub sts;
+	aws_stub ecs;
+	aws_stub imds;
+	assert_true(aws_stub_start(&ec2, false));
+	assert_true(aws_stub_start(&sts, false));
+	assert_true(aws_stub_start(&ecs, false));
+	assert_true(aws_stub_start(&imds, false));
+	stub_one(&ec2, "10.0.0.1");
+	tmp_dir d;
+	assert_true(tmp_create(&d));
+	const char* token_file = tmp_text(&d, "token", WEB_TOKEN "\n");
+
+	char* xml = aws_xml_sts(CRED_KEY, CRED_SECRET, CRED_TOKEN, CRED_EXPIRATION);
+	aws_stub_http(&sts, 200, NULL, xml);
+
+	fake_env f;
+	fake_init(&f, sts.port, 0, 0);
+	f.now_ms = CRED_NOW_MS;
+	fake_set(&f, "AWS_WEB_IDENTITY_TOKEN_FILE", token_file);
+	fake_set(&f, "AWS_ROLE_ARN", ROLE_ARN);
+	fake_set(&f, "AWS_ROLE_SESSION_NAME", "seed session");
+
+	char buf[512];
+	log_start();
+	as_status status = cred_once(&ec2, &f, buf, sizeof(buf));
+	log_stop();
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(signed_with(&ec2, 0, CRED_KEY, CRED_SECRET, CRED_TOKEN));
+	assert_true(log_find(AS_LOG_LEVEL_INFO, "AWS EC2 seed provider credentials from web-identity")
+		>= 0);
+
+	aws_request* r = cred_request(&sts, 0);
+	assert_not_null(r);
+	assert_string_eq(r->method, "POST");
+	assert_string_eq(r->target, "/sts");
+	assert_string_eq(r->body, "Action=AssumeRoleWithWebIdentity&Version=2011-06-15"
+		"&RoleArn=arn%3Aaws%3Aiam%3A%3A123456789012%3Arole%2Fseed-role"
+		"&RoleSessionName=seed%20session&WebIdentityToken=" WEB_TOKEN);
+	char value[256];
+	assert_int_eq(aws_request_header(r, "authorization", NULL, 0), 0);
+	assert_int_eq(aws_request_header(r, "content-type", value, sizeof(value)), 1);
+	assert_string_eq(value, AWS_FORM);
+	free(r);
+
+	// The default session name comes from the injected clock.
+	fake_set(&f, "AWS_ROLE_SESSION_NAME", NULL);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_OK);
+	r = cred_request(&sts, 1);
+	assert_not_null(r);
+	assert_not_null(strstr(r->body, "&RoleSessionName=aerospike-client-1440938160000&"));
+	free(r);
+
+	// Java's STS error test: code, message and request id, with the token redacted.
+	char* error = aws_strf("<ErrorResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\">"
+		"<Error><Type>Sender</Type><Code>InvalidIdentityToken</Code><Message>Token %s is invalid"
+		"</Message></Error><RequestId>c6104cbe-af31-11e0-8154-cbc7ccf896c7</RequestId>"
+		"</ErrorResponse>", WEB_TOKEN);
+	aws_stub_set_http(&sts, 400, NULL, error);
+	free(error);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: STS AssumeRoleWithWebIdentity failed: HTTP 400 "
+		"InvalidIdentityToken: Token <redacted> is invalid (request id "
+		"c6104cbe-af31-11e0-8154-cbc7ccf896c7)");
+
+	static const struct {
+		const char* body;
+		const char* message;
+	} bad_bodies[] = {
+		{"<AssumeRoleWithWebIdentityResponse><AssumeRoleWithWebIdentityResult/>"
+			"</AssumeRoleWithWebIdentityResponse>",
+			"AWS EC2 seed provider: STS AssumeRoleWithWebIdentity response has no credentials"},
+		{"not xml", "AWS EC2 seed provider: invalid STS AssumeRoleWithWebIdentity response"},
+		{"", "AWS EC2 seed provider: invalid STS AssumeRoleWithWebIdentity response"}
+	};
+
+	for (uint32_t i = 0; i < 3; i++) {
+		aws_stub_set_http(&sts, 200, NULL, bad_bodies[i].body);
+		assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		assert_string_eq(buf, bad_bodies[i].message);
+	}
+
+	// A CR in the STS session token fails before DescribeInstances; so does a bad expiration.
+	char* bad = aws_xml_sts(CRED_KEY, CRED_SECRET, "tok&#13;en", CRED_EXPIRATION);
+	aws_stub_set_http(&sts, 200, NULL, bad);
+	free(bad);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: STS AssumeRoleWithWebIdentity returned an "
+		"invalid session token");
+	bad = aws_xml_sts(CRED_KEY, CRED_SECRET, CRED_TOKEN, "2015-08-30T13:36:00");
+	aws_stub_set_http(&sts, 200, NULL, bad);
+	free(bad);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: STS AssumeRoleWithWebIdentity returned an "
+		"invalid expiration");
+	assert_int_eq(aws_stub_requests(&ec2), 2);
+
+	// Token file failures fail the load: no request to STS, and no fall-through to ECS or IMDS.
+	aws_stub_reset(&sts);
+	aws_stub_http(&sts, 200, NULL, xml);
+	fake_init(&f, sts.port, ecs.port, imds.port);
+	fake_set(&f, "AWS_ROLE_ARN", ROLE_ARN);
+	fake_set(&f, "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/creds");
+
+	char missing[128];
+	snprintf(missing, sizeof(missing), "%s/missing", d.path);
+	const char* files[] = {
+		missing, tmp_fifo(&d, "fifo"), tmp_big(&d, "big"), tmp_text(&d, "space", "eyJ bad\n"),
+		tmp_text(&d, "empty", " \n"), tmp_file(&d, "nul", "eyJ\0x", 5)
+	};
+	const char* messages[] = {
+		"AWS EC2 seed provider: failed to read AWS_WEB_IDENTITY_TOKEN_FILE: No such file or "
+			"directory",
+		"AWS EC2 seed provider: failed to read AWS_WEB_IDENTITY_TOKEN_FILE: not a regular file",
+		"AWS EC2 seed provider: failed to read AWS_WEB_IDENTITY_TOKEN_FILE: larger than 1 MiB",
+		"AWS EC2 seed provider: STS AssumeRoleWithWebIdentity failed: invalid web identity token",
+		"AWS EC2 seed provider: STS AssumeRoleWithWebIdentity failed: invalid web identity token",
+		"AWS EC2 seed provider: STS AssumeRoleWithWebIdentity failed: invalid web identity token"
+	};
+
+	for (uint32_t i = 0; i < 6; i++) {
+		fake_set(&f, "AWS_WEB_IDENTITY_TOKEN_FILE", files[i]);
+		uint64_t start = cf_getms();
+		status = cred_once(&ec2, &f, buf, sizeof(buf));
+		uint64_t elapsed = cf_getms() - start;
+
+		if (status != AEROSPIKE_ERR_SEED_DISCOVERY_FAILED || strcmp(buf, messages[i]) != 0 ||
+			elapsed > 1000) {
+			fail("token file %u: %d \"%s\" after %" PRIu64 " ms", i, status, buf, elapsed);
+		}
+	}
+	assert_int_eq(aws_stub_requests(&sts), 0);
+	assert_int_eq(aws_stub_accepts(&ecs), 0);
+	assert_int_eq(aws_stub_accepts(&imds), 0);
+	assert_int_eq(aws_stub_requests(&ec2), 2);
+
+	free(xml);
+	tmp_destroy(&d);
+	aws_stub_stop(&imds);
+	aws_stub_stop(&ecs);
+	aws_stub_stop(&sts);
+	aws_stub_stop(&ec2);
+}
+
+TEST(aws_cred_ecs, "D-14 ECS: relative and full URIs with query and [::1], token file preferred over the variable, invalid URLs and untrusted values fail at load")
+{
+	aws_stub ec2;
+	aws_stub ecs;
+	assert_true(aws_stub_start(&ec2, false));
+	assert_true(aws_stub_start(&ecs, false));
+	stub_one(&ec2, "10.0.0.1");
+	tmp_dir d;
+	assert_true(tmp_create(&d));
+	char* json = aws_json_credentials(CRED_KEY, CRED_SECRET, CRED_TOKEN, CRED_EXPIRATION);
+	aws_stub_http(&ecs, 200, NULL, json);
+
+	fake_env f;
+	fake_init(&f, 0, ecs.port, 0);
+	fake_set(&f, "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/v2/credentials/abc?id=1");
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN", ECS_AUTHORIZATION);
+
+	char buf[512];
+	char value[256];
+	log_start();
+	as_status status = cred_once(&ec2, &f, buf, sizeof(buf));
+	log_stop();
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(signed_with(&ec2, 0, CRED_KEY, CRED_SECRET, CRED_TOKEN));
+	assert_true(log_find(AS_LOG_LEVEL_INFO, "AWS EC2 seed provider credentials from ecs") >= 0);
+	assert_true(request_is(&ecs, 0, "GET", "/ecs/v2/credentials/abc?id=1"));
+	assert_int_eq(request_header(&ecs, 0, "authorization", value, sizeof(value)), 1);
+	assert_string_eq(value, ECS_AUTHORIZATION);
+	assert_int_eq(request_header(&ecs, 0, "content-length", NULL, 0), 0);
+
+	// A full URI with a query and a token file, which wins over the variable.
+	char full[96];
+	snprintf(full, sizeof(full), "http://127.0.0.1:%u/full?x=1", ecs.port);
+	fake_init(&f, 0, 0, 0);
+	fake_set(&f, "AWS_CONTAINER_CREDENTIALS_FULL_URI", full);
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
+		tmp_text(&d, "ecs-token", ECS_AUTHORIZATION "-file\n"));
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN", "ignored");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_true(request_is(&ecs, 1, "GET", "/full?x=1"));
+	assert_int_eq(request_header(&ecs, 1, "authorization", value, sizeof(value)), 1);
+	assert_string_eq(value, ECS_AUTHORIZATION "-file");
+
+	// A token with a scheme keeps its inner space, as in Java and the AWS SDKs.
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", NULL);
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN", " Bearer " ECS_AUTHORIZATION " ");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_int_eq(request_header(&ecs, 2, "authorization", value, sizeof(value)), 1);
+	assert_string_eq(value, "Bearer " ECS_AUTHORIZATION);
+
+	// A token variable of only spaces sends no authorization.
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN", "   ");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_int_eq(request_header(&ecs, 3, "authorization", NULL, 0), 0);
+
+	aws_stub ecs6;
+
+	if (aws_stub_start(&ecs6, true)) {
+		aws_stub_http(&ecs6, 200, NULL, json);
+		snprintf(full, sizeof(full), "http://[::1]:%u/creds", ecs6.port);
+		fake_set(&f, "AWS_CONTAINER_CREDENTIALS_FULL_URI", full);
+		assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_OK);
+		assert_int_eq(aws_stub_requests(&ecs6), 1);
+		aws_stub_stop(&ecs6);
+	}
+	else {
+		info("skipped the [::1] full URI: no IPv6 loopback");
+	}
+	snprintf(full, sizeof(full), "http://127.0.0.1:%u/creds", ecs.port);
+	fake_set(&f, "AWS_CONTAINER_CREDENTIALS_FULL_URI", full);
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN", NULL);
+
+	aws_stub_set_http(&ecs, 401, NULL, "unauthorized");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: HTTP 401");
+
+	// Invalid URLs do not fail construction; they fail the ECS load.
+	uint32_t ecs_requests = aws_stub_requests(&ecs);
+	fake_set(&f, "AWS_CONTAINER_CREDENTIALS_FULL_URI", "not a url");
+	fake_set(&f, "AWS_ACCESS_KEY_ID", "AKIDENVIRONMENT");
+	fake_set(&f, "AWS_SECRET_ACCESS_KEY", "environment/secret");
+	uint32_t ec2_requests = aws_stub_requests(&ec2);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_true(signed_with(&ec2, ec2_requests, "AKIDENVIRONMENT", "environment/secret", NULL));
+	fake_set(&f, "AWS_ACCESS_KEY_ID", NULL);
+	fake_set(&f, "AWS_SECRET_ACCESS_KEY", NULL);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: invalid URL");
+
+	fake_init(&f, 0, ecs.port, 0);
+	fake_set(&f, "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", ".example.com/creds");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: invalid URL");
+	assert_int_eq(aws_stub_requests(&ecs), ecs_requests);
+
+	// Untrusted tokens fail before the request.
+	aws_stub_set_http(&ecs, 200, NULL, json);
+	fake_set(&f, "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/creds");
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", tmp_text(&d, "cr-token", "abc\rdef\n"));
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: invalid authorization "
+		"token");
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", NULL);
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN", "abc\r\nx-injected: 1");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: invalid authorization "
+		"token");
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN", "abc\tdef");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: invalid authorization "
+		"token");
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN", "abc\xc3\xa9");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: invalid authorization "
+		"token");
+	char missing[128];
+	snprintf(missing, sizeof(missing), "%s/missing", d.path);
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", missing);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: failed to read "
+		"AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE: No such file or directory");
+	assert_int_eq(aws_stub_requests(&ecs), ecs_requests);
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", NULL);
+	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN", NULL);
+
+	// Untrusted or incomplete responses fail before DescribeInstances.
+	char* bad_key = aws_json_credentials("AKID-BAD", CRED_SECRET, CRED_TOKEN, CRED_EXPIRATION);
+	char* no_expiration = aws_json_credentials(CRED_KEY, CRED_SECRET, CRED_TOKEN, NULL);
+	char* no_secret = aws_json_credentials(CRED_KEY, NULL, CRED_TOKEN, CRED_EXPIRATION);
+	char* epoch = aws_json_credentials(CRED_KEY, CRED_SECRET, CRED_TOKEN, "1970-01-01T00:00:00Z");
+	char* cr_token = aws_json_credentials(CRED_KEY, CRED_SECRET, "tok\\r\\nen", CRED_EXPIRATION);
+	char* bad_secret = aws_json_credentials(CRED_KEY, "sec ret", CRED_TOKEN, CRED_EXPIRATION);
+	const char* bodies[] = {bad_key, no_expiration, no_secret, epoch, cr_token, "not json", "",
+		bad_secret};
+	const char* messages[] = {
+		"AWS EC2 seed provider: ECS credentials returned an invalid access key id",
+		"AWS EC2 seed provider: ECS credentials response has no credentials",
+		"AWS EC2 seed provider: ECS credentials response has no credentials",
+		"AWS EC2 seed provider: ECS credentials returned an invalid expiration",
+		"AWS EC2 seed provider: ECS credentials returned an invalid session token",
+		"AWS EC2 seed provider: invalid ECS credentials response",
+		"AWS EC2 seed provider: invalid ECS credentials response",
+		"AWS EC2 seed provider: ECS credentials returned an invalid secret access key"
+	};
+	ec2_requests = aws_stub_requests(&ec2);
+
+	for (uint32_t i = 0; i < 8; i++) {
+		aws_stub_set_http(&ecs, 200, NULL, bodies[i]);
+		status = cred_once(&ec2, &f, buf, sizeof(buf));
+
+		if (status != AEROSPIKE_ERR_SEED_DISCOVERY_FAILED || strcmp(buf, messages[i]) != 0) {
+			fail("body %u: %d \"%s\"", i, status, buf);
+		}
+	}
+	assert_int_eq(aws_stub_requests(&ec2), ec2_requests);
+
+	free(bad_secret);
+	free(cr_token);
+	free(epoch);
+	free(no_secret);
+	free(no_expiration);
+	free(bad_key);
+	free(json);
+	tmp_destroy(&d);
+	aws_stub_stop(&ecs);
+	aws_stub_stop(&ec2);
+}
+
+// Refresh the provider and return the message, or the hosts on success.
+static const char*
+cred_step(as_seed_provider* provider, char* buf, size_t size)
+{
+	cred_refresh(provider, buf, size);
+	return buf;
+}
+
+TEST(aws_cred_imds, "D-14 IMDSv2: token PUT, cached role, credentials GET; a 404 drops the role; empty, invalid and failed responses fail cleanly; disabled case-insensitively")
+{
+	aws_stub ec2;
+	aws_stub imds;
+	assert_true(aws_stub_start(&ec2, false));
+	assert_true(aws_stub_start(&imds, false));
+	stub_one(&ec2, "10.0.0.1");
+	char* json = aws_json_credentials(CRED_KEY, CRED_SECRET, CRED_TOKEN, CRED_EXPIRATION);
+	const char* role_path = IMDS_ROLES_PATH AWS_STUB_IMDS_ROLE;
+
+	fake_env f;
+	fake_init(&f, 0, 0, imds.port);
+	f.now_ms = CRED_NOW_MS;
+	aws_stub_imds(&imds, AWS_STUB_IMDS_ROLE "\nsecond-role\n", json);
+	aws_stub_imds(&imds, NULL, json);
+
+	char buf[512];
+	char value[256];
+	as_seed_provider provider;
+	assert_int_eq(cred_provider(&ec2, &f, &provider, buf, sizeof(buf)), AEROSPIKE_OK);
+	log_start();
+	as_status status = cred_refresh(&provider, buf, sizeof(buf));
+	log_stop();
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(signed_with(&ec2, 0, CRED_KEY, CRED_SECRET, CRED_TOKEN));
+	assert_true(log_find(AS_LOG_LEVEL_INFO, "AWS EC2 seed provider credentials from imds") >= 0);
+
+	assert_true(request_is(&imds, 0, "PUT", "/latest/api/token"));
+	assert_int_eq(request_header(&imds, 0, "x-aws-ec2-metadata-token-ttl-seconds", value,
+		sizeof(value)), 1);
+	assert_string_eq(value, "21600");
+	assert_int_eq(request_header(&imds, 0, "content-length", value, sizeof(value)), 1);
+	assert_string_eq(value, "0");
+	assert_int_eq(request_header(&imds, 0, "x-aws-ec2-metadata-token", NULL, 0), 0);
+	assert_true(request_is(&imds, 1, "GET", IMDS_ROLES_PATH));
+	assert_true(request_is(&imds, 2, "GET", role_path));
+
+	for (uint32_t i = 1; i <= 2; i++) {
+		assert_int_eq(request_header(&imds, i, "x-aws-ec2-metadata-token", value, sizeof(value)),
+			1);
+		assert_string_eq(value, AWS_STUB_IMDS_TOKEN);
+		assert_int_eq(request_header(&imds, i, "content-length", NULL, 0), 0);
+	}
+
+	// The role is cached: the next load sends the token PUT and the credentials GET only.
+	f.now_ms = CRED_EXPIRATION_MS - 300000;
+	assert_int_eq(cred_refresh(&provider, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_int_eq(aws_stub_requests(&imds), 5);
+	assert_true(request_is(&imds, 3, "PUT", "/latest/api/token"));
+	assert_true(request_is(&imds, 4, "GET", role_path));
+	provider.destroy(provider.udata);
+
+	// A 404 on the first resolution: the combined message; the next load lists the role again.
+	aws_stub_reset(&imds);
+	f.now_ms = CRED_NOW_MS;
+	aws_stub_http(&imds, 200, NULL, AWS_STUB_IMDS_TOKEN);
+	aws_stub_http(&imds, 200, NULL, AWS_STUB_IMDS_ROLE);
+	aws_stub_http(&imds, 404, NULL, "");
+	aws_stub_imds(&imds, AWS_STUB_IMDS_ROLE, json);
+	assert_int_eq(cred_provider(&ec2, &f, &provider, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_string_eq(cred_step(&provider, buf, sizeof(buf)),
+		CRED_NO_SOURCE "IMDS credentials failed: HTTP 404");
+	assert_string_eq(cred_step(&provider, buf, sizeof(buf)), "10.0.0.1:3000");
+	assert_int_eq(aws_stub_requests(&imds), 6);
+	assert_true(request_is(&imds, 4, "GET", IMDS_ROLES_PATH));
+	provider.destroy(provider.udata);
+
+	// A 404 on a reload after expiry: the plain message; the next load lists the role again.
+	aws_stub_reset(&imds);
+	aws_stub_imds(&imds, AWS_STUB_IMDS_ROLE, json);
+	aws_stub_http(&imds, 200, NULL, AWS_STUB_IMDS_TOKEN);
+	aws_stub_http(&imds, 404, NULL, "");
+	aws_stub_imds(&imds, AWS_STUB_IMDS_ROLE, json);
+	assert_int_eq(cred_provider(&ec2, &f, &provider, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_string_eq(cred_step(&provider, buf, sizeof(buf)), "10.0.0.1:3000");
+	f.now_ms = CRED_EXPIRATION_MS;
+	assert_string_eq(cred_step(&provider, buf, sizeof(buf)),
+		"AWS EC2 seed provider: IMDS credentials failed: HTTP 404");
+	assert_string_eq(cred_step(&provider, buf, sizeof(buf)), "10.0.0.1:3000");
+	assert_int_eq(aws_stub_requests(&imds), 8);
+	assert_true(request_is(&imds, 4, "GET", role_path));
+	assert_true(request_is(&imds, 6, "GET", IMDS_ROLES_PATH));
+	provider.destroy(provider.udata);
+	f.now_ms = CRED_NOW_MS;
+
+	// Failures of one load, each with the number of IMDS requests it makes.
+	char* failure = aws_strf("{\"Code\":\"AssumeRoleUnauthorizedAccess\",\"AccessKeyId\":\"%s\","
+		"\"SecretAccessKey\":\"%s\",\"Expiration\":\"%s\"}", CRED_KEY, CRED_SECRET,
+		CRED_EXPIRATION);
+	char* cr_token = aws_json_credentials(CRED_KEY, CRED_SECRET, "tok\\ren", CRED_EXPIRATION);
+	static const struct {
+		int token_status;
+		const char* token;
+		int role_status;
+		const char* role;
+		uint32_t requests;
+		const char* message;
+	} cases[] = {
+		{403, "", 0, NULL, 1, "IMDS token failed: HTTP 403"},
+		{200, "", 0, NULL, 1, "IMDS token returned an invalid token"},
+		{200, " \n", 0, NULL, 1, "IMDS token returned an invalid token"},
+		{200, "tok en", 0, NULL, 1, "IMDS token returned an invalid token"},
+		{200, AWS_STUB_IMDS_TOKEN, 404, "", 2, "IMDS role failed: HTTP 404 (no instance profile "
+			"attached?)"},
+		{200, AWS_STUB_IMDS_TOKEN, 200, "", 2, "IMDS returned no instance profile role"},
+		{200, AWS_STUB_IMDS_TOKEN, 200, " \r\n", 2, "IMDS returned no instance profile role"},
+		{200, AWS_STUB_IMDS_TOKEN, 200, "a/b", 2, "IMDS role returned an invalid role name"},
+		{200, AWS_STUB_IMDS_TOKEN, 200, ".", 2, "IMDS role returned an invalid role name"},
+		{200, AWS_STUB_IMDS_TOKEN, 200, "..", 2, "IMDS role returned an invalid role name"},
+		{200, AWS_STUB_IMDS_TOKEN, 200, "a?b", 2, "IMDS role returned an invalid role name"},
+		{200, AWS_STUB_IMDS_TOKEN, 200, AWS_STUB_IMDS_ROLE, 3, NULL},
+		{200, AWS_STUB_IMDS_TOKEN, 200, AWS_STUB_IMDS_ROLE, 3, NULL}
+	};
+	const char* last_bodies[] = {failure, cr_token};
+	const char* last_messages[] = {
+		"IMDS credentials failed: AssumeRoleUnauthorizedAccess",
+		"IMDS credentials returned an invalid session token"
+	};
+	uint32_t ec2_requests = aws_stub_requests(&ec2);
+
+	for (uint32_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+		aws_stub_reset(&imds);
+		aws_stub_http(&imds, cases[i].token_status, NULL, cases[i].token);
+
+		if (cases[i].role) {
+			aws_stub_http(&imds, cases[i].role_status, NULL, cases[i].role);
+		}
+
+		const char* message = cases[i].message;
+
+		if (!message) {
+			uint32_t last = i - (sizeof(cases) / sizeof(cases[0]) - 2);
+			aws_stub_http(&imds, 200, NULL, last_bodies[last]);
+			message = last_messages[last];
+		}
+
+		char expected[300];
+		snprintf(expected, sizeof(expected), CRED_NO_SOURCE "%s", message);
+		status = cred_once(&ec2, &f, buf, sizeof(buf));
+
+		if (status != AEROSPIKE_ERR_SEED_DISCOVERY_FAILED || strcmp(buf, expected) != 0 ||
+			aws_stub_requests(&imds) != cases[i].requests) {
+			fail("case %u: %d \"%s\" after %u requests", i, status, buf,
+				aws_stub_requests(&imds));
+		}
+	}
+	assert_int_eq(aws_stub_requests(&ec2), ec2_requests);
+
+	// A missing Code is accepted.
+	aws_stub_reset(&imds);
+	char* no_code = aws_strf("{\"AccessKeyId\":\"AKIDNOCODE\",\"SecretAccessKey\":\"%s\","
+		"\"Expiration\":\"%s\"}", CRED_SECRET, CRED_EXPIRATION);
+	aws_stub_imds(&imds, AWS_STUB_IMDS_ROLE, no_code);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_true(signed_with(&ec2, ec2_requests, "AKIDNOCODE", CRED_SECRET, NULL));
+
+	// Disabled, case-insensitively, before any request; any other value leaves it enabled.
+	aws_stub_reset(&imds);
+	fake_set(&f, "AWS_EC2_METADATA_DISABLED", "TRUE");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, CRED_DISABLED);
+	assert_int_eq(aws_stub_requests(&imds), 0);
+	aws_stub_imds(&imds, AWS_STUB_IMDS_ROLE, json);
+	fake_set(&f, "AWS_EC2_METADATA_DISABLED", "false");
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_OK);
+
+	free(no_code);
+	free(cr_token);
+	free(failure);
+	free(json);
+	aws_stub_stop(&imds);
+	aws_stub_stop(&ec2);
+}
+
+TEST(aws_cred_order, "the chain resolves in Java's order: environment, profile, web identity, ECS, IMDS; a higher source wins over running lower ones")
+{
+	aws_stub ec2;
+	aws_stub sts;
+	aws_stub ecs;
+	aws_stub imds;
+	assert_true(aws_stub_start(&ec2, false));
+	assert_true(aws_stub_start(&sts, false));
+	assert_true(aws_stub_start(&ecs, false));
+	assert_true(aws_stub_start(&imds, false));
+	stub_one(&ec2, "10.0.0.1");
+
+	char* xml = aws_xml_sts("AKIDSTS", CRED_SECRET, CRED_TOKEN, CRED_EXPIRATION);
+	aws_stub_http(&sts, 200, NULL, xml);
+	char* ecs_json = aws_json_credentials("AKIDECS", CRED_SECRET, CRED_TOKEN, CRED_EXPIRATION);
+	aws_stub_http(&ecs, 200, NULL, ecs_json);
+	char* imds_json = aws_json_credentials("AKIDIMDS", CRED_SECRET, CRED_TOKEN, CRED_EXPIRATION);
+	aws_stub_imds(&imds, AWS_STUB_IMDS_ROLE, imds_json);
+
+	tmp_dir d;
+	assert_true(tmp_create(&d));
+	tmp_mkdir(&d, ".aws");
+	tmp_text(&d, ".aws/credentials", "[default]\naws_access_key_id=AKIAPROFILE\n"
+		"aws_secret_access_key=profile-secret\n");
+	const char* token_file = tmp_text(&d, "token", WEB_TOKEN);
+
+	static const struct {
+		const char* key;
+		const char* secret;
+		const char* token;
+		const char* label;
+	} expect[] = {
+		{"AKIDENV", "env-secret", NULL, "environment"},
+		{"AKIAPROFILE", "profile-secret", NULL, "profile"},
+		{"AKIDSTS", CRED_SECRET, CRED_TOKEN, "web-identity"},
+		{"AKIDECS", CRED_SECRET, CRED_TOKEN, "ecs"},
+		{"AKIDIMDS", CRED_SECRET, CRED_TOKEN, "imds"}
+	};
+
+	for (uint32_t step = 0; step < 5; step++) {
+		fake_env f;
+		fake_init(&f, sts.port, ecs.port, imds.port);
+
+		if (step == 0) {
+			fake_set(&f, "AWS_ACCESS_KEY_ID", "AKIDENV");
+			fake_set(&f, "AWS_SECRET_ACCESS_KEY", "env-secret");
+		}
+
+		if (step <= 1) {
+			f.env.home = d.path;
+		}
+
+		if (step <= 2) {
+			fake_set(&f, "AWS_WEB_IDENTITY_TOKEN_FILE", token_file);
+			fake_set(&f, "AWS_ROLE_ARN", ROLE_ARN);
+		}
+
+		if (step <= 3) {
+			fake_set(&f, "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/creds");
+		}
+
+		char buf[512];
+		char label[128];
+		snprintf(label, sizeof(label), "AWS EC2 seed provider credentials from %s",
+			expect[step].label);
+		log_start();
+		as_status status = cred_once(&ec2, &f, buf, sizeof(buf));
+		log_stop();
+
+		if (status != AEROSPIKE_OK || log_find(AS_LOG_LEVEL_INFO, label) < 0 ||
+			!signed_with(&ec2, step, expect[step].key, expect[step].secret, expect[step].token)) {
+			fail("step %u (%s): %d \"%s\"", step, expect[step].label, status, buf);
+		}
+	}
+	assert_int_eq(aws_stub_requests(&sts), 1);
+	assert_int_eq(aws_stub_requests(&ecs), 1);
+	assert_int_eq(aws_stub_requests(&imds), 3);
+
+	tmp_destroy(&d);
+	free(imds_json);
+	free(ecs_json);
+	free(xml);
+	aws_stub_stop(&imds);
+	aws_stub_stop(&ecs);
+	aws_stub_stop(&sts);
+	aws_stub_stop(&ec2);
+}
+
+TEST(aws_cred_cache, "credentials refresh five minutes before expiry, a failed reload keeps unexpired ones with a warning, an expired cache propagates the error; no underflow")
+{
+	aws_stub ec2;
+	aws_stub ecs;
+	assert_true(aws_stub_start(&ec2, false));
+	assert_true(aws_stub_start(&ecs, false));
+	stub_one(&ec2, "10.0.0.1");
+	char* json = aws_json_credentials(CRED_KEY, CRED_SECRET, CRED_TOKEN, CRED_EXPIRATION);
+	aws_stub_http(&ecs, 200, NULL, json);
+
+	fake_env f;
+	fake_init(&f, 0, ecs.port, 0);
+	fake_set(&f, "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/creds");
+	f.now_ms = CRED_NOW_MS;
+
+	char buf[512];
+	as_seed_provider provider;
+	assert_int_eq(cred_provider(&ec2, &f, &provider, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_int_eq(cred_refresh(&provider, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_int_eq(aws_stub_requests(&ecs), 1);
+
+	f.now_ms = CRED_EXPIRATION_MS - 300000 - 1;
+	assert_int_eq(cred_refresh(&provider, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_int_eq(aws_stub_requests(&ecs), 1);
+
+	f.now_ms = CRED_EXPIRATION_MS - 300000;
+	assert_int_eq(cred_refresh(&provider, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_int_eq(aws_stub_requests(&ecs), 2);
+
+	// A failed reload while the cached credentials are unexpired: warning and reuse.
+	aws_stub_set_http(&ecs, 500, NULL, "boom");
+	f.now_ms = CRED_EXPIRATION_MS - 1000;
+	log_start();
+	as_status status = cred_refresh(&provider, buf, sizeof(buf));
+	log_stop();
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(aws_stub_requests(&ecs), 3);
+	assert_true(log_find(AS_LOG_LEVEL_WARN, "AWS EC2 seed provider: credentials refresh from ecs "
+		"failed, using cached credentials until they expire: AWS EC2 seed provider: ECS "
+		"credentials failed: HTTP 500") >= 0);
+	assert_true(signed_with(&ec2, aws_stub_requests(&ec2) - 1, CRED_KEY, CRED_SECRET,
+		CRED_TOKEN));
+
+	// Once expired, the error propagates.
+	f.now_ms = CRED_EXPIRATION_MS;
+	assert_int_eq(cred_refresh(&provider, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: HTTP 500");
+	provider.destroy(provider.udata);
+
+	// A hook expiry 1 ms after the epoch is reloaded at the next refresh.
+	char url[64];
+	as_aws_seed_provider_config cfg;
+	hook_state h;
+	cred_cfg(&cfg, &ec2, url, sizeof(url));
+	hook_init(&h, &cfg);
+	h.expiration_ms = 1;
+	as_error err;
+	assert_int_eq(as_discovery_aws_seed_provider_env(&err, &cfg, &f.env, &provider), AEROSPIKE_OK);
+	assert_int_eq(cred_refresh(&provider, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_int_eq(cred_refresh(&provider, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_int_eq(h.gets, 2);
+	provider.destroy(provider.udata);
+	assert_int_eq(h.destroys, 1);
+
+	free(json);
+	aws_stub_stop(&ecs);
+	aws_stub_stop(&ec2);
+}
+
+static as_status
+hook_provider(aws_stub* ec2, fake_env* f, hook_state* h, uint32_t timeout_ms,
+	as_seed_provider* provider)
+{
+	char url[64];
+	as_aws_seed_provider_config cfg;
+	cred_cfg(&cfg, ec2, url, sizeof(url));
+	cfg.timeout_ms = timeout_ms;
+	hook_init(h, &cfg);
+	as_error err;
+	return as_discovery_aws_seed_provider_env(&err, &cfg, &f->env, provider);
+}
+
+TEST(aws_cred_hook, "D-14 the hook replaces the chain, gets the remaining budget, caches by expiry, reports redacted errors and fails a late return while caching its result")
+{
+	aws_stub ec2;
+	aws_stub imds;
+	assert_true(aws_stub_start(&ec2, false));
+	assert_true(aws_stub_start(&imds, false));
+	stub_one(&ec2, "10.0.0.1");
+
+	fake_env f;
+	fake_init(&f, 0, 0, imds.port);
+	f.now_ms = CRED_NOW_MS;
+
+	// A first expiry within the margin, then 60 minutes: two calls in three refreshes.
+	hook_state h;
+	as_seed_provider provider;
+	char buf[512];
+	assert_int_eq(hook_provider(&ec2, &f, &h, 1000, &provider), AEROSPIKE_OK);
+	assert_int_eq(f.calls, 0);
+	h.expiration_ms = CRED_NOW_MS + 60000;
+	h.later_expiration_ms = CRED_NOW_MS + 3600000;
+	log_start();
+
+	for (uint32_t i = 0; i < 3; i++) {
+		if (cred_refresh(&provider, buf, sizeof(buf)) != AEROSPIKE_OK) {
+			log_stop();
+			fail("refresh %u: %s", i, buf);
+		}
+	}
+	log_stop();
+	assert_int_eq(h.gets, 2);
+	assert_int_eq(log_matches("credentials from"), 1);
+	assert_true(log_find(AS_LOG_LEVEL_INFO, "AWS EC2 seed provider credentials from hook") >= 0);
+	assert_true(h.last_timeout_ms <= 1000 && h.last_timeout_ms + 50 >= 1000);
+	assert_int_eq(aws_stub_accepts(&imds), 0);
+
+	for (uint32_t i = 0; i < 3; i++) {
+		assert_true(signed_with(&ec2, i, h.key, h.secret, h.token));
+	}
+	provider.destroy(provider.udata);
+	assert_int_eq(h.destroys, 1);
+
+	// Errors: the hook's message, its status when the message is empty, and no credentials.
+	assert_int_eq(hook_provider(&ec2, &f, &h, 1000, &provider), AEROSPIKE_OK);
+	h.status = AEROSPIKE_ERR_CLIENT;
+	h.message = "vault unavailable";
+	assert_string_eq(cred_step(&provider, buf, sizeof(buf)),
+		"AWS EC2 seed provider: credentials hook failed: vault unavailable");
+	h.message = NULL;
+	assert_string_eq(cred_step(&provider, buf, sizeof(buf)),
+		"AWS EC2 seed provider: credentials hook failed: status -1");
+	h.status = AEROSPIKE_OK;
+	h.key = NULL;
+	assert_string_eq(cred_step(&provider, buf, sizeof(buf)),
+		"AWS EC2 seed provider: credentials hook returned no credentials");
+	provider.destroy(provider.udata);
+
+	// The secret the hook set before failing and the cached session token are redacted.
+	assert_int_eq(hook_provider(&ec2, &f, &h, 1000, &provider), AEROSPIKE_OK);
+	h.token = "cached-session-token";
+	h.expiration_ms = CRED_NOW_MS + 60000;
+	assert_string_eq(cred_step(&provider, buf, sizeof(buf)), "10.0.0.1:3000");
+	f.now_ms = CRED_NOW_MS + 60000;
+	h.secret = "new/secret";
+	h.token = "new-session-token";
+	h.status = AEROSPIKE_ERR_CLIENT;
+	h.message = "denied for new/secret after cached-session-token and new-session-token";
+	assert_string_eq(cred_step(&provider, buf, sizeof(buf)), "AWS EC2 seed provider: credentials "
+		"hook failed: denied for <redacted> after <redacted> and <redacted>");
+	provider.destroy(provider.udata);
+	f.now_ms = CRED_NOW_MS;
+
+	// A late success fails this refresh, resolves the source and is used by the next refresh.
+	const uint32_t timeout = 200;
+	assert_int_eq(hook_provider(&ec2, &f, &h, timeout, &provider), AEROSPIKE_OK);
+	h.sleep_ms = timeout + 100;
+	uint32_t ec2_requests = aws_stub_requests(&ec2);
+	log_start();
+	uint64_t start = cf_getms();
+	as_status status = cred_refresh(&provider, buf, sizeof(buf));
+	uint64_t elapsed = cf_getms() - start;
+	log_stop();
+	info("late hook: %" PRIu64 " ms (timeout_ms %u, hook sleep %u)", elapsed, timeout,
+		h.sleep_ms);
+	char expected[128];
+	snprintf(expected, sizeof(expected), "AWS EC2 seed provider: credentials hook timed out after "
+		"%ums", h.last_timeout_ms);
+	assert_int_eq(status, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_string_eq(buf, expected);
+	assert_true(h.last_timeout_ms <= timeout && h.last_timeout_ms + 50 >= timeout);
+	assert_true(elapsed <= h.sleep_ms + AWS_MARGIN_MS);
+	assert_int_eq(log_matches("credentials from hook"), 1);
+	assert_int_eq(aws_stub_requests(&ec2), ec2_requests);
+	h.sleep_ms = 0;
+	assert_int_eq(cred_refresh(&provider, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_int_eq(h.gets, 1);
+	assert_true(signed_with(&ec2, ec2_requests, h.key, h.secret, h.token));
+	provider.destroy(provider.udata);
+
+	// A late error caches nothing and resolves nothing.
+	assert_int_eq(hook_provider(&ec2, &f, &h, timeout, &provider), AEROSPIKE_OK);
+	h.sleep_ms = timeout + 50;
+	h.status = AEROSPIKE_ERR_CLIENT;
+	h.message = "late failure";
+	log_start();
+	status = cred_refresh(&provider, buf, sizeof(buf));
+	log_stop();
+	assert_int_eq(status, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_not_null(strstr(buf, "credentials hook timed out after "));
+	assert_int_eq(log_matches("credentials from"), 0);
+	h.sleep_ms = 0;
+	h.status = AEROSPIKE_OK;
+	assert_int_eq(cred_refresh(&provider, buf, sizeof(buf)), AEROSPIKE_OK);
+	assert_int_eq(h.gets, 2);
+	provider.destroy(provider.udata);
+
+	// Credentials without an expiry: get once across ten refreshes.
+	assert_int_eq(hook_provider(&ec2, &f, &h, 1000, &provider), AEROSPIKE_OK);
+
+	for (uint32_t i = 0; i < 10; i++) {
+		assert_int_eq(cred_refresh(&provider, buf, sizeof(buf)), AEROSPIKE_OK);
+	}
+	assert_int_eq(h.gets, 1);
+	provider.destroy(provider.udata);
+	assert_int_eq(h.destroys, 1);
+	assert_int_eq(aws_stub_accepts(&imds), 0);
+
+	aws_stub_stop(&imds);
+	aws_stub_stop(&ec2);
+}
+
+//---------------------------------
 // Tests: deadlines, threads and descriptors
 //---------------------------------
 
@@ -1931,7 +3751,7 @@ timed_refresh(aws_stub* s, bool tls, const char* ca_file, uint32_t timeout_ms, u
 	return buf;
 }
 
-TEST(aws_deadline_unanswered, "D-14 a silent endpoint, a stalled handshake, a trickled body and slow pages each end within timeout_ms")
+TEST(aws_deadline_unanswered, "D-14 a silent endpoint, a stalled handshake, a trickled body, slow pages and silent STS, ECS and IMDS endpoints each end within timeout_ms")
 {
 	aws_certs certs;
 	assert_true(aws_certs_create(&certs));
@@ -1984,6 +3804,66 @@ TEST(aws_deadline_unanswered, "D-14 a silent endpoint, a stalled handshake, a tr
 			fail("slow pages: %u requests", aws_stub_requests(&s));
 		}
 	}
+
+	// Silent credential endpoints: STS, ECS, and IMDS as the only source.
+	aws_stub ec2;
+	assert_true(aws_stub_start(&ec2, false));
+	stub_one(&ec2, "10.0.0.1");
+	tmp_dir d;
+	assert_true(tmp_create(&d));
+	const char* token_file = tmp_text(&d, "token", WEB_TOKEN);
+
+	for (int variant = 0; variant < 3; variant++) {
+		static const char* const names[] = {"silent STS", "silent ECS", "silent IMDS"};
+		static const char* const messages[] = {
+			"AWS EC2 seed provider: STS AssumeRoleWithWebIdentity timed out",
+			"AWS EC2 seed provider: ECS credentials timed out",
+			CRED_NO_SOURCE "IMDS token timed out"
+		};
+		aws_stub_reset(&s);
+		aws_stub_set_tls(&s, NULL);
+		aws_reply reply = {.mode = AWS_REPLY_SILENT};
+		aws_stub_reply(&s, &reply);
+
+		fake_env f;
+		fake_init(&f, variant == 0 ? s.port : 0, variant == 1 ? s.port : 0,
+			variant == 2 ? s.port : 0);
+
+		if (variant == 0) {
+			fake_set(&f, "AWS_WEB_IDENTITY_TOKEN_FILE", token_file);
+			fake_set(&f, "AWS_ROLE_ARN", ROLE_ARN);
+		}
+		else if (variant == 1) {
+			fake_set(&f, "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/creds");
+		}
+
+		char url[64];
+		as_aws_seed_provider_config cfg;
+		cred_cfg(&cfg, &ec2, url, sizeof(url));
+		cfg.timeout_ms = timeout;
+		as_seed_provider provider;
+		as_error err;
+		assert_int_eq(as_discovery_aws_seed_provider_env(&err, &cfg, &f.env, &provider),
+			AEROSPIKE_OK);
+
+		char buf[1100];
+		uint64_t start = cf_getms();
+		cred_refresh(&provider, buf, sizeof(buf));
+		uint64_t elapsed = cf_getms() - start;
+		provider.destroy(provider.udata);
+		info("%s: %" PRIu64 " ms (timeout_ms %u)", names[variant], elapsed, timeout);
+
+		if (strcmp(buf, messages[variant]) != 0) {
+			fail("%s: got \"%s\"", names[variant], buf);
+		}
+
+		if (elapsed + 5 < timeout || elapsed > timeout + AWS_MARGIN_MS) {
+			fail("%s: took %" PRIu64 " ms", names[variant], elapsed);
+		}
+	}
+	assert_int_eq(aws_stub_requests(&ec2), 0);
+	tmp_destroy(&d);
+	aws_stub_stop(&ec2);
 
 	free(page);
 	free(doc);
@@ -2510,14 +4390,19 @@ boot_stop(boot_env* env)
 	fnode_stop(&env->a);
 }
 
+// Register aws-tags with static keys, or with a hook when hook is not NULL.
 static as_status
-boot_register(boot_env* env, as_config* config, as_error* err)
+boot_register(boot_env* env, as_config* config, hook_state* hook, as_error* err)
 {
 	char url[64];
 	as_aws_seed_provider_config cfg;
 	aws_cfg(&cfg, stub_url(&env->s, false, "127.0.0.1", url, sizeof(url)));
 	cfg.port = env->a.port;
 	cfg.timeout_ms = 2000;
+
+	if (hook) {
+		hook_init(hook, &cfg);
+	}
 	return as_config_set_aws_seed_provider(config, &cfg, err);
 }
 
@@ -2528,7 +4413,7 @@ boot_once(boot_env* env, char* msg, size_t size)
 	as_error err;
 	client_config(&config);
 
-	if (boot_register(env, &config, &err) != AEROSPIKE_OK) {
+	if (boot_register(env, &config, NULL, &err) != AEROSPIKE_OK) {
 		snprintf(msg, size, "register failed: %.400s", err.message);
 		as_config_destroy(&config);
 		return msg;
@@ -2591,7 +4476,7 @@ TEST(aws_bootstrap, "an EC2-published seed bootstraps the client in thread mode 
 }
 
 static const char*
-boot_close_reconnect(boot_env* env)
+boot_close_reconnect(boot_env* env, hook_state* hook)
 {
 	int before = discovery_thread_count();
 
@@ -2600,7 +4485,7 @@ boot_close_reconnect(boot_env* env)
 	client_config(&config);
 	config.discovery.refresh_interval_ms = 600000;
 
-	if (boot_register(env, &config, &err) != AEROSPIKE_OK) {
+	if (boot_register(env, &config, hook, &err) != AEROSPIKE_OK) {
 		as_config_destroy(&config);
 		return "register failed";
 	}
@@ -2626,6 +4511,9 @@ boot_close_reconnect(boot_env* env)
 	if (!as->config.discovery.provider_registered) {
 		failure = "sync close released the aws-tags registration";
 	}
+	else if (as_load_uint32_acq(&hook->destroys) != 0) {
+		failure = "sync close ran the hook destroy";
+	}
 	else if (before >= 0 && settle(discovery_thread_count, before) != before) {
 		failure = "sync close left the discovery thread running";
 	}
@@ -2640,21 +4528,91 @@ boot_close_reconnect(boot_env* env)
 	if (!failure && before >= 0 && settle(discovery_thread_count, before) != before) {
 		failure = "destroy left the discovery thread running";
 	}
+
+	if (!failure && !wait_count(&hook->destroys, 1, 5000)) {
+		failure = "destroy did not run the hook destroy";
+	}
 	return failure;
 }
 
-TEST(aws_close_reconnect, "sync close keeps the aws-tags registration and reconnect calls EC2 again; destroy releases it")
+TEST(aws_close_reconnect, "sync close keeps the aws-tags registration and reconnect calls EC2 again; destroy releases it and runs the hook destroy once")
 {
 	int fds = fd_count();
 	boot_env env;
 	assert_true(boot_start(&env));
-	const char* failure = boot_close_reconnect(&env);
+	hook_state hook;
+	const char* failure = boot_close_reconnect(&env, &hook);
 	boot_stop(&env);
 
 	if (failure) {
 		fail("%s", failure);
 	}
+	as_sleep(50);
+	assert_int_eq(as_load_uint32_acq(&hook.destroys), 1);
+
+	// The credentials have no expiry, so the reconnect reused them without calling get.
+	assert_int_eq(as_load_uint32_acq(&hook.gets), 1);
 	assert_int_eq(settle(fd_count, fds), fds);
+}
+
+TEST(aws_hook_deferred_destroy, "a hook blocked in get past refresh_timeout_ms blocks neither close nor destroy; its destroy runs once, on the discovery thread, after get returns")
+{
+	boot_env env;
+	assert_true(boot_start(&env));
+
+	const uint32_t refresh_timeout = 300;
+	as_config config;
+	as_error err;
+	client_config(&config);
+	config.discovery.refresh_timeout_ms = refresh_timeout;
+
+	char url[64];
+	as_aws_seed_provider_config cfg;
+	aws_cfg(&cfg, stub_url(&env.s, false, "127.0.0.1", url, sizeof(url)));
+	cfg.port = env.a.port;
+	cfg.timeout_ms = refresh_timeout;
+	hook_state h;
+	hook_init(&h, &cfg);
+
+	// Inside the expiry margin, so every refresh calls get; from the second call get blocks.
+	h.expiration_ms = cf_clock_getabsolute() + 60000;
+	h.sleep_ms = 1500;
+	h.sleep_from = 2;
+	assert_int_eq(as_config_set_aws_seed_provider(&config, &cfg, &err), AEROSPIKE_OK);
+
+	aerospike* as = aerospike_new(&config);
+
+	if (aerospike_connect(as, &err) != AEROSPIKE_OK) {
+		client_close(as);
+		boot_stop(&env);
+		fail("connect failed: %s", err.message);
+	}
+
+	if (!wait_count(&h.gets, 2, 5000)) {
+		client_close(as);
+		boot_stop(&env);
+		fail("the second refresh did not call get");
+	}
+	as_sleep(20);
+
+	uint64_t start = cf_getms();
+	client_close(as);
+	uint64_t elapsed = cf_getms() - start;
+	uint32_t destroys = as_load_uint32_acq(&h.destroys);
+	info("close and destroy with get blocked: %" PRIu64 " ms (refresh_timeout_ms %u)", elapsed,
+		refresh_timeout);
+
+	bool destroyed = wait_count(&h.destroys, 1, 5000);
+	as_sleep(50);
+	boot_stop(&env);
+
+	assert_true(elapsed <= refresh_timeout + AWS_MARGIN_MS);
+	assert_int_eq(destroys, 0);
+	assert_true(destroyed);
+	assert_int_eq(as_load_uint32_acq(&h.destroys), 1);
+	assert_true(h.destroyed_after_get);
+	assert_true(pthread_equal(h.destroy_thread, h.get_thread));
+	assert_false(pthread_equal(h.destroy_thread, pthread_self()));
 }
 
 #else
@@ -2676,6 +4634,11 @@ SUITE(discovery_aws, "pluggable discovery aws-tags seed provider tests")
 	suite_add(aws_config_invalid);
 	suite_add(aws_config_trust_files);
 	suite_add(aws_config_registration);
+	suite_add(aws_hook_ownership);
+	suite_add(aws_credentials_set);
+	suite_add(aws_json_reader);
+	suite_add(aws_ini_reader);
+	suite_add(aws_iso8601);
 	suite_add(aws_sigv4_vectors);
 	suite_add(aws_xml_reader);
 	suite_add(aws_xml_hardening);
@@ -2690,6 +4653,15 @@ SUITE(discovery_aws, "pluggable discovery aws-tags seed provider tests")
 	suite_add(aws_endpoint_forms);
 	suite_add(aws_tls);
 	suite_add(aws_trust_bundle);
+	suite_add(aws_cred_config);
+	suite_add(aws_cred_environment);
+	suite_add(aws_cred_profile);
+	suite_add(aws_cred_web_identity);
+	suite_add(aws_cred_ecs);
+	suite_add(aws_cred_imds);
+	suite_add(aws_cred_order);
+	suite_add(aws_cred_cache);
+	suite_add(aws_cred_hook);
 	suite_add(aws_deadline_unanswered);
 	suite_add(aws_no_thread);
 	suite_add(aws_no_leaked_descriptors);
@@ -2700,6 +4672,7 @@ SUITE(discovery_aws, "pluggable discovery aws-tags seed provider tests")
 	suite_add(aws_init_failure);
 	suite_add(aws_bootstrap);
 	suite_add(aws_close_reconnect);
+	suite_add(aws_hook_deferred_destroy);
 #else
 	suite_add(aws_fake_servers_skipped);
 #endif

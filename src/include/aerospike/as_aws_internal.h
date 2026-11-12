@@ -18,6 +18,7 @@
 
 // Private to the client library and its tests. Not installed.
 
+#include <aerospike/as_discovery.h>
 #include <aerospike/as_error.h>
 #include <aerospike/as_std.h>
 
@@ -73,6 +74,93 @@ typedef struct as_aws_xml_s as_aws_xml;
  * Element of a parsed XML document, valid until the document is destroyed.
  */
 typedef struct as_aws_xml_node_s as_aws_xml_node;
+
+/**
+ * @private
+ * Environment of the AWS EC2 seed provider's credential chain: the injection seam that points
+ * the chain at loopback servers, a fake environment and a fake clock. Production passes NULL,
+ * which is the same as every member NULL. The strings are copied at construction.
+ */
+typedef struct as_aws_env_s {
+	/**
+	 * Return the value of environment variable name, or NULL. Called only during construction.
+	 * NULL reads the process environment.
+	 */
+	const char* (*getenv)(const char* name, void* udata);
+
+	/**
+	 * Home directory. NULL reads HOME (USERPROFILE on Windows) through getenv; only when getenv
+	 * is NULL does an unset or empty HOME fall back to the passwd entry (POSIX).
+	 */
+	const char* home;
+
+	/**
+	 * STS base URL, which may carry a path. NULL: https://sts.<region>.amazonaws.com[.cn].
+	 */
+	const char* sts_base;
+
+	/**
+	 * Base URL that AWS_CONTAINER_CREDENTIALS_RELATIVE_URI is appended to. NULL:
+	 * http://169.254.170.2.
+	 */
+	const char* ecs_base;
+
+	/**
+	 * IMDS base URL. NULL: http://169.254.169.254.
+	 */
+	const char* imds_base;
+
+	/**
+	 * Return the wall-clock time in milliseconds since the epoch. NULL: cf_clock_getabsolute().
+	 */
+	uint64_t (*now_ms)(void* udata);
+
+	/**
+	 * Passed to getenv and now_ms. Must outlive the provider when now_ms is set.
+	 */
+	void* udata;
+} as_aws_env;
+
+/**
+ * @private
+ * One key of a flat JSON object.
+ */
+typedef struct as_aws_json_entry_s {
+	char* key;
+	char* value;
+} as_aws_json_entry;
+
+/**
+ * @private
+ * Flat JSON object: entries in the order their keys first appeared.
+ */
+typedef struct as_aws_json_s {
+	as_aws_json_entry* entries;
+	uint32_t size;
+	uint32_t capacity;
+} as_aws_json;
+
+/**
+ * @private
+ * Static keys of one profile of a shared credentials file. NULL when absent.
+ */
+typedef struct as_aws_profile_s {
+	char* access_key_id;
+	char* secret_access_key;
+	char* session_token;
+} as_aws_profile;
+
+//---------------------------------
+// Functions: construction
+//---------------------------------
+
+/**
+ * @private
+ * as_discovery_aws_seed_provider() with an injected environment. env NULL is production.
+ */
+AS_EXTERN as_status
+as_discovery_aws_seed_provider_env(as_error* err, const as_aws_seed_provider_config* config,
+	const as_aws_env* env, as_seed_provider* provider);
 
 //---------------------------------
 // Functions: SigV4 and encoding
@@ -273,6 +361,66 @@ as_aws_xml_text(const as_aws_xml_node* parent, const char* name);
  */
 AS_EXTERN const char*
 as_aws_xml_find(const as_aws_xml_node* node, const char* name);
+
+//---------------------------------
+// Functions: JSON, INI and ISO-8601
+//---------------------------------
+
+/**
+ * @private
+ * Parse one flat JSON object into string values: strings, numbers, true and false; null is
+ * omitted and nested objects and arrays (up to 64 levels) are skipped, so they leave an earlier
+ * value of a repeated key in place; otherwise a repeated key keeps the last value. \u0000, lone
+ * surrogates, short \u sequences, other unknown escapes, NUL bytes, truncation and anything but
+ * whitespace after the object are rejected. Returns false on invalid input or allocation
+ * failure, with json empty.
+ */
+AS_EXTERN bool
+as_aws_json_parse(const uint8_t* data, size_t size, as_aws_json* json);
+
+/**
+ * @private
+ * Return the value of key, or NULL.
+ */
+AS_EXTERN const char*
+as_aws_json_get(const as_aws_json* json, const char* key);
+
+/**
+ * @private
+ * Cleanse and release every entry.
+ */
+AS_EXTERN void
+as_aws_json_destroy(as_aws_json* json);
+
+/**
+ * @private
+ * Read the static keys of profile from a shared credentials file. A leading UTF-8 byte order mark
+ * is skipped. Lines end at LF or CR and are trimmed; blank lines and lines starting with '#' or
+ * ';' are skipped. A line starting with '[' ends the current section; "[name]", optionally
+ * followed by a '#' or ';' comment, starts section name (trimmed; a repeated section is merged),
+ * and any other '[' line starts no section. "key = value" lines split at the first '=', both
+ * sides trimmed, inline comments kept. A repeated key keeps the last value. Only
+ * aws_access_key_id, aws_secret_access_key and aws_session_token are kept. Returns false on
+ * allocation failure, with out empty.
+ */
+AS_EXTERN bool
+as_aws_ini_profile(const char* text, size_t size, const char* profile, as_aws_profile* out);
+
+/**
+ * @private
+ * Cleanse and release the keys.
+ */
+AS_EXTERN void
+as_aws_profile_destroy(as_aws_profile* profile);
+
+/**
+ * @private
+ * Parse YYYY-MM-DDTHH:MM:SS with an optional fraction of 1 to 9 digits (truncated to
+ * milliseconds) and Z or a +HH:MM or -HH:MM offset into milliseconds since the epoch. Fields
+ * out of range and times at or before 1970-01-01T00:00:00Z are rejected.
+ */
+AS_EXTERN bool
+as_aws_iso8601(const char* text, uint64_t* epoch_ms);
 
 #ifdef __cplusplus
 } // end extern "C"

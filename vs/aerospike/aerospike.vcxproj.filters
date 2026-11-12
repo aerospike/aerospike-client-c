@@ -557,6 +557,9 @@
     <ClCompile Include="..\..\src\main\aerospike\as_aws.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\main\aerospike\as_aws_credentials.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\main\aerospike\as_aws_http.c">
       <Filter>Source Files</Filter>
     </ClCompile>

@@ -98,25 +98,67 @@ aws_valid_region(const char* region)
 }
 
 static bool
-aws_alnum(const char* s)
+aws_present(const char* s)
 {
-	for (; *s; s++) {
-		if (!((*s >= 'A' && *s <= 'Z') || (*s >= 'a' && *s <= 'z') || (*s >= '0' && *s <= '9'))) {
-			return false;
-		}
-	}
-	return true;
+	return s && s[0];
 }
 
 static bool
-aws_visible(const char* s)
+aws_hook_present(const as_aws_credentials_hook* hook)
 {
-	for (const unsigned char* p = (const unsigned char*)s; *p; p++) {
-		if (*p < 0x21 || *p > 0x7e) {
-			return false;
-		}
+	return hook->get || hook->destroy || hook->udata;
+}
+
+static as_status
+aws_validate_credentials(as_error* err, const as_aws_seed_provider_config* config)
+{
+	bool key = aws_present(config->access_key_id);
+	bool secret = aws_present(config->secret_access_key);
+	bool token = aws_present(config->session_token);
+	bool hook = aws_hook_present(&config->credentials_hook);
+
+	if (secret && !key) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid AWS EC2 seed provider credentials: access_key_id is empty");
 	}
-	return true;
+
+	if (key && !secret) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid AWS EC2 seed provider credentials: secret_access_key is empty");
+	}
+
+	if (token && !key) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid AWS EC2 seed provider credentials: session_token requires access_key_id and "
+			"secret_access_key");
+	}
+
+	if (hook && (key || token)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid AWS EC2 seed provider credentials: static keys and credentials_hook cannot "
+			"both be set");
+	}
+
+	if (hook && !config->credentials_hook.get) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid AWS EC2 seed provider credentials_hook: get is required");
+	}
+
+	if (key && !as_aws_valid_key(config->access_key_id)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid AWS EC2 seed provider access_key_id: expected letters and digits");
+	}
+
+	if (secret && !as_aws_visible(config->secret_access_key)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid AWS EC2 seed provider secret_access_key: invalid character");
+	}
+
+	if (token && !as_aws_visible(config->session_token)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid AWS EC2 seed provider session_token: invalid character");
+	}
+	return AEROSPIKE_OK;
 }
 
 static as_status
@@ -233,29 +275,7 @@ aws_validate(as_error* err, const as_aws_seed_provider_config* config)
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"Invalid AWS EC2 seed provider ca_path: empty");
 	}
-
-	if (!config->access_key_id || !config->access_key_id[0] || !config->secret_access_key ||
-		!config->secret_access_key[0]) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"Invalid AWS EC2 seed provider credentials: access_key_id and secret_access_key are "
-			"required");
-	}
-
-	if (!aws_alnum(config->access_key_id)) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"Invalid AWS EC2 seed provider access_key_id: expected letters and digits");
-	}
-
-	if (!aws_visible(config->secret_access_key)) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"Invalid AWS EC2 seed provider secret_access_key: invalid character");
-	}
-
-	if (config->session_token && !aws_visible(config->session_token)) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"Invalid AWS EC2 seed provider session_token: invalid character");
-	}
-	return AEROSPIKE_OK;
+	return aws_validate_credentials(err, config);
 }
 
 //---------------------------------
@@ -323,8 +343,20 @@ aws_destroy(void* udata)
 	as_aws_free_secret(st->access_key_id);
 	as_aws_free_secret(st->secret_access_key);
 	as_aws_free_secret(st->session_token);
+	as_aws_chain_destroy(st);
+
+	if (st->hook.destroy) {
+		st->hook.destroy(st->hook.udata);
+	}
 	st->magic = 0;
 	cf_free(st);
+}
+
+// Leave the hook udata with the caller when a constructed state is destroyed unregistered.
+static void
+aws_release_hook(as_aws_state* st)
+{
+	memset(&st->hook, 0, sizeof(as_aws_credentials_hook));
 }
 
 static as_status
@@ -335,7 +367,8 @@ aws_alloc_failed(as_error* err)
 }
 
 static as_status
-aws_create(as_error* err, const as_aws_seed_provider_config* config, as_aws_state** out)
+aws_create(as_error* err, const as_aws_seed_provider_config* config, const as_aws_env* env,
+	as_aws_state** out)
 {
 	as_status status = aws_validate(err, config);
 
@@ -355,16 +388,19 @@ aws_create(as_error* err, const as_aws_seed_provider_config* config, as_aws_stat
 	st->timeout_ms = config->timeout_ms;
 	st->region = cf_strdup(config->region);
 	st->query = aws_query(config);
-	st->access_key_id = cf_strdup(config->access_key_id);
-	st->secret_access_key = cf_strdup(config->secret_access_key);
 
-	bool ok = st->region && st->query && st->access_key_id && st->secret_access_key;
+	bool ok = st->region && st->query;
+
+	if (aws_present(config->access_key_id)) {
+		ok = ok && (st->access_key_id = cf_strdup(config->access_key_id)) &&
+			(st->secret_access_key = cf_strdup(config->secret_access_key));
+	}
 
 	if (config->tls_name) {
 		ok = ok && (st->tls_name = cf_strdup(config->tls_name));
 	}
 
-	if (config->session_token && config->session_token[0]) {
+	if (aws_present(config->session_token)) {
 		ok = ok && (st->session_token = cf_strdup(config->session_token));
 	}
 
@@ -388,6 +424,13 @@ aws_create(as_error* err, const as_aws_seed_provider_config* config, as_aws_stat
 		return aws_alloc_failed(err);
 	}
 
+	status = as_aws_chain_init(err, st, config, env);
+
+	if (status != AEROSPIKE_OK) {
+		aws_destroy(st);
+		return status;
+	}
+
 	status = as_aws_tls_init(err, config->ca_file, config->ca_path, &st->tls);
 
 	if (status != AEROSPIKE_OK) {
@@ -395,6 +438,8 @@ aws_create(as_error* err, const as_aws_seed_provider_config* config, as_aws_stat
 		return status;
 	}
 
+	// After the last failure path, so that no failed construction runs the hook destroy.
+	st->hook = config->credentials_hook;
 	*out = st;
 	return AEROSPIKE_OK;
 }
@@ -428,8 +473,8 @@ aws_compare(const void* a, const void* b)
 
 // Send one DescribeInstances page and parse its body.
 static as_status
-aws_describe(as_error* err, const as_aws_state* st, const char* token, uint64_t deadline,
-	as_aws_xml** out)
+aws_describe(as_error* err, const as_aws_state* st, const as_aws_credentials* credentials,
+	const char* token, uint64_t deadline, as_aws_xml** out)
 {
 	as_aws_buf body;
 	as_aws_buf_init(&body);
@@ -449,7 +494,7 @@ aws_describe(as_error* err, const as_aws_state* st, const char* token, uint64_t 
 
 	char amz_date[AS_AWS_AMZ_DATE_SIZE];
 
-	if (!as_aws_buf_ok(&body) || !as_aws_amz_date(cf_clock_getabsolute(), amz_date)) {
+	if (!as_aws_buf_ok(&body) || !as_aws_amz_date(as_aws_now_ms(st), amz_date)) {
 		as_aws_buf_destroy(&body);
 		return as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
 			"AWS EC2 seed provider: failed to build the DescribeInstances request");
@@ -461,13 +506,13 @@ aws_describe(as_error* err, const as_aws_state* st, const char* token, uint64_t 
 		{"content-type", AWS_FORM},
 		{"host", st->endpoint.host_header},
 		{"x-amz-date", amz_date},
-		{"x-amz-security-token", st->session_token}
+		{"x-amz-security-token", credentials->session_token}
 	};
-	uint32_t headers_size = st->session_token ? 5 : 4;
+	uint32_t headers_size = credentials->session_token ? 5 : 4;
 
-	char* authorization = as_aws_sigv4_authorization(st->access_key_id, st->secret_access_key,
-		"POST", st->endpoint.path, "", headers + 1, headers_size - 1, (const uint8_t*)body.data,
-		body.size, st->region, AWS_SERVICE, amz_date);
+	char* authorization = as_aws_sigv4_authorization(credentials->access_key_id,
+		credentials->secret_access_key, "POST", st->endpoint.path, "", headers + 1,
+		headers_size - 1, (const uint8_t*)body.data, body.size, st->region, AWS_SERVICE, amz_date);
 
 	if (!authorization) {
 		as_aws_buf_destroy(&body);
@@ -477,7 +522,8 @@ aws_describe(as_error* err, const as_aws_state* st, const char* token, uint64_t 
 	headers[0].value = authorization;
 
 	const char* secrets[] = {
-		st->secret_access_key, st->session_token, strrchr(authorization, '=') + 1
+		credentials->secret_access_key, credentials->session_token,
+		strrchr(authorization, '=') + 1
 	};
 	as_aws_http_response response;
 	as_aws_http_rc rc = as_aws_http_request(err, &st->tls, AWS_ACTION, "POST", &st->endpoint,
@@ -542,10 +588,11 @@ aws_refresh(as_error* err, const as_seed_candidate_context* context,
 	}
 
 	uint64_t deadline = cf_getns() + (uint64_t)st->timeout_ms * 1000 * 1000;
+	const as_aws_credentials* credentials;
+	as_status status = as_aws_credentials_get(err, st, deadline, &credentials);
 
-	if (!st->source_logged) {
-		as_log_info("AWS EC2 seed provider credentials from config");
-		st->source_logged = true;
+	if (status != AEROSPIKE_OK) {
+		return status;
 	}
 
 	const char* element = aws_element(st->address_field);
@@ -556,11 +603,10 @@ aws_refresh(as_error* err, const as_seed_candidate_context* context,
 	uint32_t instances = 0;
 	uint32_t skipped = 0;
 	uint32_t pages = 0;
-	as_status status = AEROSPIKE_OK;
 
 	do {
 		as_aws_xml* doc = NULL;
-		status = aws_describe(err, st, token, deadline, &doc);
+		status = aws_describe(err, st, credentials, token, deadline, &doc);
 
 		if (status != AEROSPIKE_OK) {
 			break;
@@ -684,6 +730,32 @@ aws_false(void* udata)
 // Functions
 //---------------------------------
 
+bool
+as_aws_valid_key(const char* s)
+{
+	if (!s || !s[0]) {
+		return false;
+	}
+
+	for (; *s; s++) {
+		if (!((*s >= 'A' && *s <= 'Z') || (*s >= 'a' && *s <= 'z') || (*s >= '0' && *s <= '9'))) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool
+as_aws_visible(const char* s)
+{
+	for (const unsigned char* p = (const unsigned char*)s; *p; p++) {
+		if (*p < 0x21 || *p > 0x7e) {
+			return false;
+		}
+	}
+	return true;
+}
+
 char*
 as_aws_ec2_endpoint(const char* region)
 {
@@ -707,6 +779,13 @@ as_status
 as_discovery_aws_seed_provider(as_error* err, const as_aws_seed_provider_config* config,
 	as_seed_provider* provider)
 {
+	return as_discovery_aws_seed_provider_env(err, config, NULL, provider);
+}
+
+as_status
+as_discovery_aws_seed_provider_env(as_error* err, const as_aws_seed_provider_config* config,
+	const as_aws_env* env, as_seed_provider* provider)
+{
 	as_error_reset(err);
 
 	if (!config || !provider) {
@@ -714,7 +793,7 @@ as_discovery_aws_seed_provider(as_error* err, const as_aws_seed_provider_config*
 	}
 
 	as_aws_state* st = NULL;
-	as_status status = aws_create(err, config, &st);
+	as_status status = aws_create(err, config, env, &st);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -760,6 +839,7 @@ as_config_set_aws_seed_provider(as_config* config, const as_aws_seed_provider_co
 	status = as_config_set_seed_provider(config, &provider, err);
 
 	if (status != AEROSPIKE_OK) {
+		aws_release_hook(provider.udata);
 		provider.destroy(provider.udata);
 	}
 	return status;

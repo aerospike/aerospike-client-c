@@ -147,6 +147,61 @@ aws_xml_error(const char* code, const char* message, const char* request_id)
 		message, request_id);
 }
 
+char*
+aws_xml_sts(const char* access_key_id, const char* secret_access_key, const char* session_token,
+	const char* expiration)
+{
+	return aws_strf("<AssumeRoleWithWebIdentityResponse "
+		"xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\">\n"
+		"  <AssumeRoleWithWebIdentityResult>\n"
+		"    <SubjectFromWebIdentityToken>system:serviceaccount:aerospike:client"
+		"</SubjectFromWebIdentityToken>\n"
+		"    <Audience>sts.amazonaws.com</Audience>\n"
+		"    <AssumedRoleUser>\n"
+		"      <Arn>arn:aws:sts::123456789012:assumed-role/seed-role/aerospike</Arn>\n"
+		"      <AssumedRoleId>AROACLKWSDQRAOEXAMPLE:aerospike</AssumedRoleId>\n"
+		"    </AssumedRoleUser>\n"
+		"    <Credentials>\n"
+		"      <SessionToken>%s</SessionToken>\n"
+		"      <SecretAccessKey>%s</SecretAccessKey>\n"
+		"      <Expiration>%s</Expiration>\n"
+		"      <AccessKeyId>%s</AccessKeyId>\n"
+		"    </Credentials>\n"
+		"    <Provider>oidc.eks.us-east-1.amazonaws.com</Provider>\n"
+		"  </AssumeRoleWithWebIdentityResult>\n"
+		"  <ResponseMetadata>\n"
+		"    <RequestId>ad4156e9-bce1-11e2-82e6-6b6efEXAMPLE</RequestId>\n"
+		"  </ResponseMetadata>\n"
+		"</AssumeRoleWithWebIdentityResponse>\n", session_token, secret_access_key, expiration,
+		access_key_id);
+}
+
+static char*
+json_field(char* s, const char* name, const char* value)
+{
+	if (!value) {
+		return s;
+	}
+
+	char* field = aws_strf(",\"%s\":\"%s\"", name, value);
+	s = str_cat(s, field);
+	free(field);
+	return s;
+}
+
+char*
+aws_json_credentials(const char* access_key_id, const char* secret_access_key,
+	const char* session_token, const char* expiration)
+{
+	char* s = aws_strf("{\"Code\":\"Success\",\"LastUpdated\":\"2012-04-26T16:39:16Z\","
+		"\"Type\":\"AWS-HMAC\"");
+	s = json_field(s, "AccessKeyId", access_key_id);
+	s = json_field(s, "SecretAccessKey", secret_access_key);
+	s = json_field(s, "Token", session_token);
+	s = json_field(s, "Expiration", expiration);
+	return str_cat(s, "}");
+}
+
 #ifdef DISCOVERY_FAKE_SERVERS
 
 //---------------------------------
@@ -584,6 +639,17 @@ aws_stub_describe(aws_stub* s, const char* next_token, const char* const* instan
 	char* body = aws_xml_describe(next_token, instances, instances_size);
 	aws_stub_http(s, 200, NULL, body);
 	free(body);
+}
+
+void
+aws_stub_imds(aws_stub* s, const char* role, const char* credentials)
+{
+	aws_stub_http(s, 200, NULL, AWS_STUB_IMDS_TOKEN);
+
+	if (role) {
+		aws_stub_http(s, 200, NULL, role);
+	}
+	aws_stub_http(s, 200, NULL, credentials);
 }
 
 uint32_t

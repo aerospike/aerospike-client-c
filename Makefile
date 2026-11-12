@@ -115,6 +115,7 @@ AEROSPIKE += as_address.o
 AEROSPIKE += as_admin.o
 AEROSPIKE += as_async.o
 AEROSPIKE += as_aws.o
+AEROSPIKE += as_aws_credentials.o
 AEROSPIKE += as_aws_http.o
 AEROSPIKE += as_aws_parse.o
 AEROSPIKE += as_aws_sigv4.o

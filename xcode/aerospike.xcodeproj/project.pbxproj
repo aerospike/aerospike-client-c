@@ -44,6 +44,7 @@
 		D15C0A001000000000000008 /* as_dns.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000007 /* as_dns.c */; };
 		D15C0A00100000000000000A /* as_dns_internal.h in Headers */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000009 /* as_dns_internal.h */; };
 		D15C0A00100000000000000C /* as_aws.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A00100000000000000B /* as_aws.c */; };
+		D15C0A001000000000000016 /* as_aws_credentials.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000015 /* as_aws_credentials.c */; };
 		D15C0A00100000000000000E /* as_aws_http.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A00100000000000000D /* as_aws_http.c */; };
 		D15C0A001000000000000010 /* as_aws_parse.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A00100000000000000F /* as_aws_parse.c */; };
 		D15C0A001000000000000012 /* as_aws_sigv4.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000011 /* as_aws_sigv4.c */; };
@@ -448,6 +449,7 @@
 		D15C0A001000000000000007 /* as_dns.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_dns.c; path = ../src/main/aerospike/as_dns.c; sourceTree = "<group>"; };
 		D15C0A001000000000000009 /* as_dns_internal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_dns_internal.h; path = ../src/main/aerospike/as_dns_internal.h; sourceTree = "<group>"; };
 		D15C0A00100000000000000B /* as_aws.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_aws.c; path = ../src/main/aerospike/as_aws.c; sourceTree = "<group>"; };
+		D15C0A001000000000000015 /* as_aws_credentials.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_aws_credentials.c; path = ../src/main/aerospike/as_aws_credentials.c; sourceTree = "<group>"; };
 		D15C0A00100000000000000D /* as_aws_http.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_aws_http.c; path = ../src/main/aerospike/as_aws_http.c; sourceTree = "<group>"; };
 		D15C0A00100000000000000F /* as_aws_parse.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_aws_parse.c; path = ../src/main/aerospike/as_aws_parse.c; sourceTree = "<group>"; };
 		D15C0A001000000000000011 /* as_aws_sigv4.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_aws_sigv4.c; path = ../src/main/aerospike/as_aws_sigv4.c; sourceTree = "<group>"; };
@@ -594,6 +596,7 @@
 				BFC38AE01948F7CA000C53D9 /* as_admin.c */,
 				BF26CF831BFE7C7900E143DC /* as_async.c */,
 				D15C0A00100000000000000B /* as_aws.c */,
+				D15C0A001000000000000015 /* as_aws_credentials.c */,
 				D15C0A00100000000000000D /* as_aws_http.c */,
 				D15C0A00100000000000000F /* as_aws_parse.c */,
 				D15C0A001000000000000013 /* as_aws_private.h */,
@@ -1165,6 +1168,7 @@
 				BF90C76C22AB154A0062D920 /* as_cdt_internal.c in Sources */,
 				BF26CF841BFE7C7900E143DC /* as_async.c in Sources */,
 				D15C0A00100000000000000C /* as_aws.c in Sources */,
+				D15C0A001000000000000016 /* as_aws_credentials.c in Sources */,
 				D15C0A00100000000000000E /* as_aws_http.c in Sources */,
 				D15C0A001000000000000010 /* as_aws_parse.c in Sources */,
 				D15C0A001000000000000012 /* as_aws_sigv4.c in Sources */,

@@ -39,6 +39,17 @@ aws_xml_describe(const char* next_token, const char* const* instances, uint32_t 
 char*
 aws_xml_error(const char* code, const char* message, const char* request_id);
 
+// STS AssumeRoleWithWebIdentity response, as Java's StubAwsServer.assumeRoleWithWebIdentity().
+char*
+aws_xml_sts(const char* access_key_id, const char* secret_access_key, const char* session_token,
+	const char* expiration);
+
+// ECS and IMDS credentials document, as Java's StubAwsServer.credentialsJson(); NULL fields are
+// omitted.
+char*
+aws_json_credentials(const char* access_key_id, const char* secret_access_key,
+	const char* session_token, const char* expiration);
+
 #ifdef DISCOVERY_FAKE_SERVERS
 
 #include <openssl/ssl.h>
@@ -151,6 +162,14 @@ aws_stub_set_http(aws_stub* s, int status, const char* headers, const char* body
 void
 aws_stub_describe(aws_stub* s, const char* next_token, const char* const* instances,
 	uint32_t instances_size);
+
+#define AWS_STUB_IMDS_TOKEN "imds-session-token"
+#define AWS_STUB_IMDS_ROLE "aerospike-seed-role"
+
+// Queue the replies of one IMDS load: the token, the role list when role is not NULL, and the
+// credentials document.
+void
+aws_stub_imds(aws_stub* s, const char* role, const char* credentials);
 
 uint32_t
 aws_stub_requests(aws_stub* s);

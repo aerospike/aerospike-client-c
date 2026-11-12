@@ -220,6 +220,19 @@ http_error_text(int e, char* out, size_t size)
 #endif
 }
 
+// Describe a C runtime errno value. Socket errors on Windows are not errno values.
+static void
+http_errno_text(int e, char* out, size_t size)
+{
+#if !defined(_MSC_VER)
+	snprintf(out, size, "%s", strerror(e));
+#else
+	if (strerror_s(out, size, e) != 0) {
+		snprintf(out, size, "error %d", e);
+	}
+#endif
+}
+
 // Describe and clear the OpenSSL error queue.
 static void
 http_openssl_error(char* out, size_t size)
@@ -1325,7 +1338,7 @@ as_aws_tls_init(as_error* err, const char* ca_file, const char* ca_path, as_aws_
 		struct stat st;
 
 		if (stat(ca_path, &st) != 0) {
-			http_error_text(errno, ossl, sizeof(ossl));
+			http_errno_text(errno, ossl, sizeof(ossl));
 			SSL_CTX_free(ctx);
 			return as_aws_errorf(err, AEROSPIKE_ERR_TLS_ERROR, NULL, 0,
 				"AWS EC2 seed provider: failed to load ca_path %s: %s", ca_path, ossl);

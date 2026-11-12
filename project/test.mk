@@ -126,6 +126,20 @@ test-build: $(TARGET_TEST)/aerospike_test
 .PHONY: aws-real-probe
 aws-real-probe: $(TARGET_TEST)/aws_real_probe
 
+# The L1 conformance runner is built against installed headers only, like the aws-real probe.
+# conformance-run needs CONFORMANCE_DIR, an aerospike-client-conformance checkout.
+.PHONY: conformance
+conformance: $(TARGET_TEST)/conformance_runner
+
+CONFORMANCE_REPORT = $(TARGET)/conformance/conformance-report.json
+
+.PHONY: conformance-run
+conformance-run: $(TARGET_TEST)/conformance_runner
+	@test -n "$(CONFORMANCE_DIR)" || { echo "Set CONFORMANCE_DIR to an aerospike-client-conformance checkout" >&2; exit 2; }
+	@mkdir -p $(dir $(CONFORMANCE_REPORT))
+	$(TARGET_TEST)/conformance_runner --fixtures $(CONFORMANCE_DIR) \
+		--declarations $(SOURCE_TEST)/conformance/c-declared.yaml --report $(CONFORMANCE_REPORT)
+
 .PHONY: test-clean
 test-clean:
 	@rm -rf $(TARGET_TEST)
@@ -145,5 +159,9 @@ $(TARGET_TEST)/aerospike_test: $(TEST_OBJECT) $(TARGET_TEST)/test.o $(TARGET_LIB
 	$(executable) $(TEST_LDFLAGS)
 
 $(TARGET_TEST)/aws_real_probe: $(SOURCE_TEST)/aws_real/aws_real_probe.c $(TARGET_LIB)/libaerospike.a | build prepare
+	@mkdir -p $(dir $@)
+	$(CC) $(CC_FLAGS) -I$(TARGET_INCL) -o $@ $< $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)
+
+$(TARGET_TEST)/conformance_runner: $(SOURCE_TEST)/conformance/conformance_runner.c $(TARGET_LIB)/libaerospike.a | build prepare
 	@mkdir -p $(dir $@)
 	$(CC) $(CC_FLAGS) -I$(TARGET_INCL) -o $@ $< $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)

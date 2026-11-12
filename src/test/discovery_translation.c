@@ -59,6 +59,8 @@
 //   phase of translation_collision_live_node.
 // - U-15 shared addresses with a registered translator:
 //   translation_shared_address_registered.
+// - L1 collision fixture rows: discovery_conformance_collision in discovery_contract.c and
+//   src/test/conformance/conformance_runner.c.
 // - Init is not failed by collisions or strict misses: translation_collision_*,
 //   translation_wrong_list_miss and translation_service_strict_miss.
 // - FR-40 runtime TLS name of a translated peer: translation_peer_tls_name_runtime.
@@ -488,16 +490,6 @@ TEST(translation_config_helpers, "U-7 native translator helpers validate, copy a
 	as_host_destroy(&out);
 
 	as_config_destroy(&config);
-}
-
-TEST(translation_l1_pair_collision, "L1 pair-collision rows are reported as unsupported with a reason")
-{
-	// The shared v1.0.0 fixture format describes one endpoint per row and cannot express two
-	// nodes translating to one address. These rows are never skipped silently: U-15 is covered
-	// by the component tests below, and the fixture schema revision belongs to the final
-	// integration commit.
-	info("L1 translate rows 'collision-*': unsupported by fixture schema v1.0.0 "
-		"(single endpoint per row); covered by translation_collision_* component tests");
 }
 
 //---------------------------------
@@ -1659,6 +1651,11 @@ run_collision(collision_kind kind, bool reversed, bool healthy_peer, as_status e
 	log_capture_stop();
 	uint32_t warnings = log_capture_count(AS_LOG_LEVEL_WARN, "translated nodes", "B", "C", shared,
 		translator, NULL);
+	// One message per colliding peer, each naming the other peer as the first owner.
+	uint32_t b_first = log_capture_count(AS_LOG_LEVEL_WARN, "nodes B and C", shared, translator,
+		NULL);
+	uint32_t c_first = log_capture_count(AS_LOG_LEVEL_WARN, "nodes C and B", shared, translator,
+		NULL);
 
 	if (status != expected) {
 		result = "unexpected connect status";
@@ -1669,6 +1666,9 @@ run_collision(collision_kind kind, bool reversed, bool healthy_peer, as_status e
 	}
 	else if (warnings == 0) {
 		result = "no collision warning names both nodes, the shared address and the translator";
+	}
+	else if (b_first == 0 || c_first == 0) {
+		result = "the collision is not reported once for each colliding peer";
 	}
 
 	fake_client_close(&c);
@@ -2588,7 +2588,6 @@ SUITE(discovery_translation, "pluggable discovery translation, topology and TLS 
 	suite_add(translation_invalid_output);
 	suite_add(translation_source_unit);
 	suite_add(translation_config_helpers);
-	suite_add(translation_l1_pair_collision);
 	suite_add(translation_tls_dns);
 	suite_add(translation_tls_wildcard);
 	suite_add(translation_tls_ip);

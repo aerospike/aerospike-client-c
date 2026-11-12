@@ -926,6 +926,35 @@ typedef struct as_conformance_translation_s {
 	uint32_t map_size;
 } as_conformance_translation;
 
+/**
+ * Result of one conformance collision row (see as_discovery_conformance_collision()).
+ * Every string and array is owned by the client; release them with
+ * as_conformance_collisions_destroy().
+ *
+ * @ingroup discovery_api
+ */
+typedef struct as_conformance_collisions_s {
+	/**
+	 * Node names of the peers that become nodes, in input order.
+	 */
+	char** nodes;
+
+	/**
+	 * Number of nodes.
+	 */
+	uint32_t nodes_size;
+
+	/**
+	 * One AEROSPIKE_ERR_TRANSLATION_COLLISION message per colliding peer, in input order.
+	 */
+	char** errors;
+
+	/**
+	 * Number of errors.
+	 */
+	uint32_t errors_size;
+} as_conformance_collisions;
+
 //---------------------------------
 // Functions
 //---------------------------------
@@ -1317,6 +1346,45 @@ AS_EXTERN as_status
 as_discovery_conformance_merge(as_error* err, as_seed_merge_policy policy,
 	const as_vector* static_hosts, const as_vector* const* results, uint32_t results_size,
 	as_seed_candidates* snapshots);
+
+/**
+ * Conformance entry point for one collision row: peers is the ordered list of
+ * peers advertised in one peers reply, each translated as by
+ * as_discovery_conformance_translate() and then checked by the same collision
+ * code and message the cluster uses when it parses a peers reply.
+ *
+ * Each peer whose translated host and port is also the translated endpoint of
+ * another peer collides and does not become a node. Each colliding peer is
+ * reported once, with an AEROSPIKE_ERR_TRANSLATION_COLLISION message naming
+ * the translator, the other peer, the colliding peer and the shared host:port,
+ * so two peers on one endpoint give two messages, one naming each peer first.
+ * A peer with a strict miss has no endpoint, so it is neither a node nor in a
+ * collision. Every peer is a newcomer: collisions with the refreshing node,
+ * live nodes and nodes validated earlier in a tend are not modeled.
+ *
+ * On AEROSPIKE_OK, out receives copies of the node names and messages; release
+ * them with as_conformance_collisions_destroy(). On error out is zeroed and
+ * nothing is left allocated.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for invalid input: NULL arguments, no peers, a
+ * peer without a node name or host, repeated node names, peers from both the
+ * standard and alternate lists, or an invalid translation (including an
+ * invalid port-map entry). Returns AEROSPIKE_ERR_CLIENT on allocation failure.
+ *
+ * @ingroup discovery_api
+ */
+AS_EXTERN as_status
+as_discovery_conformance_collision(as_error* err, const as_conformance_translation* translation,
+	const as_endpoint* peers, uint32_t peers_size, as_conformance_collisions* out);
+
+/**
+ * Release the strings and arrays of a conformance collision result and zero it.
+ * A zeroed result is accepted.
+ *
+ * @ingroup discovery_api
+ */
+AS_EXTERN void
+as_conformance_collisions_destroy(as_conformance_collisions* out);
 
 #ifdef __cplusplus
 } // end extern "C"

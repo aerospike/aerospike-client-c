@@ -16,11 +16,13 @@
  */
 #include <aerospike/as_peers.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_discovery.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
 #include <aerospike/as_string_builder.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <stdlib.h>
+#include <string.h>
 
 //---------------------------------
 // Declarations
@@ -334,7 +336,8 @@ as_peers_node_collides(as_node* node, const char* name, const as_host* host)
 
 // Return the name of a different node that host is also an endpoint of: the refreshing node, a
 // peer of the same reply, a live cluster node or a node validated earlier in this tend. The
-// comparison is exact host and port, so it needs no DNS or I/O.
+// comparison is exact host and port, so it needs no DNS or I/O. node, cluster and peers are NULL
+// for the conformance entry point, which models the peers of one reply only.
 static const char*
 as_peers_find_host_owner(
 	as_peers* peers, as_cluster* cluster, as_node* node, as_vector* records, uint32_t index,
@@ -359,6 +362,10 @@ as_peers_find_host_owner(
 				return other->node_name;
 			}
 		}
+	}
+
+	if (! cluster || ! peers) {
+		return NULL;
 	}
 
 	as_nodes* nodes = cluster->nodes;
@@ -428,6 +435,34 @@ as_peers_remove_shared_hosts(as_peer_record* rec)
 	rec->hosts.size = size;
 }
 
+// The only place that builds the collision message, shared by the cluster and the conformance
+// entry point.
+static void
+as_peers_collision_error(
+	as_error* err, const char* translator, const char* name1, const char* name2, const char* host,
+	uint16_t port
+	)
+{
+	as_error_update(err, AEROSPIKE_ERR_TRANSLATION_COLLISION,
+		"Address translator %s translated nodes %s and %s to the same address %s:%u. "
+		"Give each node its own reachable address or mapping",
+		translator, name1, name2, host, (unsigned)port);
+}
+
+// Receives each collision found by as_peers_check_collisions().
+typedef struct as_peers_collision_sink_s {
+	void (*report)(const as_error* err, void* udata);
+	void* udata;
+} as_peers_collision_sink;
+
+// Cluster sink: udata is the as_peers of the tend.
+static void
+as_peers_report_collision(const as_error* err, void* udata)
+{
+	as_log_warn("%s", err->message);
+	as_peers_record_error(udata, err, false);
+}
+
 static void
 as_peers_record_collision(
 	as_peers* peers, as_cluster* cluster, const char* name1, const char* name2, const char* host,
@@ -435,12 +470,56 @@ as_peers_record_collision(
 	)
 {
 	as_error err;
-	as_error_update(&err, AEROSPIKE_ERR_TRANSLATION_COLLISION,
-		"Address translator %s translated nodes %s and %s to the same address %s:%u. "
-		"Give each node its own reachable address or mapping",
-		as_peers_translator_name(cluster), name1, name2, host, (unsigned)port);
-	as_log_warn("%s", err.message);
-	as_peers_record_error(peers, &err, false);
+	as_peers_collision_error(&err, as_peers_translator_name(cluster), name1, name2, host, port);
+	as_peers_report_collision(&err, peers);
+}
+
+// Detect collisions of all newcomers before any of them is validated. All shared hosts are found
+// before any is removed, so the result does not depend on the order of the reply.
+//
+// A shared host is never used, so two nodes cannot become one transport endpoint. With a
+// registered translator (reject_peer) a peer with any shared host is not created. The implicit
+// static map keeps a peer that still has hosts of its own, as servers without access-address may
+// advertise an interface address, such as a container bridge, that every node has. Each
+// colliding peer is reported once, naming the first other node of its first shared host.
+static void
+as_peers_check_collisions(
+	as_peers* peers, as_cluster* cluster, as_node* node, as_vector* records, bool reject_peer,
+	const char* translator, const as_peers_collision_sink* sink
+	)
+{
+	for (uint32_t i = 0; i < records->size; i++) {
+		as_peer_record* rec = as_vector_get(records, i);
+
+		if (rec->found || rec->alt_missing || rec->hosts.size == 0) {
+			continue;
+		}
+		as_peers_find_shared_hosts(peers, cluster, node, records, i);
+	}
+
+	for (uint32_t i = 0; i < records->size; i++) {
+		as_peer_record* rec = as_vector_get(records, i);
+
+		if (rec->shared_count == 0) {
+			continue;
+		}
+
+		as_host* shared = as_vector_get(&rec->hosts, rec->shared_index);
+
+		if (reject_peer || rec->shared_count == rec->hosts.size) {
+			rec->collided = true;
+
+			as_error err;
+			as_peers_collision_error(&err, translator, rec->shared_with, rec->node_name,
+				shared->name, shared->port);
+			sink->report(&err, sink->udata);
+		}
+		else {
+			as_log_info("Peer %s skips address %s:%u because node %s has the same address",
+				rec->node_name, shared->name, (unsigned)shared->port, rec->shared_with);
+			as_peers_remove_shared_hosts(rec);
+		}
+	}
 }
 
 //---------------------------------
@@ -1079,43 +1158,9 @@ as_peers_parse_peers(
 		rec->found = as_peers_find_node(peers, cluster, rec->node_name, &rec->hosts, &rec->replace_node);
 	}
 
-	// Detect collisions of all newcomers before any of them is validated. All shared hosts are
-	// found before any is removed, so the result does not depend on the order of the reply.
-	for (uint32_t i = 0; i < records.size; i++) {
-		as_peer_record* rec = as_vector_get(&records, i);
-
-		if (rec->found || rec->alt_missing || rec->hosts.size == 0) {
-			continue;
-		}
-		as_peers_find_shared_hosts(peers, cluster, node, &records, i);
-	}
-
-	// A shared host is never used, so two nodes cannot become one transport endpoint. With a
-	// registered translator a peer with any shared host is not created. The implicit static map
-	// keeps a peer that still has hosts of its own, as servers without access-address may
-	// advertise an interface address, such as a container bridge, that every node has.
-	bool reject_peer = cluster->translator_registered;
-
-	for (uint32_t i = 0; i < records.size; i++) {
-		as_peer_record* rec = as_vector_get(&records, i);
-
-		if (rec->shared_count == 0) {
-			continue;
-		}
-
-		as_host* shared = as_vector_get(&rec->hosts, rec->shared_index);
-
-		if (reject_peer || rec->shared_count == rec->hosts.size) {
-			rec->collided = true;
-			as_peers_record_collision(peers, cluster, rec->shared_with, rec->node_name,
-				shared->name, shared->port);
-		}
-		else {
-			as_log_info("Peer %s skips address %s:%u because node %s has the same address",
-				rec->node_name, shared->name, (unsigned)shared->port, rec->shared_with);
-			as_peers_remove_shared_hosts(rec);
-		}
-	}
+	as_peers_collision_sink sink = {.report = as_peers_report_collision, .udata = peers};
+	as_peers_check_collisions(peers, cluster, node, &records, cluster->translator_registered,
+		as_peers_translator_name(cluster), &sink);
 
 	// Only set new peers generation if all referenced peers are added to the cluster.
 	bool change_peers_generation = true;
@@ -1137,4 +1182,220 @@ as_peers_parse_peers(
 	}
 	as_peer_records_destroy(&records);
 	return AEROSPIKE_OK;
+}
+
+//---------------------------------
+// Conformance
+//---------------------------------
+
+// Conformance sink: copies each collision message.
+typedef struct as_peers_collision_copy_s {
+	as_vector messages; // char* (owned)
+	bool failed;
+} as_peers_collision_copy;
+
+static void
+as_peers_copy_collision(const as_error* err, void* udata)
+{
+	as_peers_collision_copy* copy = udata;
+	char* message = cf_strdup(err->message);
+
+	if (! message) {
+		copy->failed = true;
+		return;
+	}
+	as_vector_append(&copy->messages, &message);
+}
+
+// Same names as the conformance translate entry point uses.
+static const char*
+as_peers_translator_kind_name(as_translator_kind kind)
+{
+	switch (kind) {
+	case AS_TRANSLATOR_STATIC_MAP:
+		return "static-map";
+	case AS_TRANSLATOR_PORT_MAP:
+		return "port-map";
+	case AS_TRANSLATOR_PASS_THROUGH:
+		return "pass-through";
+	default:
+		return NULL;
+	}
+}
+
+static as_status
+as_peers_conformance_validate(as_error* err, const as_endpoint* peers, uint32_t size)
+{
+	for (uint32_t i = 0; i < size; i++) {
+		const as_endpoint* peer = &peers[i];
+
+		if (! peer->node_name || ! peer->node_name[0] || ! peer->host) {
+			return as_error_update(err, AEROSPIKE_ERR_PARAM,
+				"Invalid conformance collision peer %u: node name and host are required", i);
+		}
+
+		if (peer->source != AS_ENDPOINT_SOURCE_STANDARD &&
+			peer->source != AS_ENDPOINT_SOURCE_ALTERNATE) {
+			return as_error_update(err, AEROSPIKE_ERR_PARAM,
+				"Invalid conformance collision peer %u: unknown source %d", i, (int)peer->source);
+		}
+
+		if (peer->source != peers[0].source) {
+			return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+				"Conformance collision peers mix the standard and alternate lists");
+		}
+
+		for (uint32_t k = 0; k < i; k++) {
+			if (strcmp(peers[k].node_name, peer->node_name) == 0) {
+				return as_error_update(err, AEROSPIKE_ERR_PARAM,
+					"Conformance collision peers repeat node name %s", peer->node_name);
+			}
+		}
+	}
+	return AEROSPIKE_OK;
+}
+
+static inline bool
+as_peers_conformance_is_node(const as_peer_record* rec)
+{
+	return rec->hosts.size > 0 && ! rec->collided;
+}
+
+as_status
+as_discovery_conformance_collision(as_error* err, const as_conformance_translation* translation,
+	const as_endpoint* peers, uint32_t peers_size, as_conformance_collisions* out)
+{
+	as_error_reset(err);
+
+	if (out) {
+		memset(out, 0, sizeof(as_conformance_collisions));
+	}
+
+	if (! translation || ! peers || peers_size == 0 || ! out) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Invalid conformance collision input");
+	}
+
+	const char* translator = as_peers_translator_kind_name(translation->kind);
+
+	if (! translator) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Unknown translator kind %d",
+			(int)translation->kind);
+	}
+
+	as_status status = as_peers_conformance_validate(err, peers, peers_size);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	// Every peer is a newcomer of one reply: there is no refreshing, live or validated node.
+	as_vector records;
+	as_vector_init(&records, sizeof(as_peer_record), peers_size);
+
+	for (uint32_t i = 0; i < peers_size; i++) {
+		as_peer_record rec;
+		memset(&rec, 0, sizeof(as_peer_record));
+		rec.node_name = (char*)peers[i].node_name;
+		rec.tls_name = (char*)peers[i].tls_name;
+		as_vector_init(&rec.hosts, sizeof(as_host), 1);
+
+		as_host host;
+		status = as_discovery_conformance_translate(err, translation, &peers[i], &host);
+
+		if (status == AEROSPIKE_OK) {
+			as_vector_append(&rec.hosts, &host);
+		}
+		else if (status != AEROSPIKE_ERR_TRANSLATION_MISS) {
+			as_peer_record_destroy(&rec);
+			as_peer_records_destroy(&records);
+			return status;
+		}
+		// A strict miss leaves the peer without hosts, so it is neither a node nor a collision.
+		as_vector_append(&records, &rec);
+	}
+	as_error_reset(err);
+
+	as_peers_collision_copy copy = {.failed = false};
+	as_vector_init(&copy.messages, sizeof(char*), 4);
+	as_peers_collision_sink sink = {.report = as_peers_copy_collision, .udata = &copy};
+
+	// The cluster never counts static-map as registered: it is only the implicit ip_map
+	// translator.
+	as_peers_check_collisions(NULL, NULL, NULL, &records,
+		translation->kind != AS_TRANSLATOR_STATIC_MAP, translator, &sink);
+
+	uint32_t nodes_size = 0;
+
+	for (uint32_t i = 0; i < records.size; i++) {
+		if (as_peers_conformance_is_node(as_vector_get(&records, i))) {
+			nodes_size++;
+		}
+	}
+
+	bool ok = ! copy.failed;
+
+	if (ok && nodes_size > 0) {
+		out->nodes = cf_calloc(nodes_size, sizeof(char*));
+		ok = out->nodes != NULL;
+
+		for (uint32_t i = 0; ok && i < records.size; i++) {
+			as_peer_record* rec = as_vector_get(&records, i);
+
+			if (! as_peers_conformance_is_node(rec)) {
+				continue;
+			}
+
+			char* name = cf_strdup(rec->node_name);
+
+			if (! name) {
+				ok = false;
+				break;
+			}
+			out->nodes[out->nodes_size++] = name;
+		}
+	}
+
+	if (ok && copy.messages.size > 0) {
+		out->errors = cf_malloc(copy.messages.size * sizeof(char*));
+		ok = out->errors != NULL;
+
+		if (ok) {
+			memcpy(out->errors, copy.messages.list, copy.messages.size * sizeof(char*));
+			out->errors_size = copy.messages.size;
+			copy.messages.size = 0;
+		}
+	}
+
+	for (uint32_t i = 0; i < copy.messages.size; i++) {
+		cf_free(*(char**)as_vector_get(&copy.messages, i));
+	}
+	as_vector_destroy(&copy.messages);
+	as_peer_records_destroy(&records);
+
+	if (! ok) {
+		as_conformance_collisions_destroy(out);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to copy the conformance collision result");
+	}
+	return AEROSPIKE_OK;
+}
+
+void
+as_conformance_collisions_destroy(as_conformance_collisions* out)
+{
+	if (! out) {
+		return;
+	}
+
+	for (uint32_t i = 0; i < out->nodes_size; i++) {
+		cf_free(out->nodes[i]);
+	}
+	cf_free(out->nodes);
+
+	for (uint32_t i = 0; i < out->errors_size; i++) {
+		cf_free(out->errors[i]);
+	}
+	cf_free(out->errors);
+	memset(out, 0, sizeof(as_conformance_collisions));
 }

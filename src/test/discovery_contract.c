@@ -30,10 +30,9 @@
 #include "aerospike_test.h"
 
 // Coverage: U-1 (contract shape and error channel only), U-2, U-3, U-5, U-7,
-// U-8, U-11 and the static-map/port-map/pass-through/merge L1 translate and
-// merge rows. Pair-collision L1 rows are reported as unsupported by
-// discovery_translation because the shared fixture format cannot express two
-// endpoints. Runtime degradation in U-1 and M-7 is covered by
+// U-8, U-11 and the static-map/port-map/pass-through/merge L1 translate,
+// collision and merge entry points; src/test/conformance runs the shared
+// fixture rows through them. Runtime degradation in U-1 and M-7 is covered by
 // discovery_seed_manager.
 
 extern aerospike* as;
@@ -780,6 +779,195 @@ TEST(discovery_conformance_merge, "L1 merge rows publish one snapshot per discov
 	hosts_destroy(empty);
 }
 
+// The cluster's collision message for name2 colliding with the earlier owner name1.
+static const char*
+collision_text(char* buf, size_t size, const char* translator, const char* name1,
+	const char* name2, const char* host, uint16_t port)
+{
+	snprintf(buf, size, "Address translator %s translated nodes %s and %s to the same address "
+		"%s:%u. Give each node its own reachable address or mapping", translator, name1, name2,
+		host, (unsigned)port);
+	return buf;
+}
+
+static uint32_t
+collision_errors_naming(const as_conformance_collisions* out, const char* text)
+{
+	uint32_t count = 0;
+
+	for (uint32_t i = 0; i < out->errors_size; i++) {
+		if (strstr(out->errors[i], text)) {
+			count++;
+		}
+	}
+	return count;
+}
+
+TEST(discovery_conformance_collision, "L1 collision rows report every colliding peer and create the rest")
+{
+	char text[512];
+	as_error err;
+	as_conformance_collisions out;
+
+	// Static map: two hosts to one target, a third peer with its own mapping.
+	as_addr_map ip_entries[] = {
+		{"10.0.0.1", "203.0.113.1"}, {"10.0.0.2", "203.0.113.1"}, {"10.0.0.3", "203.0.113.3"}
+	};
+	as_conformance_translation translation = {
+		.kind = AS_TRANSLATOR_STATIC_MAP,
+		.on_miss = AS_TRANSLATION_PASS_THROUGH,
+		.map = ip_entries,
+		.map_size = 3
+	};
+	as_endpoint peers[] = {
+		{.node_name = "A", .host = "10.0.0.1", .port = 3000},
+		{.node_name = "B", .host = "10.0.0.2", .port = 3000},
+		{.node_name = "C", .host = "10.0.0.3", .port = 3000}
+	};
+
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, peers, 3, &out),
+		AEROSPIKE_OK);
+	assert_int_eq(out.nodes_size, 1);
+	assert_string_eq(out.nodes[0], "C");
+	assert_int_eq(out.errors_size, 2);
+	// One message per colliding peer, each naming the other peer first, as the cluster logs.
+	assert_string_eq(out.errors[0],
+		collision_text(text, sizeof(text), "static-map", "B", "A", "203.0.113.1", 3000));
+	assert_string_eq(out.errors[1],
+		collision_text(text, sizeof(text), "static-map", "A", "B", "203.0.113.1", 3000));
+	as_conformance_collisions_destroy(&out);
+	assert_null(out.nodes);
+	assert_null(out.errors);
+	assert_int_eq(out.errors_size, 0);
+
+	// Three peers on one endpoint: no node, every peer reported.
+	as_endpoint shared[] = {
+		{.node_name = "A", .host = "10.0.0.5", .port = 3000},
+		{.node_name = "B", .host = "10.0.0.5", .port = 3000},
+		{.node_name = "C", .host = "10.0.0.5", .port = 3000}
+	};
+	translation.kind = AS_TRANSLATOR_PASS_THROUGH;
+	translation.map = NULL;
+	translation.map_size = 0;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, shared, 3, &out),
+		AEROSPIKE_OK);
+	assert_int_eq(out.nodes_size, 0);
+	assert_null(out.nodes);
+	assert_int_eq(out.errors_size, 3);
+	assert_int_eq(collision_errors_naming(&out, "pass-through"), 3);
+	assert_int_eq(collision_errors_naming(&out, "10.0.0.5:3000"), 3);
+	assert_true(collision_errors_naming(&out, " A ") > 0);
+	assert_true(collision_errors_naming(&out, " B ") > 0);
+	assert_true(collision_errors_naming(&out, " C ") > 0);
+	as_conformance_collisions_destroy(&out);
+
+	// Port map: two node keys to one value.
+	as_addr_map port_entries[] = {{"A", "lb.example.com:30001"}, {"B", "lb.example.com:30001"}};
+	translation.kind = AS_TRANSLATOR_PORT_MAP;
+	translation.map = port_entries;
+	translation.map_size = 2;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, peers, 2, &out),
+		AEROSPIKE_OK);
+	assert_int_eq(out.nodes_size, 0);
+	assert_int_eq(out.errors_size, 2);
+	assert_string_eq(out.errors[0],
+		collision_text(text, sizeof(text), "port-map", "B", "A", "lb.example.com", 30001));
+	assert_string_eq(out.errors[1],
+		collision_text(text, sizeof(text), "port-map", "A", "B", "lb.example.com", 30001));
+	as_conformance_collisions_destroy(&out);
+
+	// Same host, distinct ports: no collision.
+	as_endpoint ports[] = {
+		{.node_name = "A", .host = "10.0.0.1", .port = 3000},
+		{.node_name = "B", .host = "10.0.0.1", .port = 3001}
+	};
+	translation.kind = AS_TRANSLATOR_PASS_THROUGH;
+	translation.map = NULL;
+	translation.map_size = 0;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, ports, 2, &out),
+		AEROSPIKE_OK);
+	assert_int_eq(out.nodes_size, 2);
+	assert_string_eq(out.nodes[0], "A");
+	assert_string_eq(out.nodes[1], "B");
+	assert_int_eq(out.errors_size, 0);
+	assert_null(out.errors);
+	as_conformance_collisions_destroy(&out);
+
+	// A strict miss drops that peer only.
+	as_endpoint miss[] = {
+		{.node_name = "A", .host = "10.0.0.1", .port = 3000},
+		{.node_name = "M", .host = "10.0.0.9", .port = 3000},
+		{.node_name = "B", .host = "10.0.0.2", .port = 3000},
+		{.node_name = "C", .host = "10.0.0.3", .port = 3000}
+	};
+	translation.kind = AS_TRANSLATOR_STATIC_MAP;
+	translation.on_miss = AS_TRANSLATION_STRICT;
+	translation.map = ip_entries;
+	translation.map_size = 3;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, miss, 4, &out),
+		AEROSPIKE_OK);
+	assert_int_eq(err.code, AEROSPIKE_OK);
+	assert_int_eq(out.nodes_size, 1);
+	assert_string_eq(out.nodes[0], "C");
+	assert_int_eq(out.errors_size, 2);
+	assert_int_eq(collision_errors_naming(&out, " M "), 0);
+	as_conformance_collisions_destroy(&out);
+
+	// Alternate source.
+	for (uint32_t i = 0; i < 3; i++) {
+		shared[i].source = AS_ENDPOINT_SOURCE_ALTERNATE;
+	}
+	translation.kind = AS_TRANSLATOR_PASS_THROUGH;
+	translation.on_miss = AS_TRANSLATION_PASS_THROUGH;
+	translation.map = NULL;
+	translation.map_size = 0;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, shared, 2, &out),
+		AEROSPIKE_OK);
+	assert_int_eq(out.errors_size, 2);
+	as_conformance_collisions_destroy(&out);
+
+	// Invalid input leaves out zeroed.
+	shared[1].source = AS_ENDPOINT_SOURCE_STANDARD;
+	out.nodes_size = 7;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, shared, 3, &out),
+		AEROSPIKE_ERR_PARAM);
+	assert_not_null(strstr(err.message, "standard and alternate"));
+	assert_null(out.nodes);
+	assert_int_eq(out.nodes_size, 0);
+	assert_null(out.errors);
+	assert_int_eq(out.errors_size, 0);
+
+	as_endpoint repeated[] = {
+		{.node_name = "A", .host = "10.0.0.1", .port = 3000},
+		{.node_name = "A", .host = "10.0.0.2", .port = 3000}
+	};
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, repeated, 2, &out),
+		AEROSPIKE_ERR_PARAM);
+	assert_not_null(strstr(err.message, "repeat node name A"));
+
+	ports[1].host = NULL;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, ports, 2, &out),
+		AEROSPIKE_ERR_PARAM);
+	assert_int_eq(out.nodes_size, 0);
+
+	as_addr_map bad_entries[] = {{"A", "lb.example.com"}};
+	translation.kind = AS_TRANSLATOR_PORT_MAP;
+	translation.map = bad_entries;
+	translation.map_size = 1;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, peers, 2, &out),
+		AEROSPIKE_ERR_PARAM);
+	assert_int_eq(out.nodes_size, 0);
+	assert_null(out.nodes);
+
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, peers, 0, &out),
+		AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_discovery_conformance_collision(&err, NULL, peers, 2, &out),
+		AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, peers, 2, NULL),
+		AEROSPIKE_ERR_PARAM);
+	as_conformance_collisions_destroy(NULL);
+}
+
 //---------------------------------
 // Tests: registration and ownership
 //---------------------------------
@@ -1182,6 +1370,7 @@ SUITE(discovery_contract, "pluggable discovery contract tests")
 	suite_add(discovery_merge);
 	suite_add(discovery_conformance_translate);
 	suite_add(discovery_conformance_merge);
+	suite_add(discovery_conformance_collision);
 	suite_add(discovery_provider_validation);
 	suite_add(discovery_translator_validation);
 	suite_add(discovery_registration_ownership);

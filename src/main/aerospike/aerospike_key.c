@@ -1481,7 +1481,12 @@ as_operate_init(
 			case AS_OPERATOR_READ:
 				oper->read_attr |= AS_MSG_INFO1_READ;
 
-				if (op->bin.name[0] == 0) {
+				// Only a plain read with no bin name means "read all bins". ""
+				// is also a valid bin name, and the server ignores the operation
+				// list when GET_ALL is set, so setting it for a CDT, bit, HLL or
+				// expression read on bin "" would return every bin whole instead
+				// of the operation's result. Matches as_batch_attr_read_adjust_ops.
+				if (op->op == AS_OPERATOR_READ && op->bin.name[0] == 0) {
 					oper->read_attr |= AS_MSG_INFO1_GET_ALL;
 				}
 				break;

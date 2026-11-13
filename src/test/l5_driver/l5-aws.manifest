@@ -1,0 +1,6 @@
+# Manifest for the l5-aws and l2-proxy harnesses in aerospike-client-conformance (l5-aws/DRIVER.md).
+# Each command runs with bash on Amazon Linux 2023 from the repository root.
+L5_SETUP='bash .github/script/install_deps.bash amazonlinux-2023 sync false false'
+# A local run.sh export has no .git but already holds the submodule contents (a flattened scratch repository).
+L5_BUILD='if [ ! -f modules/common/Makefile ]; then git config --global --add safe.directory "$PWD" && git submodule update --init --recursive; fi && make && make l5-driver l5-driver-test'
+L5_DRIVER='"target/$(uname -s)-$(uname -m)/test/l5_driver"'

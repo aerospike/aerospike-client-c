@@ -140,6 +140,15 @@ conformance-run: $(TARGET_TEST)/conformance_runner
 	$(TARGET_TEST)/conformance_runner --fixtures $(CONFORMANCE_DIR) \
 		--declarations $(SOURCE_TEST)/conformance/c-declared.yaml --report $(CONFORMANCE_REPORT)
 
+# The L5 driver is built against installed headers only, like the conformance runner. Its unit
+# tests need no server.
+.PHONY: l5-driver
+l5-driver: $(TARGET_TEST)/l5_driver
+
+.PHONY: l5-driver-test
+l5-driver-test: $(TARGET_TEST)/l5_driver_test
+	$(TARGET_TEST)/l5_driver_test
+
 .PHONY: test-clean
 test-clean:
 	@rm -rf $(TARGET_TEST)
@@ -165,3 +174,11 @@ $(TARGET_TEST)/aws_real_probe: $(SOURCE_TEST)/aws_real/aws_real_probe.c $(TARGET
 $(TARGET_TEST)/conformance_runner: $(SOURCE_TEST)/conformance/conformance_runner.c $(TARGET_LIB)/libaerospike.a | build prepare
 	@mkdir -p $(dir $@)
 	$(CC) $(CC_FLAGS) -I$(TARGET_INCL) -o $@ $< $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)
+
+$(TARGET_TEST)/l5_driver: $(SOURCE_TEST)/l5_driver/l5_driver.c $(TARGET_LIB)/libaerospike.a | build prepare
+	@mkdir -p $(dir $@)
+	$(CC) $(CC_FLAGS) -I$(TARGET_INCL) -o $@ $< $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)
+
+$(TARGET_TEST)/l5_driver_test: $(SOURCE_TEST)/l5_driver/l5_driver_test.c $(SOURCE_TEST)/l5_driver/l5_driver.c $(SOURCE_TEST)/test.c $(TARGET_LIB)/libaerospike.a | build prepare
+	@mkdir -p $(dir $@)
+	$(CC) $(CC_FLAGS) -DL5_DRIVER_NO_MAIN -I$(TARGET_INCL) -I$(SOURCE_TEST) -o $@ $< $(SOURCE_TEST)/test.c $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)

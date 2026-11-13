@@ -3904,6 +3904,106 @@ TEST(map_select_null, "test select null")
 	as_exp_destroy(exp);
 }
 
+// "" is a valid bin name (namespaces migrated from single-bin keep their data
+// in it). A map read on that bin must return the operation's result, not every
+// bin of the record: an empty bin name only means "read all bins" for a plain
+// read.
+TEST(map_empty_bin_name, "Map read on bin named empty string")
+{
+	as_key rkey;
+	as_key_init_int64(&rkey, NAMESPACE, SET, 40);
+
+	as_error err;
+	as_status status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_true(status == AEROSPIKE_OK || status == AEROSPIKE_ERR_RECORD_NOT_FOUND);
+
+	// bin "" = {a: {x: 1}, b: {x: 2}, c: {x: 3}}, bin "other" = 7
+	as_hashmap map;
+	as_hashmap_init(&map, 3);
+	const char* names[] = {"a", "b", "c"};
+
+	for (int i = 0; i < 3; i++) {
+		as_map* inner = (as_map*)as_hashmap_new(1);
+		as_stringmap_set_int64(inner, "x", i + 1);
+		as_stringmap_set_map((as_map*)&map, names[i], inner);
+	}
+
+	as_record put;
+	as_record_inita(&put, 2);
+	as_record_set_map(&put, "", (as_map*)&map);
+	as_record_set_int64(&put, "other", 7);
+	status = aerospike_key_put(as, &err, NULL, &rkey, &put);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_record_destroy(&put);
+
+	// map_get_by_key returns only the requested entry.
+	as_operations ops;
+	as_operations_inita(&ops, 1);
+	as_string k;
+	as_string_init(&k, "b", false);
+	as_operations_map_get_by_key(&ops, "", NULL, (as_val*)&k, AS_MAP_RETURN_VALUE);
+
+	as_record* rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+
+	assert_int_eq(rec->bins.size, 1);
+	as_map* entry = as_record_get_map(rec, "");
+	assert_not_null(entry);
+	assert_int_eq(as_map_size(entry), 1);
+	assert_int_eq(as_stringmap_get_int64(entry, "x"), 2);
+	as_record_destroy(rec);
+
+	// map_size returns the size, not the map.
+	as_operations_inita(&ops, 1);
+	as_operations_add_map_size(&ops, "");
+
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+
+	assert_int_eq(rec->bins.size, 1);
+	assert_int_eq(as_record_get_int64(rec, "", -1), 3);
+	as_record_destroy(rec);
+
+	// A write combined with a map read on bin "" is accepted and returns the
+	// read result.
+	as_operations_inita(&ops, 2);
+	as_operations_add_write_int64(&ops, "other", 8);
+	as_string_init(&k, "b", false);
+	as_operations_map_get_by_key(&ops, "", NULL, (as_val*)&k, AS_MAP_RETURN_VALUE);
+
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+
+	entry = as_record_get_map(rec, "");
+	assert_not_null(entry);
+	assert_int_eq(as_map_size(entry), 1);
+	assert_int_eq(as_stringmap_get_int64(entry, "x"), 2);
+	as_record_destroy(rec);
+
+	// A plain read with no bin name still reads all bins.
+	as_operations_inita(&ops, 1);
+	as_operations_add_read_all(&ops);
+
+	rec = NULL;
+	status = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+	as_operations_destroy(&ops);
+
+	assert_int_eq(rec->bins.size, 2);
+	entry = as_record_get_map(rec, "");
+	assert_not_null(entry);
+	assert_int_eq(as_map_size(entry), 3);
+	as_record_destroy(rec);
+
+	status = aerospike_key_remove(as, &err, NULL, &rkey);
+	assert_int_eq(status, AEROSPIKE_OK);
+}
 
 /******************************************************************************
  * TEST SUITE
@@ -3949,4 +4049,5 @@ SUITE(map_basics, "aerospike map basic tests")
 	suite_add(map_select_apply);
 	suite_add(map_apply_level);
 	suite_add(map_select_null);
+	suite_add(map_empty_bin_name);
 }

@@ -1474,10 +1474,20 @@ as_operate_init(
 			case AS_OPERATOR_HLL_READ:
 			case AS_OPERATOR_STRING_READ:
 			case AS_OPERATOR_TO_STRING:
-				// Map operations require respond_all_ops to be true.
+				// These operations require respond_all_ops to be true.
 				respond_all_ops = true;
-				// Fall through to read.
+				oper->read_attr |= AS_MSG_INFO1_READ;
+				break;
+
 			case AS_OPERATOR_CDT_READ:
+				oper->read_attr |= AS_MSG_INFO1_READ;
+				break;
+
+			// Only a plain read with no bin name means "read all bins". ""
+			// is also a valid bin name, and the server ignores the operation
+			// list when GET_ALL is set, so setting it for a CDT, bit, HLL or
+			// expression read on bin "" would return every bin whole instead
+			// of the operation's result. Matches as_batch_attr_read_adjust_ops.
 			case AS_OPERATOR_READ:
 				oper->read_attr |= AS_MSG_INFO1_READ;
 

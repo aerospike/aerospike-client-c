@@ -111,6 +111,11 @@ live_cleanup_drop(const char* key);
 void
 live_cleanup(void);
 
+// In a forked child: forget the parent's entries and failures without running or freeing anything,
+// since they belong to the parent.
+void
+live_cleanup_forget(void);
+
 // False once an undo failed.
 bool
 live_cleanup_ok(void);

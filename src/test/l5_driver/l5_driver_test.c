@@ -226,6 +226,9 @@ TEST(test_l5_options_valid, "a valid port-map run keeps name and HOST:PORT keys 
 	as_translation_miss_policy on_miss = config.translation.on_miss;
 	uint32_t retries = config.policies.read.base.max_retries + config.policies.write.base.max_retries;
 	uint32_t total = config.policies.write.base.total_timeout;
+	bool tls = config.tls.enable;
+	as_host* seed = as_vector_get(config.hosts, 0);
+	bool seed_tls_name = seed->tls_name != NULL;
 	as_config_destroy(&config);
 	l5_options_destroy(&o);
 	assert_int_eq(status, AEROSPIKE_OK);
@@ -233,6 +236,49 @@ TEST(test_l5_options_valid, "a valid port-map run keeps name and HOST:PORT keys 
 	assert_int_eq(on_miss, AS_TRANSLATION_STRICT);
 	assert_int_eq(retries, 0);
 	assert_int_eq(total, 1000);
+	assert_false(tls);
+	assert_false(seed_tls_name);
+}
+
+TEST(test_l5_options_tls, "--tls-name and --tls-ca-file make the seed a TLS host validated against the name")
+{
+	char ca[] = "/tmp/l5_driver_test_ca_XXXXXX";
+	int fd = mkstemp(ca);
+	assert_int_ne(fd, -1);
+	close(fd);
+
+	char* argv[] = {
+		"l5_driver", "--seed", "127.0.0.1:4807", "--shape", "pass-through", "--tend-interval", "250",
+		"--timeout", "1000", "--namespace", "test", "--set", "s", "--tls-name", "cluster.example.com",
+		"--tls-ca-file", ca
+	};
+	l5_options o;
+	int rv = parse(ARGC(argv), argv, NULL, &o);
+	bool names = rv == 0 && o.tls_name && strcmp(o.tls_name, "cluster.example.com") == 0 &&
+		o.tls_ca_file && strcmp(o.tls_ca_file, ca) == 0;
+
+	as_config config;
+	as_error err;
+	as_status status = l5_configure(&o, &config, &err);
+	bool tls = config.tls.enable;
+	bool alternate = config.use_services_alternate;
+	bool cafile = config.tls.cafile && strcmp(config.tls.cafile, ca) == 0;
+	uint32_t hosts = config.hosts->size;
+	as_host* seed = as_vector_get(config.hosts, 0);
+	bool seed_ok = strcmp(seed->name, "127.0.0.1") == 0 && seed->port == 4807 && seed->tls_name &&
+		strcmp(seed->tls_name, "cluster.example.com") == 0;
+	as_config_destroy(&config);
+	l5_options_destroy(&o);
+	unlink(ca);
+
+	assert_int_eq(rv, 0);
+	assert_true(names);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(tls);
+	assert_true(alternate);
+	assert_true(cafile);
+	assert_int_eq(hosts, 1);
+	assert_true(seed_ok);
 }
 
 TEST(test_l5_options_shapes, "pass-through, explicit on-miss, bracketed IPv6 seed, workers and user")
@@ -314,6 +360,48 @@ TEST(test_l5_options_bad, "each bad flag is exit 2")
 	};
 	assert_int_eq(parse(ARGC(port_map_without_map), port_map_without_map, NULL, &o), 2);
 	l5_options_destroy(&o);
+
+	char ca[] = "/tmp/l5_driver_test_ca_XXXXXX";
+	int fd = mkstemp(ca);
+	assert_int_ne(fd, -1);
+	close(fd);
+	char* tls_ok[] = {
+		"l5_driver", "--seed", "h:1", "--shape", "pass-through", "--tend-interval", "250", "--timeout", "1000",
+		"--namespace", "test", "--set", "s", "--tls-name", "n", "--tls-ca-file", ca
+	};
+	int rv_ok = parse(ARGC(tls_ok), tls_ok, NULL, &o);
+	l5_options_destroy(&o);
+	tls_ok[14] = "";
+	int rv_empty_name = parse(ARGC(tls_ok), tls_ok, NULL, &o);
+	l5_options_destroy(&o);
+	tls_ok[14] = "n";
+	tls_ok[16] = "/nonexistent/l5_driver_test_ca.pem";
+	int rv_missing_ca = parse(ARGC(tls_ok), tls_ok, NULL, &o);
+	l5_options_destroy(&o);
+	tls_ok[16] = ca;
+	char long_name[300];
+	memset(long_name, 'a', 256);
+	long_name[256] = '\0';
+	tls_ok[14] = long_name;
+	int rv_long_name = parse(ARGC(tls_ok), tls_ok, NULL, &o);
+	l5_options_destroy(&o);
+	int rv_name_only = parse_with("--tls-name", "n", NULL);
+	int rv_ca_without_name = parse_with("--tls-ca-file", ca, NULL);
+
+	char* tls_twice[] = {
+		"l5_driver", "--seed", "h:1", "--shape", "pass-through", "--tend-interval", "250", "--timeout", "1000",
+		"--namespace", "test", "--set", "s", "--tls-name", "n", "--tls-ca-file", ca, "--tls-name", "m"
+	};
+	int rv_twice = parse(ARGC(tls_twice), tls_twice, NULL, &o);
+	l5_options_destroy(&o);
+	unlink(ca);
+	assert_int_eq(rv_ok, 0);
+	assert_int_eq(rv_empty_name, 2);
+	assert_int_eq(rv_missing_ca, 2);
+	assert_int_eq(rv_long_name, 2);
+	assert_int_eq(rv_name_only, 2);
+	assert_int_eq(rv_ca_without_name, 2);
+	assert_int_eq(rv_twice, 2);
 
 	// The translator rejects what the flag split accepts; main() exits 2 on it.
 	char* bad_target[] = {
@@ -694,6 +782,7 @@ SUITE(l5_driver_suite, "L5 driver logic without a server")
 	suite_add(test_l5_json);
 	suite_add(test_l5_options_valid);
 	suite_add(test_l5_options_shapes);
+	suite_add(test_l5_options_tls);
 	suite_add(test_l5_options_bad);
 	suite_add(test_l5_address);
 	suite_add(test_l5_serve_keys);

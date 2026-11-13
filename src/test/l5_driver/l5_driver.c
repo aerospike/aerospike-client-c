@@ -17,13 +17,15 @@
 
 /*
  * The C driver for the l5-aws and l2-proxy harnesses in aerospike-client-conformance
- * (l5-aws/DRIVER.md there, contract version 5). It builds a client from the flags, runs a
- * retrying load, writes what the client sees to stdout as JSON lines and answers the commands it
- * reads from stdin. It measures and reports; the harness decides every row.
+ * (l5-aws/DRIVER.md there, contract version 5, with the TLS flags of version 4). It builds a
+ * client from the flags, runs a retrying load, writes what the client sees to stdout as JSON
+ * lines and answers the commands it reads from stdin. It measures and reports; the harness
+ * decides every row. With --tls-name, the seed and every node are TLS endpoints, each validated
+ * against the tls-name the client holds for it.
  *
  * Exit status: 0 after quit or end of input; 2 on bad flags, the reason on stderr; 3 when the
- * client could not be created, an error line on stdout and then the reason on stderr; 1 when the
- * driver's own threads cannot be started.
+ * client could not be created (also when a certificate does not match), an error line on stdout
+ * and then the reason on stderr; 1 when the driver's own threads cannot be started.
  * Built against installed headers only by "make l5-driver"; POSIX only. With L5_DRIVER_NO_MAIN
  * defined, main() is left out so that l5_driver_test.c can include this file.
  */
@@ -110,6 +112,8 @@ typedef struct l5_options_s {
 	uint32_t keys;
 	char* ns;
 	char* set;
+	char* tls_name;
+	char* tls_ca_file;
 } l5_options;
 
 // Stdout carries JSON lines only, each flushed, ready first. Lines written before ready go to
@@ -240,7 +244,8 @@ typedef struct l5_reach_arg_s {
 static const char L5_USAGE[] =
 	"usage: l5_driver --seed HOST:PORT --shape pass-through|port-map [--port-map NODE=HOST:PORT,...]\n"
 	"                 [--on-miss strict|pass-through] [--user USER] --tend-interval MS --timeout MS\n"
-	"                 --namespace NS --set SET [--workers N] [--keys N]";
+	"                 --namespace NS --set SET [--workers N] [--keys N]\n"
+	"                 [--tls-name NAME --tls-ca-file PATH]";
 
 static uint64_t l5_start_ns;
 static l5_output* l5_log_output;
@@ -707,12 +712,14 @@ l5_options_destroy(l5_options* o)
 	free(o->password);
 	free(o->ns);
 	free(o->set);
+	free(o->tls_name);
+	free(o->tls_ca_file);
 	memset(o, 0, sizeof(*o));
 }
 
 static const char* const L5_FLAGS[] = {
 	"--seed", "--shape", "--port-map", "--on-miss", "--user", "--tend-interval", "--timeout",
-	"--namespace", "--set", "--workers", "--keys"
+	"--namespace", "--set", "--workers", "--keys", "--tls-name", "--tls-ca-file"
 };
 
 #define L5_FLAG_COUNT (sizeof(L5_FLAGS) / sizeof(L5_FLAGS[0]))
@@ -813,6 +820,17 @@ l5_parse_options(int argc, char** argv, const char* password, l5_options* o, cha
 		case 10:
 			ok = l5_parse_positive(value, INT32_MAX, &o->keys);
 			break;
+		case 11:
+			ok = value[0] && strlen(value) < 256;
+			o->tls_name = l5_strdup(value);
+			break;
+		case 12:
+			// A readable file that is not a PEM CA fails in aerospike_connect(), which is exit 3.
+			if (access(value, R_OK) != 0) {
+				return l5_fail(msg, size, "cannot read --tls-ca-file: %s", value);
+			}
+			o->tls_ca_file = l5_strdup(value);
+			break;
 		}
 
 		if (!ok) {
@@ -836,6 +854,15 @@ l5_parse_options(int argc, char** argv, const char* password, l5_options* o, cha
 	if (!o->pass_through && !o->port_map) {
 		return l5_fail(msg, size, "missing --port-map with --shape port-map");
 	}
+
+	if (o->tls_ca_file && !o->tls_name) {
+		return l5_fail(msg, size, "--tls-ca-file only with --tls-name");
+	}
+
+	// The client loads no default trust store, so TLS without a CA file never connects.
+	if (o->tls_name && !o->tls_ca_file) {
+		return l5_fail(msg, size, "--tls-name needs --tls-ca-file");
+	}
 	return 0;
 }
 
@@ -844,7 +871,15 @@ as_status
 l5_configure(const l5_options* o, as_config* c, as_error* err)
 {
 	as_config_init(c);
-	as_config_add_host(c, o->seed_host, o->seed_port);
+
+	if (o->tls_name) {
+		c->tls.enable = true;
+		as_config_tls_add_host(c, o->seed_host, o->tls_name, o->seed_port);
+		as_config_tls_set_cafile(c, o->tls_ca_file);
+	}
+	else {
+		as_config_add_host(c, o->seed_host, o->seed_port);
+	}
 
 	if (o->user && !as_config_set_user(c, o->user, o->password)) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "--user or its password is too long");

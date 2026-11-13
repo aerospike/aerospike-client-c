@@ -6,7 +6,8 @@ name: Discovery integration
 # and env-collision (N-18 against a live node) run src/test/discovery_env in conformance envs/
 # through test-envs.yaml. l2-ce builds the PR head SHA; the env jobs build what test-envs.yaml
 # checks out, the PR merge commit. The harness is pinned by commit in each job below; switch them
-# to the v1.1.0 tag once it exists.
+# to the v1.1.0 tag once it exists. The Enterprise jobs (l2-proxy on EE, the TLS rows N-6 and N-17,
+# the certificate name matching cases) and the nightly schedule are in discovery-integration-ee.yml.
 
 on:
   pull_request:
@@ -28,7 +29,7 @@ jobs:
     name: L2 proxy (CE)
     # About an hour per run; drafts wait until they are ready for review.
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@575501469e053042b6fe0ae656920160226bda84
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
     with:
       client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -36,27 +37,27 @@ jobs:
       profile: all
       edition: ce
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: 575501469e053042b6fe0ae656920160226bda84
+      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
 
   env-dns:
     name: N-4 DNS environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@575501469e053042b6fe0ae656920160226bda84
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
     with:
       environment: dns
       command: bash src/test/discovery_env/run.sh dns
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: 575501469e053042b6fe0ae656920160226bda84
+      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
 
   env-collision:
     name: N-18 collision environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@575501469e053042b6fe0ae656920160226bda84
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
     with:
       environment: collision
       command: bash src/test/discovery_env/run.sh collision
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: 575501469e053042b6fe0ae656920160226bda84
+      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
 
   l2-summary:
     name: L2 rows

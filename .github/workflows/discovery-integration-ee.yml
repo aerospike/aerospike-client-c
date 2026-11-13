@@ -1,0 +1,138 @@
+name: Discovery integration (EE)
+
+# The Enterprise half of discovery-integration.yml, in its own workflow because conformance
+# l2-proxy.yaml uploads one fixed artifact name per run (l2-proxy-results-<run id>-<attempt>), so a
+# second l2-proxy call in the CE run would fail its upload.
+#
+# l2-ee runs the l2-proxy default profile on Aerospike Enterprise through src/test/l5_driver.
+# env-tls runs src/test/discovery_env in conformance envs/tls-matching.sh: N-6 (TLS through the
+# proxy validates each node against its tls-name), the env's certificate name matching cases sync
+# and async against C's declarations, and a smoke of the driver's TLS flags. env-tls-n17 runs N-17
+# alone (a CN-only certificate is rejected): C keeps CN acceptance, deprecated, until the next major
+# release (PRD FR-45), so the job is red by design until then and labelled N17 EXPECTED-RED in its
+# log; N17 BROKEN there is a real failure. It must not be a required check.
+#
+# Every job needs AES_FEATURES_CONF, which fork pull requests do not get: the gate job decides that
+# once and reports the layers it skips with report-skipped-layers. Drafts wait until they are ready
+# for review, as in the CE workflow. A schedule runs only from the default branch, so the nightly
+# starts once this file reaches master and then tests master; dispatch it on stage meanwhile. The
+# harness is pinned by commit in each job below.
+
+on:
+  pull_request:
+    branches: [stage]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [stage]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: discovery-integration-ee-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # The only place the Enterprise gate is decided, so a skip and its report cannot drift apart.
+  gate:
+    name: Skipped layers
+    runs-on: ubuntu-24.04
+    outputs:
+      enterprise: ${{ steps.gate.outputs.enterprise }}
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - name: Decide the Enterprise gate
+        id: gate
+        env:
+          ENTERPRISE: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          set -euo pipefail
+          layers='[]'
+          if [[ "${ENTERPRISE}" != true ]]; then
+            reason='fork pull requests get no AES_FEATURES_CONF'
+            layers=$(jq -cn --arg reason "${reason}" '[
+              {layer: "L2 EE", tests: "l2-proxy default profile on Aerospike Enterprise", reason: $reason},
+              {layer: "TLS name matching", tests: "N-6 and the envs/tls-matching.sh certificate cases", reason: $reason},
+              {layer: "N-17", tests: "CN-only certificate rejected", reason: $reason}
+            ]')
+          fi
+          echo "enterprise=${ENTERPRISE}" >> "${GITHUB_OUTPUT}"
+          echo "layers=${layers}" >> "${GITHUB_OUTPUT}"
+      - name: Report skipped layers
+        uses: aerospike/aerospike-client-conformance/.github/actions/report-skipped-layers@57c0a2ae457f77a56bdae2675688f66218e8fa89
+        with:
+          layers: ${{ steps.gate.outputs.layers }}
+
+  l2-ee:
+    name: L2 proxy (EE, default)
+    needs: gate
+    if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
+    with:
+      client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      commit: ${{ github.event.pull_request.head.sha || github.sha }}
+      manifest: src/test/l5_driver/l5-aws.manifest
+      profile: default
+      edition: ee
+      server-image: aerospike/aerospike-server-enterprise:8.2.0.0
+      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
+    secrets:
+      FEATURES_CONF: ${{ secrets.AES_FEATURES_CONF }}
+
+  env-tls:
+    name: N-6 and TLS name matching (EE)
+    needs: gate
+    if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
+    with:
+      environment: tls-matching
+      command: bash src/test/discovery_env/run.sh tls-matching
+      server-image: aerospike/aerospike-server-enterprise:8.2.0.0
+      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
+    secrets:
+      features-conf: ${{ secrets.AES_FEATURES_CONF }}
+
+  env-tls-n17:
+    name: N-17 CN-only certificate rejected (EE, red until the next major, FR-45)
+    needs: gate
+    if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
+    with:
+      environment: tls-matching
+      command: bash src/test/discovery_env/run.sh tls-matching n17
+      server-image: aerospike/aerospike-server-enterprise:8.2.0.0
+      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
+    secrets:
+      features-conf: ${{ secrets.AES_FEATURES_CONF }}
+
+  l2-ee-summary:
+    name: L2 rows (EE)
+    needs: l2-ee
+    if: ${{ !cancelled() && needs.l2-ee.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        continue-on-error: true
+        with:
+          name: l2-proxy-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: l2-proxy-results
+      - run: |
+          {
+            echo '### L2 proxy rows (EE)'
+            echo '```'
+            if [[ -s l2-proxy-results/rows.txt ]]; then
+              cat l2-proxy-results/rows.txt
+            else
+              echo 'No rows.txt: the run stopped before the rows. Last lines of build.log:'
+              tail -n 40 l2-proxy-results/build.log 2>/dev/null || echo 'No build.log either.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

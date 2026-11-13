@@ -53,6 +53,9 @@ typedef struct live_entry_s {
 	void* ptr;
 } live_entry;
 
+void
+aerospike_destroy_internal(aerospike* as);
+
 //---------------------------------
 // Globals
 //---------------------------------
@@ -281,6 +284,13 @@ live_cleanup(void)
 	}
 }
 
+void
+live_cleanup_forget(void)
+{
+	live_entries_size = 0;
+	live_cleanup_failed = false;
+}
+
 bool
 live_cleanup_ok(void)
 {
@@ -314,7 +324,9 @@ live_connect(as_config* config, as_error* err)
 	aerospike_init(as, config);
 
 	if (aerospike_connect(as, err) != AEROSPIKE_OK) {
-		aerospike_destroy(as);
+		// Not aerospike_destroy(): with event loops it leaves the destroy to the cluster's close,
+		// and a client that did not connect has no cluster.
+		aerospike_destroy_internal(as);
 		free(as);
 		return NULL;
 	}

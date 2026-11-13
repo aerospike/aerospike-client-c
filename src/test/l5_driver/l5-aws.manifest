@@ -1,6 +1,8 @@
 # Manifest for the l5-aws and l2-proxy harnesses in aerospike-client-conformance (l5-aws/DRIVER.md).
 # Each command runs with bash on Amazon Linux 2023 from the repository root.
-L5_SETUP='bash .github/script/install_deps.bash amazonlinux-2023 sync false false'
+# AL2023's loader does not search /usr/local/lib, where install_deps.bash installs libev, and every binary built here links it.
+L5_SETUP='bash .github/script/install_deps.bash amazonlinux-2023 libev false false && echo /usr/local/lib | sudo tee /etc/ld.so.conf.d/usr-local.conf >/dev/null && sudo ldconfig'
 # A local run.sh export has no .git but already holds the submodule contents (a flattened scratch repository).
-L5_BUILD='if [ ! -f modules/common/Makefile ]; then git config --global --add safe.directory "$PWD" && git submodule update --init --recursive; fi && make && make l5-driver l5-driver-test'
+L5_BUILD='if [ ! -f modules/common/Makefile ]; then git config --global --add safe.directory "$PWD" && git submodule update --init --recursive; fi && make EVENT_LIB=libev && make EVENT_LIB=libev l5-driver l5-driver-test l2-run'
 L5_DRIVER='"target/$(uname -s)-$(uname -m)/test/l5_driver"'
+L2_RUN='"target/$(uname -s)-$(uname -m)/test/l2_run"'

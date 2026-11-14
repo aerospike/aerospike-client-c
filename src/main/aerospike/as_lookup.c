@@ -23,13 +23,6 @@
 #include <aerospike/as_version.h>
 
 //---------------------------------
-// Declarations
-//---------------------------------
-
-const char*
-as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname);
-
-//---------------------------------
 // Static Functions
 //---------------------------------
 
@@ -44,11 +37,81 @@ as_lookup_record_connect_failure(as_cluster* cluster, as_socket* sock)
 	}
 }
 
-static as_status
-as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node_info, uint64_t deadline)
+static void
+as_lookup_destroy_hosts(as_vector* hosts)
 {
-	// Obtain non-TLS addresses.
-	char* command = cluster->use_services_alternate ? "service-clear-alt\n" : "service-clear-std\n";
+	for (uint32_t i = 0; i < hosts->size; i++) {
+		as_host_destroy(as_vector_get(hosts, i));
+	}
+	as_vector_destroy(hosts);
+}
+
+static as_status
+as_lookup_alternate_missing(
+	as_error* err, const char* node_name, const char* where, bool* alternate_missing
+	)
+{
+	if (alternate_missing) {
+		*alternate_missing = true;
+	}
+
+	return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
+		"Node %s%s%s has no alternate-access-address and use_services_alternate is true. "
+		"Configure alternate-access-address on the server or set use_services_alternate to false",
+		node_name, *where ? " " : "", where);
+}
+
+// Parse a service response and translate each advertised address. Addresses that cannot be
+// translated are skipped and the first translation error is retained in first_error.
+static as_status
+as_lookup_translate_services(
+	as_cluster* cluster, as_error* err, char* value, const char* node_name, const char* tls_name,
+	as_vector* translated, as_error* first_error, bool* has_error
+	)
+{
+	as_vector advertised;
+	as_vector_inita(&advertised, sizeof(as_host), 4);
+
+	if (! as_host_parse_addresses(value, &advertised)) {
+		as_vector_destroy(&advertised);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid service hosts string: '%s'", value);
+	}
+
+	as_endpoint_source source = as_cluster_endpoint_source(cluster);
+
+	for (uint32_t i = 0; i < advertised.size; i++) {
+		as_host* host = as_vector_get(&advertised, i);
+		as_error terr;
+		as_host out;
+		as_status status = as_cluster_translate_address(cluster, &terr, node_name, tls_name,
+			host->name, host->port, source, &out);
+
+		if (status == AEROSPIKE_OK) {
+			as_vector_append(translated, &out);
+		}
+		else {
+			as_log_debug("%s", terr.message);
+
+			if (! *has_error) {
+				*first_error = terr;
+				*has_error = true;
+			}
+		}
+	}
+	as_vector_destroy(&advertised);
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_switch_to_clear_socket(
+	as_cluster* cluster, as_error* err, as_node_info* node_info, uint64_t deadline,
+	bool* alternate_missing
+	)
+{
+	// Obtain the node name and non-TLS addresses. The node name is needed to translate addresses.
+	bool alt = cluster->use_services_alternate;
+	char* command = alt ? "node\nservice-clear-alt\n" : "node\nservice-clear-std\n";
+	const char* service_name = alt ? "service-clear-alt" : "service-clear-std";
 	char* response = NULL;
 	as_status status = as_info_command(err, &node_info->socket, NULL, command, true, deadline, 0, &response);
 	as_socket_close(&node_info->socket);
@@ -57,31 +120,57 @@ as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node
 		return status;
 	}
 
+	as_vector values;
+	as_vector_inita(&values, sizeof(as_name_value), 2);
+	as_info_parse_multi_response(response, &values);
+
+	char* node_name = NULL;
+	char* service = NULL;
+
+	for (uint32_t i = 0; i < values.size; i++) {
+		as_name_value* nv = as_vector_get(&values, i);
+
+		if (strcmp(nv->name, "node") == 0) {
+			node_name = nv->value;
+		}
+		else if (strcmp(nv->name, service_name) == 0) {
+			service = nv->value;
+		}
+	}
+
 	as_vector hosts;
 	as_vector_inita(&hosts, sizeof(as_host), 4);
 
-	char* value = NULL;
-	status = as_info_parse_single_response(response, &value);
+	as_error first_error;
+	bool has_error = false;
 
-	if (status) {
-		goto SWITCH_ERROR;
+	if (! node_name || *node_name == 0 || ! service || *service == 0) {
+		if (alt) {
+			status = as_lookup_alternate_missing(err, node_name ? node_name : "", "",
+				alternate_missing);
+		}
+		else {
+			status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid service hosts string: '%s'", response);
+		}
+		goto SWITCH_DONE;
 	}
 
-	if (! as_host_parse_addresses(value, &hosts)) {
-		goto SWITCH_ERROR;
+	status = as_lookup_translate_services(cluster, err, service, node_name, node_info->host.tls_name,
+		&hosts, &first_error, &has_error);
+
+	if (status) {
+		goto SWITCH_DONE;
 	}
 
 	as_error error_local;
 	as_address_iterator iter;
 	as_host* host;
-	const char* hostname;
 	struct sockaddr* addr;
 
 	// Find first valid non-TLS address.
 	for (uint32_t i = 0; i < hosts.size; i++) {
 		host = as_vector_get(&hosts, i);
-		hostname = as_cluster_get_alternate_host(cluster, host->name);
-		status = as_lookup_host(&iter, &error_local, hostname, host->port);
+		status = as_lookup_host(&iter, &error_local, host->name, host->port);
 
 		if (status) {
 			continue;
@@ -101,12 +190,11 @@ as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node
 				}
 
 				if (status == AEROSPIKE_OK) {
-					node_info->host.name = (char*)hostname;
-					node_info->host.tls_name = NULL;
-					node_info->host.port = host->port;
+					// The node keeps its TLS identity (node_info->host.tls_name) even though the
+					// socket is clear.
 					as_address_copy_storage(addr, &node_info->addr);
 					as_lookup_end(&iter);
-					goto SWITCH_SUCCESS;
+					goto SWITCH_DONE;
 				}
 
 				// Close and try next address.
@@ -119,12 +207,18 @@ as_switch_to_clear_socket(as_cluster* cluster, as_error* err, as_node_info* node
 		as_lookup_end(&iter);
 	}
 
-SWITCH_ERROR:
 	// Failed to find non-TLS socket.
-	status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid service hosts string: '%s'", response);
+	if (hosts.size == 0 && has_error) {
+		*err = first_error;
+		status = err->code;
+	}
+	else {
+		status = as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid service hosts string: '%s'", service);
+	}
 
-SWITCH_SUCCESS:
-	as_vector_destroy(&hosts);
+SWITCH_DONE:
+	as_vector_destroy(&values);
+	as_lookup_destroy_hosts(&hosts);
 	cf_free(response);
 	return status;
 }
@@ -140,26 +234,32 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 
 	char addr_name[AS_IP_ADDRESS_SIZE];
 	as_address_short_name((struct sockaddr*)&node_info->addr, addr_name, sizeof(addr_name));
+	uint16_t addr_port = as_address_port((struct sockaddr*)&node_info->addr);
 
 	as_vector hosts;
 	as_vector_inita(&hosts, sizeof(as_host), 4);
 
-	if (! as_host_parse_addresses(response, &hosts)) {
+	as_error first_error;
+	bool has_error = false;
+	as_status status = as_lookup_translate_services(cluster, err, response, node_info->name,
+		tls_name, &hosts, &first_error, &has_error);
+
+	if (status != AEROSPIKE_OK) {
 		as_vector_destroy(&hosts);
-		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Invalid service hosts string: '%s'", response);
+		return status;
 	}
 
-	// Search real hosts for seed.
+	// Search real hosts for seed. Only a registered translator can change the port, so the
+	// implicit static map keeps the legacy host-only comparison.
 	as_host* host;
-	const char* hostname;
+	bool match_port = cluster->translator_registered;
 
 	for (uint32_t i = 0; i < hosts.size; i++) {
 		host = as_vector_get(&hosts, i);
-		hostname = as_cluster_get_alternate_host(cluster, host->name);
 
-		if (strcmp(hostname, addr_name) == 0) {
+		if ((! match_port || host->port == addr_port) && strcmp(host->name, addr_name) == 0) {
 			// Found seed which is not a load balancer.
-			as_vector_destroy(&hosts);
+			as_lookup_destroy_hosts(&hosts);
 			return AEROSPIKE_OK;
 		}
 	}
@@ -170,12 +270,10 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 	as_address_iterator iter;
 	struct sockaddr* addr;
 	as_error error_local;
-	as_status status;
 
 	for (uint32_t i = 0; i < hosts.size; i++) {
 		host = as_vector_get(&hosts, i);
-		hostname = as_cluster_get_alternate_host(cluster, host->name);
-		status = as_lookup_host(&iter, &error_local, hostname, host->port);
+		status = as_lookup_host(&iter, &error_local, host->name, host->port);
 
 		if (status != AEROSPIKE_OK) {
 			continue;
@@ -214,12 +312,9 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 
 							as_socket_close(&node_info->socket);
 							memcpy(&node_info->socket, &sock, sizeof(as_socket));
-							node_info->host.name = (char*)hostname;
-							node_info->host.tls_name = tls_name;
-							node_info->host.port = host->port;
 							as_address_copy_storage(addr, &node_info->addr);
 							as_lookup_end(&iter);
-							as_vector_destroy(&hosts);
+							as_lookup_destroy_hosts(&hosts);
 							cf_free(response2);
 							return AEROSPIKE_OK;
 						}
@@ -240,7 +335,7 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 	// because the server access-address is not configured.  Log warning and continue
 	// with original seed.
 	as_log_info("Invalid address %s. access-address is probably not configured on server.", response);
-	as_vector_destroy(&hosts);
+	as_lookup_destroy_hosts(&hosts);
 	return AEROSPIKE_OK;
 }
 
@@ -292,11 +387,16 @@ as_lookup_host(as_address_iterator* iter, as_error* err, const char* hostname, u
 as_status
 as_lookup_node(
 	as_cluster* cluster, as_error* err, as_host* host, struct sockaddr* addr,
-	bool detect_load_balancer, as_node_info* node_info
+	bool detect_load_balancer, as_node_info* node_info, bool* alternate_missing
 	)
 {
+	if (alternate_missing) {
+		*alternate_missing = false;
+	}
+
 	uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
 	
+	bool alt_validated = false;
 	as_status status = as_socket_create_and_connect(&node_info->socket, err, addr, cluster->tls_ctx,
 													host->tls_name, deadline);
 
@@ -324,7 +424,8 @@ as_lookup_node(
 
 		if (cluster->tls_ctx && cluster->tls_ctx->for_login_only) {
 			// Switch to using non-TLS socket.
-			status = as_switch_to_clear_socket(cluster, err, node_info, deadline);
+			status = as_switch_to_clear_socket(cluster, err, node_info, deadline,
+				alternate_missing);
 
 			if (status) {
 				cf_free(node_info->session);
@@ -334,6 +435,9 @@ as_lookup_node(
 			// Disable load balancer detection since non-TLS address has already
 			// been retrieved via service info command.
 			detect_load_balancer = false;
+
+			// The clear service address list was already required to be non-empty.
+			alt_validated = true;
 		}
 	}
 
@@ -347,21 +451,24 @@ as_lookup_node(
 		args++;
 	}
 
-	if (detect_load_balancer) {
-		if (as_address_is_local(addr)) {
-			// localhost is never a load balancer.
-			detect_load_balancer = false;
-		}
-		else {
-			// Seed may be load balancer with changing address. Determine real address.
-			const char* address_command = (cluster->tls_ctx) ?
-				cluster->use_services_alternate ? "service-tls-alt" : "service-tls-std" :
-				cluster->use_services_alternate ? "service-clear-alt" : "service-clear-std";
+	if (detect_load_balancer && as_address_is_local(addr)) {
+		// localhost is never a load balancer.
+		detect_load_balancer = false;
+	}
 
-			as_string_builder_append(&sb, address_command);
-			as_string_builder_append_char(&sb, '\n');
-			args++;
-		}
+	// The alternate address list must contain the node itself, even when load balancer detection
+	// is not needed.
+	bool service = detect_load_balancer || (cluster->use_services_alternate && ! alt_validated);
+
+	if (service) {
+		// Seed may be load balancer with changing address. Determine real address.
+		const char* address_command = (cluster->tls_ctx) ?
+			cluster->use_services_alternate ? "service-tls-alt" : "service-tls-std" :
+			cluster->use_services_alternate ? "service-clear-alt" : "service-clear-std";
+
+		as_string_builder_append(&sb, address_command);
+		as_string_builder_append_char(&sb, '\n');
+		args++;
 	}
 
 	char* response = 0;
@@ -378,7 +485,7 @@ as_lookup_node(
 	
 	as_info_parse_multi_response(response, &values);
 	
-	if ((detect_load_balancer && values.size < args - 1) || (!detect_load_balancer && values.size != args)) {
+	if ((service && values.size < args - 1) || (!service && values.size != args)) {
 		// Vector was probably resized on heap. Destroy vector.
 		as_vector_destroy(&values);
 		goto Error;
@@ -484,14 +591,26 @@ as_lookup_node(
 		}
 	}
 
-	if (detect_load_balancer && args < values.size) {
-		nv = as_vector_get(&values, args++);
-		status = as_set_node_address(cluster, err, nv->value, host->tls_name, node_info);
+	if (service) {
+		char* service_value = (args < values.size) ? ((as_name_value*)as_vector_get(&values, args++))->value : NULL;
 
-		if (status != AEROSPIKE_OK) {
+		if (cluster->use_services_alternate && (! service_value || *service_value == 0)) {
+			char addr_name[AS_IP_ADDRESS_SIZE];
+			as_address_name((struct sockaddr*)&node_info->addr, addr_name, sizeof(addr_name));
+			as_lookup_alternate_missing(err, node_info->name, addr_name, alternate_missing);
 			cf_free(response);
 			as_node_info_destroy(node_info);
-			return status;
+			return err->code;
+		}
+
+		if (detect_load_balancer && service_value) {
+			status = as_set_node_address(cluster, err, service_value, host->tls_name, node_info);
+
+			if (status != AEROSPIKE_OK) {
+				cf_free(response);
+				as_node_info_destroy(node_info);
+				return status;
+			}
 		}
 	}
 

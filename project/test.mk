@@ -4,6 +4,13 @@
 
 TEST_AEROSPIKE = aerospike_test.c
 TEST_AEROSPIKE += config_basics.c
+TEST_AEROSPIKE += discovery_aws.c
+TEST_AEROSPIKE += discovery_aws_stub.c
+TEST_AEROSPIKE += discovery_contract.c
+TEST_AEROSPIKE += discovery_dns.c
+TEST_AEROSPIKE += discovery_fake_node.c
+TEST_AEROSPIKE += discovery_translation.c
+TEST_AEROSPIKE += discovery_seed_manager.c
 TEST_AEROSPIKE += metrics_basics.c
 TEST_AEROSPIKE += aerospike_batch/*.c
 TEST_AEROSPIKE += aerospike_bit/*.c
@@ -114,6 +121,44 @@ test-gdb: test-build
 .PHONY: test-build
 test-build: $(TARGET_TEST)/aerospike_test
 
+# The aws-real probe is built against installed headers only, so it has its own recipe: the
+# object and executable macros add every INC_PATH entry, including src/include.
+.PHONY: aws-real-probe
+aws-real-probe: $(TARGET_TEST)/aws_real_probe
+
+# The L1 conformance runner is built against installed headers only, like the aws-real probe.
+# conformance-run needs CONFORMANCE_DIR, an aerospike-client-conformance checkout.
+.PHONY: conformance
+conformance: $(TARGET_TEST)/conformance_runner
+
+CONFORMANCE_REPORT = $(TARGET)/conformance/conformance-report.json
+
+.PHONY: conformance-run
+conformance-run: $(TARGET_TEST)/conformance_runner
+	@test -n "$(CONFORMANCE_DIR)" || { echo "Set CONFORMANCE_DIR to an aerospike-client-conformance checkout" >&2; exit 2; }
+	@mkdir -p $(dir $(CONFORMANCE_REPORT))
+	$(TARGET_TEST)/conformance_runner --fixtures $(CONFORMANCE_DIR) \
+		--declarations $(SOURCE_TEST)/conformance/c-declared.yaml --report $(CONFORMANCE_REPORT)
+
+# The L5 driver is built against installed headers only, like the conformance runner. Its unit
+# tests need no server.
+.PHONY: l5-driver
+l5-driver: $(TARGET_TEST)/l5_driver
+
+.PHONY: l5-driver-test
+l5-driver-test: $(TARGET_TEST)/l5_driver_test
+	$(TARGET_TEST)/l5_driver_test
+
+# Client tests for the aerospike-client-conformance topologies, built against installed headers
+# only like the L5 driver: l2_run is the l2-proxy L2_RUN, discovery_env the envs/ client. The
+# harnesses run them, so neither target does. EVENT_LIB must be the one libaerospike.a was built
+# with; make does not rebuild the library when it changes.
+.PHONY: l2-run
+l2-run: $(TARGET_TEST)/l2_run
+
+.PHONY: discovery-env
+discovery-env: $(TARGET_TEST)/discovery_env
+
 .PHONY: test-clean
 test-clean:
 	@rm -rf $(TARGET_TEST)
@@ -131,3 +176,29 @@ $(TARGET_TEST)/%.o: $(SOURCE_TEST)/%.c
 $(TARGET_TEST)/aerospike_test: CFLAGS += $(TEST_CFLAGS)
 $(TARGET_TEST)/aerospike_test: $(TEST_OBJECT) $(TARGET_TEST)/test.o $(TARGET_LIB)/libaerospike.a | build prepare
 	$(executable) $(TEST_LDFLAGS)
+
+$(TARGET_TEST)/aws_real_probe: $(SOURCE_TEST)/aws_real/aws_real_probe.c $(TARGET_LIB)/libaerospike.a | build prepare
+	@mkdir -p $(dir $@)
+	$(CC) $(CC_FLAGS) -I$(TARGET_INCL) -o $@ $< $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)
+
+$(TARGET_TEST)/conformance_runner: $(SOURCE_TEST)/conformance/conformance_runner.c $(TARGET_LIB)/libaerospike.a | build prepare
+	@mkdir -p $(dir $@)
+	$(CC) $(CC_FLAGS) -I$(TARGET_INCL) -o $@ $< $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)
+
+$(TARGET_TEST)/l5_driver: $(SOURCE_TEST)/l5_driver/l5_driver.c $(TARGET_LIB)/libaerospike.a | build prepare
+	@mkdir -p $(dir $@)
+	$(CC) $(CC_FLAGS) -I$(TARGET_INCL) -o $@ $< $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)
+
+$(TARGET_TEST)/l5_driver_test: $(SOURCE_TEST)/l5_driver/l5_driver_test.c $(SOURCE_TEST)/l5_driver/l5_driver.c $(SOURCE_TEST)/test.c $(TARGET_LIB)/libaerospike.a | build prepare
+	@mkdir -p $(dir $@)
+	$(CC) $(CC_FLAGS) -DL5_DRIVER_NO_MAIN -I$(TARGET_INCL) -I$(SOURCE_TEST) -o $@ $< $(SOURCE_TEST)/test.c $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)
+
+LIVE_SOURCE = $(SOURCE_TEST)/l2_run/live.c $(SOURCE_TEST)/test.c
+
+$(TARGET_TEST)/l2_run: $(SOURCE_TEST)/l2_run/l2_run.c $(LIVE_SOURCE) $(SOURCE_TEST)/l2_run/live.h $(TARGET_LIB)/libaerospike.a | build prepare
+	@mkdir -p $(dir $@)
+	$(CC) $(CC_FLAGS) -I$(TARGET_INCL) -I$(SOURCE_TEST) -o $@ $< $(LIVE_SOURCE) $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)
+
+$(TARGET_TEST)/discovery_env: $(SOURCE_TEST)/discovery_env/discovery_env.c $(LIVE_SOURCE) $(SOURCE_TEST)/l2_run/live.h $(TARGET_LIB)/libaerospike.a | build prepare
+	@mkdir -p $(dir $@)
+	$(CC) $(CC_FLAGS) -I$(TARGET_INCL) -I$(SOURCE_TEST) -o $@ $< $(LIVE_SOURCE) $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)

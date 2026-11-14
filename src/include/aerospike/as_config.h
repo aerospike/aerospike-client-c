@@ -17,6 +17,7 @@
 #pragma once 
 
 #include <aerospike/as_error.h>
+#include <aerospike/as_discovery.h>
 #include <aerospike/as_host.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_password.h>
@@ -465,6 +466,7 @@ typedef struct as_config_s {
 	/**
 	 * Seed hosts. Populate with one or more hosts in the cluster that you intend to connect with.
 	 * Do not set directly.  Use as_config_add_hosts() or as_config_add_host() to add seed hosts.
+	 * May be left empty when a seed provider is registered (see discovery).
 	 */
 	as_vector* hosts;
 	
@@ -519,6 +521,14 @@ typedef struct as_config_s {
 	 * The key is the IP address returned from friend info requests to other servers.  The
 	 * value is the real IP address used to connect to the server.
 	 *
+	 * The match is exact and host-only, and the port is unchanged. It applies to
+	 * configured seeds, as_cluster_add_seed() hosts, node addresses used to reseed,
+	 * and advertised peer and service addresses. Seeds returned by a seed provider
+	 * are used as returned, unless one equals a configured seed by name and port.
+	 *
+	 * Ignored while an address translator is registered, configured seeds included;
+	 * aerospike_connect() then logs a warning.
+	 *
 	 * A deep copy of ip_map is performed in aerospike_connect().  The caller is
 	 * responsible for memory deallocation of the original data structure.
 	 */
@@ -529,6 +539,30 @@ typedef struct as_config_s {
 	 * Default: 0
 	 */
 	uint32_t ip_map_size;
+
+	/**
+	 * Pluggable seed discovery configuration. When no provider is registered
+	 * the static provider over the configured seeds is used, which adds no
+	 * thread and no periodic work.
+	 *
+	 * The provider supplies the hosts used to bootstrap and, when the cluster
+	 * has no active node, to reseed. Cluster membership still comes from the
+	 * servers. Its result is merged with hosts per merge_policy; hosts may be
+	 * empty when a provider is registered. Discovered hosts without a TLS name
+	 * get the same default as configured hosts when TLS is enabled.
+	 */
+	as_discovery_config discovery;
+
+	/**
+	 * Pluggable address translation configuration. When no translator is
+	 * registered the static map over ip_map is used, including for configured
+	 * seeds.
+	 *
+	 * A registered translator is invoked for every peer and service endpoint a
+	 * server advertises, never for configured seeds. While a translator is
+	 * registered, ip_map is ignored and configured seeds are used as configured.
+	 */
+	as_translation_config translation;
 	
 	/**
 	 * Minimum number of synchronous connections allowed per server node.  Preallocate min
@@ -767,6 +801,18 @@ typedef struct as_config_s {
 	 * Peers addresses: peers-clear-alt
 	 * Peers TLS addresses: peers-tls-alt
 	 *
+	 * When true, every node must have an alternate address:
+	 * - A seed whose service-*-alt reply is empty is not used. If no seed is
+	 *   usable, aerospike_connect() fails with AEROSPIKE_ERR_INVALID_NODE when
+	 *   fail_if_not_connected is true; otherwise it logs a warning and connects
+	 *   with no nodes.
+	 * - A peer that is missing from the alternate peers list, or listed with no
+	 *   hosts, is not added. It is logged at error level on every tend until it
+	 *   is fixed. During aerospike_connect() with fail_if_not_connected, when only
+	 *   the seed node is found, connect fails with AEROSPIKE_ERR_INVALID_NODE.
+	 *
+	 * Each such error names use_services_alternate and alternate-access-address.
+	 *
 	 * Default: false
 	 */
 	bool use_services_alternate;
@@ -894,6 +940,181 @@ AS_EXTERN void
 as_config_destroy(as_config* config);
 
 /**
+ * Register a seed provider. The function table is validated (size, version,
+ * non-empty name, refresh and needs_periodic_refresh) and copied, including
+ * name. On success the config takes ownership of provider->udata and destroys
+ * it exactly once (see as_seed_provider.destroy); a previous registration is
+ * destroyed, unless it has the same udata (below). On failure ownership stays
+ * with the caller.
+ *
+ * Registering the non-NULL udata that is already registered on this config
+ * destroys nothing; the registration is replaced and keeps that udata, and the
+ * new destroy replaces the previous one. udata is destroyed once per distinct
+ * pointer, not once per registration: a caller that takes a reference for each
+ * registration must not take another when registering the same udata again. A
+ * udata registered on several configs is owned by each of them: each calls it
+ * independently and each destroys it once.
+ *
+ * A successful registration also ends a release by aerospike_close() of an
+ * unconnected async client (as_discovery_config.provider_released).
+ *
+ * Returns AEROSPIKE_ERR_PARAM for an invalid table or while a client created
+ * from this config is connected.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_seed_provider(as_config* config, const as_seed_provider* provider, as_error* err);
+
+/**
+ * Register an address translator. The function table is validated (size,
+ * version, non-empty name and translate) and copied, including name. On
+ * success the config takes ownership of translator->udata and destroys it
+ * exactly once (see as_address_translator.destroy); a previous registration is
+ * destroyed, unless it has the same udata (below). On failure ownership stays
+ * with the caller.
+ *
+ * Registering the non-NULL udata that is already registered on this config
+ * destroys nothing; the registration is replaced and keeps that udata, and the
+ * new destroy replaces the previous one. udata is destroyed once per distinct
+ * pointer, not once per registration: a caller that takes a reference for each
+ * registration must not take another when registering the same udata again. A
+ * udata registered on several configs is owned by each of them: each calls it
+ * independently and each destroys it once.
+ *
+ * A successful registration also ends a release by aerospike_close() of an
+ * unconnected async client (as_translation_config.provider_released).
+ *
+ * While a translator is registered, as_config.ip_map is ignored, configured
+ * seeds included.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for an invalid table or while a client created
+ * from this config is connected.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_address_translator(as_config* config, const as_address_translator* translator,
+	as_error* err);
+
+/**
+ * Register the built-in port-map translator. entries maps an advertised
+ * host:port, or a node name, to the host:port to connect to; see
+ * as_discovery_port_map_translator() for the grammar. The entries are
+ * validated and copied; the caller keeps ownership of its strings. As with
+ * as_config_set_address_translator(), ip_map is then ignored.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for an invalid entry (the message names it) or
+ * while a client created from this config is connected. On failure the
+ * previous registration is unchanged.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_port_map_translator(as_config* config, const as_addr_map* entries, uint32_t size,
+	as_error* err);
+
+/**
+ * Register the built-in pass-through translator, which returns every advertised
+ * endpoint unchanged as a successful mapping, so it succeeds even with
+ * translation.on_miss set to AS_TRANSLATION_STRICT. As with
+ * as_config_set_address_translator(), ip_map is then ignored.
+ *
+ * Returns AEROSPIKE_ERR_PARAM while a client created from this config is
+ * connected.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_pass_through_translator(as_config* config, as_error* err);
+
+/**
+ * Register the built-in DNS seed provider; see as_discovery_dns_seed_provider()
+ * for its behavior. The configuration is validated and copied, and the system
+ * resolvers are read when servers is empty; the caller keeps ownership of dns
+ * and its strings.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for an invalid configuration (the message names
+ * the value), when no system resolver is usable and servers is empty, or while
+ * a client created from this config is connected. On failure the previous
+ * registration is unchanged.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_dns_seed_provider(as_config* config, const as_dns_seed_provider_config* dns,
+	as_error* err);
+
+/**
+ * Register the built-in AWS EC2 seed provider; see as_discovery_aws_seed_provider() for its
+ * behavior. The configuration is validated and copied and the TLS context created; the caller
+ * keeps ownership of aws and its strings. On success the registration owns
+ * aws->credentials_hook.udata and runs the hook destroy when it is released; on any failure the
+ * caller keeps it.
+ *
+ * The provider is thread-only: registration fails while discovery.execution_mode is
+ * AS_DISCOVERY_EXECUTION_TEND, and aerospike_connect() fails if execution_mode is changed to it
+ * afterwards. Set execution_mode before registering.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for an invalid configuration (the message names the value), in
+ * tend mode, or while a client created from this config is connected,
+ * AEROSPIKE_ERR_TLS_ERROR when ca_file or ca_path cannot be loaded, and AEROSPIKE_ERR_CLIENT
+ * when memory runs out. On failure the previous registration is unchanged.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_aws_seed_provider(as_config* config, const as_aws_seed_provider_config* aws,
+	as_error* err);
+
+/**
+ * Register a seed provider implemented by a language binding (Python, Node.js).
+ * Ownership and replacement rules are those of as_config_set_seed_provider().
+ *
+ * The callback is only valid with AS_DISCOVERY_EXECUTION_THREAD: registration
+ * fails while execution_mode is AS_DISCOVERY_EXECUTION_TEND and
+ * aerospike_connect() fails if execution_mode is changed to it afterwards.
+ *
+ * Every refresh call, including the initial one, runs on the client-owned
+ * discovery thread, periodic or not, and never on the connecting or tend
+ * thread. aerospike_connect() waits at most discovery.refresh_timeout_ms for
+ * the initial result; as_seed_provider.refresh states the close and reconnect
+ * bounds. refresh must enter the runtime safely (for example acquire the Python
+ * GIL) and return hosts copied with as_seed_candidates_append(), or a non-OK
+ * as_status with err set; the client then keeps the previous seeds. Only
+ * refresh may wait for the runtime thread: destroy must not (see
+ * as_seed_provider.destroy), and there is no needs_periodic_refresh callback.
+ *
+ * The thread that calls aerospike_connect(), aerospike_close() or
+ * aerospike_destroy() must not hold anything the callback needs:
+ * - Node.js: call aerospike_connect(), aerospike_close() and
+ *   aerospike_destroy() from a worker thread (for example an AsyncWorker), not
+ *   the JS main thread. Otherwise every connect waits up to refresh_timeout_ms
+ *   and continues without the result (it then uses the configured seeds and
+ *   fails if there are none), and a close during a refresh blocks the main
+ *   thread up to refresh_timeout_ms.
+ * - Python: release the GIL around connect, close and destroy.
+ *
+ * With async event loops, closing after a failed connect releases the
+ * registration, so retrying aerospike_connect() on the same aerospike object
+ * fails until it is registered again. A binding that lets users retry connect
+ * must register again or create a new aerospike object.
+ *
+ * A binding translate callback is not supported.
+ *
+ * periodic: true when candidates can change and must be refreshed
+ * periodically. Replaces needs_periodic_refresh, so the client never calls into
+ * the binding to decide it. destroy is optional.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_binding_seed_provider(as_config* config, const char* name,
+	as_status (*refresh)(as_error* err, const as_seed_candidate_context* context,
+		as_seed_candidates* candidates, void* udata),
+	bool periodic, void (*destroy)(void* udata), void* udata, as_error* err);
+
+/**
  * Add seed host(s) from a string with format: hostname1[:tlsname1][:port1],...
  * Hostname may also be an IP address in the following formats.
  *
@@ -905,6 +1126,9 @@ as_config_destroy(as_config* config);
  *
  * The host addresses will be copied.
  * The caller is responsible for the original string.
+ *
+ * An empty TLS name is the same as none: with TLS enabled, the host gets the
+ * default TLS name (cluster_name, or the host name).
  *
  * @code
  * as_config config;
@@ -1137,6 +1361,9 @@ as_config_tls_set_certstring(as_config* config, const char* certstring)
  * Add TLS host to seed the cluster.
  * The host address and TLS name will be copied.
  * The caller is responsible for the original address string.
+ *
+ * An empty TLS name is the same as none: with TLS enabled, the host gets the
+ * default TLS name (cluster_name, or the host name).
  *
  * @code
  * as_config config;

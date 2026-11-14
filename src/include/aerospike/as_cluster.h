@@ -76,6 +76,73 @@ typedef struct as_event_state_s {
 
 /**
  * @private
+ * Immutable, reference counted seed list published by the seed manager.
+ */
+typedef struct as_seed_snapshot_s as_seed_snapshot;
+
+/**
+ * @private
+ * Seed discovery runtime: owns the published seed snapshots and schedules seed provider refreshes.
+ */
+typedef struct as_seed_manager_s as_seed_manager;
+
+/**
+ * @private
+ * Seed manager counters, for diagnostics and tests.
+ */
+typedef struct as_seed_manager_stats_s {
+	/**
+	 * Tends counted after initialization. Passed to the provider as tend_iteration.
+	 */
+	uint64_t tend_iteration;
+
+	/**
+	 * Provider refresh calls, including the initialization call.
+	 */
+	uint32_t refreshes;
+
+	/**
+	 * Refreshes after initialization that kept the previous seeds because the provider failed,
+	 * returned invalid output or the merge failed.
+	 */
+	uint32_t failures;
+
+	/**
+	 * Tend mode: consecutive refreshes over tend_refresh_deadline_ms. Thread mode: refreshes over
+	 * refresh_timeout_ms, counted only; refreshes never stop.
+	 */
+	uint32_t overruns;
+
+	/**
+	 * Urgent requests that woke the sleeping refresh thread.
+	 */
+	uint32_t urgent_wakes;
+
+	/**
+	 * Snapshots published, including the initialization snapshot.
+	 */
+	uint32_t publications;
+
+	/**
+	 * True while the discovery thread exists, including a thread left finishing a refresh after
+	 * stop.
+	 */
+	bool thread_running;
+
+	/**
+	 * True while a provider call runs on the discovery thread.
+	 */
+	bool in_refresh;
+
+	/**
+	 * True when three consecutive tend-mode overruns stopped refreshes and restored the
+	 * initialization seeds.
+	 */
+	bool tripped;
+} as_seed_manager_stats;
+
+/**
+ * @private
  * Reference counted release function definition.
  */
 typedef void (*as_release_fn) (void* value);
@@ -172,9 +239,9 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Initial seed hosts specified by user.
+	 * Seed snapshots and seed provider refresh scheduling.
 	 */
-	as_vector* /* <as_host> */ seeds;
+	as_seed_manager* seed_manager;
 
 	/**
 	 * @private
@@ -184,8 +251,43 @@ typedef struct as_cluster_s {
 	 *
 	 * The key is the IP address returned from friend info requests to other servers.  The
 	 * value is the real IP address used to connect to the server.
+	 *
+	 * NULL when a translator is registered: ip_map is then ignored, configured seeds included.
 	 */
 	as_vector* /* <as_addr_map> */ ip_map;
+
+	/**
+	 * @private
+	 * Shallow copy of the translator registered in the config. The name and udata stay
+	 * owned by the config, which outlives the cluster and cannot change while connected.
+	 * Only valid when translator_registered is true; otherwise ip_map is the translator.
+	 */
+	as_address_translator translator;
+
+	/**
+	 * @private
+	 * Behavior when the translator has no mapping.
+	 */
+	as_translation_miss_policy translation_on_miss;
+
+	/**
+	 * @private
+	 * Client-wide counter passed to the translator's on_cluster_view_changed callback.
+	 * Incremented in the tend thread.
+	 */
+	uint32_t translation_view_generation;
+
+	/**
+	 * @private
+	 * True when a registered translator has a translate callback.
+	 */
+	bool translator_registered;
+
+	/**
+	 * @private
+	 * True when the registered translator wants cluster view change notifications.
+	 */
+	bool translation_view_callback;
 
 	/**
 	 * @private
@@ -205,12 +307,6 @@ typedef struct as_cluster_s {
 	 */
 	pthread_t tend_thread;
 	
-	/**
-	 * @private
-	 * Lock for adding/removing seeds.
-	 */
-	pthread_mutex_t seed_lock;
-
 	/**
 	 * @private
 	 * Lock for metrics operations.
@@ -662,6 +758,30 @@ as_nodes_release(as_nodes* nodes)
 }
 
 /**
+ * @private
+ * Translate an advertised peer or service endpoint into the host to connect to. Uses the
+ * registered translator, or the static map over ip_map when none is registered, then applies the
+ * translation miss policy. On AEROSPIKE_OK out is a copy owned by the caller, with a copy of
+ * tls_name: translation never changes the TLS identity. A strict miss returns
+ * AEROSPIKE_ERR_TRANSLATION_MISS. Performs no I/O.
+ */
+AS_EXTERN as_status
+as_cluster_translate_address(
+	as_cluster* cluster, as_error* err, const char* node_name, const char* tls_name,
+	const char* host, uint16_t port, as_endpoint_source source, as_host* out
+	);
+
+/**
+ * @private
+ * Source list that servers advertise endpoints from, according to use_services_alternate.
+ */
+static inline as_endpoint_source
+as_cluster_endpoint_source(const as_cluster* cluster)
+{
+	return cluster->use_services_alternate ? AS_ENDPOINT_SOURCE_ALTERNATE : AS_ENDPOINT_SOURCE_STANDARD;
+}
+
+/**
  * Reserve nodes. Return error if cluster is empty.
  */
 AS_EXTERN as_status
@@ -683,16 +803,173 @@ as_status
 as_cluster_validate_size(as_cluster* cluster, as_error* err, uint32_t* size);
 
 /**
- * Add seed to cluster.
+ * Add seed to cluster. The seed list is replaced, not modified, so a reseed already in progress
+ * keeps the list it started with. A later seed provider refresh may replace the added seed
+ * according to as_config.discovery.merge_policy. An empty tls_name is the same as NULL; with TLS
+ * enabled a NULL tls_name gets the configured-seed default.
  */
 AS_EXTERN void
 as_cluster_add_seed(as_cluster* cluster, const char* hostname, const char* tls_name, uint16_t port);
 
 /**
- * Remove seed from cluster.
+ * Remove seed from cluster. The seed list is replaced, not modified, so a reseed already in
+ * progress keeps the list it started with. A later seed provider refresh may add the seed again.
  */
 AS_EXTERN void
 as_cluster_remove_seed(as_cluster* cluster, const char* hostname, uint16_t port);
+
+/**
+ * @private
+ * Tracks the discovery-thread provider call of one config, which can outlive the seed manager
+ * that started it, and the provider destroys handed over while it runs.
+ */
+typedef struct as_seed_inflight_s as_seed_inflight;
+
+/**
+ * @private
+ * Release a reference on the call tracker. Accepts NULL.
+ */
+void
+as_seed_inflight_release(as_seed_inflight* inflight);
+
+/**
+ * @private
+ * When a discovery-thread call with this udata is running, hand destroy(udata) over to that
+ * thread, which runs it after the call returns, and return true. Otherwise return false and the
+ * caller destroys udata. Accepts a NULL tracker.
+ */
+bool
+as_seed_inflight_defer_destroy(as_seed_inflight* inflight, void (*destroy)(void*), void* udata);
+
+/**
+ * @private
+ * Wait at most timeout_ms for a running discovery-thread call to return. Returns
+ * AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, naming the provider, when it is still running. Accepts a
+ * NULL tracker.
+ */
+as_status
+as_seed_inflight_wait(as_seed_inflight* inflight, uint32_t timeout_ms, as_error* err);
+
+/**
+ * @private
+ * Wait at most refresh_timeout_ms for a refresh left running by an earlier seed manager of the
+ * same config, then validate the discovery configuration and create a seed manager over copies
+ * of config->hosts, the cluster name and the provider name. Calls the provider's
+ * needs_periodic_refresh and supports_deadline; does not call refresh. A manager that will run a
+ * discovery thread takes a reference on config->discovery.inflight.
+ *
+ * Returns AEROSPIKE_ERR_SEED_DISCOVERY_FAILED when the earlier refresh is still running,
+ * AEROSPIKE_ERR_PARAM for an invalid discovery setting.
+ */
+AS_EXTERN as_status
+as_seed_manager_create(as_error* err, as_config* config, as_seed_manager** manager);
+
+/**
+ * @private
+ * Obtain and publish the initialization seeds. A binding provider, or a periodic provider in
+ * thread execution mode, is refreshed on the started discovery thread, and this call waits for
+ * its first result for at most refresh_timeout_ms; otherwise the provider is refreshed once on
+ * the calling thread.
+ *
+ * Returns AEROSPIKE_ERR_SEED_DISCOVERY_FAILED when the provider failed and no configured seed is
+ * left.
+ */
+AS_EXTERN as_status
+as_seed_manager_start(as_seed_manager* manager, as_error* err);
+
+/**
+ * @private
+ * Mark connect complete. Until then, stop waits only for the rest of the connect budget, which
+ * started with the initial refresh.
+ */
+AS_EXTERN void
+as_seed_manager_connected(as_seed_manager* manager);
+
+/**
+ * @private
+ * Reserve the current seed snapshot. Never calls the provider and never waits for a refresh.
+ * Release with as_seed_snapshot_release().
+ */
+AS_EXTERN as_seed_snapshot*
+as_seed_manager_reserve(as_seed_manager* manager);
+
+/**
+ * @private
+ * Hosts (as_host elements) of a reserved snapshot. Read-only, valid until the snapshot is released.
+ */
+AS_EXTERN const as_vector*
+as_seed_snapshot_hosts(const as_seed_snapshot* snapshot);
+
+/**
+ * @private
+ * True when the legacy ip_map applies to the snapshot host at index: configured seeds, node
+ * addresses and as_cluster_add_seed() hosts. Provider-only hosts are used as returned.
+ */
+AS_EXTERN bool
+as_seed_snapshot_uses_ip_map(const as_seed_snapshot* snapshot, uint32_t index);
+
+/**
+ * @private
+ * Release a reserved seed snapshot.
+ */
+AS_EXTERN void
+as_seed_snapshot_release(as_seed_snapshot* snapshot);
+
+/**
+ * @private
+ * Wake a sleeping refresh thread so that it refreshes now, at most once per refresh_interval_ms.
+ * Returns immediately. Does nothing when a refresh is in progress or no refresh thread exists.
+ */
+AS_EXTERN void
+as_seed_manager_request_urgent(as_seed_manager* manager);
+
+/**
+ * @private
+ * Count one tend after initialization and, in tend execution mode, refresh the provider on its
+ * cadence. Called by the tend thread after the reseed attempt of that tend.
+ */
+AS_EXTERN void
+as_seed_manager_tend(as_seed_manager* manager);
+
+/**
+ * @private
+ * Publish a copy of the current seeds with the given hosts (as_host elements) appended. Hosts
+ * already present (same name and port) are skipped.
+ */
+AS_EXTERN void
+as_seed_manager_add_hosts(as_seed_manager* manager, const as_vector* hosts);
+
+/**
+ * @private
+ * Publish a copy of the current seeds without any host of the given name and port.
+ */
+AS_EXTERN void
+as_seed_manager_remove_host(as_seed_manager* manager, const char* name, uint16_t port);
+
+/**
+ * @private
+ * Stop the discovery thread. An idle thread is joined. A refresh in progress is waited for at most
+ * refresh_timeout_ms, or the rest of the connect budget before as_seed_manager_connected(); after
+ * that the thread is detached and finishes the call on its own. No provider call starts after
+ * this returns. Seeds stay readable and modifiable. Idempotent.
+ */
+AS_EXTERN void
+as_seed_manager_stop(as_seed_manager* manager);
+
+/**
+ * @private
+ * Stop the seed manager and release the caller's reference. A thread still finishing a refresh
+ * releases the manager when it exits.
+ */
+AS_EXTERN void
+as_seed_manager_destroy(as_seed_manager* manager);
+
+/**
+ * @private
+ * Copy the seed manager counters.
+ */
+AS_EXTERN void
+as_seed_manager_get_stats(as_seed_manager* manager, as_seed_manager_stats* stats);
 
 /**
  * @private
@@ -700,6 +977,13 @@ as_cluster_remove_seed(as_cluster* cluster, const char* hostname, uint16_t port)
  */
 void
 as_cluster_change_password(as_cluster* cluster, const char* user, const char* password, const char* password_hash);
+
+/**
+ * @private
+ * Return the legacy ip_map translation of hostname, or hostname when unmapped.
+ */
+AS_EXTERN const char*
+as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname);
 
 /**
  * @private

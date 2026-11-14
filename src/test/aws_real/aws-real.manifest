@@ -1,0 +1,5 @@
+# Manifest for the aws-tags real AWS harness in aerospike-client-conformance (aws-real/README.md).
+# Each command runs with bash on the runner (Amazon Linux 2023) from the repository root.
+AWS_REAL_SETUP='bash .github/script/install_deps.bash amazonlinux-2023 sync false false'
+AWS_REAL_BUILD='git submodule update --init --recursive && make && make aws-real-probe'
+AWS_REAL_PROBE='"target/$(uname -s)-$(uname -m)/test/aws_real_probe"'

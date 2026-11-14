@@ -58,9 +58,6 @@ static const char* as_ns_empty = "";
 // Function declarations
 //---------------------------------
 
-const char*
-as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname);
-
 bool
 as_partition_tables_update_all(as_cluster* cluster, as_node* node, char* buf);
 
@@ -180,6 +177,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->addresses = cf_malloc(sizeof(as_address) * (AS_ADDRESS6_MAX));
 	as_node_add_address(node, (struct sockaddr*)&node_info->addr);
 	node->hostname = NULL;
+	node->advertised_hosts = NULL;
 
 	memcpy(&node->info_socket, &node_info->socket, sizeof(as_socket));
 	node->tls_name = node_info->host.tls_name ? cf_strdup(node_info->host.tls_name) : NULL;
@@ -303,6 +301,8 @@ as_node_destroy(as_node* node)
 	if (node->tls_name) {
 		cf_free(node->tls_name);
 	}
+
+	cf_free(node->advertised_hosts);
 
 	as_session* session = as_session_load(&node->session);
 
@@ -1258,33 +1258,51 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 	return status;
 }
 
-static const char INFO_STR_PEERS_TLS_ALT[] = "peers-tls-alt\n";
 static const char INFO_STR_PEERS_TLS_STD[] = "peers-tls-std\n";
-static const char INFO_STR_PEERS_CLEAR_ALT[] = "peers-clear-alt\n";
 static const char INFO_STR_PEERS_CLEAR_STD[] = "peers-clear-std\n";
+
+// Alternate peers are requested together with the standard peers in one round trip. The standard
+// list is only the completeness baseline.
+static const char INFO_STR_PEERS_TLS_ALT_STD[] = "peers-tls-std\npeers-tls-alt\n";
+static const char INFO_STR_PEERS_CLEAR_ALT_STD[] = "peers-clear-std\npeers-clear-alt\n";
 
 static as_status
 as_node_process_peers(as_cluster* cluster, as_error* err, as_node* node, as_vector* values, as_peers* peers)
 {
+	char* selected = NULL;
+	char* std = NULL;
+	bool alt = cluster->use_services_alternate;
+
 	for (uint32_t i = 0; i < values->size; i++) {
 		as_name_value* nv = as_vector_get(values, i);
 		
 		if (strcmp(nv->name, "peers-tls-alt") == 0 ||
-			strcmp(nv->name, "peers-tls-std") == 0 ||
-			strcmp(nv->name, "peers-clear-alt") == 0 ||
-			strcmp(nv->name, "peers-clear-std") == 0
-			) {
-			as_status status = as_peers_parse_peers(peers, err, cluster, node, nv->value);
-			
-			if (status != AEROSPIKE_OK) {
-				return status;
+			strcmp(nv->name, "peers-clear-alt") == 0) {
+			selected = nv->value;
+		}
+		else if (strcmp(nv->name, "peers-tls-std") == 0 ||
+			strcmp(nv->name, "peers-clear-std") == 0) {
+			if (alt) {
+				std = nv->value;
+			}
+			else {
+				selected = nv->value;
 			}
 		}
 		else {
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Node %s did not request info '%s'", node->name, nv->name);
 		}
 	}
-	return AEROSPIKE_OK;
+
+	if (! selected) {
+		return AEROSPIKE_OK;
+	}
+
+	if (alt && ! std) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			"Node %s did not return standard peers needed to verify alternate peers", node->name);
+	}
+	return as_peers_parse_peers(peers, err, cluster, node, selected, alt ? std : NULL);
 }
 
 as_status
@@ -1298,8 +1316,8 @@ as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peer
 
 	if (cluster->tls_ctx) {
 		if (cluster->use_services_alternate) {
-			command = INFO_STR_PEERS_TLS_ALT;
-			command_len = sizeof(INFO_STR_PEERS_TLS_ALT) - 1;
+			command = INFO_STR_PEERS_TLS_ALT_STD;
+			command_len = sizeof(INFO_STR_PEERS_TLS_ALT_STD) - 1;
 		}
 		else {
 			command = INFO_STR_PEERS_TLS_STD;
@@ -1308,8 +1326,8 @@ as_node_refresh_peers(as_cluster* cluster, as_error* err, as_node* node, as_peer
 	}
 	else {
 		if (cluster->use_services_alternate) {
-			command = INFO_STR_PEERS_CLEAR_ALT;
-			command_len = sizeof(INFO_STR_PEERS_CLEAR_ALT) - 1;
+			command = INFO_STR_PEERS_CLEAR_ALT_STD;
+			command_len = sizeof(INFO_STR_PEERS_CLEAR_ALT_STD) - 1;
 		}
 		else {
 			command = INFO_STR_PEERS_CLEAR_STD;

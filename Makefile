@@ -114,6 +114,11 @@ AEROSPIKE += aerospike_udf.o
 AEROSPIKE += as_address.o
 AEROSPIKE += as_admin.o
 AEROSPIKE += as_async.o
+AEROSPIKE += as_aws.o
+AEROSPIKE += as_aws_credentials.o
+AEROSPIKE += as_aws_http.o
+AEROSPIKE += as_aws_parse.o
+AEROSPIKE += as_aws_sigv4.o
 AEROSPIKE += as_batch.o
 AEROSPIKE += as_bit_operations.o
 AEROSPIKE += as_cdt_ctx.o
@@ -123,6 +128,8 @@ AEROSPIKE += as_config.o
 AEROSPIKE += as_config_file.o
 AEROSPIKE += as_conn_recover.o
 AEROSPIKE += as_cluster.o
+AEROSPIKE += as_discovery.o
+AEROSPIKE += as_dns.o
 AEROSPIKE += as_error.o
 AEROSPIKE += as_event.o
 AEROSPIKE += as_event_ev.o
@@ -157,6 +164,7 @@ AEROSPIKE += as_record.o
 AEROSPIKE += as_record_hooks.o
 AEROSPIKE += as_record_iterator.o
 AEROSPIKE += as_scan.o
+AEROSPIKE += as_seed_manager.o
 AEROSPIKE += as_shm_cluster.o
 AEROSPIKE += as_socket.o
 AEROSPIKE += as_string_operations.o
@@ -192,6 +200,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_ll.h
 COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_queue.h
 
 EXCLUDE-HEADERS = $(SOURCE_INCL)/aerospike/as_metrics_internal.h
+EXCLUDE-HEADERS += $(SOURCE_INCL)/aerospike/as_aws_internal.h
 
 AEROSPIKE-HEADERS := $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/*.h))
 
@@ -273,4 +282,3 @@ $(TARGET_INCL)/aerospike/%.h: $(SOURCE_INCL)/aerospike/%.h
 
 ###############################################################################
 include project/modules.mk project/test.mk project/rules.mk
-

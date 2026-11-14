@@ -1,0 +1,87 @@
+name: Discovery integration
+
+# L2: conformance l2-proxy builds the topology, applies the faults and decides every row through
+# src/test/l5_driver (l5-aws/DRIVER.md, contract 5), then runs the manifest's L2_RUN
+# (src/test/l2_run: F-1 on idle-reset, N-18 two peers on default) once per profile. env-dns (N-4)
+# and env-collision (N-18 against a live node) run src/test/discovery_env in conformance envs/
+# through test-envs.yaml. l2-ce builds the PR head SHA; the env jobs build what test-envs.yaml
+# checks out, the PR merge commit. The harness is pinned by commit in each job below; switch them
+# to the v1.1.0 tag once it exists. The Enterprise jobs (l2-proxy on EE, the TLS rows N-6 and N-17,
+# the certificate name matching cases) and the nightly schedule are in discovery-integration-ee.yml.
+
+on:
+  pull_request:
+    branches: [stage]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [stage]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: discovery-integration-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  l2-ce:
+    name: L2 proxy (CE)
+    # About an hour per run; drafts wait until they are ready for review.
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
+    with:
+      client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      commit: ${{ github.event.pull_request.head.sha || github.sha }}
+      manifest: src/test/l5_driver/l5-aws.manifest
+      profile: all
+      edition: ce
+      server-image: aerospike/aerospike-server:8.2.0.0
+      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
+
+  env-dns:
+    name: N-4 DNS environment (CE)
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
+    with:
+      environment: dns
+      command: bash src/test/discovery_env/run.sh dns
+      server-image: aerospike/aerospike-server:8.2.0.0
+      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
+
+  env-collision:
+    name: N-18 collision environment (CE)
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
+    with:
+      environment: collision
+      command: bash src/test/discovery_env/run.sh collision
+      server-image: aerospike/aerospike-server:8.2.0.0
+      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
+
+  l2-summary:
+    name: L2 rows
+    needs: l2-ce
+    if: ${{ !cancelled() && needs.l2-ce.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        continue-on-error: true
+        with:
+          name: l2-proxy-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: l2-proxy-results
+      - run: |
+          {
+            echo '### L2 proxy rows'
+            echo '```'
+            if [[ -s l2-proxy-results/rows.txt ]]; then
+              cat l2-proxy-results/rows.txt
+            else
+              echo 'No rows.txt: the run stopped before the rows. Last lines of build.log:'
+              tail -n 40 l2-proxy-results/build.log 2>/dev/null || echo 'No build.log either.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

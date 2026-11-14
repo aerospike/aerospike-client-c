@@ -15,6 +15,8 @@
  * the License.
  */
 #include <aerospike/as_config.h>
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_discovery.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_policy.h>
@@ -23,6 +25,104 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+
+//---------------------------------
+// Static Functions
+//---------------------------------
+
+static bool
+provider_is_valid(const as_seed_provider* provider)
+{
+	return provider && provider->size >= sizeof(as_seed_provider) &&
+		provider->api_version == AS_DISCOVERY_API_VERSION && provider->name &&
+		provider->name[0] && provider->refresh && provider->needs_periodic_refresh;
+}
+
+static bool
+translator_is_valid(const as_address_translator* translator)
+{
+	return translator && translator->size >= sizeof(as_address_translator) &&
+		translator->api_version == AS_DISCOVERY_API_VERSION && translator->name &&
+		translator->name[0] && translator->translate;
+}
+
+static void
+destroy_provider(as_discovery_config* discovery)
+{
+	if (discovery->provider_registered) {
+		as_seed_provider* p = &discovery->provider;
+
+		// A refresh still running on a discovery thread destroys udata when it returns.
+		if (p->destroy &&
+			!as_seed_inflight_defer_destroy(discovery->inflight, p->destroy, p->udata)) {
+			p->destroy(p->udata);
+		}
+		cf_free((void*)p->name);
+	}
+	memset(&discovery->provider, 0, sizeof(as_seed_provider));
+	discovery->provider_registered = false;
+	discovery->binding_provider = false;
+}
+
+static void
+destroy_translator(as_translation_config* translation)
+{
+	if (translation->provider_registered) {
+		if (translation->provider.destroy) {
+			translation->provider.destroy(translation->provider.udata);
+		}
+		cf_free((void*)translation->provider.name);
+	}
+	memset(&translation->provider, 0, sizeof(as_address_translator));
+	translation->provider_registered = false;
+}
+
+static void
+replace_provider(as_discovery_config* discovery, const as_seed_provider* copy)
+{
+	if (discovery->provider_registered && discovery->provider.udata &&
+		discovery->provider.udata == copy->udata) {
+		// Same state now owned by the new registration.
+		cf_free((void*)discovery->provider.name);
+		discovery->binding_provider = false;
+	}
+	else {
+		destroy_provider(discovery);
+	}
+	discovery->provider = *copy;
+	discovery->provider_registered = true;
+	discovery->provider_released = false;
+}
+
+static void
+replace_translator(as_translation_config* translation, const as_address_translator* copy)
+{
+	if (translation->provider_registered && translation->provider.udata &&
+		translation->provider.udata == copy->udata) {
+		// Same state now owned by the new registration.
+		cf_free((void*)translation->provider.name);
+	}
+	else {
+		destroy_translator(translation);
+	}
+	translation->provider = *copy;
+	translation->provider_registered = true;
+	translation->provider_released = false;
+}
+
+static bool
+binding_periodic(void* udata)
+{
+	(void)udata;
+	return true;
+}
+
+static bool
+binding_not_periodic(void* udata)
+{
+	(void)udata;
+	return false;
+}
 
 //---------------------------------
 // Functions
@@ -40,6 +140,14 @@ as_config_init(as_config* c)
 	c->event_callback_udata = NULL;
 	c->ip_map = NULL;
 	c->ip_map_size = 0;
+	memset(&c->discovery, 0, sizeof(as_discovery_config));
+	c->discovery.merge_policy = AS_SEED_MERGE;
+	c->discovery.execution_mode = AS_DISCOVERY_EXECUTION_THREAD;
+	c->discovery.refresh_interval_ms = 30000;
+	c->discovery.refresh_timeout_ms = 10000;
+	c->discovery.tend_refresh_deadline_ms = 100;
+	memset(&c->translation, 0, sizeof(as_translation_config));
+	c->translation.on_miss = AS_TRANSLATION_PASS_THROUGH;
 	c->min_conns_per_node = 0;
 	c->max_conns_per_node = 100;
 	c->async_min_conns_per_node = 0;
@@ -106,6 +214,11 @@ as_config_destroy(as_config* config) {
 		cf_free(config->config_provider.path);
 	}
 
+	destroy_provider(&config->discovery);
+	as_seed_inflight_release(config->discovery.inflight);
+	config->discovery.inflight = NULL;
+	destroy_translator(&config->translation);
+
 	as_policies_destroy(&config->policies);
 
 	as_config_tls* tls = &config->tls;
@@ -153,6 +266,160 @@ as_config_destroy(as_config* config) {
 	if (tls->certstring) {
 		cf_free(tls->certstring);
 	}
+}
+
+void
+as_config_release_plugins(as_config* config)
+{
+	// Private: called by aerospike_close() on an unconnected async client.
+	if (config->discovery.provider_registered) {
+		destroy_provider(&config->discovery);
+		config->discovery.provider_released = true;
+	}
+
+	if (config->translation.provider_registered) {
+		destroy_translator(&config->translation);
+		config->translation.provider_released = true;
+	}
+}
+
+as_status
+as_config_set_seed_provider(as_config* config, const as_seed_provider* provider, as_error* err)
+{
+	if (!config || !provider_is_valid(provider)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid seed provider");
+	}
+
+	if (config->discovery.registration_locked) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Seed provider cannot be replaced while the client is connected");
+	}
+
+	as_seed_provider copy = *provider;
+	copy.name = cf_strdup(provider->name);
+
+	if (!copy.name) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to copy seed provider name");
+	}
+
+	replace_provider(&config->discovery, &copy);
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_config_set_address_translator(as_config* config, const as_address_translator* translator,
+	as_error* err)
+{
+	if (!config || !translator_is_valid(translator)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid address translator");
+	}
+
+	if (config->discovery.registration_locked) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Address translator cannot be replaced while the client is connected");
+	}
+
+	as_address_translator copy = *translator;
+	copy.name = cf_strdup(translator->name);
+
+	if (!copy.name) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to copy address translator name");
+	}
+
+	replace_translator(&config->translation, &copy);
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_config_set_port_map_translator(as_config* config, const as_addr_map* entries, uint32_t size,
+	as_error* err)
+{
+	if (!config) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid address translator");
+	}
+
+	as_address_translator translator;
+	as_status status = as_discovery_port_map_translator(err, entries, size, &translator);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	status = as_config_set_address_translator(config, &translator, err);
+
+	if (status != AEROSPIKE_OK) {
+		translator.destroy(translator.udata);
+	}
+	return status;
+}
+
+as_status
+as_config_set_pass_through_translator(as_config* config, as_error* err)
+{
+	as_address_translator translator;
+	as_discovery_pass_through_translator(&translator);
+	return as_config_set_address_translator(config, &translator, err);
+}
+
+as_status
+as_config_set_dns_seed_provider(as_config* config, const as_dns_seed_provider_config* dns,
+	as_error* err)
+{
+	if (!config) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid seed provider");
+	}
+
+	if (config->discovery.registration_locked) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Seed provider cannot be replaced while the client is connected");
+	}
+
+	as_seed_provider provider;
+	as_status status = as_discovery_dns_seed_provider(err, dns, &provider);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	status = as_config_set_seed_provider(config, &provider, err);
+
+	if (status != AEROSPIKE_OK) {
+		provider.destroy(provider.udata);
+	}
+	return status;
+}
+
+as_status
+as_config_set_binding_seed_provider(as_config* config, const char* name,
+	as_status (*refresh)(as_error* err, const as_seed_candidate_context* context,
+		as_seed_candidates* candidates, void* udata),
+	bool periodic, void (*destroy)(void* udata), void* udata, as_error* err)
+{
+	if (!config) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid seed provider");
+	}
+
+	if (config->discovery.execution_mode != AS_DISCOVERY_EXECUTION_THREAD) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Binding seed provider requires thread execution mode");
+	}
+
+	as_seed_provider provider = {
+		.size = sizeof(as_seed_provider),
+		.api_version = AS_DISCOVERY_API_VERSION,
+		.name = name,
+		.refresh = refresh,
+		.needs_periodic_refresh = periodic ? binding_periodic : binding_not_periodic,
+		.destroy = destroy,
+		.udata = udata
+	};
+	as_status status = as_config_set_seed_provider(config, &provider, err);
+
+	if (status == AEROSPIKE_OK) {
+		config->discovery.binding_provider = true;
+	}
+	return status;
 }
 
 bool

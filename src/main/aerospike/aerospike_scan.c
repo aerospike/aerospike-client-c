@@ -194,7 +194,7 @@ as_scan_parse_record_async(
 	)
 {
 	as_record rec;
-	as_record_inita(&rec, msg->n_ops);
+	as_command_record_init(&rec, msg->n_ops);
 	
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
@@ -299,7 +299,7 @@ static as_status
 as_scan_parse_record(uint8_t** pp, as_msg* msg, as_scan_task* task, as_error* err)
 {
 	as_record rec;
-	as_record_inita(&rec, msg->n_ops);
+	as_command_record_init(&rec, msg->n_ops);
 	
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
@@ -699,7 +699,7 @@ as_scan_command_execute(as_scan_task* task)
 	as_queue opsbuffers;
 
 	if (as_operations_defined(task->scan->ops)) {
-		as_queue_inita(&opsbuffers, sizeof(as_buffer), task->scan->ops->binops.size);
+		as_command_buffers_init(&opsbuffers, task->scan->ops->binops.size);
 	}
 
 	as_scan_builder sb;
@@ -1283,7 +1283,7 @@ as_scan_partition_async(
 	as_queue opsbuffers;
 
 	if (as_operations_defined(scan->ops)) {
-		as_queue_inita(&opsbuffers, sizeof(as_buffer), scan->ops->binops.size);
+		as_command_buffers_init(&opsbuffers, scan->ops->binops.size);
 	}
 
 	// Create scan command buffer without partition fields.

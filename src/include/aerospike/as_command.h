@@ -174,6 +174,44 @@ local_free(void* memory)
  */
 #define as_command_buffer_free(_buf, _sz) if (_sz > AS_STACK_BUF_SIZE) {local_free(_buf);}
 
+/**
+ * @private
+ * Bin and operation counts at or above this are kept on the heap. A command can have up to 65,535
+ * operations, and stacks can be small: 2 MB for python.exe's main thread on Windows and 512 KB for
+ * secondary threads on macOS.
+ */
+#define AS_STACK_BINS_MAX 1000
+
+/**
+ * @private
+ * Initialize a record for _nbins bins, on the stack or heap depending on the count.
+ * Release it with as_record_destroy().
+ */
+#define as_command_record_init(_rec, _nbins) \
+	do {\
+		if ((_nbins) < AS_STACK_BINS_MAX) {\
+			as_record_inita(_rec, _nbins);\
+		}\
+		else {\
+			as_record_init(_rec, _nbins);\
+		}\
+	} while (0)
+
+/**
+ * @private
+ * Initialize a queue of as_buffer for _n bins or operations, on the stack or heap depending on
+ * the count. Release it with as_buffers_destroy().
+ */
+#define as_command_buffers_init(_queue, _n) \
+	do {\
+		if ((_n) < AS_STACK_BINS_MAX) {\
+			as_queue_inita(_queue, sizeof(as_buffer), _n);\
+		}\
+		else {\
+			as_queue_init(_queue, sizeof(as_buffer), _n);\
+		}\
+	} while (0)
+
 //---------------------------------
 // Types
 //---------------------------------

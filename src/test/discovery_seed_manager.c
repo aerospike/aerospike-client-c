@@ -730,8 +730,9 @@ TEST(seed_snapshot_copy_on_write, "M-6 add and remove publish new snapshots; a r
 #define STRESS_HOSTS 8
 #define STRESS_READERS 4
 #define STRESS_TENDS 3000
-#define STRESS_MAX_TENDS 2000000
 #define STRESS_GENERATIONS (STRESS_READERS * 16)
+#define STRESS_MAX_TENDS (STRESS_TENDS + STRESS_GENERATIONS * 4)
+#define STRESS_WAIT_MS 1000
 
 static as_status
 stress_step(fake_provider* fp, uint32_t call, as_error* err, as_seed_candidates* out)
@@ -751,6 +752,7 @@ stress_step(fake_provider* fp, uint32_t call, as_error* err, as_seed_candidates*
 typedef struct stress_state_s {
 	as_seed_manager* m;
 	uint8_t done;
+	uint8_t settle;
 	uint32_t bad;
 	uint32_t generations;
 } stress_state;
@@ -763,6 +765,7 @@ stress_reader(void* udata)
 	uint32_t bad = 0;
 
 	while (!as_load_uint8(&st->done)) {
+		bool changed = false;
 		as_seed_snapshot* s = as_seed_manager_reserve(st->m);
 		const as_vector* hosts = as_seed_snapshot_hosts(s);
 
@@ -784,9 +787,15 @@ stress_reader(void* udata)
 			if (strcmp(first->name, last) != 0) {
 				snprintf(last, sizeof(last), "%s", first->name);
 				as_incr_uint32(&st->generations);
+				changed = true;
 			}
 		}
 		as_seed_snapshot_release(s);
+
+		// A spinning reader can keep a one-thread-at-a-time scheduler from running the publisher.
+		if (!changed && as_load_uint8(&st->settle)) {
+			as_sleep(1);
+		}
 	}
 
 	as_aaf_uint32(&st->bad, bad);
@@ -806,7 +815,7 @@ TEST(seed_snapshot_atomic, "M-6 concurrent reads and refresh publications never 
 	config.discovery.merge_policy = AS_SEED_REPLACE;
 	assert_int_eq(mgr_open(&config, &fp, &m, &err), AEROSPIKE_OK);
 
-	stress_state st = {.m = m, .done = 0, .bad = 0, .generations = 0};
+	stress_state st = {.m = m, .done = 0, .settle = 0, .bad = 0, .generations = 0};
 	pthread_t readers[STRESS_READERS];
 
 	for (uint32_t i = 0; i < STRESS_READERS; i++) {
@@ -822,6 +831,8 @@ TEST(seed_snapshot_atomic, "M-6 concurrent reads and refresh publications never 
 
 	while (tends < STRESS_MAX_TENDS &&
 		(tends < STRESS_TENDS || as_load_uint32(&st.generations) < STRESS_GENERATIONS)) {
+		uint32_t seen = as_load_uint32(&st.generations);
+
 		as_seed_manager_tend(m);
 		tends++;
 
@@ -832,10 +843,17 @@ TEST(seed_snapshot_atomic, "M-6 concurrent reads and refresh publications never 
 		}
 		overruns = current;
 
-		// A scheduler that runs one thread at a time, such as valgrind's, can keep running this
-		// thread. Past the stress phase, yield so the readers observe the swaps.
+		// A scheduler that runs one thread at a time, such as valgrind's, can keep running one
+		// side of the test. Past the stress phase, idle readers and this thread sleep, and each
+		// publication waits until a reader observes it, so it counts toward STRESS_GENERATIONS.
 		if (tends >= STRESS_TENDS) {
-			as_sleep(0);
+			as_store_uint8(&st.settle, 1);
+
+			uint64_t wait_end = cf_getms() + STRESS_WAIT_MS;
+
+			while (as_load_uint32(&st.generations) == seen && cf_getms() < wait_end) {
+				as_sleep(1);
+			}
 		}
 	}
 	as_store_uint8(&st.done, 1);

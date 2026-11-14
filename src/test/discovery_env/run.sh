@@ -10,8 +10,9 @@
 # libaerospike.a of the other flavour stops the run (make does not rebuild it on EVENT_LIB).
 # tls-matching also smokes the L5 driver's TLS flags against the proxy cluster. tls-matching n17
 # runs only N-17, which fails until the next major release (FR-45): its failure is labelled
-# N17 EXPECTED-RED when discovery_env printed the FR-45 marker, and N17 BROKEN otherwise. Exits
-# non-zero when discovery_env or the driver smoke failed.
+# N17 EXPECTED-RED, with a warning annotation and exit 0, when discovery_env printed the FR-45
+# marker, and N17 BROKEN otherwise. Exits non-zero when discovery_env or the driver smoke failed,
+# except for N17 EXPECTED-RED.
 set -euo pipefail
 
 env_name="${1:-}"
@@ -76,12 +77,18 @@ ${DISCOVERY_ENV_WRAPPER:-} "$target/test/discovery_env" 2>&1 | tee "$log" || sta
 echo "discovery_env $env_name${suite:+ $suite} exit=$status"
 
 if [ "$suite" = n17 ]; then
-	if [ "$status" -ne 0 ]; then
+	if [ "$status" -eq 0 ]; then
+		echo "N17 GREEN"
+		if [ "${GITHUB_ACTIONS:-}" = true ]; then
+			echo "::notice title=N-17 now passes::CN-only certificates are rejected; drop the EXPECTED-RED handling in run.sh"
+		fi
+	else
 		if grep -q '^ENV-N17-RESULT accepted-through-legacy' "$log"; then
 			echo "N17 EXPECTED-RED"
 			if [ "${GITHUB_ACTIONS:-}" = true ]; then
-				echo "::error title=N-17 CN-only certificate (FR-45)::C keeps CN acceptance, deprecated, until the next major release"
+				echo "::warning title=N-17 CN-only certificate (FR-45)::C keeps CN acceptance, deprecated, until the next major release"
 			fi
+			status=0
 		else
 			echo "N17 BROKEN"
 			if [ "${GITHUB_ACTIONS:-}" = true ]; then

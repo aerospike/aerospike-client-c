@@ -9,8 +9,8 @@ name: Discovery integration (EE)
 # proxy validates each node against its tls-name), the env's certificate name matching cases sync
 # and async against C's declarations, and a smoke of the driver's TLS flags. env-tls-n17 runs N-17
 # alone (a CN-only certificate is rejected): C keeps CN acceptance, deprecated, until the next major
-# release (PRD FR-45), so the job is red by design until then and labelled N17 EXPECTED-RED in its
-# log; N17 BROKEN there is a real failure. It must not be a required check.
+# release (PRD FR-45), so the test fails until then; run.sh labels that N17 EXPECTED-RED and passes
+# the job with a warning annotation. N17 BROKEN fails the job and is a real failure.
 #
 # Every job needs AES_FEATURES_CONF, which fork pull requests do not get: the gate job decides that
 # once and reports the layers it skips with report-skipped-layers. Drafts wait until they are ready
@@ -98,7 +98,7 @@ jobs:
       features-conf: ${{ secrets.AES_FEATURES_CONF }}
 
   env-tls-n17:
-    name: N-17 CN-only certificate rejected (EE, red until the next major, FR-45)
+    name: N-17 CN-only certificate rejected (EE, expected to fail until the next major, FR-45)
     needs: gate
     if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
     uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89

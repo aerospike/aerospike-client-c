@@ -738,7 +738,11 @@ as_node_get_connection(
 				status = as_node_create_connection(err, node, 0, deadline_ms, pool, sock, ctx);
 			}
 
-			if (status != AEROSPIKE_OK) {
+			// If authentication timed out and the socket was handed to the recover queue,
+			// the recover entry now owns this pool slot. It releases the slot itself, either
+			// by returning the socket to the pool or by closing it (as_node_close_connection).
+			// Decrementing here too would release the slot twice.
+			if (status != AEROSPIKE_OK && !(ctx && ctx->in_recovery)) {
 				as_conn_pool_decr(pool);
 			}
 			return status;

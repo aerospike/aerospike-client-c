@@ -811,6 +811,11 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 
 		as_socket socket;
 		ctx.state = AS_READ_STATE_AUTH_HEADER;
+		// in_recovery describes the socket of the current attempt only. A stale true value
+		// from a previous attempt's recovered timeout would make this attempt skip closing
+		// its socket on error (leaking the fd and the pool slot).
+		ctx.in_recovery = false;
+
 		status = as_node_get_connection(err, node, cmd, cmd->deadline_ms, &socket, &ctx);
 
 		if (status != AEROSPIKE_OK) {

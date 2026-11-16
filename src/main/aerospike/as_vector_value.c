@@ -514,7 +514,7 @@ as_vector_value_from_bytes(as_error* err, const as_bytes* bytes)
 
 	uint32_t expected_size = AS_VECTOR_VALUE_HEADER_SIZE + dimensions * elem_size;
 
-	if (length < expected_size) {
+	if (length != expected_size) {
 		as_error_update(err, AEROSPIKE_ERR_PARAM,
 			"vector: value size %u does not match %u (%u dimensions of %u bytes, little-endian)",
 			length, expected_size, dimensions, elem_size);

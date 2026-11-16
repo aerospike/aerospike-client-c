@@ -874,6 +874,11 @@ as_query_validate_topk(
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "orderBy supports at most two keys");
 	}
 
+	if (query->then_order_by.defined && strcmp(query->order_by.bin, query->then_order_by.bin) == 0) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"order-by names bin '%s' more than once", query->order_by.bin);
+	}
+
 	// An order key without k is not checked here: it is sent to the server, which rejects it
 	// with a reason. A k set to 0 is rejected like any other k out of range.
 	if (query->top_k > AS_QUERY_TOPK_MAX || (query->top_k_defined && query->top_k == 0)) {

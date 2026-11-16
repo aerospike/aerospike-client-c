@@ -769,7 +769,7 @@ TEST(vector_float16_float_roundtrip, "float values exact in float16 survive a fl
 	}
 }
 
-TEST(vector_from_trailing_bytes, "as_vector_value_from_bytes ignores bytes past the encoded vector")
+TEST(vector_from_trailing_bytes, "as_vector_value_from_bytes rejects bytes past the encoded vector")
 {
 	float data[3] = {1.5f, -2.25f, 3.14159f};
 	as_error err;
@@ -781,24 +781,20 @@ TEST(vector_from_trailing_bytes, "as_vector_value_from_bytes ignores bytes past 
 	memset(buf, 0xCD, sizeof(buf)); // trailing junk after the vector
 	memcpy(buf, bytes.value, bytes.size);
 
-	// Report far more available bytes than the vector actually needs.
-	as_vector_value* out = vector_from_buffer(&err, buf, sizeof(buf));
-	assert_not_null(out);
-	assert_int_eq(out->dimensions, 3);
+	// Report more available bytes than the vector actually needs (18 encoded, 20 reported:
+	// a 3-dimension FLOAT32 vector with 2 extra trailing bytes). The client must refuse this
+	// the same way the server does, instead of silently decoding the first 18 bytes.
+	assert_null(vector_from_buffer(&err, buf, bytes.size + 2));
+	assert_int_eq(err.code, AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message,
+		"vector: value size 20 does not match 18 (3 dimensions of 4 bytes, little-endian)");
 
-	const float* elems = as_vector_value_get_float32(out);
-	assert_not_null(elems);
-	for (uint32_t i = 0; i < 3; i++) {
-		assert(elems[i] == data[i]);
-	}
-
-	// The exact-size decode must agree with the oversized-length decode.
+	// The exact-size decode must still succeed.
 	as_vector_value* exact = vector_from_buffer(&err, buf, bytes.size);
 	assert_not_null(exact);
 	assert_int_eq(exact->dimensions, 3);
 
 	as_vector_value_destroy(exact);
-	as_vector_value_destroy(out);
 	as_bytes_destroy(&bytes);
 	as_vector_value_destroy(vec);
 }

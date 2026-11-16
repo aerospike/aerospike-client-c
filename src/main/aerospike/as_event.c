@@ -1692,12 +1692,7 @@ as_event_command_parse_result(as_event_command* cmd)
 			else {
 				as_record rec;
 
-				if (msg->n_ops < 1000) {
-					as_record_inita(&rec, msg->n_ops);
-				}
-				else {
-					as_record_init(&rec, msg->n_ops);
-				}
+				as_record_init_auto(&rec, msg->n_ops);
 
 				rec.gen = msg->generation;
 				rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);

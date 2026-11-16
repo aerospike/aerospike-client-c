@@ -1298,12 +1298,35 @@ TEST(cf_aws_provider, "the aws-tags provider from the file sends its region and 
 	assert_int_eq(ignored, 1);
 }
 
+// Replace the file atomically with body and a later modification time. The tender reads the file
+// whenever its modification time changes, so an in-place rewrite could be read truncated.
 static bool
-cf_touch_later(void)
+cf_replace_later(const char* body)
 {
+	char tmp[sizeof(cf_path) + 8];
+	snprintf(tmp, sizeof(tmp), "%s.tmp", cf_path);
+
+	FILE* fp = fopen(tmp, "w");
+
+	if (!fp) {
+		return false;
+	}
+
+	bool ok = fputs(body, fp) >= 0;
+
+	if (fclose(fp) != 0 || !ok) {
+		remove(tmp);
+		return false;
+	}
+
 	time_t later = time(NULL) + 5;
 	struct utimbuf t = {.actime = later, .modtime = later};
-	return utime(cf_path, &t) == 0;
+
+	if (utime(tmp, &t) != 0 || rename(tmp, cf_path) != 0) {
+		remove(tmp);
+		return false;
+	}
+	return true;
 }
 
 // A client connected to fnode a from body, reading the file every tend.
@@ -1332,14 +1355,14 @@ cf_connect(fnode* a, const char* body, as_error* err)
 	return client;
 }
 
-// Rewrite the file with a later modification time and wait until the reload set
+// Replace the file with a later modification time and wait until the reload set
 // max_error_rate. The log is captured meanwhile.
 static bool
 cf_reload(aerospike* client, const char* body, uint32_t max_error_rate)
 {
 	cf_log_start();
 
-	if (!cf_write(body) || !cf_touch_later()) {
+	if (!cf_replace_later(body)) {
 		cf_log_stop();
 		return false;
 	}

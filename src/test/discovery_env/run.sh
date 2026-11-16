@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Build the client and run src/test/discovery_env against a running aerospike-client-conformance
-# environment: run.sh dns|collision|tls-matching [n17], with the environment's values file loaded
+# environment: run.sh dns|collision|yaml|tls-matching [n17], with the environment's values file loaded
 # into the environment. This is the command of conformance test-envs.yaml, which checks out this
 # repository without submodules on ubuntu-24.04. Dependencies are installed only under GitHub
 # Actions; a local run uses the installed toolchain. DISCOVERY_ENV_WRAPPER, when set, is put in
 # front of the binary (for example valgrind).
 #
-# dns and collision build with EVENT_LIB=sync, tls-matching with libev; an existing
+# dns, collision and yaml build with EVENT_LIB=sync, tls-matching with libev; an existing
 # libaerospike.a of the other flavour stops the run (make does not rebuild it on EVENT_LIB).
 # tls-matching also smokes the L5 driver's TLS flags against the proxy cluster. tls-matching n17
 # runs only N-17, which fails until the next major release (FR-45): its failure is labelled
@@ -19,12 +19,12 @@ env_name="${1:-}"
 suite="${2:-}"
 
 usage() {
-	echo "usage: $0 dns|collision|tls-matching [n17]" >&2
+	echo "usage: $0 dns|collision|yaml|tls-matching [n17]" >&2
 	exit 2
 }
 
 case "$env_name" in
-	dns | collision) event_lib=sync ;;
+	dns | collision | yaml) event_lib=sync ;;
 	tls-matching) event_lib=libev ;;
 	*) usage ;;
 esac

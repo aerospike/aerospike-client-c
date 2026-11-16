@@ -1602,7 +1602,7 @@ provider_unsupported(const yaml_node_t* block, const char* block_name, const cha
 		}
 
 		if (!strcmp(key, "init_timeout_ms")) {
-			return xstrdup("C has no init_timeout_ms; 6c decides the YAML mapping");
+			return xstrdup("C has no init_timeout_ms; the first refresh is bounded by refresh_timeout_ms");
 		}
 		return xasprintf("option discovery.%s.%s is not implemented", block_name, key);
 	}

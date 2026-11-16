@@ -219,6 +219,23 @@ as_config_destroy(as_config* config) {
 	config->discovery.inflight = NULL;
 	destroy_translator(&config->translation);
 
+	as_translation_config* translation = &config->translation;
+
+	if (translation->file_ip_map) {
+		for (uint32_t i = 0; i < translation->file_ip_map_size; i++) {
+			cf_free(translation->file_ip_map[i].orig);
+			cf_free(translation->file_ip_map[i].alt);
+		}
+
+		if (config->ip_map == translation->file_ip_map) {
+			config->ip_map = NULL;
+			config->ip_map_size = 0;
+		}
+		cf_free(translation->file_ip_map);
+		translation->file_ip_map = NULL;
+		translation->file_ip_map_size = 0;
+	}
+
 	as_policies_destroy(&config->policies);
 
 	as_config_tls* tls = &config->tls;
@@ -280,6 +297,30 @@ as_config_release_plugins(as_config* config)
 	if (config->translation.provider_registered) {
 		destroy_translator(&config->translation);
 		config->translation.provider_released = true;
+	}
+}
+
+void
+as_config_file_set_seed_provider(as_config* config, const as_seed_provider* owned)
+{
+	// Private: config file only. owned->name is already copied. NULL resets to the default.
+	if (owned) {
+		replace_provider(&config->discovery, owned);
+	}
+	else {
+		destroy_provider(&config->discovery);
+	}
+}
+
+void
+as_config_file_set_translator(as_config* config, const as_address_translator* owned)
+{
+	// Private: config file only. owned->name is already copied. NULL resets to the default.
+	if (owned) {
+		replace_translator(&config->translation, owned);
+	}
+	else {
+		destroy_translator(&config->translation);
 	}
 }
 

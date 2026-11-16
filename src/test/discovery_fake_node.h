@@ -37,7 +37,8 @@ struct fnode_s {
 	bool running;
 	char name[32];
 
-	// Reply to peers-clear-std. Empty for no peers.
+	// Reply to peers-clear-std and peers-clear-alt. Empty for no peers. service-clear-alt
+	// answers this node's own address.
 	char peers[256];
 
 	// Accept and immediately close every connection.

@@ -94,6 +94,7 @@ fnode_reply(fnode* n, char* body, char* out, size_t cap)
 {
 	size_t len = 0;
 	char* save = NULL;
+	char service[32];
 
 	for (char* line = strtok_r(body, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
 		const char* value = "";
@@ -111,8 +112,12 @@ fnode_reply(fnode* n, char* body, char* out, size_t cap)
 			value = "1";
 			n->tends++;
 		}
-		else if (strcmp(line, "peers-clear-std") == 0) {
+		else if (strcmp(line, "peers-clear-std") == 0 || strcmp(line, "peers-clear-alt") == 0) {
 			value = n->peers[0] ? n->peers : "1,3000,[]";
+		}
+		else if (strcmp(line, "service-clear-alt") == 0) {
+			snprintf(service, sizeof(service), "127.0.0.1:%u", n->port);
+			value = service;
 		}
 		else if (strcmp(line, "rebalance-generation") == 0) {
 			value = "0";

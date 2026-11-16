@@ -16,13 +16,15 @@
  */
 
 /*
- * The client side of three test environments of aerospike-client-conformance (envs/README.md
+ * The client side of four test environments of aerospike-client-conformance (envs/README.md
  * there), selected by ENV_NAME from the environment's values file:
  *
- *   dns           N-4: DNS seed discovery with A and SRV records in thread and tend mode, a DNS
- *                 outage, and a changed SRV record.
+ *   dns           N-4: DNS seed discovery with A and SRV records in thread and tend mode, from
+ *                 code and from the YAML config file, a DNS outage, and a changed SRV record.
  *   collision     N-18: a node translated to a live node's address under pass-through, static-map
  *                 and port-map is never created, and the live node serves.
+ *   yaml          Translation configured from the YAML config file only: pass-through with
+ *                 alternate addresses, and a strict port-map by host:port and by node name.
  *   tls-matching  N-6: TLS through the proxy cluster validates against each node's tls-name, not
  *                 the dialed host; the env's certificate name matching cases, sync and async,
  *                 against C's declarations. With DISCOVERY_ENV_SUITE=n17 only N-17: a CN-only
@@ -156,6 +158,10 @@ static env_node env_control_a;
 static env_node env_control_b;
 static env_node env_collision_a;
 static env_node env_collision_b;
+static env_node env_pass_through_a;
+static env_node env_pass_through_b;
+static env_node env_port_map_a;
+static env_node env_port_map_b;
 
 // Sorted "host:port" lists: nodes A and B, and node C.
 static char env_ab[ENV_LINE_SIZE];
@@ -350,6 +356,21 @@ env_dns_connect(const char* name, as_dns_record_type type, as_discovery_executio
 	return live_connect(&config, err);
 }
 
+// A client configured by the YAML file named by the value, seeded at seed or, when NULL, only by
+// the file.
+static aerospike*
+env_yaml_connect(const char* value, const env_node* seed, as_error* err)
+{
+	as_config config;
+	as_config_init(&config);
+	as_config_provider_set_path(&config, live_value(value));
+
+	if (seed) {
+		as_config_add_host(&config, seed->host, seed->port);
+	}
+	return live_connect(&config, err);
+}
+
 static void
 env_snapshot(aerospike* as, char* buf, size_t size)
 {
@@ -440,6 +461,33 @@ TEST(n4_a_records_thread, "N-4: A records seed both nodes in thread mode")
 TEST(n4_srv_tend, "N-4: SRV records seed both nodes in tend mode")
 {
 	env_joins(__result__, "srv-tend", ENV_SRV, AS_DNS_RECORD_SRV, AS_DISCOVERY_EXECUTION_TEND);
+}
+
+TEST(n4_yaml_a_records, "N-4 YAML (Java case 5): CLIENT_CONFIG seeds both nodes in thread mode")
+{
+	live_cleanup();
+	as_error err;
+	aerospike* as = env_yaml_connect("CLIENT_CONFIG", NULL, &err);
+	check(as, "client not created: %d %s", err.code, err.message);
+
+	as_discovery_config* d = &as->config.discovery;
+	check(d->provider_registered && strcmp(d->provider.name, "dns") == 0, "provider is %s, not dns",
+		d->provider_registered ? d->provider.name : "(none)");
+	check(as->cluster->use_services_alternate, "use_services_alternate is not set from the file");
+
+	char msg[ENV_LINE_SIZE];
+	check(env_serves_ab("yaml", as, msg, sizeof(msg)), "%s", msg);
+
+	char snapshot[ENV_LINE_SIZE];
+	env_snapshot(as, snapshot, sizeof(snapshot));
+	printf("ENV-N4-SEEDS yaml %s\n", snapshot);
+	check(strcmp(snapshot, env_ab) == 0, "seeds are %s, not %s", snapshot, env_ab);
+	check(env_mode_ok(as, AS_DISCOVERY_EXECUTION_THREAD, msg, sizeof(msg)), "%s", msg);
+
+	char nodes[ENV_LINE_SIZE];
+	live_nodes(as, nodes, sizeof(nodes));
+	check(! strstr(nodes, env_c.name), "node %s joined: %s", env_c.name, nodes);
+	live_cleanup();
 }
 
 TEST(n4_outage_keeps_running, "N-4: a DNS outage keeps the client serving and counts the failed refreshes")
@@ -694,6 +742,119 @@ TEST(n18_static_map_live_node, "N-18: static-map never creates a node whose only
 TEST(n18_port_map_live_node, "N-18: port-map never creates a node mapped to a live node's address")
 {
 	env_collision_case(__result__, ENV_PORT_MAP, &env_control_a, &env_control_b);
+}
+
+//---------------------------------
+// yaml
+//---------------------------------
+
+// The client holds exactly nodes a and b, each at its published host:port.
+static bool
+env_yaml_nodes_at(const char* label, aerospike* as, const env_node* a, const env_node* b, char* msg,
+	size_t size)
+{
+	as_nodes* nodes = as_nodes_reserve(as->cluster);
+	bool ok = nodes->size == 2;
+	msg[0] = '\0';
+
+	if (! ok) {
+		snprintf(msg, size, "%s: %u nodes, not 2", label, nodes->size);
+	}
+
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+		as_address* address = as_node_get_address(node);
+		char host[INET6_ADDRSTRLEN];
+		as_address_short_name((struct sockaddr*)&address->addr, host, sizeof(host));
+		uint16_t port = as_address_port((struct sockaddr*)&address->addr);
+		printf("ENV-YAML-NODE %s name=%s endpoint=%s:%u\n", label, node->name, host, port);
+
+		const env_node* expected = strcmp(node->name, a->name) == 0 ? a :
+			strcmp(node->name, b->name) == 0 ? b : NULL;
+
+		if (ok && ! expected) {
+			snprintf(msg, size, "%s: unexpected node %s", label, node->name);
+			ok = false;
+		}
+		else if (ok && (strcmp(host, expected->host) != 0 || port != expected->port)) {
+			snprintf(msg, size, "%s: node %s (advertised %s) is held at %s:%u, not %s", label,
+				node->name, expected->advertised, host, port, expected->address);
+			ok = false;
+		}
+	}
+	as_nodes_release(nodes);
+	return ok;
+}
+
+// Both nodes held with every partition owned and at their published addresses, and ENV_KEYS keys
+// written and read.
+static bool
+env_yaml_serves(const char* label, aerospike* as, const env_node* a, const env_node* b, char* msg,
+	size_t size)
+{
+	char names[256];
+	char* items[] = {(char*)a->name, (char*)b->name};
+	live_sort_join(items, 2, names, sizeof(names));
+
+	char last[LIVE_LIST_SIZE];
+
+	if (! live_wait_nodes(as, env_ns, names, ENV_WAIT_MS, last, sizeof(last))) {
+		snprintf(msg, size, "%.63s: expected nodes %s with every partition owned: %s", label, names, last);
+		return false;
+	}
+
+	if (! env_yaml_nodes_at(label, as, a, b, msg, size)) {
+		return false;
+	}
+
+	char first[1024];
+	uint32_t failures = live_round_trip(as, env_ns, ENV_SET, label, NULL, ENV_KEYS, first, sizeof(first));
+	printf("ENV-YAML-RESULT %s %s keys=%u failures=%u\n", label, last, ENV_KEYS, failures);
+
+	if (failures > 0) {
+		snprintf(msg, size, "%s: %u of %u keys failed, first %s", label, failures, ENV_KEYS, first);
+		return false;
+	}
+	return true;
+}
+
+static const char*
+env_translator_of(aerospike* as)
+{
+	as_translation_config* t = &as->config.translation;
+	return t->provider_registered ? t->provider.name : "(none)";
+}
+
+TEST(yaml_pass_through, "YAML pass-through: alternate addresses and tend_interval from the file, both nodes serve")
+{
+	live_cleanup();
+	as_error err;
+	aerospike* as = env_yaml_connect("PASS_THROUGH_CLIENT_CONFIG", &env_pass_through_a, &err);
+	check(as, "client not created: %d %s", err.code, err.message);
+	check(strcmp(env_translator_of(as), "pass-through") == 0, "translator is %s, not pass-through",
+		env_translator_of(as));
+	check(as->cluster->use_services_alternate, "use_services_alternate is not set from the file");
+	check(as->config.tender_interval == 250, "tender_interval is %u, not 250", as->config.tender_interval);
+
+	char msg[ENV_LINE_SIZE];
+	check(env_yaml_serves("pass-through", as, &env_pass_through_a, &env_pass_through_b, msg, sizeof(msg)),
+		"%s", msg);
+	live_cleanup();
+}
+
+TEST(yaml_port_map_strict, "YAML port-map: strict, node A by host:port and node B by node name, both nodes serve")
+{
+	live_cleanup();
+	as_error err;
+	aerospike* as = env_yaml_connect("PORT_MAP_CLIENT_CONFIG", &env_port_map_a, &err);
+	check(as, "client not created: %d %s", err.code, err.message);
+	check(strcmp(env_translator_of(as), "port-map") == 0, "translator is %s, not port-map",
+		env_translator_of(as));
+	check(as->config.translation.on_miss == AS_TRANSLATION_STRICT, "on_miss is not strict");
+
+	char msg[ENV_LINE_SIZE];
+	check(env_yaml_serves("port-map", as, &env_port_map_a, &env_port_map_b, msg, sizeof(msg)), "%s", msg);
+	live_cleanup();
 }
 
 //---------------------------------
@@ -1820,6 +1981,7 @@ SUITE(env_dns_suite, "N-4 DNS seed discovery (envs/dns.sh)")
 	suite_after(env_suite_after);
 	suite_add(n4_a_records_thread);
 	suite_add(n4_srv_tend);
+	suite_add(n4_yaml_a_records);
 	suite_add(n4_outage_keeps_running);
 	suite_add(n4_changed_srv_thread);
 	suite_add(n4_changed_srv_tend);
@@ -1832,6 +1994,13 @@ SUITE(env_collision_suite, "N-18 translated address collisions against a live no
 	suite_add(n18_pass_through_live_node);
 	suite_add(n18_static_map_live_node);
 	suite_add(n18_port_map_live_node);
+}
+
+SUITE(env_yaml_suite, "YAML translation from the client config file (envs/yaml.sh)")
+{
+	suite_after(env_suite_after);
+	suite_add(yaml_pass_through);
+	suite_add(yaml_port_map_strict);
 }
 
 SUITE(env_tls_suite, "N-6 TLS through the proxy and certificate name matching (envs/tls-matching.sh)")
@@ -1957,6 +2126,17 @@ PLAN(discovery_env)
 		}
 		plan_add(env_collision_suite);
 	}
+	else if (strcmp(env_name, "yaml") == 0) {
+		env_node_read(&env_pass_through_a, "PASS_THROUGH_NODE_A");
+		env_node_read(&env_pass_through_b, "PASS_THROUGH_NODE_B");
+		env_node_read(&env_port_map_a, "PORT_MAP_NODE_A");
+		env_node_read(&env_port_map_b, "PORT_MAP_NODE_B");
+		env_node_read_advertised(&env_pass_through_a, "PASS_THROUGH_NODE_A");
+		env_node_read_advertised(&env_pass_through_b, "PASS_THROUGH_NODE_B");
+		env_node_read_advertised(&env_port_map_a, "PORT_MAP_NODE_A");
+		env_node_read_advertised(&env_port_map_b, "PORT_MAP_NODE_B");
+		plan_add(env_yaml_suite);
+	}
 	else if (strcmp(env_name, "tls-matching") == 0) {
 		env_tls_read();
 		const char* suite = env_optional_value("DISCOVERY_ENV_SUITE");
@@ -1973,7 +2153,7 @@ PLAN(discovery_env)
 		}
 	}
 	else {
-		printf("ENV %s: no client test for this environment; run it in dns, collision or tls-matching\n",
+		printf("ENV %s: no client test for this environment; run it in dns, collision, yaml or tls-matching\n",
 			env_name);
 		exit(1);
 	}

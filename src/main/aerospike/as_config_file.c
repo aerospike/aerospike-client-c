@@ -17,20 +17,79 @@
 #include <aerospike/as_config_file.h>
 #include <aerospike/aerospike.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_discovery.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_metrics_internal.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_string_builder.h>
 #include <ctype.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <yaml.h>
 
 //---------------------------------
+// Macros
+//---------------------------------
+
+// Keys of static.client staged in as_yaml_discovery.set.
+#define AS_YAML_SET_IP_MAP (1u << 0)
+#define AS_YAML_SET_USE_SERVICES_ALTERNATE (1u << 1)
+#define AS_YAML_SET_MERGE_POLICY (1u << 2)
+#define AS_YAML_SET_EXECUTION_MODE (1u << 3)
+#define AS_YAML_SET_REFRESH_INTERVAL (1u << 4)
+#define AS_YAML_SET_REFRESH_TIMEOUT (1u << 5)
+#define AS_YAML_SET_TEND_DEADLINE (1u << 6)
+#define AS_YAML_SET_DNS (1u << 7)
+#define AS_YAML_SET_AWS (1u << 8)
+#define AS_YAML_SET_ON_MISS (1u << 9)
+#define AS_YAML_SET_STATIC_MAP (1u << 10)
+#define AS_YAML_SET_PORT_MAP (1u << 11)
+
+#define AS_YAML_PATH_SIZE 256
+
+//---------------------------------
 // Types
 //---------------------------------
+
+typedef enum {
+	AS_YAML_PROVIDER_UNSET,
+	AS_YAML_PROVIDER_STATIC,
+	AS_YAML_PROVIDER_DNS,
+	AS_YAML_PROVIDER_AWS
+} as_yaml_provider;
+
+typedef enum {
+	AS_YAML_TRANSLATOR_UNSET,
+	AS_YAML_TRANSLATOR_STATIC_MAP,
+	AS_YAML_TRANSLATOR_PORT_MAP,
+	AS_YAML_TRANSLATOR_PASS_THROUGH
+} as_yaml_translator;
+
+typedef struct {
+	char* name;
+	as_vector values; // char*, owned
+	bool has_values;
+} as_yaml_filter;
+
+// Heap data and plugins of static.client, staged until the whole file is valid. Scalar
+// discovery and translation keys are written directly to the config instead.
+typedef struct {
+	as_vector ip_map;      // as_addr_map, strings owned
+	as_vector static_map;  // as_addr_map, strings owned
+	as_vector port_map;    // as_addr_map, strings owned
+	as_vector dns_names;   // char*, owned
+	as_vector dns_servers; // char*, owned
+	as_vector aws_filters; // as_yaml_filter, owned
+	as_dns_seed_provider_config dns; // tls_name owned
+	as_aws_seed_provider_config aws; // region, tls_name and endpoint owned
+	as_yaml_provider provider;
+	as_yaml_translator translator;
+	bool use_services_alternate;
+	uint32_t set;
+} as_yaml_discovery;
 
 typedef struct {
 	yaml_parser_t parser;
@@ -38,6 +97,7 @@ typedef struct {
 	uint8_t* bitmap;
 	as_config* config;
 	const char* name;
+	as_yaml_discovery* disc; // NULL on reload
 	as_error err;
 	bool init;
 } as_yaml;
@@ -46,11 +106,34 @@ typedef struct {
 // Static Functions
 //---------------------------------
 
+static void
+as_parser_error(as_yaml* yaml)
+{
+	yaml_parser_t* parser = &yaml->parser;
+
+	if (!parser->problem) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "yaml_parser_parse failure at offset %zu",
+			parser->offset);
+		return;
+	}
+
+	// libyaml sets problem_offset only for reader errors; scanner and parser errors set problem_mark.
+	if (parser->error == YAML_READER_ERROR) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "yaml_parser_parse failure at offset %zu: %s",
+			parser->problem_offset, parser->problem);
+		return;
+	}
+
+	as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+		"yaml_parser_parse failure at line %zu, column %zu: %s",
+		parser->problem_mark.line + 1, parser->problem_mark.column + 1, parser->problem);
+}
+
 static inline bool
 as_parse_next(as_yaml* yaml)
 {
 	if (!yaml_parser_parse(&yaml->parser, &yaml->event)) {
-		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "yaml_parser_parse failure at offset %zu", yaml->parser.offset);
+		as_parser_error(yaml);
 		return false;
 	}
 	return true;
@@ -1610,6 +1693,836 @@ as_parse_policy(as_yaml* yaml, as_parse_policy_fn fn)
 	return true;
 }
 
+//---------------------------------
+// Static Functions: discovery and translation keys
+//---------------------------------
+
+#define AS_YAML_COUNT(a) (sizeof(a) / sizeof((a)[0]))
+
+static const char* const as_yaml_providers[] = {"static", "dns", "aws-tags"};
+static const char* const as_yaml_translators[] = {"static-map", "port-map", "pass-through"};
+static const char* const as_yaml_merge_policies[] = {"merge", "replace", "discovery_only"};
+static const char* const as_yaml_execution_modes[] = {"thread", "tend"};
+static const char* const as_yaml_record_types[] = {"a", "srv"};
+static const char* const as_yaml_address_fields[] = {
+	"private_ip", "public_ip", "private_dns", "public_dns"
+};
+static const char* const as_yaml_miss_policies[] = {"pass_through", "strict"};
+
+static const char* const as_yaml_static_client_scalars[] = {
+	"config_interval", "max_connections_per_node", "min_connections_per_node",
+	"async_max_connections_per_node", "async_min_connections_per_node", "use_services_alternate",
+	NULL
+};
+static const char* const as_yaml_discovery_scalars[] = {
+	"provider", "merge_policy", "execution_mode", "refresh_interval_ms", "refresh_timeout_ms",
+	"tend_refresh_deadline_ms", NULL
+};
+static const char* const as_yaml_dns_scalars[] = {
+	"record_type", "port", "tls_name", "timeout_ms", NULL
+};
+static const char* const as_yaml_aws_scalars[] = {
+	"region", "address_field", "port", "tls_name", "timeout_ms", "init_timeout_ms", "endpoint",
+	NULL
+};
+static const char* const as_yaml_translation_scalars[] = {"provider", "on_miss", NULL};
+
+typedef bool (*as_parse_block_fn)(as_yaml* yaml, const char* path, const char* name);
+
+static bool
+as_yaml_known(const char* name, const char* const* names)
+{
+	for (const char* const* p = names; *p; p++) {
+		if (strcmp(name, *p) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static const char*
+as_event_kind(yaml_event_type_t type)
+{
+	switch (type) {
+		case YAML_SCALAR_EVENT:
+			return "a scalar";
+		case YAML_MAPPING_START_EVENT:
+			return "a map";
+		case YAML_SEQUENCE_START_EVENT:
+			return "a sequence";
+		default:
+			return "an unsupported value";
+	}
+}
+
+static inline const char*
+as_yaml_scalar(as_yaml* yaml)
+{
+	return (const char*)yaml->event.data.scalar.value;
+}
+
+static void
+as_yaml_path(char* out, const char* path, const char* name)
+{
+	as_string_builder sb;
+	as_string_builder_assign(&sb, AS_YAML_PATH_SIZE, out);
+	as_string_builder_append(&sb, path);
+	as_string_builder_append_char(&sb, '.');
+	as_string_builder_append(&sb, name);
+}
+
+// A known key whose value has the wrong kind. Deletes the event.
+static bool
+as_kind_error(as_yaml* yaml, const char* path, const char* name, const char* expected)
+{
+	as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s.%s: expected %s, not %s",
+		path, name, expected, as_event_kind(yaml->event.type));
+	yaml_event_delete(&yaml->event);
+	return false;
+}
+
+// Log an unknown key and skip its value, whatever its kind.
+static bool
+as_skip_field(as_yaml* yaml, const char* path, const char* name)
+{
+	as_log_info("Unexpected field: %s.%s", path, name);
+
+	switch (yaml->event.type) {
+		case YAML_SCALAR_EVENT:
+			yaml_event_delete(&yaml->event);
+			return true;
+
+		case YAML_MAPPING_START_EVENT:
+			yaml_event_delete(&yaml->event);
+			return as_skip_open_mapping(yaml);
+
+		case YAML_SEQUENCE_START_EVENT:
+			yaml_event_delete(&yaml->event);
+			as_skip_sequence(yaml);
+			return true;
+
+		default:
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s.%s: %s", path, name,
+				as_event_kind(yaml->event.type));
+			yaml_event_delete(&yaml->event);
+			return false;
+	}
+}
+
+static bool
+parse_uint32_strict(
+	as_yaml* yaml, const char* path, const char* value, uint32_t min, uint32_t max, uint32_t* out
+	)
+{
+	char* end = NULL;
+	errno = 0;
+	unsigned long long v = strtoull(value, &end, 10);
+
+	if (!isdigit((unsigned char)value[0]) || *end != '\0' || errno != 0 || v > UINT32_MAX) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid uint %s: %s", path, value);
+		return false;
+	}
+
+	if (v < min || v > max) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid uint %s: %s. valid range: %u - %u",
+			path, value, min, max);
+		return false;
+	}
+
+	*out = (uint32_t)v;
+	return true;
+}
+
+static bool
+as_parse_enum(
+	as_yaml* yaml, const char* path, const char* value, const char* const* names, uint32_t size,
+	uint32_t* out
+	)
+{
+	for (uint32_t i = 0; i < size; i++) {
+		if (strcmp(value, names[i]) == 0) {
+			*out = i;
+			return true;
+		}
+	}
+
+	as_string_builder sb;
+	as_string_builder_inita(&sb, 256, false);
+
+	for (uint32_t i = 0; i < size; i++) {
+		if (i > 0) {
+			as_string_builder_append(&sb, ", ");
+		}
+		as_string_builder_append(&sb, names[i]);
+	}
+
+	as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s. valid values: %s",
+		path, value, sb.data);
+	return false;
+}
+
+static void
+as_yaml_set_string(const char** trg, const char* value)
+{
+	cf_free((void*)*trg);
+	*trg = cf_strdup(value);
+}
+
+static void
+as_yaml_strings_clear(as_vector* v)
+{
+	for (uint32_t i = 0; i < v->size; i++) {
+		cf_free(*(char**)as_vector_get(v, i));
+	}
+	as_vector_clear(v);
+}
+
+static void
+as_yaml_addr_map_clear(as_vector* v)
+{
+	for (uint32_t i = 0; i < v->size; i++) {
+		as_addr_map* entry = as_vector_get(v, i);
+		cf_free(entry->orig);
+		cf_free(entry->alt);
+	}
+	as_vector_clear(v);
+}
+
+static void
+as_yaml_filters_clear(as_vector* v)
+{
+	for (uint32_t i = 0; i < v->size; i++) {
+		as_yaml_filter* filter = as_vector_get(v, i);
+		cf_free(filter->name);
+		as_yaml_strings_clear(&filter->values);
+		as_vector_destroy(&filter->values);
+	}
+	as_vector_clear(v);
+}
+
+static void
+as_yaml_dns_reset(as_yaml_discovery* d)
+{
+	as_yaml_strings_clear(&d->dns_names);
+	as_yaml_strings_clear(&d->dns_servers);
+	cf_free((void*)d->dns.tls_name);
+	as_dns_seed_provider_config_init(&d->dns);
+}
+
+static void
+as_yaml_aws_reset(as_yaml_discovery* d)
+{
+	as_yaml_filters_clear(&d->aws_filters);
+	cf_free((void*)d->aws.region);
+	cf_free((void*)d->aws.tls_name);
+	cf_free((void*)d->aws.endpoint);
+	as_aws_seed_provider_config_init(&d->aws);
+}
+
+static void
+as_yaml_discovery_init(as_yaml_discovery* d)
+{
+	memset(d, 0, sizeof(as_yaml_discovery));
+	as_vector_init(&d->ip_map, sizeof(as_addr_map), 4);
+	as_vector_init(&d->static_map, sizeof(as_addr_map), 4);
+	as_vector_init(&d->port_map, sizeof(as_addr_map), 4);
+	as_vector_init(&d->dns_names, sizeof(char*), 4);
+	as_vector_init(&d->dns_servers, sizeof(char*), 4);
+	as_vector_init(&d->aws_filters, sizeof(as_yaml_filter), 2);
+	as_dns_seed_provider_config_init(&d->dns);
+	as_aws_seed_provider_config_init(&d->aws);
+}
+
+static void
+as_yaml_discovery_destroy(as_yaml_discovery* d)
+{
+	as_yaml_dns_reset(d);
+	as_yaml_aws_reset(d);
+	as_yaml_addr_map_clear(&d->ip_map);
+	as_yaml_addr_map_clear(&d->static_map);
+	as_yaml_addr_map_clear(&d->port_map);
+	as_vector_destroy(&d->ip_map);
+	as_vector_destroy(&d->static_map);
+	as_vector_destroy(&d->port_map);
+	as_vector_destroy(&d->dns_names);
+	as_vector_destroy(&d->dns_servers);
+	as_vector_destroy(&d->aws_filters);
+}
+
+// Parse the name/value pairs of a mapping whose start event is consumed, through the end event.
+// fn receives each value's first event and consumes the whole value.
+static bool
+as_parse_block(as_yaml* yaml, const char* path, as_parse_block_fn fn)
+{
+	while (as_parse_next(yaml)) {
+		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+			return true;
+		}
+
+		if (yaml->event.type != YAML_SCALAR_EVENT) {
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: expected scalar keys, not %s",
+				path, as_event_kind(yaml->event.type));
+			yaml_event_delete(&yaml->event);
+			return false;
+		}
+
+		char name[256];
+		as_strncpy(name, as_yaml_scalar(yaml), sizeof(name));
+		yaml_event_delete(&yaml->event);
+
+		if (!as_parse_next(yaml)) {
+			return false;
+		}
+
+		if (!fn(yaml, path, name)) {
+			return false;
+		}
+	}
+	return false;
+}
+
+// Parse a sequence of scalars whose start event is consumed into out (char*, owned).
+static bool
+as_parse_string_seq(as_yaml* yaml, const char* path, as_vector* out)
+{
+	as_string_builder sb;
+	as_string_builder_inita(&sb, 512, false);
+	as_string_builder_append(&sb, "Set ");
+	as_string_builder_append(&sb, path);
+	as_string_builder_append(&sb, " = [");
+
+	for (uint32_t i = 0; as_parse_next(yaml); i++) {
+		if (yaml->event.type == YAML_SEQUENCE_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+			as_string_builder_append_char(&sb, ']');
+			as_log_info("%s", sb.data);
+			return true;
+		}
+
+		if (yaml->event.type != YAML_SCALAR_EVENT) {
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s[%u]: expected a scalar, not %s",
+				path, i, as_event_kind(yaml->event.type));
+			yaml_event_delete(&yaml->event);
+			return false;
+		}
+
+		char* value = cf_strdup(as_yaml_scalar(yaml));
+		as_vector_append(out, &value);
+
+		if (i > 0) {
+			as_string_builder_append_char(&sb, ',');
+		}
+		as_string_builder_append(&sb, value);
+		yaml_event_delete(&yaml->event);
+	}
+	return false;
+}
+
+// Parse a map of scalars whose start event is consumed into out (as_addr_map, owned).
+static bool
+as_parse_addr_map(as_yaml* yaml, const char* path, as_vector* out)
+{
+	while (as_parse_next(yaml)) {
+		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+			return true;
+		}
+
+		if (yaml->event.type != YAML_SCALAR_EVENT) {
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: expected scalar keys, not %s",
+				path, as_event_kind(yaml->event.type));
+			yaml_event_delete(&yaml->event);
+			return false;
+		}
+
+		char* orig = cf_strdup(as_yaml_scalar(yaml));
+		yaml_event_delete(&yaml->event);
+
+		if (!as_parse_next(yaml)) {
+			cf_free(orig);
+			return false;
+		}
+
+		if (yaml->event.type != YAML_SCALAR_EVENT) {
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s[%s]: expected a scalar, not %s",
+				path, orig, as_event_kind(yaml->event.type));
+			yaml_event_delete(&yaml->event);
+			cf_free(orig);
+			return false;
+		}
+
+		as_addr_map* entry = as_vector_reserve(out);
+		entry->orig = orig;
+		entry->alt = cf_strdup(as_yaml_scalar(yaml));
+		as_log_info("Set %s[%s] = %s", path, entry->orig, entry->alt);
+		yaml_event_delete(&yaml->event);
+	}
+	return false;
+}
+
+// Parse a map value into one of the staged address maps; a repeated key keeps the last value.
+static bool
+as_parse_staged_map(as_yaml* yaml, const char* path, const char* name, as_vector* out, uint32_t flag)
+{
+	if (yaml->event.type != YAML_MAPPING_START_EVENT) {
+		return as_kind_error(yaml, path, name, "a map");
+	}
+	yaml_event_delete(&yaml->event);
+
+	as_yaml_discovery* d = yaml->disc;
+	as_yaml_addr_map_clear(out);
+	d->set &= ~flag;
+
+	char key[AS_YAML_PATH_SIZE];
+	as_yaml_path(key, path, name);
+
+	if (!as_parse_addr_map(yaml, key, out)) {
+		return false;
+	}
+	d->set |= flag;
+	return true;
+}
+
+// Parse a sequence value into a staged string list; a repeated key keeps the last value.
+static bool
+as_parse_staged_seq(as_yaml* yaml, const char* path, const char* name, as_vector* out)
+{
+	if (yaml->event.type != YAML_SEQUENCE_START_EVENT) {
+		return as_kind_error(yaml, path, name, "a sequence");
+	}
+	yaml_event_delete(&yaml->event);
+	as_yaml_strings_clear(out);
+
+	char key[AS_YAML_PATH_SIZE];
+	as_yaml_path(key, path, name);
+	return as_parse_string_seq(yaml, key, out);
+}
+
+static bool
+as_parse_dns_field(as_yaml* yaml, const char* path, const char* name)
+{
+	as_yaml_discovery* d = yaml->disc;
+
+	if (strcmp(name, "names") == 0) {
+		return as_parse_staged_seq(yaml, path, name, &d->dns_names);
+	}
+
+	if (strcmp(name, "servers") == 0) {
+		return as_parse_staged_seq(yaml, path, name, &d->dns_servers);
+	}
+
+	if (!as_yaml_known(name, as_yaml_dns_scalars)) {
+		return as_skip_field(yaml, path, name);
+	}
+
+	if (yaml->event.type != YAML_SCALAR_EVENT) {
+		return as_kind_error(yaml, path, name, "a scalar");
+	}
+
+	const char* value = as_yaml_scalar(yaml);
+	char key[AS_YAML_PATH_SIZE];
+	as_yaml_path(key, path, name);
+	uint32_t v = 0;
+	bool rv = true;
+
+	if (strcmp(name, "record_type") == 0) {
+		if ((rv = as_parse_enum(yaml, key, value, as_yaml_record_types,
+				AS_YAML_COUNT(as_yaml_record_types), &v))) {
+			d->dns.record_type = (as_dns_record_type)v;
+		}
+	}
+	else if (strcmp(name, "port") == 0) {
+		if ((rv = parse_uint32_strict(yaml, key, value, 1, UINT16_MAX, &v))) {
+			d->dns.port = (uint16_t)v;
+		}
+	}
+	else if (strcmp(name, "tls_name") == 0) {
+		as_yaml_set_string(&d->dns.tls_name, value);
+	}
+	else {
+		rv = parse_uint32_strict(yaml, key, value, 1, UINT32_MAX, &d->dns.timeout_ms);
+	}
+
+	if (rv) {
+		as_log_info("Set %s = %s", key, value);
+	}
+	yaml_event_delete(&yaml->event);
+	return rv;
+}
+
+static bool
+as_parse_filter_field(as_yaml* yaml, const char* path, const char* name)
+{
+	as_vector* filters = &yaml->disc->aws_filters;
+	as_yaml_filter* filter = as_vector_get(filters, filters->size - 1);
+
+	if (strcmp(name, "values") == 0) {
+		filter->has_values = false;
+
+		if (!as_parse_staged_seq(yaml, path, name, &filter->values)) {
+			return false;
+		}
+		filter->has_values = true;
+		return true;
+	}
+
+	if (strcmp(name, "name") != 0) {
+		return as_skip_field(yaml, path, name);
+	}
+
+	if (yaml->event.type != YAML_SCALAR_EVENT) {
+		return as_kind_error(yaml, path, name, "a scalar");
+	}
+
+	cf_free(filter->name);
+	filter->name = cf_strdup(as_yaml_scalar(yaml));
+	as_log_info("Set %s.%s = %s", path, name, filter->name);
+	yaml_event_delete(&yaml->event);
+	return true;
+}
+
+// Parse the filters sequence whose start event is consumed.
+static bool
+as_parse_aws_filters(as_yaml* yaml, const char* path)
+{
+	as_vector* filters = &yaml->disc->aws_filters;
+	as_yaml_filters_clear(filters);
+
+	char key[AS_YAML_PATH_SIZE];
+
+	for (uint32_t i = 0; as_parse_next(yaml); i++) {
+		if (yaml->event.type == YAML_SEQUENCE_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+			return true;
+		}
+
+		as_string_builder sb;
+		as_string_builder_assign(&sb, sizeof(key), key);
+		as_string_builder_append(&sb, path);
+		as_string_builder_append_char(&sb, '[');
+		as_string_builder_append_uint(&sb, i);
+		as_string_builder_append_char(&sb, ']');
+
+		if (yaml->event.type != YAML_MAPPING_START_EVENT) {
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: expected a map, not %s",
+				key, as_event_kind(yaml->event.type));
+			yaml_event_delete(&yaml->event);
+			return false;
+		}
+		yaml_event_delete(&yaml->event);
+
+		as_yaml_filter* filter = as_vector_reserve(filters);
+		as_vector_init(&filter->values, sizeof(char*), 4);
+
+		if (!as_parse_block(yaml, key, as_parse_filter_field)) {
+			return false;
+		}
+
+		filter = as_vector_get(filters, filters->size - 1);
+
+		if (!filter->name) {
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: name is required", key);
+			return false;
+		}
+
+		if (!filter->has_values) {
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: values is required", key);
+			return false;
+		}
+	}
+	return false;
+}
+
+static bool
+as_parse_aws_field(as_yaml* yaml, const char* path, const char* name)
+{
+	as_yaml_discovery* d = yaml->disc;
+	char key[AS_YAML_PATH_SIZE];
+	as_yaml_path(key, path, name);
+
+	if (strcmp(name, "filters") == 0) {
+		if (yaml->event.type != YAML_SEQUENCE_START_EVENT) {
+			return as_kind_error(yaml, path, name, "a sequence");
+		}
+		yaml_event_delete(&yaml->event);
+		return as_parse_aws_filters(yaml, key);
+	}
+
+	if (!as_yaml_known(name, as_yaml_aws_scalars)) {
+		return as_skip_field(yaml, path, name);
+	}
+
+	if (yaml->event.type != YAML_SCALAR_EVENT) {
+		return as_kind_error(yaml, path, name, "a scalar");
+	}
+
+	const char* value = as_yaml_scalar(yaml);
+	uint32_t v = 0;
+	bool rv = true;
+
+	if (strcmp(name, "region") == 0) {
+		as_yaml_set_string(&d->aws.region, value);
+	}
+	else if (strcmp(name, "address_field") == 0) {
+		if ((rv = as_parse_enum(yaml, key, value, as_yaml_address_fields,
+				AS_YAML_COUNT(as_yaml_address_fields), &v))) {
+			d->aws.address_field = (as_aws_address_field)v;
+		}
+	}
+	else if (strcmp(name, "port") == 0) {
+		if ((rv = parse_uint32_strict(yaml, key, value, 1, UINT16_MAX, &v))) {
+			d->aws.port = (uint16_t)v;
+		}
+	}
+	else if (strcmp(name, "tls_name") == 0) {
+		as_yaml_set_string(&d->aws.tls_name, value);
+	}
+	else if (strcmp(name, "timeout_ms") == 0) {
+		rv = parse_uint32_strict(yaml, key, value, 1, UINT32_MAX, &d->aws.timeout_ms);
+	}
+	else if (strcmp(name, "init_timeout_ms") == 0) {
+		if ((rv = parse_uint32_strict(yaml, key, value, 1, UINT32_MAX, &v))) {
+			as_log_info("Ignore %s = %s: the first refresh is bounded by "
+				"static.client.discovery.refresh_timeout_ms", key, value);
+		}
+		yaml_event_delete(&yaml->event);
+		return rv;
+	}
+	else {
+		as_yaml_set_string(&d->aws.endpoint, value);
+	}
+
+	if (rv) {
+		as_log_info("Set %s = %s", key, value);
+	}
+	yaml_event_delete(&yaml->event);
+	return rv;
+}
+
+static bool
+as_parse_discovery_field(as_yaml* yaml, const char* path, const char* name)
+{
+	as_yaml_discovery* d = yaml->disc;
+	char key[AS_YAML_PATH_SIZE];
+	as_yaml_path(key, path, name);
+
+	if (strcmp(name, "dns") == 0) {
+		if (yaml->event.type != YAML_MAPPING_START_EVENT) {
+			return as_kind_error(yaml, path, name, "a map");
+		}
+		yaml_event_delete(&yaml->event);
+		as_yaml_dns_reset(d);
+		d->set |= AS_YAML_SET_DNS;
+		return as_parse_block(yaml, key, as_parse_dns_field);
+	}
+
+	if (strcmp(name, "aws") == 0) {
+		if (yaml->event.type != YAML_MAPPING_START_EVENT) {
+			return as_kind_error(yaml, path, name, "a map");
+		}
+		yaml_event_delete(&yaml->event);
+		as_yaml_aws_reset(d);
+		d->set |= AS_YAML_SET_AWS;
+		return as_parse_block(yaml, key, as_parse_aws_field);
+	}
+
+	if (!as_yaml_known(name, as_yaml_discovery_scalars)) {
+		return as_skip_field(yaml, path, name);
+	}
+
+	if (yaml->event.type != YAML_SCALAR_EVENT) {
+		return as_kind_error(yaml, path, name, "a scalar");
+	}
+
+	as_discovery_config* discovery = &yaml->config->discovery;
+	const char* value = as_yaml_scalar(yaml);
+	uint32_t v = 0;
+	bool rv;
+
+	if (strcmp(name, "provider") == 0) {
+		if ((rv = as_parse_enum(yaml, key, value, as_yaml_providers,
+				AS_YAML_COUNT(as_yaml_providers), &v))) {
+			d->provider = (as_yaml_provider)(v + 1);
+		}
+	}
+	else if (strcmp(name, "merge_policy") == 0) {
+		if ((rv = as_parse_enum(yaml, key, value, as_yaml_merge_policies,
+				AS_YAML_COUNT(as_yaml_merge_policies), &v))) {
+			discovery->merge_policy = (as_seed_merge_policy)v;
+			d->set |= AS_YAML_SET_MERGE_POLICY;
+		}
+	}
+	else if (strcmp(name, "execution_mode") == 0) {
+		if ((rv = as_parse_enum(yaml, key, value, as_yaml_execution_modes,
+				AS_YAML_COUNT(as_yaml_execution_modes), &v))) {
+			discovery->execution_mode = (as_discovery_execution_mode)v;
+			d->set |= AS_YAML_SET_EXECUTION_MODE;
+		}
+	}
+	else if (strcmp(name, "refresh_interval_ms") == 0) {
+		if ((rv = parse_uint32_strict(yaml, key, value, 0, UINT32_MAX,
+				&discovery->refresh_interval_ms))) {
+			d->set |= AS_YAML_SET_REFRESH_INTERVAL;
+		}
+	}
+	else if (strcmp(name, "refresh_timeout_ms") == 0) {
+		if ((rv = parse_uint32_strict(yaml, key, value, 0, UINT32_MAX,
+				&discovery->refresh_timeout_ms))) {
+			d->set |= AS_YAML_SET_REFRESH_TIMEOUT;
+		}
+	}
+	else {
+		if ((rv = parse_uint32_strict(yaml, key, value, 0, UINT32_MAX,
+				&discovery->tend_refresh_deadline_ms))) {
+			d->set |= AS_YAML_SET_TEND_DEADLINE;
+		}
+	}
+
+	if (rv) {
+		as_log_info("Set %s = %s", key, value);
+	}
+	yaml_event_delete(&yaml->event);
+	return rv;
+}
+
+static bool
+as_parse_translation_field(as_yaml* yaml, const char* path, const char* name)
+{
+	as_yaml_discovery* d = yaml->disc;
+
+	if (strcmp(name, "static_map") == 0) {
+		return as_parse_staged_map(yaml, path, name, &d->static_map, AS_YAML_SET_STATIC_MAP);
+	}
+
+	if (strcmp(name, "port_map") == 0) {
+		return as_parse_staged_map(yaml, path, name, &d->port_map, AS_YAML_SET_PORT_MAP);
+	}
+
+	if (!as_yaml_known(name, as_yaml_translation_scalars)) {
+		return as_skip_field(yaml, path, name);
+	}
+
+	if (yaml->event.type != YAML_SCALAR_EVENT) {
+		return as_kind_error(yaml, path, name, "a scalar");
+	}
+
+	const char* value = as_yaml_scalar(yaml);
+	char key[AS_YAML_PATH_SIZE];
+	as_yaml_path(key, path, name);
+	uint32_t v = 0;
+	bool rv;
+
+	if (strcmp(name, "provider") == 0) {
+		if ((rv = as_parse_enum(yaml, key, value, as_yaml_translators,
+				AS_YAML_COUNT(as_yaml_translators), &v))) {
+			d->translator = (as_yaml_translator)(v + 1);
+		}
+	}
+	else {
+		if ((rv = as_parse_enum(yaml, key, value, as_yaml_miss_policies,
+				AS_YAML_COUNT(as_yaml_miss_policies), &v))) {
+			yaml->config->translation.on_miss = (as_translation_miss_policy)v;
+			d->set |= AS_YAML_SET_ON_MISS;
+		}
+	}
+
+	if (rv) {
+		as_log_info("Set %s = %s", key, value);
+	}
+	yaml_event_delete(&yaml->event);
+	return rv;
+}
+
+static bool
+as_parse_static_client_scalar(as_yaml* yaml, const char* path, const char* name)
+{
+	const char* value = as_yaml_scalar(yaml);
+	bool rv;
+
+	if (strcmp(name, "config_interval") == 0) {
+		rv = as_parse_uint32(yaml, name, value, &yaml->config->config_provider.interval, AS_CONFIG_INTERVAL);
+	}
+	else if (strcmp(name, "max_connections_per_node") == 0) {
+		rv = as_parse_uint32(yaml, name, value, &yaml->config->max_conns_per_node, AS_MAX_CONNS_PER_NODE);
+	}
+	else if (strcmp(name, "min_connections_per_node") == 0) {
+		rv = as_parse_uint32(yaml, name, value, &yaml->config->min_conns_per_node, AS_MIN_CONNS_PER_NODE);
+	}
+	else if (strcmp(name, "async_max_connections_per_node") == 0) {
+		rv = as_parse_uint32(yaml, name, value, &yaml->config->async_max_conns_per_node, AS_ASYNC_MAX_CONNS_PER_NODE);
+	}
+	else if (strcmp(name, "async_min_connections_per_node") == 0) {
+		rv = as_parse_uint32(yaml, name, value, &yaml->config->async_min_conns_per_node, AS_ASYNC_MIN_CONNS_PER_NODE);
+	}
+	else if (strcmp(name, "use_services_alternate") == 0) {
+		char key[AS_YAML_PATH_SIZE];
+		as_yaml_path(key, path, name);
+		as_yaml_discovery* d = yaml->disc;
+
+		if ((rv = parse_bool(yaml, key, value, &d->use_services_alternate))) {
+			d->set |= AS_YAML_SET_USE_SERVICES_ALTERNATE;
+			as_log_info("Set %s = %s", key, value);
+		}
+	}
+	else {
+		as_log_info("Unexpected field: %s.%s", yaml->name, name);
+		rv = true; // Skip unknown scalars.
+	}
+
+	yaml_event_delete(&yaml->event);
+	return rv;
+}
+
+static bool
+as_parse_static_client_field(as_yaml* yaml, const char* path, const char* name)
+{
+	as_yaml_discovery* d = yaml->disc;
+	char key[AS_YAML_PATH_SIZE];
+	as_yaml_path(key, path, name);
+
+	if (strcmp(name, "ip_map") == 0) {
+		return as_parse_staged_map(yaml, path, name, &d->ip_map, AS_YAML_SET_IP_MAP);
+	}
+
+	if (strcmp(name, "discovery") == 0 || strcmp(name, "translation") == 0) {
+		if (yaml->event.type != YAML_MAPPING_START_EVENT) {
+			return as_kind_error(yaml, path, name, "a map");
+		}
+		yaml_event_delete(&yaml->event);
+		return as_parse_block(yaml, key,
+			name[0] == 'd' ? as_parse_discovery_field : as_parse_translation_field);
+	}
+
+	switch (yaml->event.type) {
+		case YAML_SCALAR_EVENT:
+			return as_parse_static_client_scalar(yaml, path, name);
+
+		case YAML_MAPPING_START_EVENT:
+		case YAML_SEQUENCE_START_EVENT: {
+			if (as_yaml_known(name, as_yaml_static_client_scalars)) {
+				return as_kind_error(yaml, path, name, "a scalar");
+			}
+
+			bool map = yaml->event.type == YAML_MAPPING_START_EVENT;
+			yaml_event_delete(&yaml->event);
+
+			if (map) {
+				as_log_info("Unexpected section: %s.%s", yaml->name, name);
+				return as_skip_open_mapping(yaml);
+			}
+			as_log_info("Unexpected sequence: %s.%s", yaml->name, name);
+			as_skip_sequence(yaml);
+			return true;
+		}
+
+		default:
+			as_expected_error(yaml, YAML_SCALAR_EVENT);
+			yaml_event_delete(&yaml->event);
+			return false;
+	}
+}
+
 static bool
 as_parse_static_client(as_yaml* yaml)
 {
@@ -1618,51 +2531,7 @@ as_parse_static_client(as_yaml* yaml)
 	}
 
 	yaml->name = "client";
-
-	char name[256];
-
-	while (as_parse_scalar(yaml, name, sizeof(name))) {
-		if (!as_parse_next(yaml)) {
-			return false;
-		}
-
-		if (yaml->event.type == YAML_SCALAR_EVENT) {
-			const char* value = (const char*)yaml->event.data.scalar.value;
-			bool rv;
-
-			if (strcmp(name, "config_interval") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->config_provider.interval, AS_CONFIG_INTERVAL);
-			}
-			else if (strcmp(name, "max_connections_per_node") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->max_conns_per_node, AS_MAX_CONNS_PER_NODE);
-			}
-			else if (strcmp(name, "min_connections_per_node") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->min_conns_per_node, AS_MIN_CONNS_PER_NODE);
-			}
-			else if (strcmp(name, "async_max_connections_per_node") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->async_max_conns_per_node, AS_ASYNC_MAX_CONNS_PER_NODE);
-			}
-			else if (strcmp(name, "async_min_connections_per_node") == 0) {
-				rv = as_parse_uint32(yaml, name, value, &yaml->config->async_min_conns_per_node, AS_ASYNC_MIN_CONNS_PER_NODE);
-			}
-			else {
-				as_log_info("Unexpected field: %s.%s", yaml->name, name);
-				rv = true; // Skip unknown scalars.
-			}
-
-			yaml_event_delete(&yaml->event);
-
-			if (!rv) {
-				return rv;
-			}
-		}
-		else {
-			as_expected_error(yaml, YAML_SCALAR_EVENT);
-			yaml_event_delete(&yaml->event);
-			return false;
-		}
-	}
-	return true;
+	return as_parse_block(yaml, "static.client", as_parse_static_client_field);
 }
 
 static bool
@@ -1968,7 +2837,10 @@ parse_debug(yaml_parser_t* parser)
 #endif
 
 static as_status
-as_config_file_read(aerospike* as, as_config* config, uint8_t* bitmap, bool init, as_error* err)
+as_config_file_read(
+	aerospike* as, as_config* config, uint8_t* bitmap, bool init, as_yaml_discovery* disc,
+	as_error* err
+	)
 {
 	as_error_reset(err);
 
@@ -1982,7 +2854,10 @@ as_config_file_read(aerospike* as, as_config* config, uint8_t* bitmap, bool init
 	as_yaml yaml;
 	yaml.bitmap = bitmap;
 	yaml.config = config;
+	yaml.name = NULL;
+	yaml.disc = disc;
 	yaml.init = init;
+	as_error_init(&yaml.err);
 
 	if (!yaml_parser_initialize(&yaml.parser)) {
 		fclose(fp);
@@ -1993,6 +2868,13 @@ as_config_file_read(aerospike* as, as_config* config, uint8_t* bitmap, bool init
 
 	bool rv = as_parse_yaml(&yaml);
 	//bool rv = parse_debug(&yaml.parser);
+
+	// Key loops end on any parse failure, so a syntax error can surface as a success or as an
+	// unrelated event error. The parser problem is the cause either way.
+	if (yaml.parser.error != YAML_NO_ERROR) {
+		as_parser_error(&yaml);
+		rv = false;
+	}
 
 	yaml_parser_delete(&yaml.parser);
 	fclose(fp);
@@ -2607,6 +3489,279 @@ as_cluster_update(
 	return status;
 }
 
+void
+as_config_file_set_seed_provider(as_config* config, const as_seed_provider* owned);
+
+void
+as_config_file_set_translator(as_config* config, const as_address_translator* owned);
+
+static as_status
+as_apply_error(as_error* err, const char* path, const char* fmt, ...)
+{
+	char detail[AS_ERROR_MESSAGE_MAX_SIZE];
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(detail, sizeof(detail), fmt, ap);
+	va_end(ap);
+	return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to parse: %s\n%s", path, detail);
+}
+
+static as_status
+as_apply_validate(as_yaml_discovery* d, const char* path, as_error* err)
+{
+	bool dns = (d->set & AS_YAML_SET_DNS) != 0;
+	bool aws = (d->set & AS_YAML_SET_AWS) != 0;
+	bool static_map = (d->set & AS_YAML_SET_STATIC_MAP) != 0;
+	bool port_map = (d->set & AS_YAML_SET_PORT_MAP) != 0;
+	const char* translator = d->translator == AS_YAML_TRANSLATOR_UNSET ? NULL :
+		as_yaml_translators[d->translator - 1];
+
+	if (d->provider == AS_YAML_PROVIDER_DNS && !dns) {
+		return as_apply_error(err, path, "static.client.discovery.dns is required with provider dns");
+	}
+
+	if (dns && d->provider != AS_YAML_PROVIDER_DNS) {
+		return as_apply_error(err, path, "static.client.discovery.dns is only valid with provider dns");
+	}
+
+	if (d->provider == AS_YAML_PROVIDER_AWS && !aws) {
+		return as_apply_error(err, path,
+			"static.client.discovery.aws is required with provider aws-tags");
+	}
+
+	if (aws && d->provider != AS_YAML_PROVIDER_AWS) {
+		return as_apply_error(err, path,
+			"static.client.discovery.aws is only valid with provider aws-tags");
+	}
+
+	if (static_map && translator && d->translator != AS_YAML_TRANSLATOR_STATIC_MAP) {
+		return as_apply_error(err, path,
+			"static.client.translation.static_map is only valid with provider static-map, not '%s'",
+			translator);
+	}
+
+	if (port_map && d->translator != AS_YAML_TRANSLATOR_PORT_MAP) {
+		if (translator) {
+			return as_apply_error(err, path,
+				"static.client.translation.port_map is only valid with provider port-map, not '%s'",
+				translator);
+		}
+		return as_apply_error(err, path,
+			"static.client.translation.port_map is only valid with provider port-map");
+	}
+
+	if (d->translator == AS_YAML_TRANSLATOR_PORT_MAP && !port_map) {
+		return as_apply_error(err, path,
+			"static.client.translation.port_map is required with provider port-map");
+	}
+
+	if (static_map && (d->set & AS_YAML_SET_IP_MAP)) {
+		return as_apply_error(err, path,
+			"static.client.translation.static_map and static.client.ip_map are both set");
+	}
+	return AEROSPIKE_OK;
+}
+
+static as_status
+as_apply_build_provider(
+	as_yaml_discovery* d, const char* path, as_seed_provider* provider, as_error* err
+	)
+{
+	as_error local;
+	as_status status;
+
+	if (d->provider == AS_YAML_PROVIDER_DNS) {
+		as_dns_seed_provider_config dns = d->dns;
+		dns.names = d->dns_names.size ? (const char* const*)d->dns_names.list : NULL;
+		dns.names_size = d->dns_names.size;
+		dns.servers = d->dns_servers.size ? (const char* const*)d->dns_servers.list : NULL;
+		dns.servers_size = d->dns_servers.size;
+
+		status = as_discovery_dns_seed_provider(&local, &dns, provider);
+
+		if (status != AEROSPIKE_OK) {
+			return as_apply_error(err, path, "Invalid static.client.discovery.dns: %s",
+				local.message);
+		}
+		return AEROSPIKE_OK;
+	}
+
+	uint32_t size = d->aws_filters.size;
+	as_aws_filter* filters = NULL;
+
+	if (size > 0) {
+		filters = cf_malloc(sizeof(as_aws_filter) * size);
+
+		if (!filters) {
+			return as_apply_error(err, path, "Failed to allocate static.client.discovery.aws.filters");
+		}
+
+		for (uint32_t i = 0; i < size; i++) {
+			as_yaml_filter* src = as_vector_get(&d->aws_filters, i);
+			filters[i].name = src->name;
+			filters[i].values = src->values.size ? (const char* const*)src->values.list : NULL;
+			filters[i].values_size = src->values.size;
+		}
+	}
+
+	as_aws_seed_provider_config aws = d->aws;
+	aws.filters = filters;
+	aws.filters_size = size;
+
+	status = as_discovery_aws_seed_provider(&local, &aws, provider);
+	cf_free(filters);
+
+	if (status != AEROSPIKE_OK) {
+		return as_apply_error(err, path, "Invalid static.client.discovery.aws: %s", local.message);
+	}
+	return AEROSPIKE_OK;
+}
+
+static as_addr_map*
+as_apply_copy_map(as_vector* src)
+{
+	as_addr_map* map = cf_malloc(sizeof(as_addr_map) * src->size);
+
+	if (!map) {
+		return NULL;
+	}
+
+	for (uint32_t i = 0; i < src->size; i++) {
+		as_addr_map* entry = as_vector_get(src, i);
+		map[i].orig = cf_strdup(entry->orig);
+		map[i].alt = cf_strdup(entry->alt);
+
+		if (!map[i].orig || !map[i].alt) {
+			for (uint32_t j = 0; j <= i; j++) {
+				cf_free(map[j].orig);
+				cf_free(map[j].alt);
+			}
+			cf_free(map);
+			return NULL;
+		}
+	}
+	return map;
+}
+
+// Register the staged discovery and translation keys of a valid file. Nothing in as->config
+// changes unless every part is built, so a failure keeps the code registrations.
+static as_status
+as_config_file_apply_discovery(aerospike* as, as_yaml_discovery* d, as_error* err)
+{
+	const char* path = as->config.config_provider.path;
+	as_status status = as_apply_validate(d, path, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	// Build.
+	as_config* config = &as->config;
+
+	as_seed_provider provider;
+	memset(&provider, 0, sizeof(provider));
+	bool has_provider = d->provider == AS_YAML_PROVIDER_DNS || d->provider == AS_YAML_PROVIDER_AWS;
+	char* provider_name = NULL;
+
+	as_address_translator translator;
+	memset(&translator, 0, sizeof(translator));
+	bool has_translator = false;
+	char* translator_name = NULL;
+
+	as_vector* entries = NULL;
+	as_addr_map* map = NULL;
+
+	if (has_provider) {
+		status = as_apply_build_provider(d, path, &provider, err);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+	}
+
+	if (d->translator == AS_YAML_TRANSLATOR_PORT_MAP) {
+		as_error local;
+
+		if (as_discovery_port_map_translator(&local, d->port_map.list, d->port_map.size,
+				&translator) != AEROSPIKE_OK) {
+			status = as_apply_error(err, path, "Invalid static.client.translation.port_map: %s",
+				local.message);
+			goto Release;
+		}
+		has_translator = true;
+	}
+	else if (d->translator == AS_YAML_TRANSLATOR_PASS_THROUGH) {
+		as_discovery_pass_through_translator(&translator);
+		has_translator = true;
+	}
+
+	if (has_provider && !(provider_name = cf_strdup(provider.name))) {
+		status = as_apply_error(err, path, "Failed to copy seed provider name");
+		goto Release;
+	}
+
+	if (has_translator && !(translator_name = cf_strdup(translator.name))) {
+		status = as_apply_error(err, path, "Failed to copy address translator name");
+		goto Release;
+	}
+
+	if (d->set & AS_YAML_SET_STATIC_MAP) {
+		entries = &d->static_map;
+	}
+	else if (d->set & AS_YAML_SET_IP_MAP) {
+		entries = &d->ip_map;
+	}
+
+	if (entries && entries->size > 0 && !(map = as_apply_copy_map(entries))) {
+		status = as_apply_error(err, path, "Failed to copy static.client.ip_map");
+		goto Release;
+	}
+
+	// Commit. Nothing below can fail.
+	if (d->set & AS_YAML_SET_USE_SERVICES_ALTERNATE) {
+		// dynamic.client.use_service_alternative wins. as_cluster_update() reverts to
+		// config_orig when the dynamic key is absent, so the static value goes there too.
+		if (!as_field_is_set(as->config_bitmap, AS_USE_SERVICE_ALTERNATIVE)) {
+			config->use_services_alternate = d->use_services_alternate;
+		}
+		as->config_orig->use_services_alternate = d->use_services_alternate;
+	}
+
+	if (entries) {
+		config->ip_map = map;
+		config->ip_map_size = entries->size;
+		config->translation.file_ip_map = map;
+		config->translation.file_ip_map_size = map ? entries->size : 0;
+	}
+
+	if (d->provider != AS_YAML_PROVIDER_UNSET) {
+		if (has_provider) {
+			provider.name = provider_name;
+		}
+		as_config_file_set_seed_provider(config, has_provider ? &provider : NULL);
+	}
+
+	if (d->translator != AS_YAML_TRANSLATOR_UNSET || (d->set & AS_YAML_SET_STATIC_MAP)) {
+		if (has_translator) {
+			translator.name = translator_name;
+		}
+		as_config_file_set_translator(config, has_translator ? &translator : NULL);
+	}
+	return AEROSPIKE_OK;
+
+Release:
+	if (has_provider && provider.destroy) {
+		provider.destroy(provider.udata);
+	}
+
+	if (has_translator && translator.destroy) {
+		translator.destroy(translator.udata);
+	}
+	cf_free(provider_name);
+	cf_free(translator_name);
+	return status;
+}
+
 //---------------------------------
 // Functions
 //---------------------------------
@@ -2622,8 +3777,15 @@ as_config_file_init(aerospike* as, as_error* err)
 	as->config_bitmap = cf_malloc(AS_CONFIG_BITMAP_SIZE);
 	memset(as->config_bitmap, 0, AS_CONFIG_BITMAP_SIZE);
 
+	as_yaml_discovery disc;
+	as_yaml_discovery_init(&disc);
+
 	as_config* config = &as->config;
-	as_status status = as_config_file_read(as, config, as->config_bitmap, true, err);
+	as_status status = as_config_file_read(as, config, as->config_bitmap, true, &disc, err);
+
+	if (status == AEROSPIKE_OK) {
+		status = as_config_file_apply_discovery(as, &disc, err);
+	}
 
 	if (status == AEROSPIKE_OK &&
 			as_field_is_set(as->config_bitmap, AS_METRICS_LEGACY_ENABLE) &&
@@ -2649,7 +3811,10 @@ as_config_file_init(aerospike* as, as_error* err)
 
 		// Restore original config.
 		memcpy(&as->config, as->config_orig, sizeof(as_config));
+		memset(as->config_bitmap, 0, AS_CONFIG_BITMAP_SIZE);
 	}
+
+	as_yaml_discovery_destroy(&disc);
 	return status;
 }
 
@@ -2669,7 +3834,7 @@ as_config_file_update(aerospike* as, as_error* err)
 	uint8_t bitmap[AS_CONFIG_BITMAP_SIZE];
 	memset(bitmap, 0, AS_CONFIG_BITMAP_SIZE);
 
-	as_status status = as_config_file_read(as, &config, bitmap, false, err);
+	as_status status = as_config_file_read(as, &config, bitmap, false, NULL, err);
 
 	if (status != AEROSPIKE_OK) {
 		// Destroy heap allocated fields if changed before update fails.

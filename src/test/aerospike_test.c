@@ -515,6 +515,7 @@ PLAN(aerospike_test)
 	plan_after(after);
 
 	plan_add(config_basics);
+	plan_add(discovery_config_file);
 	plan_add(discovery_contract);
 	plan_add(discovery_translation);
 	plan_add(discovery_seed_manager);

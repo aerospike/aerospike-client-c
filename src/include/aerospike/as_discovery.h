@@ -892,6 +892,19 @@ typedef struct as_translation_config_s {
 	 * again. Do not set directly.
 	 */
 	bool provider_released;
+
+	/**
+	 * @private
+	 * ip_map entries allocated by the config file; as_config_destroy() frees them. Do not set
+	 * directly.
+	 */
+	struct as_addr_map_s* file_ip_map;
+
+	/**
+	 * @private
+	 * Number of file_ip_map entries.
+	 */
+	uint32_t file_ip_map_size;
 } as_translation_config;
 
 /**

@@ -370,7 +370,7 @@ as_query_parse_record_async(
 	)
 {
 	as_record rec;
-	as_command_record_init(&rec, msg->n_ops);
+	as_record_init_auto(&rec, msg->n_ops);
 	
 	rec.gen = msg->generation;
 	rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
@@ -523,7 +523,7 @@ as_query_parse_record(uint8_t** pp, as_msg* msg, as_query_task* task, as_error* 
 
 		// Parse normal record values.
 		as_record rec;
-		as_command_record_init(&rec, msg->n_ops);
+		as_record_init_auto(&rec, msg->n_ops);
 		
 		rec.gen = msg->generation;
 		rec.ttl = cf_server_void_time_to_ttl(msg->record_ttl);
@@ -1591,7 +1591,7 @@ as_query_command_execute_new(as_query_task* task)
 	as_queue opsbuffers;
 
 	if (task->query->ops) {
-		as_command_buffers_init(&opsbuffers, task->query->ops->binops.size);
+		as_queue_init_auto(&opsbuffers, sizeof(as_buffer), task->query->ops->binops.size);
 	}
 
 	as_query_builder qb;
@@ -1723,7 +1723,7 @@ as_query_execute(as_query_task* task, const as_query* query, as_nodes* nodes)
 	as_queue opsbuffers;
 
 	if (query->ops) {
-		as_command_buffers_init(&opsbuffers, query->ops->binops.size);
+		as_queue_init_auto(&opsbuffers, sizeof(as_buffer), query->ops->binops.size);
 	}
 
 	as_query_builder qb;
@@ -2210,7 +2210,7 @@ as_query_partition_async(
 	as_queue opsbuffers;
 
 	if (query->ops) {
-		as_command_buffers_init(&opsbuffers, query->ops->binops.size);
+		as_queue_init_auto(&opsbuffers, sizeof(as_buffer), query->ops->binops.size);
 	}
 
 	uint64_t parent_id = as_random_get_uint64();
@@ -2759,7 +2759,7 @@ aerospike_query_async(
 	as_queue opsbuffers;
 
 	if (query->ops) {
-		as_command_buffers_init(&opsbuffers, query->ops->binops.size);
+		as_queue_init_auto(&opsbuffers, sizeof(as_buffer), query->ops->binops.size);
 	}
 
 	as_query_builder qb;

@@ -1066,7 +1066,7 @@ aerospike_key_put(
 	}
 
 	as_queue buffers;
-	as_command_buffers_init(&buffers, rec->bins.size);
+	as_queue_init_auto(&buffers, sizeof(as_buffer), rec->bins.size);
 
 	as_put put;
 	status = as_put_init(&put, policy, pkey, key, rec, &buffers, err);
@@ -1112,7 +1112,7 @@ aerospike_key_put_async_ex(
 	}
 
 	as_queue buffers;
-	as_command_buffers_init(&buffers, rec->bins.size);
+	as_queue_init_auto(&buffers, sizeof(as_buffer), rec->bins.size);
 
 	as_put put;
 	status = as_put_init(&put, policy, pkey, key, rec, &buffers, err);
@@ -1592,7 +1592,7 @@ aerospike_key_operate_internal(
 	}
 
 	as_queue buffers;
-	as_command_buffers_init(&buffers, n_operations);
+	as_queue_init_auto(&buffers, sizeof(as_buffer), n_operations);
 
 	as_policy_operate policy_local;
 	as_operate oper;
@@ -1673,7 +1673,7 @@ aerospike_key_operate_async_internal(
 	}
 	
 	as_queue buffers;
-	as_command_buffers_init(&buffers, n_operations);
+	as_queue_init_auto(&buffers, sizeof(as_buffer), n_operations);
 
 	as_policy_operate policy_local;
 	as_operate oper;
@@ -2178,7 +2178,7 @@ as_txn_monitor_operate(
 	}
 
 	as_queue buffers;
-	as_command_buffers_init(&buffers, n_operations);
+	as_queue_init_auto(&buffers, sizeof(as_buffer), n_operations);
 
 	as_policy_operate policy_local;
 	as_operate oper;
@@ -2219,7 +2219,7 @@ as_txn_monitor_operate_async(
 	}
 	
 	as_queue buffers;
-	as_command_buffers_init(&buffers, n_operations);
+	as_queue_init_auto(&buffers, sizeof(as_buffer), n_operations);
 
 	as_policy_operate policy_local;
 	as_operate oper;

@@ -187,7 +187,7 @@ local_free(void* memory)
  * Initialize a record for _nbins bins, on the stack or heap depending on the count.
  * Release it with as_record_destroy().
  */
-#define as_command_record_init(_rec, _nbins) \
+#define as_record_init_auto(_rec, _nbins) \
 	do {\
 		if ((_nbins) < AS_STACK_BINS_MAX) {\
 			as_record_inita(_rec, _nbins);\
@@ -199,16 +199,17 @@ local_free(void* memory)
 
 /**
  * @private
- * Initialize a queue of as_buffer for _n bins or operations, on the stack or heap depending on
- * the count. Release it with as_buffers_destroy().
+ * Initialize a queue for _capacity items of _item_size bytes, on the stack or heap depending on
+ * the capacity. Release it with as_queue_destroy(), or as_buffers_destroy() for a queue of
+ * as_buffer.
  */
-#define as_command_buffers_init(_queue, _n) \
+#define as_queue_init_auto(_queue, _item_size, _capacity) \
 	do {\
-		if ((_n) < AS_STACK_BINS_MAX) {\
-			as_queue_inita(_queue, sizeof(as_buffer), _n);\
+		if ((_capacity) < AS_STACK_BINS_MAX) {\
+			as_queue_inita(_queue, _item_size, _capacity);\
 		}\
 		else {\
-			as_queue_init(_queue, sizeof(as_buffer), _n);\
+			as_queue_init(_queue, _item_size, _capacity);\
 		}\
 	} while (0)
 

@@ -380,6 +380,44 @@ TEST(key_operate_read_all_bins , "operate read all bins")
 	as_record_destroy(prec);
 }
 
+TEST(key_operate_init_auto , "operate with as_operations_init_auto() below and at AS_STACK_BINS_MAX")
+{
+	as_key key;
+	as_key_init(&key, NAMESPACE, SET, "opinitauto");
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+	as_record_set_int64(&rec, "a", 1);
+
+	as_error err;
+	as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+	assert_int_eq(status, AEROSPIKE_OK);
+
+	uint16_t counts[] = {AS_STACK_BINS_MAX - 1, AS_STACK_BINS_MAX};
+
+	for (uint32_t i = 0; i < sizeof(counts) / sizeof(counts[0]); i++) {
+		as_operations ops;
+		as_operations_init_auto(&ops, counts[i]);
+
+		bool on_heap = counts[i] >= AS_STACK_BINS_MAX;
+		assert_true(ops.binops._free == on_heap);
+
+		for (uint16_t j = 0; j < counts[i]; j++) {
+			as_operations_add_read(&ops, "a");
+		}
+
+		as_record* prec = NULL;
+		status = aerospike_key_operate(as, &err, NULL, &key, &ops, &prec);
+		assert_int_eq(status, AEROSPIKE_OK);
+
+		int64_t val = as_record_get_int64(prec, "a", 0);
+		assert_int_eq(val, 1);
+
+		as_operations_destroy(&ops);
+		as_record_destroy(prec);
+	}
+}
+
 typedef struct {
 	as_error* err;
 	as_key* key;
@@ -558,5 +596,6 @@ SUITE(key_operate, "aerospike_key_operate tests")
 	suite_add(key_operate_delete);
 	suite_add(key_operate_bool);
 	suite_add(key_operate_read_all_bins);
+	suite_add(key_operate_init_auto);
 	suite_add(key_operate_store_key);
 }

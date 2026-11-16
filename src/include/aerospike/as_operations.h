@@ -403,6 +403,38 @@ typedef enum {
 	(__ops)->gen = 0;\
 	(__ops)->_free = false;
 
+/**
+ * Initializes a stack allocated `as_operations` (as_operations) with `__nops` entries, which are
+ * allocated on the stack if `__nops` is less than `AS_STACK_BINS_MAX` and on the heap otherwise.
+ * Use this instead of `as_operations_inita()` when the number of operations comes from the
+ * application and can be large.
+ *
+ * @code
+ * as_operations ops;
+ * as_operations_init_auto(&ops, n);
+ * for (uint32_t i = 0; i < n; i++) {
+ *     as_operations_add_read(&ops, bin_names[i]);
+ * }
+ * @endcode
+ *
+ * Use `as_operations_destroy()` to free the resources allocated to the `as_operations`.
+ *
+ * @param __ops		The `as_operations *` to initialize.
+ * @param __nops	The number of `as_binops.entries` to allocate.
+ *
+ * @relates as_operations
+ * @ingroup base_operations
+ */
+#define as_operations_init_auto(__ops, __nops) \
+	do {\
+		if ((__nops) < AS_STACK_BINS_MAX) {\
+			as_operations_inita(__ops, __nops);\
+		}\
+		else {\
+			as_operations_init(__ops, __nops);\
+		}\
+	} while (0)
+
 //---------------------------------
 // Functions
 //---------------------------------

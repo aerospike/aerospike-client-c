@@ -179,6 +179,10 @@ local_free(void* memory)
  * Bin and operation counts at or above this are kept on the heap. A command can have up to 65,535
  * operations, and stacks can be small: 2 MB for python.exe's main thread on Windows and 512 KB for
  * secondary threads on macOS.
+ *
+ * Below 1,000, a command's bins (56 bytes each) and operation buffers (16 bytes each) take at most
+ * about 70 KB of stack, which leaves most of a 512 KB stack for the caller. Commands this small
+ * are the common case, and they avoid a heap allocation per record.
  */
 #define AS_STACK_BINS_MAX 1000
 

@@ -113,6 +113,7 @@ typedef struct aws_stub_s {
 	pthread_t thread;
 	pthread_mutex_t lock;
 	uint8_t stop;
+	bool started;
 	bool running;
 
 	// Serve HTTPS with this context; NULL serves plain HTTP. Not owned.
@@ -139,6 +140,7 @@ typedef struct aws_stub_s {
 bool
 aws_stub_start(aws_stub* s, bool ipv6);
 
+// Does nothing for a stub that is zeroed or already stopped.
 void
 aws_stub_stop(aws_stub* s);
 

@@ -660,6 +660,7 @@ struct dns_stub_s {
 	int tcp_fd;
 	uint16_t port;
 	pthread_t thread;
+	bool started;
 	bool running;
 	uint8_t stop;
 	pthread_mutex_t lock;
@@ -1097,6 +1098,7 @@ stub_start(dns_stub* s)
 	pthread_mutex_init(&s->lock, NULL);
 	s->udp_fd = -1;
 	s->tcp_fd = -1;
+	s->started = true;
 
 	for (int attempt = 0; attempt < 20 && s->tcp_fd < 0; attempt++) {
 		struct sockaddr_in addr;
@@ -1141,6 +1143,10 @@ stub_start(dns_stub* s)
 static void
 stub_stop(dns_stub* s)
 {
+	if (!s->started) {
+		return;
+	}
+
 	if (s->running) {
 		as_store_uint8(&s->stop, 1);
 		pthread_join(s->thread, NULL);
@@ -1159,6 +1165,7 @@ stub_stop(dns_stub* s)
 		close(s->tcp_fd);
 	}
 	pthread_mutex_destroy(&s->lock);
+	s->started = false;
 }
 
 static const char*
@@ -1384,7 +1391,7 @@ all_numeric(const as_vector* hosts)
 
 TEST(dns_a_aaaa, "U-4 A then AAAA: each family sorted, A first, canonical numeric text, configured port")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_a(&s, "seeds.example.com", "10.0.0.9");
 	stub_a(&s, "seeds.example.com", "10.0.0.2");
@@ -1427,7 +1434,7 @@ TEST(dns_a_aaaa, "U-4 A then AAAA: each family sorted, A first, canonical numeri
 
 TEST(dns_a_names_in_order, "U-4 names are resolved in configured order and hosts deduplicated by address and port")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_a(&s, "b.example.com", "10.0.0.2");
 	stub_a(&s, "b.example.com", "10.0.0.3");
@@ -1455,7 +1462,7 @@ TEST(dns_a_names_in_order, "U-4 names are resolved in configured order and hosts
 
 TEST(dns_tls_name, "the configured TLS name is copied to every host in A and SRV mode")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_a(&s, "seeds.example.com", "10.0.0.1");
 	stub_a(&s, "seeds.example.com", "10.0.0.2");
@@ -1489,7 +1496,7 @@ TEST(dns_tls_name, "the configured TLS name is copied to every host in A and SRV
 
 TEST(dns_cname, "U-4 answers through a CNAME chain are used; records of other owners are ignored")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_rr(&s, "alias.example.com", T_A, false, "alias.example.com", T_CNAME, "mid.example.com");
 	stub_rr(&s, "alias.example.com", T_A, false, "mid.example.com", T_CNAME, "real.example.org");
@@ -1517,7 +1524,7 @@ TEST(dns_cname, "U-4 answers through a CNAME chain are used; records of other ow
 
 TEST(dns_srv_additional, "U-4 SRV: priority then weight descending, targets from the additional section, record ports")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	const char* n = "_aerospike._tcp.example.com";
 	stub_srv(&s, n, 20, 5, 3002, "node2.example.com");
@@ -1558,7 +1565,7 @@ TEST(dns_srv_additional, "U-4 SRV: priority then weight descending, targets from
 
 TEST(dns_srv_follow_up, "U-4 SRV targets without additional records are resolved by A, then AAAA only without A")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	const char* n = "_aerospike._tcp.example.com";
 	stub_srv(&s, n, 10, 1, 3001, "node1.example.com");
@@ -1592,7 +1599,7 @@ TEST(dns_srv_follow_up, "U-4 SRV targets without additional records are resolved
 
 TEST(dns_srv_targets, "U-4 SRV: a target is resolved once, '.' and port 0 records are dropped, unresolved targets warn; invalid records are logged once; additional AAAA records are not used")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	const char* n = "_aerospike._tcp.example.com";
 	stub_srv(&s, n, 10, 1, 3001, "node1.example.com");
@@ -1652,7 +1659,7 @@ TEST(dns_srv_targets, "U-4 SRV: a target is resolved once, '.' and port 0 record
 
 TEST(dns_partial, "U-4 partial success returns the resolved names and warns once per failed name")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_a(&s, "good.example.com", "10.0.0.1");
 	stub_rcode(&s, "bad.example.com", T_A, 2);
@@ -1683,7 +1690,7 @@ TEST(dns_partial, "U-4 partial success returns the resolved names and warns once
 
 TEST(dns_all_failed, "U-4 when every name fails the refresh returns -27 naming each name and its failure")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_rcode(&s, "bad.example.com", T_A, 2);
 	stub_rcode(&s, "bad.example.com", T_AAAA, 2);
@@ -1742,7 +1749,8 @@ TEST(dns_all_failed, "U-4 when every name fails the refresh returns -27 naming e
 
 TEST(dns_failover, "resolvers are tried in order once per query, starting with the one that last answered; SERVFAIL, REFUSED and ICMP errors fail over, NXDOMAIN does not")
 {
-	dns_stub bad, good;
+	DISCOVERY_SCOPED(dns_stub, bad, stub_stop);
+	DISCOVERY_SCOPED(dns_stub, good, stub_stop);
 	assert_true(stub_start(&bad));
 	assert_true(stub_start(&good));
 	stub_rcode(&bad, "seeds.example.com", T_A, 2);
@@ -1810,7 +1818,7 @@ TEST(dns_failover, "resolvers are tried in order once per query, starting with t
 
 TEST(dns_tcp_fallback, "a truncated UDP answer is retried over TCP to the same resolver")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_set(&s, &s.truncate, true);
 	stub_a(&s, "seeds.example.com", "10.0.0.1");
@@ -1836,7 +1844,7 @@ TEST(dns_tcp_fallback, "a truncated UDP answer is retried over TCP to the same r
 
 TEST(dns_spoofed_datagrams, "datagrams with a wrong ID or question, non-responses and runts are ignored while waiting")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_set(&s, &s.spoof_first, true);
 	stub_a(&s, "seeds.example.com", "10.0.0.1");
@@ -2200,7 +2208,7 @@ typedef struct malformed_case_s {
 
 TEST(dns_malformed, "malformed answers (pointer loops, bad lengths, counts, labels, TC over TCP) fail the query without overreads")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 
 	const malformed_case cases[] = {
@@ -2267,7 +2275,7 @@ TEST(dns_malformed, "malformed answers (pointer loops, bad lengths, counts, labe
 
 TEST(dns_large_answers, "a large SRV or A answer is capped at 256 records, warned once, and resolved within timeout_ms")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_set_custom(&s, raw_large);
 
@@ -2335,7 +2343,8 @@ TEST(dns_large_answers, "a large SRV or A answer is capped at 256 records, warne
 
 TEST(dns_deadline_unanswered, "an unanswered refresh returns within timeout_ms for every name, type and resolver")
 {
-	dns_stub silent, silent2;
+	DISCOVERY_SCOPED(dns_stub, silent, stub_stop);
+	DISCOVERY_SCOPED(dns_stub, silent2, stub_stop);
 	assert_true(stub_start(&silent));
 	assert_true(stub_start(&silent2));
 	stub_set(&silent, &silent.silent, true);
@@ -2383,7 +2392,8 @@ TEST(dns_deadline_unanswered, "an unanswered refresh returns within timeout_ms f
 
 TEST(dns_deadline_shares, "a silent resolver costs one share and is skipped once another answers; a silent name leaves a quarter of the time left to the next")
 {
-	dns_stub silent, good;
+	DISCOVERY_SCOPED(dns_stub, silent, stub_stop);
+	DISCOVERY_SCOPED(dns_stub, good, stub_stop);
 	assert_true(stub_start(&silent));
 	assert_true(stub_start(&good));
 	stub_set(&silent, &silent.silent, true);
@@ -2438,7 +2448,8 @@ TEST(dns_deadline_shares, "a silent resolver costs one share and is skipped once
 
 TEST(dns_resolver_rotation, "a dead first resolver costs one share per refresh: later queries start at the resolver that answered")
 {
-	dns_stub silent, good;
+	DISCOVERY_SCOPED(dns_stub, silent, stub_stop);
+	DISCOVERY_SCOPED(dns_stub, good, stub_stop);
 	assert_true(stub_start(&silent));
 	assert_true(stub_start(&good));
 	stub_set(&silent, &silent.silent, true);
@@ -2489,7 +2500,7 @@ TEST(dns_resolver_rotation, "a dead first resolver costs one share per refresh: 
 
 TEST(dns_deadline_srv_targets, "unanswered SRV targets share the refresh budget and are each dropped with a warning; targets left without time are counted in one line")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	const char* n = "_aerospike._tcp.example.com";
 	const char* targets[] = {"node1.example.com", "node2.example.com", "node3.example.com"};
@@ -2540,7 +2551,7 @@ TEST(dns_deadline_srv_targets, "unanswered SRV targets share the refresh budget 
 
 	// Each silent target uses 3/4 of the time left, so targets 1-3 take about 59 ms and the rest
 	// get no query.
-	dns_stub late;
+	DISCOVERY_SCOPED(dns_stub, late, stub_stop);
 	assert_true(stub_start(&late));
 	const char* ln = "_late._tcp.example.com";
 
@@ -2593,7 +2604,8 @@ TEST(dns_deadline_srv_targets, "unanswered SRV targets share the refresh budget 
 
 TEST(dns_deadline_tcp, "a truncated answer whose TCP retry hangs, after a silent resolver, still returns within timeout_ms")
 {
-	dns_stub silent, truncated;
+	DISCOVERY_SCOPED(dns_stub, silent, stub_stop);
+	DISCOVERY_SCOPED(dns_stub, truncated, stub_stop);
 	assert_true(stub_start(&silent));
 	assert_true(stub_start(&truncated));
 	stub_set(&silent, &silent.silent, true);
@@ -2628,7 +2640,7 @@ TEST(dns_deadline_tcp, "a truncated answer whose TCP retry hangs, after a silent
 
 TEST(dns_no_thread, "the provider creates no thread across repeated refreshes")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_a(&s, "seeds.example.com", "10.0.0.1");
 
@@ -2660,8 +2672,8 @@ TEST(dns_no_leaked_descriptors, "every transport path, error and failed construc
 	int before = discovery_fd_count();
 	assert_true(before > 0);
 
-	dns_stub good;
-	dns_stub silent;
+	DISCOVERY_SCOPED(dns_stub, good, stub_stop);
+	DISCOVERY_SCOPED(dns_stub, silent, stub_stop);
 	assert_true(stub_start(&good));
 	assert_true(stub_start(&silent));
 	stub_a(&good, "seeds.example.com", "10.0.0.1");
@@ -2669,7 +2681,7 @@ TEST(dns_no_leaked_descriptors, "every transport path, error and failed construc
 	stub_rcode(&good, "bad.example.com", T_AAAA, 2);
 	stub_set(&silent, &silent.silent, true);
 
-	dns_stub tc;
+	DISCOVERY_SCOPED(dns_stub, tc, stub_stop);
 	assert_true(stub_start(&tc));
 	stub_a(&tc, "seeds.example.com", "10.0.0.2");
 	stub_set(&tc, &tc.truncate, true);
@@ -2797,7 +2809,7 @@ fake_refresh(as_error* err, const as_seed_candidate_context* context, as_seed_ca
 
 TEST(dns_tend_validation, "execution-mode validation rejects a DNS timeout above tend_refresh_deadline_ms or refresh_timeout_ms before any query and accepts equality")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_a(&s, "seeds.example.com", "10.0.0.1");
 
@@ -2880,7 +2892,8 @@ TEST(dns_tend_silent_resolver, "timeout_ms equal to tend_refresh_deadline_ms wit
 	// variant only guards against tripping. Each wait can overshoot its share by about 10% (timer
 	// leeway on macOS), which eats into the 2-resolver slack, so the budget must stay large enough
 	// for that slack to outlast scheduling delays.
-	dns_stub s1, s2;
+	DISCOVERY_SCOPED(dns_stub, s1, stub_stop);
+	DISCOVERY_SCOPED(dns_stub, s2, stub_stop);
 	assert_true(stub_start(&s1));
 	assert_true(stub_start(&s2));
 	stub_set(&s1, &s1.silent, true);
@@ -2938,7 +2951,7 @@ TEST(dns_tend_silent_resolver, "timeout_ms equal to tend_refresh_deadline_ms wit
 
 TEST(dns_snapshot_retention, "U-4 NXDOMAIN after a publication keeps the exact previous snapshot; recovery publishes again")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_a(&s, "seeds.example.com", "10.0.0.1");
 
@@ -2990,7 +3003,7 @@ TEST(dns_snapshot_retention, "U-4 NXDOMAIN after a publication keeps the exact p
 
 TEST(dns_thread_mode, "thread mode runs DNS on the one client-owned discovery thread and allows a longer timeout")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_a(&s, "seeds.example.com", "10.0.0.1");
 	int before = discovery_baseline();
@@ -3031,7 +3044,7 @@ TEST(dns_thread_mode, "thread mode runs DNS on the one client-owned discovery th
 
 TEST(dns_init_failure, "an all-failed initial refresh falls back to configured seeds, or returns -27 naming dns and every name")
 {
-	dns_stub s;
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
 	stub_rcode(&s, "bad.example.com", T_A, 2);
 	stub_rcode(&s, "bad.example.com", T_AAAA, 2);
@@ -3263,7 +3276,7 @@ n4_bootstrap(n4_env* env, bool srv, as_discovery_execution_mode mode, char* msg,
 TEST(dns_n4_bootstrap, "N-4 precursor: a DNS-published seed bootstraps the client in both modes; membership comes from peers")
 {
 	int fds = discovery_fd_count();
-	n4_env env;
+	DISCOVERY_SCOPED(n4_env, env, n4_stop);
 	assert_true(n4_start(&env));
 
 	for (int srv = 0; srv < 2; srv++) {
@@ -3373,7 +3386,7 @@ n4_close_reconnect(n4_env* env)
 TEST(dns_n4_close_reconnect, "N-4 precursor: sync close keeps the DNS registration and reconnect resolves again; destroy releases it")
 {
 	int fds = discovery_fd_count();
-	n4_env env;
+	DISCOVERY_SCOPED(n4_env, env, n4_stop);
 	assert_true(n4_start(&env));
 	const char* failure = n4_close_reconnect(&env);
 	n4_stop(&env);

@@ -503,6 +503,7 @@ aws_stub_start(aws_stub* s, bool ipv6)
 	pthread_mutex_init(&s->lock, NULL);
 	s->listen_fd = -1;
 	s->requests = calloc(AWS_STUB_MAX_REQUESTS, sizeof(aws_request));
+	s->started = true;
 
 	struct sockaddr_storage ss;
 	memset(&ss, 0, sizeof(ss));
@@ -562,6 +563,10 @@ stub_clear(aws_stub* s)
 void
 aws_stub_stop(aws_stub* s)
 {
+	if (!s->started) {
+		return;
+	}
+
 	if (s->running) {
 		as_store_uint8(&s->stop, 1);
 		pthread_join(s->thread, NULL);
@@ -577,6 +582,7 @@ aws_stub_stop(aws_stub* s)
 	free(s->requests);
 	s->requests = NULL;
 	pthread_mutex_destroy(&s->lock);
+	s->started = false;
 }
 
 void

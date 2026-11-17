@@ -267,6 +267,7 @@ fnode_init(fnode* n, const char* name)
 	memset(n, 0, sizeof(fnode));
 	n->listen_fd = -1;
 	pthread_mutex_init(&n->lock, NULL);
+	n->started = true;
 	snprintf(n->name, sizeof(n->name), "%s", name);
 }
 
@@ -328,8 +329,12 @@ fnode_halt(fnode* n)
 void
 fnode_stop(fnode* n)
 {
+	if (!n->started) {
+		return;
+	}
 	fnode_halt(n);
 	pthread_mutex_destroy(&n->lock);
+	n->started = false;
 }
 
 uint32_t

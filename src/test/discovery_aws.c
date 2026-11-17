@@ -1986,7 +1986,7 @@ request_header(aws_stub* s, uint32_t i, const char* name, char* out, size_t size
 
 TEST(aws_refresh_addresses, "each address field is selected, missing and invalid values are skipped and counted, hosts are sorted, deduplicated and carry port and TLS name")
 {
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 
 	char* long_ip = repeat("", "1", 300, "");
@@ -2074,7 +2074,7 @@ TEST(aws_refresh_addresses, "each address field is selected, missing and invalid
 
 TEST(aws_request_shape, "the request is one POST form in configured filter order with running appended, one signed host header and an authorization equal to a recomputed SigV4 signature")
 {
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 	stub_one(&s, "10.0.0.1");
 
@@ -2210,7 +2210,7 @@ TEST(aws_request_shape, "the request is one POST form in configured filter order
 
 TEST(aws_pagination, "NextToken pages are followed and encoded, collected across pages, a failed page fails the refresh and a repeated token is rejected")
 {
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 
 	char* i1 = aws_xml_instance("i-1", "10.0.0.3", NULL, NULL, NULL);
@@ -2285,7 +2285,7 @@ TEST(aws_pagination, "NextToken pages are followed and encoded, collected across
 
 TEST(aws_empty_and_errors, "an empty result is success; API errors carry code, message and request id from the body or header, also EOF-framed; DOCTYPE and empty bodies are invalid")
 {
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 	char buf[1100];
 
@@ -2389,7 +2389,7 @@ typedef struct framing_case_s {
 
 TEST(aws_http_framing, "Content-Length, chunked and EOF framing are read as Java reads them; oversize, malformed and truncated responses fail with a reason")
 {
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 
 	char* instance = aws_xml_instance("i-1", "10.0.0.1", NULL, NULL, NULL);
@@ -2513,7 +2513,7 @@ TEST(aws_http_framing, "Content-Length, chunked and EOF framing are read as Java
 
 TEST(aws_header_injection, "a CR or LF in a credential is rejected at creation, before any connection")
 {
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 	stub_one(&s, "10.0.0.1");
 
@@ -2539,7 +2539,7 @@ TEST(aws_header_injection, "a CR or LF in a credential is rejected at creation, 
 
 TEST(aws_endpoint_forms, "a bracketed [::1] endpoint sends a bracketed host header; a localhost name tries each resolved address in order")
 {
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 
 	if (aws_stub_start(&s, true)) {
 		stub_one(&s, "10.0.0.1");
@@ -2602,7 +2602,7 @@ TEST(aws_tls, "HTTPS verifies trust through ca_file or ca_path, the host name or
 {
 	aws_certs certs;
 	assert_true(aws_certs_create(&certs));
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 	aws_stub_set_tls(&s, certs.good);
 	stub_one(&s, "10.0.0.1");
@@ -2741,7 +2741,7 @@ TEST(aws_trust_bundle, "without ca_file or ca_path a system CA bundle is chosen 
 
 TEST(aws_cred_config, "D-14 config keys sign DescribeInstances with the injected clock, read no environment and log the config source once")
 {
-	aws_stub ec2;
+	DISCOVERY_SCOPED(aws_stub, ec2, aws_stub_stop);
 	assert_true(aws_stub_start(&ec2, false));
 	stub_one(&ec2, "10.0.0.1");
 	fake_env f;
@@ -2779,7 +2779,7 @@ TEST(aws_cred_config, "D-14 config keys sign DescribeInstances with the injected
 
 TEST(aws_cred_environment, "D-14 environment keys are snapshotted at construction and sign; a key without a secret is skipped; invalid values fail before any request")
 {
-	aws_stub ec2;
+	DISCOVERY_SCOPED(aws_stub, ec2, aws_stub_stop);
 	assert_true(aws_stub_start(&ec2, false));
 	stub_one(&ec2, "10.0.0.1");
 	fake_env f;
@@ -2842,7 +2842,7 @@ TEST(aws_cred_environment, "D-14 environment keys are snapshotted at constructio
 
 TEST(aws_cred_profile, "D-14 the shared credentials file: default and AWS_PROFILE sections, explicit and ~/ paths; missing, FIFO and directory skipped; over 1 MiB and invalid values fail")
 {
-	aws_stub ec2;
+	DISCOVERY_SCOPED(aws_stub, ec2, aws_stub_stop);
 	assert_true(aws_stub_start(&ec2, false));
 	stub_one(&ec2, "10.0.0.1");
 	tmp_dir d;
@@ -2943,10 +2943,10 @@ TEST(aws_cred_profile, "D-14 the shared credentials file: default and AWS_PROFIL
 
 TEST(aws_cred_web_identity, "D-14 web identity: unsigned STS form POST with the trimmed token; temporary credentials sign; STS errors redact the token; token file failures never fall through")
 {
-	aws_stub ec2;
-	aws_stub sts;
-	aws_stub ecs;
-	aws_stub imds;
+	DISCOVERY_SCOPED(aws_stub, ec2, aws_stub_stop);
+	DISCOVERY_SCOPED(aws_stub, sts, aws_stub_stop);
+	DISCOVERY_SCOPED(aws_stub, ecs, aws_stub_stop);
+	DISCOVERY_SCOPED(aws_stub, imds, aws_stub_stop);
 	assert_true(aws_stub_start(&ec2, false));
 	assert_true(aws_stub_start(&sts, false));
 	assert_true(aws_stub_start(&ecs, false));
@@ -3089,8 +3089,8 @@ TEST(aws_cred_web_identity, "D-14 web identity: unsigned STS form POST with the 
 
 TEST(aws_cred_ecs, "D-14 ECS: relative and full URIs with query and [::1], token file preferred over the variable, invalid URLs and untrusted values fail at load")
 {
-	aws_stub ec2;
-	aws_stub ecs;
+	DISCOVERY_SCOPED(aws_stub, ec2, aws_stub_stop);
+	DISCOVERY_SCOPED(aws_stub, ecs, aws_stub_stop);
 	assert_true(aws_stub_start(&ec2, false));
 	assert_true(aws_stub_start(&ecs, false));
 	stub_one(&ec2, "10.0.0.1");
@@ -3142,7 +3142,7 @@ TEST(aws_cred_ecs, "D-14 ECS: relative and full URIs with query and [::1], token
 	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_OK);
 	assert_int_eq(request_header(&ecs, 3, "authorization", NULL, 0), 0);
 
-	aws_stub ecs6;
+	DISCOVERY_SCOPED(aws_stub, ecs6, aws_stub_stop);
 
 	if (aws_stub_start(&ecs6, true)) {
 		aws_stub_http(&ecs6, 200, NULL, json);
@@ -3265,8 +3265,8 @@ cred_step(as_seed_provider* provider, char* buf, size_t size)
 
 TEST(aws_cred_imds, "D-14 IMDSv2: token PUT, cached role, credentials GET; a 404 drops the role; empty, invalid and failed responses fail cleanly; disabled case-insensitively")
 {
-	aws_stub ec2;
-	aws_stub imds;
+	DISCOVERY_SCOPED(aws_stub, ec2, aws_stub_stop);
+	DISCOVERY_SCOPED(aws_stub, imds, aws_stub_stop);
 	assert_true(aws_stub_start(&ec2, false));
 	assert_true(aws_stub_start(&imds, false));
 	stub_one(&ec2, "10.0.0.1");
@@ -3439,10 +3439,10 @@ TEST(aws_cred_imds, "D-14 IMDSv2: token PUT, cached role, credentials GET; a 404
 
 TEST(aws_cred_order, "the chain resolves in Java's order: environment, profile, web identity, ECS, IMDS; a higher source wins over running lower ones")
 {
-	aws_stub ec2;
-	aws_stub sts;
-	aws_stub ecs;
-	aws_stub imds;
+	DISCOVERY_SCOPED(aws_stub, ec2, aws_stub_stop);
+	DISCOVERY_SCOPED(aws_stub, sts, aws_stub_stop);
+	DISCOVERY_SCOPED(aws_stub, ecs, aws_stub_stop);
+	DISCOVERY_SCOPED(aws_stub, imds, aws_stub_stop);
 	assert_true(aws_stub_start(&ec2, false));
 	assert_true(aws_stub_start(&sts, false));
 	assert_true(aws_stub_start(&ecs, false));
@@ -3527,8 +3527,8 @@ TEST(aws_cred_order, "the chain resolves in Java's order: environment, profile, 
 
 TEST(aws_cred_cache, "credentials refresh five minutes before expiry, a failed reload keeps unexpired ones with a warning, an expired cache propagates the error; no underflow")
 {
-	aws_stub ec2;
-	aws_stub ecs;
+	DISCOVERY_SCOPED(aws_stub, ec2, aws_stub_stop);
+	DISCOVERY_SCOPED(aws_stub, ecs, aws_stub_stop);
 	assert_true(aws_stub_start(&ec2, false));
 	assert_true(aws_stub_start(&ecs, false));
 	stub_one(&ec2, "10.0.0.1");
@@ -3609,8 +3609,8 @@ hook_provider(aws_stub* ec2, fake_env* f, hook_state* h, uint32_t timeout_ms,
 
 TEST(aws_cred_hook, "D-14 the hook replaces the chain, gets the remaining budget, caches by expiry, reports redacted errors and fails a late return while caching its result")
 {
-	aws_stub ec2;
-	aws_stub imds;
+	DISCOVERY_SCOPED(aws_stub, ec2, aws_stub_stop);
+	DISCOVERY_SCOPED(aws_stub, imds, aws_stub_stop);
 	assert_true(aws_stub_start(&ec2, false));
 	assert_true(aws_stub_start(&imds, false));
 	stub_one(&ec2, "10.0.0.1");
@@ -3755,7 +3755,7 @@ TEST(aws_deadline_unanswered, "D-14 a silent endpoint, a stalled handshake, a tr
 {
 	aws_certs certs;
 	assert_true(aws_certs_create(&certs));
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 
 	const uint32_t timeout = 300;
@@ -3806,7 +3806,7 @@ TEST(aws_deadline_unanswered, "D-14 a silent endpoint, a stalled handshake, a tr
 	}
 
 	// Silent credential endpoints: STS, ECS, and IMDS as the only source.
-	aws_stub ec2;
+	DISCOVERY_SCOPED(aws_stub, ec2, aws_stub_stop);
 	assert_true(aws_stub_start(&ec2, false));
 	stub_one(&ec2, "10.0.0.1");
 	tmp_dir d;
@@ -3875,7 +3875,7 @@ TEST(aws_deadline_unanswered, "D-14 a silent endpoint, a stalled handshake, a tr
 TEST(aws_no_thread, "D-14 construction and ten refreshes create no thread")
 {
 #if defined(__linux__)
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 	stub_one(&s, "10.0.0.1");
 	int before = stable_thread_count();
@@ -3907,8 +3907,8 @@ TEST(aws_no_leaked_descriptors, "every transport path, error and failed construc
 {
 	aws_certs certs;
 	assert_true(aws_certs_create(&certs));
-	aws_stub plain;
-	aws_stub tls;
+	DISCOVERY_SCOPED(aws_stub, plain, aws_stub_stop);
+	DISCOVERY_SCOPED(aws_stub, tls, aws_stub_stop);
 	assert_true(aws_stub_start(&plain, false));
 	assert_true(aws_stub_start(&tls, false));
 	aws_stub_set_tls(&tls, certs.good);
@@ -4075,7 +4075,7 @@ client_close(aerospike* as)
 
 TEST(aws_thread_validation, "thread mode rejects timeout_ms above refresh_timeout_ms before any request and accepts equality")
 {
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 	stub_one(&s, "10.0.0.1");
 
@@ -4129,7 +4129,7 @@ TEST(aws_thread_validation, "thread mode rejects timeout_ms above refresh_timeou
 
 TEST(aws_tend_rejected, "M-10 tend mode is rejected at registration and at connect, with zero requests")
 {
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 	stub_one(&s, "10.0.0.1");
 
@@ -4173,7 +4173,7 @@ TEST(aws_tend_rejected, "M-10 tend mode is rejected at registration and at conne
 
 TEST(aws_thread_mode, "thread mode runs aws-tags on the one client-owned discovery thread; tend never refreshes it")
 {
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 	stub_one(&s, "10.0.0.1");
 	int before = discovery_baseline();
@@ -4214,7 +4214,7 @@ TEST(aws_thread_mode, "thread mode runs aws-tags on the one client-owned discove
 
 TEST(aws_snapshot_retention, "an API error after a publication keeps the exact previous snapshot; recovery publishes again")
 {
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 	stub_one(&s, "10.0.0.1");
 
@@ -4265,7 +4265,7 @@ TEST(aws_snapshot_retention, "an API error after a publication keeps the exact p
 
 TEST(aws_init_failure, "an initial failure falls back to configured seeds, or returns -27 naming aws-tags and the AWS error")
 {
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 	stub_403(&s);
 
@@ -4460,7 +4460,7 @@ boot_once(boot_env* env, char* msg, size_t size)
 TEST(aws_bootstrap, "an EC2-published seed bootstraps the client in thread mode with no static seeds; membership comes from peers")
 {
 	int fds = discovery_fd_count();
-	boot_env env;
+	DISCOVERY_SCOPED(boot_env, env, boot_stop);
 	assert_true(boot_start(&env));
 
 	char msg[512];
@@ -4539,7 +4539,7 @@ boot_close_reconnect(boot_env* env, hook_state* hook)
 TEST(aws_close_reconnect, "sync close keeps the aws-tags registration and reconnect calls EC2 again; destroy releases it and runs the hook destroy once")
 {
 	int fds = discovery_fd_count();
-	boot_env env;
+	DISCOVERY_SCOPED(boot_env, env, boot_stop);
 	assert_true(boot_start(&env));
 	hook_state hook;
 	const char* failure = boot_close_reconnect(&env, &hook);
@@ -4558,7 +4558,7 @@ TEST(aws_close_reconnect, "sync close keeps the aws-tags registration and reconn
 
 TEST(aws_hook_deferred_destroy, "a hook blocked in get past refresh_timeout_ms blocks neither close nor destroy; its destroy runs once, on the discovery thread, after get returns")
 {
-	boot_env env;
+	DISCOVERY_SCOPED(boot_env, env, boot_stop);
 	assert_true(boot_start(&env));
 
 	const uint32_t refresh_timeout = 300;

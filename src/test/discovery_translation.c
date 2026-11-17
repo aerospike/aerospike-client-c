@@ -45,7 +45,8 @@
 #include <pthread.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#define DISCOVERY_FAKE_SERVERS 1
+
+#include "discovery_fake_node.h"
 #endif
 
 // Coverage: U-7, U-8, U-9, U-10, U-13, U-15 and the FR-40/FR-45 TLS rows of the
@@ -688,6 +689,8 @@ typedef struct fake_node_s {
 	uint16_t port;
 	pthread_t thread;
 	pthread_mutex_t lock;
+	bool started;
+	bool running;
 	volatile bool stop;
 	char name[32];
 	char peers_gen[16];
@@ -883,6 +886,7 @@ fake_node_start_on(fake_node* n, const char* name, const char* bind_addr)
 {
 	memset(n, 0, sizeof(fake_node));
 	pthread_mutex_init(&n->lock, NULL);
+	n->started = true;
 	snprintf(n->name, sizeof(n->name), "%s", name);
 	fake_node_set_peers(n, 1, NULL, NULL);
 	// Alternate addresses of the node itself are only needed in alternate mode.
@@ -908,11 +912,13 @@ fake_node_start_on(fake_node* n, const char* name, const char* bind_addr)
 		listen(n->listen_fd, 16) != 0 ||
 		getsockname(n->listen_fd, (struct sockaddr*)&addr, &addr_len) != 0) {
 		close(n->listen_fd);
+		n->listen_fd = -1;
 		return false;
 	}
 
 	n->port = ntohs(addr.sin_port);
-	return pthread_create(&n->thread, NULL, fake_node_run, n) == 0;
+	n->running = pthread_create(&n->thread, NULL, fake_node_run, n) == 0;
+	return n->running;
 }
 
 static bool
@@ -921,13 +927,26 @@ fake_node_start(fake_node* n, const char* name)
 	return fake_node_start_on(n, name, NULL);
 }
 
+// Does nothing for a node that is zeroed or already stopped.
 static void
 fake_node_stop(fake_node* n)
 {
-	n->stop = true;
-	pthread_join(n->thread, NULL);
-	close(n->listen_fd);
+	if (!n->started) {
+		return;
+	}
+
+	if (n->running) {
+		n->stop = true;
+		pthread_join(n->thread, NULL);
+		n->running = false;
+	}
+
+	if (n->listen_fd >= 0) {
+		close(n->listen_fd);
+		n->listen_fd = -1;
+	}
 	pthread_mutex_destroy(&n->lock);
+	n->started = false;
 }
 
 // Return the first up, non-loopback IPv4 address of this machine, or false.
@@ -1177,7 +1196,8 @@ log_capture_count(as_log_level level, ...)
 
 TEST(translation_alt_peer_only_in_standard, "N-14 peer present only in the standard list fails alternate init")
 {
-	fake_node s, b;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&b, "B"));
 
@@ -1204,7 +1224,8 @@ TEST(translation_alt_peer_only_in_standard, "N-14 peer present only in the stand
 
 TEST(translation_alt_empty_host_list, "N-14 empty alternate host list fails alternate init")
 {
-	fake_node s, b;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&b, "B"));
 
@@ -1227,7 +1248,7 @@ TEST(translation_alt_empty_host_list, "N-14 empty alternate host list fails alte
 
 TEST(translation_alt_empty_service, "N-14 empty service-clear-alt fails alternate init and names the setting")
 {
-	fake_node s;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	fake_node_set_service(&s, "127.0.0.1:1", "");
 
@@ -1246,7 +1267,7 @@ TEST(translation_alt_empty_service, "N-14 empty service-clear-alt fails alternat
 
 TEST(translation_alt_empty_service_no_fail, "N-14 without fail_if_not_connected an empty service-clear-alt connects with no nodes and warns")
 {
-	fake_node s;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	fake_node_set_service(&s, "127.0.0.1:1", "");
 
@@ -1269,7 +1290,8 @@ TEST(translation_alt_empty_service_no_fail, "N-14 without fail_if_not_connected 
 
 TEST(translation_alt_missing_after_init, "N-14 without fail_if_not_connected a peer missing from the alternate list is logged on every tend")
 {
-	fake_node s, b;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&b, "B"));
 
@@ -1307,7 +1329,8 @@ TEST(translation_alt_missing_after_init, "N-14 without fail_if_not_connected a p
 
 TEST(translation_standard_mode_compat, "standard mode keeps the single-command peers path")
 {
-	fake_node s, b;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&b, "B"));
 
@@ -1335,7 +1358,8 @@ TEST(translation_standard_mode_compat, "standard mode keeps the single-command p
 TEST(translation_peers_default_port, "peer hosts without a port use the default port of the reply")
 {
 	for (int alternate = 0; alternate <= 1; alternate++) {
-		fake_node s, b;
+		DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+		DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 		assert_true(fake_node_start(&s, "S"));
 		assert_true(fake_node_start(&b, "B"));
 
@@ -1358,7 +1382,8 @@ TEST(translation_peers_default_port, "peer hosts without a port use the default 
 
 TEST(translation_alt_peer_empty_service, "N-14 a peer without alternate service addresses fails init and names the setting")
 {
-	fake_node s, b;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&b, "B"));
 
@@ -1382,7 +1407,8 @@ TEST(translation_alt_peer_empty_service, "N-14 a peer without alternate service 
 
 TEST(translation_alt_translated_peer, "N-2 alternate peers are translated and complete against the standard list")
 {
-	fake_node s, b;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&b, "B"));
 
@@ -1414,7 +1440,8 @@ TEST(translation_alt_translated_peer, "N-2 alternate peers are translated and co
 TEST(translation_source_runtime, "U-13 peer endpoints carry the source of the selected list")
 {
 	for (int alternate = 0; alternate <= 1; alternate++) {
-		fake_node s, b;
+		DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+		DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 		assert_true(fake_node_start(&s, "S"));
 		assert_true(fake_node_start(&b, "B"));
 
@@ -1455,7 +1482,8 @@ TEST(translation_source_runtime, "U-13 peer endpoints carry the source of the se
 
 TEST(translation_wrong_list_miss, "U-13 a mapping for the standard address misses an alternate endpoint")
 {
-	fake_node s, b;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&b, "B"));
 
@@ -1495,7 +1523,8 @@ TEST(translation_wrong_list_miss, "U-13 a mapping for the standard address misse
 
 TEST(translation_miss_then_mapped, "N-6 a strict miss on one address is skipped when another maps")
 {
-	fake_node s, b;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&b, "B"));
 
@@ -1526,7 +1555,9 @@ TEST(translation_miss_then_mapped, "N-6 a strict miss on one address is skipped 
 
 TEST(translation_miss_retry, "N-6 a strict miss does not advance the peers generation and is retried")
 {
-	fake_node s, c_node, b;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, c_node, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&c_node, "C"));
 	assert_true(fake_node_start(&b, "B"));
@@ -1594,7 +1625,9 @@ static const char*
 run_collision(collision_kind kind, bool reversed, bool healthy_peer, as_status expected,
 	uint32_t expected_nodes)
 {
-	fake_node s, b, d;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
 
 	if (!fake_node_start(&s, "S") || !fake_node_start(&b, "B") || !fake_node_start(&d, "D")) {
 		return "cannot start fake nodes";
@@ -1710,7 +1743,8 @@ COLLISION_TEST(translation_collision_pass_through, COLLISION_PASS_THROUGH,
 
 TEST(translation_collision_live_node, "U-15 a newcomer colliding with a live node is dropped, the live node stays")
 {
-	fake_node s, d;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&d, "D"));
 
@@ -1778,7 +1812,7 @@ TEST(translation_collision_live_node, "U-15 a newcomer colliding with a live nod
 
 TEST(translation_collision_seed, "U-15 a peer advertised at the seed address is rejected before it joins")
 {
-	fake_node s;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 
 	char list[128];
@@ -1813,7 +1847,9 @@ TEST(translation_collision_seed, "U-15 a peer advertised at the seed address is 
 
 TEST(translation_shared_address_skipped, "U-15 an address shared by peers is never used, peers keep their own addresses")
 {
-	fake_node s, b, d;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&b, "B"));
 	assert_true(fake_node_start(&d, "D"));
@@ -1873,7 +1909,9 @@ TEST(translation_shared_address_skipped, "U-15 an address shared by peers is nev
 
 TEST(translation_shared_address_registered, "U-15 with a registered translator a peer with any shared address is not created")
 {
-	fake_node s, b, d;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&b, "B"));
 	assert_true(fake_node_start(&d, "D"));
@@ -1923,7 +1961,8 @@ TEST(translation_shared_address_registered, "U-15 with a registered translator a
 static const char*
 run_collision_alias(bool reversed, bool pass_through)
 {
-	fake_node s, b;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 
 	if (!fake_node_start(&s, "S") || !fake_node_start(&b, "B")) {
 		return "cannot start fake nodes";
@@ -2010,7 +2049,9 @@ TEST(translation_collision_alias, "U-15 two peers that reach one server through 
 
 TEST(translation_distinct_ports_one_host, "U-15 peers on one host with distinct ports do not collide")
 {
-	fake_node s, b, d;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&b, "B"));
 	assert_true(fake_node_start(&d, "D"));
@@ -2070,7 +2111,8 @@ TEST(translation_tls_legacy_warn_once, "FR-45 the legacy name check warns once p
 
 TEST(translation_peer_tls_name_runtime, "FR-40 a translated peer keeps the TLS name advertised in peers")
 {
-	fake_node s, b;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&b, "B"));
 
@@ -2117,7 +2159,8 @@ TEST(translation_peer_tls_name_runtime, "FR-40 a translated peer keeps the TLS n
 
 TEST(translation_peers_parser_inputs, "bracketed IPv6 peer hosts are translated, truncated peers fail the seed")
 {
-	fake_node s, b;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&b, "B"));
 
@@ -2171,7 +2214,8 @@ service_seed_start(fake_node* seed, fake_node* real, char* seed_host, size_t siz
 
 TEST(translation_service_translated, "N-8 translated service address replaces a load balancer seed")
 {
-	fake_node seed, real;
+	DISCOVERY_SCOPED(fake_node, seed, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, real, fake_node_stop);
 	char seed_host[64];
 	memset(&seed, 0, sizeof(seed));
 
@@ -2213,7 +2257,8 @@ TEST(translation_service_translated, "N-8 translated service address replaces a 
 
 TEST(translation_service_strict_miss, "N-8 strict service misses are skipped, and the seed is kept when all miss")
 {
-	fake_node seed, real;
+	DISCOVERY_SCOPED(fake_node, seed, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, real, fake_node_stop);
 	char seed_host[64];
 	memset(&seed, 0, sizeof(seed));
 
@@ -2357,7 +2402,10 @@ wait_for_view_calls(view* v, uint32_t count, uint32_t timeout_ms)
 
 TEST(translation_view_notifications, "view changes notify once per tend, never at init or on a no-op")
 {
-	fake_node s, d, e, f;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, e, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, f, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	assert_true(fake_node_start(&d, "D"));
 	assert_true(fake_node_start(&e, "E"));
@@ -2457,7 +2505,9 @@ TEST(translation_view_notifications, "view changes notify once per tend, never a
 TEST(translation_view_not_tracked, "no snapshots or notifications without a callback")
 {
 	for (int custom = 0; custom <= 1; custom++) {
-		fake_node s, d, e;
+		DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+		DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
+		DISCOVERY_SCOPED(fake_node, e, fake_node_stop);
 		assert_true(fake_node_start(&s, "S"));
 		assert_true(fake_node_start(&d, "D"));
 		assert_true(fake_node_start(&e, "E"));
@@ -2510,7 +2560,7 @@ TEST(translation_view_not_tracked, "no snapshots or notifications without a call
 
 TEST(translation_ip_map_ignored, "ip_map is ignored and a warning logged while a translator is registered")
 {
-	fake_node s;
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
 	assert_true(fake_node_start(&s, "S"));
 	as_error err;
 

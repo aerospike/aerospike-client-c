@@ -26,6 +26,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Declare a fake server, zeroed, that stop() releases when the scope ends. A failed assertion
+// returns from the test early, which would otherwise leave the server thread running on the freed
+// stack frame. stop() must do nothing for a server that is zeroed or already stopped.
+#define DISCOVERY_SCOPED(type, name, stop) type name __attribute__((cleanup(stop))) = {0}
+
 typedef struct fnode_s fnode;
 
 struct fnode_s {
@@ -34,6 +39,7 @@ struct fnode_s {
 	pthread_t thread;
 	pthread_mutex_t lock;
 	uint8_t stop;
+	bool started;
 	bool running;
 	char name[32];
 
@@ -68,6 +74,7 @@ fnode_start(fnode* n, const char* name);
 void
 fnode_halt(fnode* n);
 
+// Does nothing for a node that is zeroed or already stopped.
 void
 fnode_stop(fnode* n);
 

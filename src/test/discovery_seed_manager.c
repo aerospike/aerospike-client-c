@@ -2423,7 +2423,7 @@ client_stats(aerospike* client)
 
 TEST(seed_provider_only_bootstrap, "a registered provider may supply every seed; the default keeps the no-host error")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	char addr[64];
 	as_config config;
@@ -2465,7 +2465,7 @@ TEST(seed_provider_only_bootstrap, "a registered provider may supply every seed;
 
 TEST(seed_connect_init_failure, "connect falls back to configured seeds on a provider error, and returns -27 without them")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	as_config config;
 	as_error err;
@@ -2515,7 +2515,7 @@ TEST(seed_connect_init_failure, "connect falls back to configured seeds on a pro
 
 TEST(seed_connect_validation, "M-1/M-10 connect rejects ineligible settings before any refresh and unlocks registration")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	as_config config;
 	as_error err;
@@ -2550,7 +2550,7 @@ TEST(seed_connect_validation, "M-1/M-10 connect rejects ineligible settings befo
 
 TEST(seed_default_compat, "U-3/M-7 default static seeds keep the ip_map seed rewrite and add no discovery thread")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	as_config config;
 	as_error err;
@@ -2614,7 +2614,7 @@ TEST(seed_default_compat, "U-3/M-7 default static seeds keep the ip_map seed rew
 
 TEST(seed_thread_mode_tend_continues, "M-5 tend keeps its cadence while a thread-mode refresh is blocked")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	as_config config;
 	as_error err;
@@ -2648,7 +2648,7 @@ TEST(seed_thread_mode_tend_continues, "M-5 tend keeps its cadence while a thread
 
 TEST(seed_reseed_in_flight, "M-11 zero-node reseed uses the held snapshot while a thread refresh is in flight")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	as_config config;
 	as_error err;
@@ -2743,7 +2743,8 @@ switch_first_b(fnode* n)
 
 TEST(seed_reseed_tend_mode, "M-12 a same-tend tend-mode refresh applies only to the next reseed attempt")
 {
-	fnode a, b;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
+	DISCOVERY_SCOPED(fnode, b, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	fnode_init(&b, "B");
 	switch_state st;
@@ -2809,7 +2810,7 @@ TEST(seed_reseed_tend_mode, "M-12 a same-tend tend-mode refresh applies only to 
 static bool
 reseed_next_tend(as_discovery_execution_mode mode, bool provider, uint64_t* elapsed)
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 
 	if (!fnode_start(&a, "A")) {
 		return false;
@@ -2897,7 +2898,7 @@ close_run(void* udata)
 
 TEST(seed_close_in_flight, "close waits for an in-flight refresh; destroy runs once, after it returns")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	as_config config;
 	as_error err;
@@ -2936,7 +2937,7 @@ TEST(seed_close_in_flight, "close waits for an in-flight refresh; destroy runs o
 
 TEST(seed_close_reconnect, "sync close stops discovery and keeps the registration; reconnect starts it again")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	as_config config;
 	as_error err;
@@ -2985,7 +2986,7 @@ TEST(seed_close_reconnect, "sync close stops discovery and keeps the registratio
 
 TEST(seed_force_single, "force_single_node bootstraps from the provider snapshot and keeps no refresh thread")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	as_config config;
 	as_error err;
@@ -3030,7 +3031,7 @@ TEST(seed_force_single, "force_single_node bootstraps from the provider snapshot
 
 TEST(seed_close_bounded, "close waits at most refresh_timeout_ms for a blocked refresh; destroy runs after it returns")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	as_config config;
 	as_error err;
@@ -3068,7 +3069,7 @@ TEST(seed_close_bounded, "close waits at most refresh_timeout_ms for a blocked r
 
 TEST(seed_reconnect_in_flight, "reconnect fails naming the provider while the previous connection's refresh runs, then succeeds")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	as_config config;
 	as_error err;
@@ -3115,7 +3116,7 @@ TEST(seed_reconnect_in_flight, "reconnect fails naming the provider while the pr
 
 TEST(seed_discovered_no_ip_map, "ip_map rewrites configured seeds as before, but not provider-discovered seeds")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	as_config config;
 	as_error err;
@@ -3163,7 +3164,7 @@ TEST(seed_discovered_no_ip_map, "ip_map rewrites configured seeds as before, but
 
 TEST(seed_shm_takeover, "SHM: only the tend master refreshes in tend mode; a prole takes over with its own seeds")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 	as_error err;
 	char addr[64];

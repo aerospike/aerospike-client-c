@@ -1203,7 +1203,7 @@ TEST(cf_dns_provider, "the dns provider from the file uses its servers and timeo
 
 TEST(cf_aws_provider, "the aws-tags provider from the file sends its region and filters and returns its port and tls_name")
 {
-	aws_stub s;
+	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
 	assert_true(aws_stub_start(&s, false));
 	char* instance = aws_xml_instance("i-1", "10.0.0.7", "203.0.113.7", NULL, NULL);
 	const char* instances[] = {instance};
@@ -1384,7 +1384,7 @@ cf_reload(aerospike* client, const char* body, uint32_t max_error_rate)
 
 TEST(cf_reload_keeps_static_alternate, "a reload without the dynamic key keeps the static use_services_alternate")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 
 	as_error err;
@@ -1419,7 +1419,7 @@ TEST(cf_reload_keeps_static_alternate, "a reload without the dynamic key keeps t
 
 TEST(cf_reload_skips_static, "a reload skips changed and broken static discovery keys")
 {
-	fnode a;
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
 
 	as_error err;

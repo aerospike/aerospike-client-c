@@ -595,7 +595,7 @@ batch_retry_write_check(atf_test_result* __result__, bool has_filter)
 	for (uint32_t pass = 0; pass < 2; pass++) {
 		for (uint32_t n = 0; n < RETRY_N_NODES; n++) {
 			as_vector offsets;
-			as_vector_inita(&offsets, sizeof(retry_offset), node_counts[n]);
+			as_vector_init(&offsets, sizeof(retry_offset), node_counts[n]);
 
 			size_t expected = header_size + sizeof(uint32_t) + 1;
 

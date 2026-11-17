@@ -1,8 +1,9 @@
 name: Discovery integration (EE)
 
 # The Enterprise half of discovery-integration.yml, in its own workflow because conformance
-# l2-proxy.yaml uploads one fixed artifact name per run (l2-proxy-results-<run id>-<attempt>), so a
-# second l2-proxy call in the CE run would fail its upload.
+# l2-proxy.yaml uploads one fixed artifact name per profile and run
+# (l2-proxy-results-<profile>-<run id>-<attempt>), so a second l2-proxy call with the same profile in
+# the CE run would fail its upload.
 #
 # l2-ee runs the l2-proxy default profile on Aerospike Enterprise through src/test/l5_driver.
 # env-tls runs src/test/discovery_env in conformance envs/tls-matching.sh: N-6 (TLS through the
@@ -64,7 +65,7 @@ jobs:
           echo "enterprise=${ENTERPRISE}" >> "${GITHUB_OUTPUT}"
           echo "layers=${layers}" >> "${GITHUB_OUTPUT}"
       - name: Report skipped layers
-        uses: aerospike/aerospike-client-conformance/.github/actions/report-skipped-layers@57c0a2ae457f77a56bdae2675688f66218e8fa89
+        uses: aerospike/aerospike-client-conformance/.github/actions/report-skipped-layers@f0dfda5d49e0fcac2613df3fa29e4386201df11c
         with:
           layers: ${{ steps.gate.outputs.layers }}
 
@@ -72,7 +73,7 @@ jobs:
     name: L2 proxy (EE, default)
     needs: gate
     if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
     with:
       client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -80,7 +81,7 @@ jobs:
       profile: default
       edition: ee
       server-image: aerospike/aerospike-server-enterprise:8.2.0.0
-      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
+      conformance-ref: f0dfda5d49e0fcac2613df3fa29e4386201df11c
     secrets:
       FEATURES_CONF: ${{ secrets.AES_FEATURES_CONF }}
 
@@ -88,12 +89,12 @@ jobs:
     name: N-6 and TLS name matching (EE)
     needs: gate
     if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
     with:
       environment: tls-matching
       command: bash src/test/discovery_env/run.sh tls-matching
       server-image: aerospike/aerospike-server-enterprise:8.2.0.0
-      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
+      conformance-ref: f0dfda5d49e0fcac2613df3fa29e4386201df11c
     secrets:
       features-conf: ${{ secrets.AES_FEATURES_CONF }}
 
@@ -101,12 +102,12 @@ jobs:
     name: N-17 CN-only certificate rejected (EE, expected to fail until the next major, FR-45)
     needs: gate
     if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
     with:
       environment: tls-matching
       command: bash src/test/discovery_env/run.sh tls-matching n17
       server-image: aerospike/aerospike-server-enterprise:8.2.0.0
-      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
+      conformance-ref: f0dfda5d49e0fcac2613df3fa29e4386201df11c
     secrets:
       features-conf: ${{ secrets.AES_FEATURES_CONF }}
 
@@ -122,7 +123,7 @@ jobs:
       - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         continue-on-error: true
         with:
-          name: l2-proxy-results-${{ github.run_id }}-${{ github.run_attempt }}
+          name: l2-proxy-results-default-${{ github.run_id }}-${{ github.run_attempt }}
           path: l2-proxy-results
       - run: |
           {

@@ -30,7 +30,7 @@ jobs:
     name: L2 proxy (CE)
     # About an hour per run; drafts wait until they are ready for review.
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
     with:
       client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -38,37 +38,37 @@ jobs:
       profile: all
       edition: ce
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
+      conformance-ref: f0dfda5d49e0fcac2613df3fa29e4386201df11c
 
   env-dns:
     name: N-4 DNS environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
     with:
       environment: dns
       command: bash src/test/discovery_env/run.sh dns
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
+      conformance-ref: f0dfda5d49e0fcac2613df3fa29e4386201df11c
 
   env-collision:
     name: N-18 collision environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
     with:
       environment: collision
       command: bash src/test/discovery_env/run.sh collision
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
+      conformance-ref: f0dfda5d49e0fcac2613df3fa29e4386201df11c
 
   env-yaml:
     name: YAML translation environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@57c0a2ae457f77a56bdae2675688f66218e8fa89
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
     with:
       environment: yaml
       command: bash src/test/discovery_env/run.sh yaml
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: 57c0a2ae457f77a56bdae2675688f66218e8fa89
+      conformance-ref: f0dfda5d49e0fcac2613df3fa29e4386201df11c
 
   l2-summary:
     name: L2 rows
@@ -82,7 +82,7 @@ jobs:
       - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         continue-on-error: true
         with:
-          name: l2-proxy-results-${{ github.run_id }}-${{ github.run_attempt }}
+          name: l2-proxy-results-all-${{ github.run_id }}-${{ github.run_attempt }}
           path: l2-proxy-results
       - run: |
           {

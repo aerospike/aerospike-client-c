@@ -168,13 +168,21 @@ occurrence.
 | Policy | At initialization | On a later refresh | Use when |
 | --- | --- | --- | --- |
 | `AS_SEED_MERGE` (`merge`, default) | Configured seeds, then discovered seeds. | The same: configured seeds, then the new discovered seeds. | Migrating to discovery, resilience, and keeping a known-good endpoint while discovery catches up. |
-| `AS_SEED_REPLACE` (`replace`) | As `merge`. | The discovered seeds replace the list. An empty result keeps the previous list. | Greenfield deployments where the configured seeds are legacy or bootstrap only. |
+| `AS_SEED_REPLACE` (`replace`) | As `merge`. | The discovered seeds replace the list. An empty result is published as an empty list. | Greenfield deployments where the configured seeds are legacy or bootstrap only. |
 | `AS_SEED_DISCOVERY_ONLY` (`discovery_only`) | Discovered seeds only; the configured seeds when discovery returns an empty result or fails. | Discovered seeds only; the configured seeds when the result is empty. A failed refresh keeps the previous seeds. | The configured seeds are an emergency fallback only. |
 
 For every policy:
 
-- A failed refresh after initialization keeps the previous seeds. A refresh whose merged list is
-  empty keeps the previous seeds too.
+- A failed refresh after initialization keeps the previous seeds. A successful refresh is published
+  even when its merged list is empty. While the list is empty and the cluster has no node, every
+  tend fails with `No seed host to connect to`, and the client reconnects only after a refresh
+  returns a seed: at most `refresh_interval_ms` (default 30 s) after the provider starts returning
+  hosts again, plus any delay of the provider's own, such as EC2's eventual consistency.
+- The built-in providers reach an empty list differently. `aws-tags` returns an empty result when
+  no running instance matches its filters, so `replace`, and `merge` or `discovery_only` without
+  configured seeds, publish an empty list. `dns` reports a failure when no name resolves, so the previous seeds are
+  kept. To keep a fallback endpoint while discovery returns nothing, use `merge` or
+  `discovery_only` with configured seeds.
 - At initialization a failed refresh counts as an empty result. When the merged list is then empty,
   `aerospike_connect()` fails with `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED`.
 - **Late initial refresh** (`thread` mode): when the initial refresh does not return within

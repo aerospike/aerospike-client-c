@@ -658,6 +658,37 @@ wait_idle(as_seed_manager* m)
 	return true;
 }
 
+// Wait until the published seeds read expected, for at most timeout_ms.
+static bool
+wait_snap(as_seed_manager* m, const char* expected, uint32_t timeout_ms)
+{
+	char buf[256];
+	uint64_t end = cf_getms() + timeout_ms;
+
+	while (strcmp(snap_str(m, buf, sizeof(buf)), expected) != 0) {
+		if (cf_getms() >= end) {
+			return false;
+		}
+		as_sleep(5);
+	}
+	return true;
+}
+
+// Wait until the failure count exceeds failures, for at most timeout_ms.
+static bool
+wait_failures(as_seed_manager* m, uint32_t failures, uint32_t timeout_ms)
+{
+	uint64_t end = cf_getms() + timeout_ms;
+
+	while (stats_of(m).failures <= failures) {
+		if (cf_getms() >= end) {
+			return false;
+		}
+		as_sleep(5);
+	}
+	return true;
+}
+
 //---------------------------------
 // Tests: snapshots
 //---------------------------------
@@ -1018,7 +1049,7 @@ TEST(seed_merge_publication, "U-5 merge, replace and discovery_only publish orde
 	assert_string_eq(merge_run(AS_SEED_MERGE, run, sizeof(run)),
 		"s1:1,s2:2,d1:1,d2:2|s1:1,s2:2,d3:3|s1:1,s2:2|s1:1,s2:2");
 	assert_string_eq(merge_run(AS_SEED_REPLACE, run, sizeof(run)),
-		"s1:1,s2:2,d1:1,d2:2|d3:3|d3:3|d3:3");
+		"s1:1,s2:2,d1:1,d2:2|d3:3||");
 	assert_string_eq(merge_run(AS_SEED_DISCOVERY_ONLY, run, sizeof(run)),
 		"d1:1,s1:1,d2:2|d3:3|s1:1,s2:2|s1:1,s2:2");
 
@@ -1896,6 +1927,96 @@ TEST(seed_thread_failures, "U-1 thread-mode failures keep the last-good seeds an
 	fp_free(&fp);
 }
 
+TEST(seed_empty_refresh_published, "CM-01 a successful empty refresh is published; only failures keep the last seeds")
+{
+	as_config config;
+	as_error err;
+	as_seed_manager* m;
+	fake_provider fp;
+	char buf[256];
+
+	// Tend mode: each tend refreshes once.
+	fp_init(&fp, true, true, "a:1");
+	mgr_config(&config, AS_DISCOVERY_EXECUTION_TEND, 1000);
+	config.discovery.merge_policy = AS_SEED_REPLACE;
+	as_config_add_host(&config, "s", 9);
+	assert_int_eq(mgr_open(&config, &fp, &m, &err), AEROSPIKE_OK);
+	assert_string_eq(snap_str(m, buf, sizeof(buf)), "s:9,a:1");
+
+	as_seed_manager_stats before = stats_of(m);
+	fp_set_hosts(&fp, "");
+	log_capture_start();
+	as_seed_manager_tend(m);
+	log_capture_stop();
+	assert_string_eq(snap_str(m, buf, sizeof(buf)), "");
+	assert_int_eq(stats_of(m).publications, before.publications + 1);
+	assert_int_eq(stats_of(m).failures, before.failures);
+	assert_int_eq(log_capture_count(AS_LOG_LEVEL_WARN, "Seed provider fake",
+		"Publishing an empty seed list", NULL), 1);
+
+	// A failure keeps the empty list.
+	fp_set_hosts(&fp, "bad");
+	as_seed_manager_tend(m);
+	assert_string_eq(snap_str(m, buf, sizeof(buf)), "");
+	assert_int_eq(stats_of(m).failures, before.failures + 1);
+
+	// A later non-empty result replaces it.
+	fp_set_hosts(&fp, "b:2");
+	as_seed_manager_tend(m);
+	assert_string_eq(snap_str(m, buf, sizeof(buf)), "b:2");
+	mgr_close(m, &config);
+	fp_settle(&fp);
+	fp_free(&fp);
+
+	// Thread mode: the loop refreshes every refresh_interval_ms, so the empty result can be
+	// published more than once before the provider changes.
+	fp_init(&fp, true, false, "a:1");
+	mgr_config(&config, AS_DISCOVERY_EXECUTION_THREAD, AS_TEND_INTERVAL_MIN);
+	config.discovery.merge_policy = AS_SEED_REPLACE;
+	as_config_add_host(&config, "s", 9);
+	assert_int_eq(mgr_open(&config, &fp, &m, &err), AEROSPIKE_OK);
+	assert_string_eq(snap_str(m, buf, sizeof(buf)), "s:9,a:1");
+
+	before = stats_of(m);
+	log_capture_start();
+	fp_set_hosts(&fp, "");
+	bool published = wait_snap(m, "", 5000);
+	as_seed_manager_stats after = stats_of(m);
+	log_capture_stop();
+	assert_true(published);
+	assert_true(after.publications > before.publications);
+	assert_int_eq(after.failures, before.failures);
+	assert_true(log_capture_count(AS_LOG_LEVEL_WARN, "Seed provider fake",
+		"Publishing an empty seed list", NULL) >= 1);
+
+	fp_set_hosts(&fp, "bad");
+	assert_true(wait_failures(m, before.failures, 5000));
+	assert_string_eq(snap_str(m, buf, sizeof(buf)), "");
+
+	fp_set_hosts(&fp, "b:2");
+	assert_true(wait_snap(m, "b:2", 5000));
+	mgr_close(m, &config);
+	fp_settle(&fp);
+	fp_free(&fp);
+
+	// Merge with no configured seeds: the merged list is empty, and it is published too.
+	fp_init(&fp, true, true, "a:1");
+	mgr_config(&config, AS_DISCOVERY_EXECUTION_TEND, 1000);
+	config.discovery.merge_policy = AS_SEED_MERGE;
+	assert_int_eq(mgr_open(&config, &fp, &m, &err), AEROSPIKE_OK);
+	assert_string_eq(snap_str(m, buf, sizeof(buf)), "a:1");
+
+	before = stats_of(m);
+	fp_set_hosts(&fp, "");
+	as_seed_manager_tend(m);
+	assert_string_eq(snap_str(m, buf, sizeof(buf)), "");
+	assert_int_eq(stats_of(m).publications, before.publications + 1);
+	assert_int_eq(stats_of(m).failures, before.failures);
+	mgr_close(m, &config);
+	fp_settle(&fp);
+	fp_free(&fp);
+}
+
 static as_seed_manager** g_hook_mgr;
 static fake_provider* g_hook_fp;
 static bool g_hook_published;
@@ -2507,6 +2628,7 @@ TEST(seed_connect_init_failure, "connect falls back to configured seeds on a pro
 	client_config(&config);
 	assert_int_eq(fp_register(&config, &fp, &err), AEROSPIKE_OK);
 	assert_int_eq(client_connect(&c, &config), AEROSPIKE_ERR_CLIENT);
+	assert_string_eq(c.err.message, "No seed host to connect to");
 	client_close(&c);
 	fp_settle(&fp);
 	fp_free(&fp);
@@ -2876,6 +2998,133 @@ TEST(seed_reseed_next_tend, "N-12 precursor: a restored node is reseeded on the 
 	assert_true(elapsed < AS_TEND_INTERVAL_MIN * 2 + 500);
 	assert_true(reseed_next_tend(AS_DISCOVERY_EXECUTION_THREAD, false, &elapsed));
 	assert_true(elapsed < AS_TEND_INTERVAL_MIN * 2 + 500);
+}
+
+// Wait until count more tends have run, for at most timeout_ms.
+static bool
+wait_tends(aerospike* client, uint64_t count, uint32_t timeout_ms)
+{
+	uint64_t iteration = client_stats(client).tend_iteration;
+	uint64_t end = cf_getms() + timeout_ms;
+
+	while (client_stats(client).tend_iteration < iteration + count) {
+		if (cf_getms() >= end) {
+			return false;
+		}
+		as_sleep(10);
+	}
+	return true;
+}
+
+// Return "ok", or the step that failed.
+static const char*
+empty_reseed_steps(fclient* c, fake_provider* fp, fnode* a, fnode* b)
+{
+	as_seed_manager* m = c->as->cluster->seed_manager;
+	char buf[256];
+
+	if (!has_node(c->as, "A")) {
+		return "the client did not join A";
+	}
+
+	uint32_t publications = stats_of(m).publications;
+	fp_set_hosts(fp, "");
+
+	if (!wait_snap(m, "", 5000) || stats_of(m).publications <= publications) {
+		return "the empty refresh was not published";
+	}
+
+	if (!has_node(c->as, "A")) {
+		return "A left before the empty refresh was published";
+	}
+
+	uint32_t failures = stats_of(m).failures;
+	fnode_set_reject(a, true);
+
+	if (!wait_for_nodes(c->as, 0, 10000)) {
+		return "A was not removed";
+	}
+
+	// A connection started before the removal may still reach A.
+	log_capture_start();
+	bool tended = wait_tends(c->as, 1, 5000);
+	uint32_t rejects = fnode_get(a, &a->rejects);
+	tended = tended && wait_tends(c->as, 4, 5000);
+	log_capture_stop();
+
+	if (!tended) {
+		return "tend stalled";
+	}
+
+	if (fnode_get(a, &a->rejects) != rejects) {
+		return "A was contacted again after the node loss";
+	}
+
+	if (log_capture_count(AS_LOG_LEVEL_WARN, "Tend error", "No seed host to connect to",
+		NULL) == 0) {
+		return "the tend error did not name the empty seed list";
+	}
+
+	if (strcmp(snap_str(m, buf, sizeof(buf)), "") != 0) {
+		return "the empty seed list was replaced";
+	}
+
+	if (stats_of(m).failures != failures) {
+		return "an empty refresh was counted as a failure";
+	}
+
+	char addr[64];
+	fp_set_hosts(fp, fnode_addr(b, addr, sizeof(addr)));
+
+	if (!wait_for_nodes(c->as, 1, 5000) || !has_node(c->as, "B")) {
+		return "the client did not join B";
+	}
+
+	if (stats_of(m).overruns != 0) {
+		return "a refresh overran";
+	}
+	return "ok";
+}
+
+static const char*
+empty_reseed(as_discovery_execution_mode mode)
+{
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
+	DISCOVERY_SCOPED(fnode, b, fnode_stop);
+
+	if (!fnode_start(&a, "A") || !fnode_start(&b, "B")) {
+		return "a fake node did not start";
+	}
+
+	as_config config;
+	as_error err;
+	fclient c;
+	fake_provider fp;
+	char addr[64];
+	const char* rv = "connect failed";
+
+	// No configured seeds, so only the provider supplies them.
+	fp_init(&fp, true, true, fnode_addr(&a, addr, sizeof(addr)));
+	client_config(&config);
+	config.discovery.execution_mode = mode;
+	config.discovery.merge_policy = AS_SEED_REPLACE;
+	fp_register(&config, &fp, &err);
+
+	if (client_connect(&c, &config) == AEROSPIKE_OK) {
+		rv = empty_reseed_steps(&c, &fp, &a, &b);
+	}
+	client_close(&c);
+	fp_settle(&fp);
+	fp_free(&fp);
+	fnode_stop(&b);
+	fnode_stop(&a);
+	return rv;
+}
+
+TEST(seed_empty_refresh_reseed, "CM-01 a published empty seed list stops reseeding against lost nodes until a refresh returns one")
+{
+	assert_string_eq(empty_reseed(AS_DISCOVERY_EXECUTION_TEND), "ok");
+	assert_string_eq(empty_reseed(AS_DISCOVERY_EXECUTION_THREAD), "ok");
 }
 
 //---------------------------------
@@ -3260,6 +3509,7 @@ SUITE(discovery_seed_manager, "pluggable discovery seed manager and execution mo
 	suite_add(seed_thread_urgent);
 	suite_add(seed_thread_never_blocks_tend);
 	suite_add(seed_thread_failures);
+	suite_add(seed_empty_refresh_published);
 	suite_add(seed_late_init_publication);
 	suite_add(seed_thread_stop_bounded);
 	suite_add(seed_reconnect_wait);
@@ -3276,6 +3526,7 @@ SUITE(discovery_seed_manager, "pluggable discovery seed manager and execution mo
 	suite_add(seed_reseed_in_flight);
 	suite_add(seed_reseed_tend_mode);
 	suite_add(seed_reseed_next_tend);
+	suite_add(seed_empty_refresh_reseed);
 	suite_add(seed_close_in_flight);
 	suite_add(seed_close_reconnect);
 	suite_add(seed_force_single);

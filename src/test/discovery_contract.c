@@ -752,12 +752,12 @@ TEST(discovery_conformance_merge, "L1 merge rows publish one snapshot per discov
 	const as_vector* results[] = {d1, empty, NULL, d2};
 	as_seed_candidates snapshots[4];
 
-	// replace: init merges, empty and failed refreshes keep the previous snapshot.
+	// replace: init merges, an empty refresh publishes empty, a failure keeps it.
 	assert_int_eq(as_discovery_conformance_merge(&err, AS_SEED_REPLACE, statics, results, 4,
 		snapshots), AEROSPIKE_OK);
 	assert_string_eq(hosts_str(snapshots[0].hosts, buf, sizeof(buf)), "s1:3000,d1:3000");
-	assert_string_eq(hosts_str(snapshots[1].hosts, buf, sizeof(buf)), "s1:3000,d1:3000");
-	assert_string_eq(hosts_str(snapshots[2].hosts, buf, sizeof(buf)), "s1:3000,d1:3000");
+	assert_string_eq(hosts_str(snapshots[1].hosts, buf, sizeof(buf)), "");
+	assert_string_eq(hosts_str(snapshots[2].hosts, buf, sizeof(buf)), "");
 	assert_string_eq(hosts_str(snapshots[3].hosts, buf, sizeof(buf)), "d2:3000");
 
 	for (uint32_t i = 0; i < 4; i++) {

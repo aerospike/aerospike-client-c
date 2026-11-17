@@ -120,9 +120,10 @@ typedef enum as_seed_merge_policy_e {
 
 	/**
 	 * At initialization behave as AS_SEED_MERGE. After initialization the
-	 * discovered seeds of each successful refresh replace the seed list. An
-	 * empty discovery result after initialization keeps the previous list.
-	 * Use for greenfield deployments where the static seeds are legacy.
+	 * discovered seeds of each successful refresh replace the seed list. A
+	 * successful empty result after initialization is published as an empty
+	 * list; a failed refresh keeps the previous list. Use for greenfield
+	 * deployments where the static seeds are legacy.
 	 */
 	AS_SEED_REPLACE,
 
@@ -1342,7 +1343,7 @@ as_discovery_complete_translation(as_error* err, const char* translator_name,
  * initialized by the caller and receives copies. init is true for the result
  * obtained at client initialization and false for later refreshes. Duplicates
  * (same name and port) are removed, keeping the first occurrence. An empty
- * output after initialization means the previous seeds are kept.
+ * output after initialization is published as an empty seed list.
  *
  * @ingroup discovery_api
  */
@@ -1374,8 +1375,8 @@ as_discovery_conformance_translate(as_error* err, const as_conformance_translati
  * a failed refresh. snapshots must have results_size elements; on AEROSPIKE_OK
  * each is initialized with the seed snapshot published after the corresponding
  * result, and the caller destroys each with as_seed_candidates_destroy(). A
- * failed refresh, or an empty merge after initialization, keeps the previous
- * snapshot. On error no snapshot is left allocated.
+ * failed refresh keeps the previous snapshot. On error no snapshot is left
+ * allocated.
  *
  * @ingroup discovery_api
  */

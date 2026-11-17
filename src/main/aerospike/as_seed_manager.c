@@ -420,7 +420,8 @@ count_failure(as_seed_manager* m)
 	pthread_mutex_unlock(&m->lock);
 }
 
-// Publish a refresh result, or keep the previous seeds. init merges as at initialization.
+// Publish a refresh result, empty included, or keep the previous seeds when the refresh failed.
+// init merges as at initialization.
 static void
 complete_refresh(
 	as_seed_manager* m, as_status status, const as_error* provider_err,
@@ -444,10 +445,8 @@ complete_refresh(
 	}
 
 	if (snapshot->hosts->size == 0) {
-		as_log_warn("Seed provider %s refresh left no seed host. Keeping the previous seeds",
+		as_log_warn("Seed provider %s refresh left no seed host. Publishing an empty seed list",
 			m->provider.name);
-		as_seed_snapshot_release(snapshot);
-		return;
 	}
 	publish_locked(m, snapshot);
 }

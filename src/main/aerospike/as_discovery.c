@@ -749,12 +749,7 @@ as_discovery_conformance_merge(as_error* err, as_seed_merge_policy policy,
 		else {
 			ok = as_discovery_merge_hosts(policy, i == 0, static_hosts, results[i], &snapshots[i]);
 
-			if (ok && i > 0 && snapshots[i].hosts->size == 0) {
-				// An empty merge after initialization keeps the previous snapshot.
-				as_seed_candidates_destroy(&snapshots[i]);
-				ok = copy_candidates(&snapshots[i - 1], &snapshots[i]);
-			}
-			else if (!ok) {
+			if (!ok) {
 				as_seed_candidates_destroy(&snapshots[i]);
 			}
 		}

@@ -22,3 +22,13 @@ tls/name-matching.yaml:
   ci-server-certificate-shape:
     result: fail
     reason: "legacy name check kept until the next major version (deferring per FR-45)"
+
+# The pinned fixture still expects an empty refresh to keep the previous seeds. The tech spec
+# publishes it; CLIENT-5946 fixes the fixture.
+discovery/merge/merge-policy.yaml:
+  replace-empty-refresh-keeps-previous:
+    result: fail
+    reason: "fixture contradicts the tech spec: an empty refresh is published (CLIENT-5946)"
+  replace-empty-at-init-keeps-static:
+    result: fail
+    reason: "fixture contradicts the tech spec: an empty refresh is published (CLIENT-5946)"

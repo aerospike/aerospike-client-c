@@ -410,6 +410,10 @@ as_cluster_seed_node(
 	as_error topology_error;
 	bool has_topology_error = false;
 
+	if (hosts->size == 0) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "No seed host to connect to");
+	}
+
 	for (uint32_t i = 0; i < hosts->size && node == NULL; i++) {
 		as_host* seed = as_vector_get((as_vector*)hosts, i);
 

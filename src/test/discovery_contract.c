@@ -20,18 +20,21 @@
 #include <string.h>
 
 #include <aerospike/aerospike.h>
+#include <aerospike/aerospike_key.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_conn_pool.h>
 #include <aerospike/as_discovery.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_sleep.h>
+#include <aerospike/as_socket.h>
 #include <citrusleaf/cf_clock.h>
 
 #include "test.h"
 #include "aerospike_test.h"
 
 // Coverage: U-1 (contract shape and error channel only), U-2, U-3, U-5, U-7,
-// U-8, U-11 and the static-map/port-map/pass-through/merge L1 translate,
+// U-8, U-11, U-12 and the static-map/port-map/pass-through/merge L1 translate,
 // collision and merge entry points; src/test/conformance runs the shared
 // fixture rows through them. Runtime degradation in U-1 and M-7 is covered by
 // discovery_seed_manager.
@@ -1369,6 +1372,215 @@ TEST(discovery_live_lifecycle, "U-1 registrations survive close/reconnect and ar
 	assert_int_eq(other, 0);
 }
 
+// AWS documented TCP idle timeout of Network Load Balancer listeners (default) and PrivateLink
+// endpoints.
+#define AWS_NLB_TCP_IDLE_TIMEOUT_SEC 350
+#define MAX_SOCKET_IDLE_UNDER_NLB 340
+#define NS_PER_SEC ((uint64_t)1000 * 1000 * 1000)
+
+static uint64_t
+idle_for(uint64_t sec)
+{
+	return cf_getns() - sec * NS_PER_SEC;
+}
+
+// Only total and min_size are read by as_conn_pool_excess(), so the pool is not initialized.
+static void
+pool_with_total(as_conn_pool* pool, uint32_t total)
+{
+	memset(pool, 0, sizeof(as_conn_pool));
+	pool->min_size = 2;
+	pool->queue.total = total;
+}
+
+static void
+idle_client_close(aerospike* client)
+{
+	as_error err;
+	aerospike_close(client, &err);
+
+	// Async close destroys a connected client once pending commands complete.
+	if (as_event_loop_size == 0 || as_event_single_thread) {
+		aerospike_destroy(client);
+	}
+}
+
+// A client of the harness host, connected as discovery_live_lifecycle does. TLS is not copied.
+static aerospike*
+idle_client_connect(uint32_t max_socket_idle, uint32_t tender_interval, as_error* err)
+{
+	as_config config;
+	as_config_init(&config);
+	as_config_add_hosts(&config, g_host, (uint16_t)g_port);
+	as_config_set_user(&config, as->config.user, as->config.password);
+	config.use_services_alternate = as->config.use_services_alternate;
+	config.auth_mode = as->config.auth_mode;
+	config.max_socket_idle = max_socket_idle;
+	config.tender_interval = tender_interval;
+
+	aerospike* client = aerospike_new(&config);
+
+	if (aerospike_connect(client, err) != AEROSPIKE_OK) {
+		idle_client_close(client);
+		return NULL;
+	}
+	return client;
+}
+
+// Sync connections of every node, pooled or in use.
+static uint32_t
+sync_conn_total(as_cluster* cluster)
+{
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	uint32_t total = 0;
+
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+
+		for (uint32_t j = 0; j < cluster->conn_pools_per_node; j++) {
+			total += as_load_uint32(&node->sync_conn_pools[j].queue.total);
+		}
+	}
+	as_nodes_release(nodes);
+	return total;
+}
+
+// Mark every pooled sync connection as idle for the NLB timeout. Returns the number marked.
+static uint32_t
+age_pooled_sync_conns(as_cluster* cluster)
+{
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	uint64_t last_used = idle_for(AWS_NLB_TCP_IDLE_TIMEOUT_SEC);
+	uint32_t aged = 0;
+
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+
+		for (uint32_t j = 0; j < cluster->conn_pools_per_node; j++) {
+			as_conn_pool* pool = &node->sync_conn_pools[j];
+			pthread_mutex_lock(&pool->lock);
+
+			for (uint32_t k = pool->queue.head; k < pool->queue.tail; k++) {
+				as_socket* sock = as_queue_get(&pool->queue, k);
+				sock->last_used = last_used;
+				aged++;
+			}
+			pthread_mutex_unlock(&pool->lock);
+		}
+	}
+	as_nodes_release(nodes);
+	return aged;
+}
+
+TEST(discovery_idle_reap_under_lb_timeout, "U-12 idle-reaping defaults sit under the AWS NLB TCP idle timeout")
+{
+	as_config config;
+	as_config_init(&config);
+	assert_int_eq(config.max_socket_idle, 0);
+	assert_int_eq(config.min_conns_per_node, 0);
+	assert_int_eq(config.async_min_conns_per_node, 0);
+
+	uint64_t trim_ns = (uint64_t)AS_CLUSTER_IDLE_TRIM_DEFAULT_SEC * NS_PER_SEC;
+	uint64_t nominal_ms = (uint64_t)AS_CLUSTER_IDLE_TRIM_DEFAULT_SEC * 1000 +
+		(uint64_t)AS_CLUSTER_BALANCE_TENDS * config.tender_interval;
+	assert_true(nominal_ms < (uint64_t)AWS_NLB_TCP_IDLE_TIMEOUT_SEC * 1000);
+
+	// Above the min count, a connection idle for the NLB timeout is trimmed.
+	as_conn_pool pool;
+	pool_with_total(&pool, 3);
+	assert_int_eq(as_conn_pool_excess(&pool), 1);
+	assert_false(as_socket_current_trim(idle_for(AWS_NLB_TCP_IDLE_TIMEOUT_SEC), trim_ns));
+
+	// At the min count nothing is trimmed, and with max_socket_idle 0 checkout keeps a reserved
+	// connection however long it was idle.
+	pool_with_total(&pool, 2);
+	assert_int_eq(as_conn_pool_excess(&pool), 0);
+	assert_true(as_socket_current_tran(idle_for(AWS_NLB_TCP_IDLE_TIMEOUT_SEC), 0));
+
+	// max_socket_idle under the NLB timeout: checkout discards a connection idle past it.
+	uint64_t tran_ns = (uint64_t)MAX_SOCKET_IDLE_UNDER_NLB * NS_PER_SEC;
+	assert_false(as_socket_current_tran(idle_for(AWS_NLB_TCP_IDLE_TIMEOUT_SEC), tran_ns));
+	assert_false(as_socket_current_tran(idle_for(MAX_SOCKET_IDLE_UNDER_NLB + 1), tran_ns));
+	assert_true(as_socket_current_tran(idle_for(MAX_SOCKET_IDLE_UNDER_NLB - 10), tran_ns));
+
+	// The harness client runs with the as_config_init() default and applies the constant.
+	assert_log(as->config.max_socket_idle != 0,
+		"harness max_socket_idle is %u, not the as_config_init() default 0",
+		as->config.max_socket_idle);
+	assert_true(as->cluster->max_socket_idle_ns_tran == 0);
+	assert_true(as->cluster->max_socket_idle_ns_trim == trim_ns);
+
+	if (as->config.tls.enable) {
+		info("skipped: max_socket_idle client does not copy TLS configuration");
+		return;
+	}
+
+	// A client with max_socket_idle under the NLB timeout checks it at checkout and trims with it.
+	as_error err;
+	aerospike* client = idle_client_connect(MAX_SOCKET_IDLE_UNDER_NLB, config.tender_interval,
+		&err);
+	assert_log(client == NULL, "connect failed: %d %s", err.code, err.message);
+	uint64_t client_tran = client->cluster->max_socket_idle_ns_tran;
+	uint64_t client_trim = client->cluster->max_socket_idle_ns_trim;
+	idle_client_close(client);
+	assert_true(client_tran == tran_ns);
+	assert_true(client_trim == tran_ns);
+}
+
+#define IDLE_TRIM_WAIT_MS 120000
+#define IDLE_TRIM_POLL_MS 20
+
+// Polling lag: the trim is seen at most a few tends after the balance run that made it.
+#define IDLE_TRIM_TEND_SLACK 3
+
+TEST(discovery_idle_reap_live, "U-12 a pooled connection idle for the AWS NLB TCP idle timeout is trimmed within one balance period")
+{
+	if (as->config.tls.enable) {
+		info("skipped: idle trim client does not copy TLS configuration");
+		return;
+	}
+
+	// Defaults except the shortest tend interval, so a balance period is short. max_socket_idle 0
+	// means checkout never checks idle time: only the balance trim closes the connection.
+	as_error err;
+	aerospike* client = idle_client_connect(0, AS_TEND_INTERVAL_MIN, &err);
+	assert_log(client == NULL, "connect failed: %d %s", err.code, err.message);
+	as_cluster* cluster = client->cluster;
+
+	as_key key;
+	as_key_init_str(&key, "test", "u12", "idle");
+	as_record* rec = NULL;
+	as_status status = aerospike_key_exists(client, &err, NULL, &key, &rec);
+
+	if (rec) {
+		as_record_destroy(rec);
+	}
+	as_key_destroy(&key);
+
+	if (status != AEROSPIKE_OK && status != AEROSPIKE_ERR_RECORD_NOT_FOUND) {
+		idle_client_close(client);
+		assert_int_eq(status, AEROSPIKE_OK);
+	}
+
+	uint32_t aged = age_pooled_sync_conns(cluster);
+	uint32_t start = as_load_uint32(&cluster->tend_count);
+	uint32_t total = sync_conn_total(cluster);
+
+	for (uint32_t ms = 0; total > 0 && ms < IDLE_TRIM_WAIT_MS; ms += IDLE_TRIM_POLL_MS) {
+		as_sleep(IDLE_TRIM_POLL_MS);
+		total = sync_conn_total(cluster);
+	}
+
+	uint32_t tends = as_load_uint32(&cluster->tend_count) - start;
+	idle_client_close(client);
+
+	assert_log(aged == 0, "no pooled sync connection after the command");
+	assert_log(total != 0, "%u sync connections left after %u tends", total, tends);
+	assert_log(tends > AS_CLUSTER_BALANCE_TENDS + IDLE_TRIM_TEND_SLACK,
+		"trimmed after %u tends, more than one balance period of %u tends", tends,
+		AS_CLUSTER_BALANCE_TENDS);
+}
+
 //---------------------------------
 // Test Suite
 //---------------------------------
@@ -1395,4 +1607,6 @@ SUITE(discovery_contract, "pluggable discovery contract tests")
 	suite_add(discovery_registration_same_udata);
 	suite_add(discovery_binding_mode);
 	suite_add(discovery_live_lifecycle);
+	suite_add(discovery_idle_reap_under_lb_timeout);
+	suite_add(discovery_idle_reap_live);
 }

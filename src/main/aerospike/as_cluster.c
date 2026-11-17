@@ -884,8 +884,8 @@ as_cluster_manage(as_cluster* cluster)
 {
 	cluster->tend_count++;
 
-	// Balance connections every 30 tend intervals.
-	if (cluster->tend_count % 30 == 0) {
+	// Balance connections every AS_CLUSTER_BALANCE_TENDS tend intervals.
+	if (cluster->tend_count % AS_CLUSTER_BALANCE_TENDS == 0) {
 		as_cluster_balance_connections(cluster);
 	}
 
@@ -1462,7 +1462,7 @@ as_cluster_set_max_socket_idle(as_cluster* cluster, uint32_t max_socket_idle_sec
 {
 	if (max_socket_idle_sec == 0) {
 		cluster->max_socket_idle_ns_tran = 0;
-		cluster->max_socket_idle_ns_trim = (uint64_t)55 * 1000 * 1000 * 1000;
+		cluster->max_socket_idle_ns_trim = (uint64_t)AS_CLUSTER_IDLE_TRIM_DEFAULT_SEC * 1000 * 1000 * 1000;
 	}
 	else {
 		cluster->max_socket_idle_ns_tran = (uint64_t)max_socket_idle_sec * 1000 * 1000 * 1000;

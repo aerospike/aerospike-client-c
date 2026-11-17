@@ -21,6 +21,20 @@
  *
  * Seed discovery and address translation plugins.
  *
+ * A seed provider returns the hosts the client seeds from at initialization and when no node
+ * is active; an address translator rewrites each endpoint a server advertises into the host and
+ * port the client connects to. Built-ins: the static provider (default), DNS
+ * (as_config_set_dns_seed_provider()), AWS EC2 tags (as_config_set_aws_seed_provider()), the
+ * static map over as_config.ip_map (default), port-map and pass-through. Custom plugins are
+ * registered with as_config_set_seed_provider() and as_config_set_address_translator(), language
+ * bindings with as_config_set_binding_seed_provider(). The same built-ins can be selected from
+ * the YAML config file under static.client.discovery and static.client.translation.
+ *
+ * Plugin guide (execution modes, thread context, merge policies, TLS identity, AWS, load
+ * balancers): https://github.com/aerospike/aerospike-client-c/blob/master/docs/discovery-plugin-guide.md
+ *
+ * YAML reference: https://github.com/aerospike/aerospike-client-c/blob/master/docs/yaml-config-discovery.md
+ *
  * Plugins run in-process with no isolation. A crash, hang or memory error in
  * plugin code is a crash, hang or memory error in the client. Plugins must not
  * create threads, tasks, timers or any other scheduling resource of their own;
@@ -148,7 +162,13 @@ typedef enum as_translation_miss_policy_e {
 } as_translation_miss_policy;
 
 /**
- * Context in which a seed provider is periodically refreshed.
+ * Context in which a seed provider is periodically refreshed. The mode matters only for a
+ * provider that needs periodic refresh: any other provider, except a binding provider, is
+ * called once on the connecting thread in either mode, and no thread starts.
+ *
+ * Per built-in: the static provider is not periodic, so neither mode adds work. The DNS
+ * provider supports both. The AWS EC2 provider and binding providers are thread-only. A custom
+ * provider may use AS_DISCOVERY_EXECUTION_TEND only when supports_deadline returns true.
  *
  * Default: AS_DISCOVERY_EXECUTION_THREAD
  *
@@ -158,7 +178,9 @@ typedef enum as_discovery_execution_mode_e {
 	/**
 	 * One client-owned discovery thread, started when the provider needs
 	 * periodic refresh or is a binding provider. Refresh never runs on the tend
-	 * thread.
+	 * thread. Required by the AWS EC2 provider, whose calls can take several
+	 * hundred milliseconds, and by binding providers; the default for DNS and
+	 * custom providers.
 	 */
 	AS_DISCOVERY_EXECUTION_THREAD,
 
@@ -170,7 +192,9 @@ typedef enum as_discovery_execution_mode_e {
 	 * in whole milliseconds, delays that tend and its result is discarded. After
 	 * three consecutive overruns the provider is no longer refreshed and the
 	 * initialization seeds are restored until the client is recreated. An on-time
-	 * refresh resets the count.
+	 * refresh resets the count. Allowed for the DNS provider, whose timeout_ms must
+	 * then not exceed tend_refresh_deadline_ms, and for custom providers whose
+	 * supports_deadline returns true.
 	 */
 	AS_DISCOVERY_EXECUTION_TEND
 } as_discovery_execution_mode;

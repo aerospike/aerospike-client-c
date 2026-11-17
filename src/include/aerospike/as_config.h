@@ -67,6 +67,19 @@ extern "C" {
 #define AS_TEND_INTERVAL_MIN 250
 
 /**
+ * Idle time in seconds after which a pooled connection above the minimum connection count is
+ * trimmed when max_socket_idle is 0.
+ */
+#define AS_CLUSTER_IDLE_TRIM_DEFAULT_SEC 55
+
+/**
+ * Number of tend iterations between connection balancing runs, which trim idle connections.
+ * In libevent single-thread mode async connections are balanced instead by a fixed 30 second
+ * timer in each event loop registered with as_event_loop_register_aerospike().
+ */
+#define AS_CLUSTER_BALANCE_TENDS 30
+
+/**
  * Default interval in milliseconds between dynamic configuration check for file modifications.
  */
 #define AS_CONFIG_PROVIDER_INTERVAL_DEFAULT 5000
@@ -209,6 +222,22 @@ typedef struct as_config_lua_s {
 
 /**
  * TLS module config
+ *
+ * Server identity: each node is authenticated as its TLS name, which comes from the seed
+ * (as_host.tls_name, defaulting to cluster_name or the host name) or from the server's peers
+ * reply. Seed discovery and address translation change only the transport host and port, never
+ * the TLS name. The name is matched per RFC 9525: an IP address against a SAN iPAddress entry,
+ * any other name against a SAN dNSName entry, compared case-insensitively, with at most one
+ * left-most wildcard label matching exactly one label. A name shaped like an IP address that is
+ * not a valid one (it contains a colon, or only digits and dots, such as 010.0.0.1) matches no
+ * entry. The subject CN is not an identifier.
+ *
+ * Deprecated: when that match fails, the previous matching is still accepted as a fallback: a
+ * match against the subject CN (even when SAN entries are present), or a TLS name that is an IP
+ * address or shaped like one, matched as text against a SAN dNSName entry or the CN. A fallback
+ * match logs a warning once per TLS name per process. The fallback will be removed in the next
+ * major release; issue certificates with a matching SAN dNSName or iPAddress entry. See
+ * https://github.com/aerospike/aerospike-client-c/blob/master/docs/discovery-plugin-guide.md
  *
  * @relates as_config
  */
@@ -529,6 +558,9 @@ typedef struct as_config_s {
 	 * Ignored while an address translator is registered, configured seeds included;
 	 * aerospike_connect() then logs a warning.
 	 *
+	 * The YAML config file keys static.client.ip_map and
+	 * static.client.translation.static_map replace it as a whole.
+	 *
 	 * A deep copy of ip_map is performed in aerospike_connect().  The caller is
 	 * responsible for memory deallocation of the original data structure.
 	 */
@@ -571,7 +603,8 @@ typedef struct as_config_s {
 	 *
 	 * Server proto-fd-idle-ms and client max_socket_idle should be set to zero (no reap) if
 	 * min_conns_per_node is greater than zero.  Reaping connections can defeat the purpose
-	 * of keeping connections in reserve for a future burst of activity.
+	 * of keeping connections in reserve for a future burst of activity.  Behind a load
+	 * balancer that drops idle flows, set max_socket_idle below its idle timeout instead.
 	 *
 	 * Servers 8.1+ have deprecated proto-fd-idle-ms. When proto-fd-idle-ms is ultimately removed,
 	 * the server will stop automatically reaping based on socket idle timeouts.
@@ -600,7 +633,8 @@ typedef struct as_config_s {
 	 *
 	 * Server proto-fd-idle-ms and client max_socket_idle should be set to zero (no reap) if
 	 * async_min_conns_per_node is greater than zero.  Reaping connections can defeat the purpose
-	 * of keeping connections in reserve for a future burst of activity.
+	 * of keeping connections in reserve for a future burst of activity.  Behind a load
+	 * balancer that drops idle flows, set max_socket_idle below its idle timeout instead.
 	 *
 	 * Servers 8.1+ have deprecated proto-fd-idle-ms. When proto-fd-idle-ms is ultimately removed,
 	 * the server will stop automatically reaping based on socket idle timeouts.
@@ -661,7 +695,10 @@ typedef struct as_config_s {
 	 *
 	 * Connection pools are now implemented by a LIFO stack.  Connections at the tail of the
 	 * stack will always be the least used.  These connections are checked for max_socket_idle
-	 * once every 30 tend iterations (usually 30 seconds).
+	 * once every AS_CLUSTER_BALANCE_TENDS tend iterations (usually 30 seconds, scaling with
+	 * tender_interval).  In libevent single-thread mode, async connections are checked instead
+	 * every 30 seconds by a timer in each event loop registered with
+	 * as_event_loop_register_aerospike().
 	 *
 	 * If server's proto-fd-idle-ms is greater than zero, then max_socket_idle should be
 	 * at least a few seconds less than the server's proto-fd-idle-ms, so the client does not
@@ -670,8 +707,18 @@ typedef struct as_config_s {
 	 * If server's proto-fd-idle-ms is zero (no reap), then max_socket_idle should also be zero.
 	 * Connections retrieved from a pool in commands will not be checked for max_socket_idle
 	 * when max_socket_idle is zero.  Idle connections will still be trimmed down from peak
-	 * connections to min connections (min_conns_per_node and async_min_conns_per_node) using a
-	 * hard-coded 55 second limit in the cluster tend thread.
+	 * connections to min connections (min_conns_per_node and async_min_conns_per_node) using an
+	 * AS_CLUSTER_IDLE_TRIM_DEFAULT_SEC (55 second) limit, on the schedule above.  Pipeline
+	 * connections are not trimmed.
+	 *
+	 * Behind a load balancer or endpoint that drops idle flows (an AWS Network Load Balancer or
+	 * PrivateLink endpoint drops them after 350 seconds by default), max_socket_idle should be
+	 * below its idle timeout, for example 340, when min connections are above zero, when
+	 * pipelining is used, when the timeout is lower than about 85 seconds, when
+	 * tender_interval is above about 9.8 seconds, or in libevent single-thread mode without
+	 * as_event_loop_register_aerospike() in every event loop.  With the other defaults, idle
+	 * connections are closed within about 85 seconds.  See
+	 * https://github.com/aerospike/aerospike-client-c/blob/master/docs/discovery-plugin-guide.md
 	 *
 	 * Servers 8.1+ have deprecated proto-fd-idle-ms. When proto-fd-idle-ms is ultimately removed,
 	 * the server will stop automatically reaping based on socket idle timeouts.
@@ -1128,7 +1175,8 @@ as_config_set_binding_seed_provider(as_config* config, const char* name,
  * The caller is responsible for the original string.
  *
  * An empty TLS name is the same as none: with TLS enabled, the host gets the
- * default TLS name (cluster_name, or the host name).
+ * default TLS name (cluster_name, or the host name). See as_config_tls for how
+ * the TLS name is matched against the server certificate.
  *
  * @code
  * as_config config;
@@ -1363,7 +1411,8 @@ as_config_tls_set_certstring(as_config* config, const char* certstring)
  * The caller is responsible for the original address string.
  *
  * An empty TLS name is the same as none: with TLS enabled, the host gets the
- * default TLS name (cluster_name, or the host name).
+ * default TLS name (cluster_name, or the host name). See as_config_tls for how
+ * the TLS name is matched against the server certificate.
  *
  * @code
  * as_config config;

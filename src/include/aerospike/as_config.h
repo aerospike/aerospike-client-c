@@ -563,6 +563,10 @@ typedef struct as_config_s {
 	 *
 	 * A deep copy of ip_map is performed in aerospike_connect().  The caller is
 	 * responsible for memory deallocation of the original data structure.
+	 *
+	 * When the config file sets ip_map, aerospike_init() points ip_map at a
+	 * client-owned copy that aerospike_destroy() frees. Free only the array you
+	 * assigned, never aerospike.config.ip_map.
 	 */
 	as_addr_map* ip_map;
 	
@@ -1134,12 +1138,13 @@ as_config_set_aws_seed_provider(as_config* config, const as_aws_seed_provider_co
  *
  * The thread that calls aerospike_connect(), aerospike_close() or
  * aerospike_destroy() must not hold anything the callback needs:
- * - Node.js: call aerospike_connect(), aerospike_close() and
- *   aerospike_destroy() from a worker thread (for example an AsyncWorker), not
- *   the JS main thread. Otherwise every connect waits up to refresh_timeout_ms
- *   and continues without the result (it then uses the configured seeds and
- *   fails if there are none), and a close during a refresh blocks the main
- *   thread up to refresh_timeout_ms.
+ * - Node.js: call aerospike_connect() from a worker thread (for example an
+ *   AsyncWorker), not the JS main thread. Otherwise every connect waits up to
+ *   refresh_timeout_ms and continues without the result (it then uses the
+ *   configured seeds and fails if there are none). aerospike_close() and
+ *   aerospike_destroy() may run on the JS main thread while its loop is the
+ *   registered event loop: close then waits for a running refresh on a client
+ *   thread, which also completes the destroy.
  * - Python: release the GIL around connect, close and destroy.
  *
  * With async event loops, closing after a failed connect releases the

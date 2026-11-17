@@ -297,8 +297,10 @@ The full contract, including HTTPS trust (`ca_file`, `ca_path`) and the hook rul
   non-OK status with `err` set; the client then keeps the previous seeds, and at initialization
   falls back to the configured seeds.
 - The thread that calls `aerospike_connect()`, `aerospike_close()` or `aerospike_destroy()` must not
-  hold anything the callback needs: Node.js calls them from a worker thread, Python releases the
-  GIL around them.
+  hold anything the callback needs. Node.js calls `aerospike_connect()` from a worker thread; close
+  and destroy may run on the JS main thread while its loop is the registered event loop, because
+  close then waits for a running refresh on a client thread, which also completes the destroy.
+  Python releases the GIL around all three.
 - A binding translator is not supported.
 
 ## Conformance entry points

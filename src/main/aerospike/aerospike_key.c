@@ -1066,7 +1066,7 @@ aerospike_key_put(
 	}
 
 	as_queue buffers;
-	as_queue_inita(&buffers, sizeof(as_buffer), rec->bins.size);
+	as_queue_init_auto(&buffers, sizeof(as_buffer), rec->bins.size);
 
 	as_put put;
 	status = as_put_init(&put, policy, pkey, key, rec, &buffers, err);
@@ -1112,7 +1112,7 @@ aerospike_key_put_async_ex(
 	}
 
 	as_queue buffers;
-	as_queue_inita(&buffers, sizeof(as_buffer), rec->bins.size);
+	as_queue_init_auto(&buffers, sizeof(as_buffer), rec->bins.size);
 
 	as_put put;
 	status = as_put_init(&put, policy, pkey, key, rec, &buffers, err);
@@ -1474,10 +1474,20 @@ as_operate_init(
 			case AS_OPERATOR_HLL_READ:
 			case AS_OPERATOR_STRING_READ:
 			case AS_OPERATOR_TO_STRING:
-				// Map operations require respond_all_ops to be true.
+				// These operations require respond_all_ops to be true.
 				respond_all_ops = true;
-				// Fall through to read.
+				oper->read_attr |= AS_MSG_INFO1_READ;
+				break;
+
 			case AS_OPERATOR_CDT_READ:
+				oper->read_attr |= AS_MSG_INFO1_READ;
+				break;
+
+			// Only a plain read with no bin name means "read all bins". ""
+			// is also a valid bin name, and the server ignores the operation
+			// list when GET_ALL is set, so setting it for a CDT, bit, HLL or
+			// expression read on bin "" would return every bin whole instead
+			// of the operation's result. Matches as_batch_attr_read_adjust_ops.
 			case AS_OPERATOR_READ:
 				oper->read_attr |= AS_MSG_INFO1_READ;
 
@@ -1582,7 +1592,7 @@ aerospike_key_operate_internal(
 	}
 
 	as_queue buffers;
-	as_queue_inita(&buffers, sizeof(as_buffer), n_operations);
+	as_queue_init_auto(&buffers, sizeof(as_buffer), n_operations);
 
 	as_policy_operate policy_local;
 	as_operate oper;
@@ -1663,7 +1673,7 @@ aerospike_key_operate_async_internal(
 	}
 	
 	as_queue buffers;
-	as_queue_inita(&buffers, sizeof(as_buffer), n_operations);
+	as_queue_init_auto(&buffers, sizeof(as_buffer), n_operations);
 
 	as_policy_operate policy_local;
 	as_operate oper;
@@ -2168,7 +2178,7 @@ as_txn_monitor_operate(
 	}
 
 	as_queue buffers;
-	as_queue_inita(&buffers, sizeof(as_buffer), n_operations);
+	as_queue_init_auto(&buffers, sizeof(as_buffer), n_operations);
 
 	as_policy_operate policy_local;
 	as_operate oper;
@@ -2209,7 +2219,7 @@ as_txn_monitor_operate_async(
 	}
 	
 	as_queue buffers;
-	as_queue_inita(&buffers, sizeof(as_buffer), n_operations);
+	as_queue_init_auto(&buffers, sizeof(as_buffer), n_operations);
 
 	as_policy_operate policy_local;
 	as_operate oper;

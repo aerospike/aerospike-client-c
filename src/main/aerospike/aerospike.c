@@ -288,25 +288,7 @@ aerospike_connect(aerospike* as, as_error* err)
 #endif
 
 	// Create the cluster object.
-	status = as_cluster_create(as, err);
-
-	if (status != AEROSPIKE_OK) {
-		return status;
-	}
-
-	// Dynamic configuration allows metrics to be enabled from a file.
-	if (as->config.policies.metrics.enable) {
-		as_log_info("Enable metrics");
-		// Call as_cluster_enable_metrics() instead of aerospike_enable_metrics() to avoid
-		// the uneccessary policy merge with the default metrics policy.
-		as_cluster* cluster = as->cluster;
-
-		pthread_mutex_lock(&cluster->metrics_lock);
-		status = as_cluster_enable_metrics(err, cluster, &as->config.policies.metrics);
-		pthread_mutex_unlock(&cluster->metrics_lock);
-	}
-
-	return status;
+	return as_cluster_create(as, err);
 }
 
 as_status as_event_close_cluster(aerospike* as, as_error* err);

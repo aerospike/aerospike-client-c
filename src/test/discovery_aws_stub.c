@@ -391,6 +391,7 @@ stub_serve(aws_stub* s, int fd)
 {
 	pthread_mutex_lock(&s->lock);
 	s->accepts++;
+	s->serving = true;
 
 	aws_reply reply = {.mode = AWS_REPLY_CLOSE};
 
@@ -483,6 +484,9 @@ stub_run(void* arg)
 
 		if (fd >= 0) {
 			stub_serve(s, fd);
+			pthread_mutex_lock(&s->lock);
+			s->serving = false;
+			pthread_mutex_unlock(&s->lock);
 		}
 	}
 	return NULL;
@@ -677,6 +681,27 @@ aws_stub_accepts(aws_stub* s)
 	uint32_t n = s->accepts;
 	pthread_mutex_unlock(&s->lock);
 	return n;
+}
+
+bool
+aws_stub_wait_idle(aws_stub* s, uint32_t timeout_ms)
+{
+	uint64_t deadline = cf_getms() + timeout_ms;
+
+	while (true) {
+		pthread_mutex_lock(&s->lock);
+		bool serving = s->serving;
+		pthread_mutex_unlock(&s->lock);
+
+		if (!serving) {
+			return true;
+		}
+
+		if (cf_getms() >= deadline) {
+			return false;
+		}
+		as_sleep(5);
+	}
 }
 
 bool

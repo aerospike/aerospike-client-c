@@ -3918,6 +3918,7 @@ TEST(aws_no_leaked_descriptors, "every transport path, error and failed construc
 	stub_one(&tls, "10.0.0.1");
 	assert_int_eq(stub_refresh(&tls, true, "localhost", certs.ca_file, 2000, buf, sizeof(buf)),
 		AEROSPIKE_OK);
+	assert_true(aws_stub_wait_idle(&tls, 2000));
 
 	int before = discovery_fd_count();
 	assert_true(before > 0);

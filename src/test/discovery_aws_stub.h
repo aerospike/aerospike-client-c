@@ -127,6 +127,9 @@ typedef struct aws_stub_s {
 	uint32_t requests_size;
 	uint32_t accepts;
 
+	// True from accept until the connection is closed or held.
+	bool serving;
+
 	// Connections kept open by AWS_REPLY_SILENT until reset or stop.
 	int held[AWS_STUB_MAX_HELD];
 	uint32_t held_size;
@@ -176,6 +179,11 @@ aws_stub_requests(aws_stub* s);
 
 uint32_t
 aws_stub_accepts(aws_stub* s);
+
+// Wait until the stub has closed or held its last accepted connection. A client can return before
+// the stub closes its side. Returns false after timeout_ms.
+bool
+aws_stub_wait_idle(aws_stub* s, uint32_t timeout_ms);
 
 // Copy request i. Returns false when there is none.
 bool

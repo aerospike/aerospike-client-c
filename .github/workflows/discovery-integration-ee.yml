@@ -1,9 +1,7 @@
 name: Discovery integration (EE)
 
-# The Enterprise half of discovery-integration.yml, in its own workflow because conformance
-# l2-proxy.yaml uploads one fixed artifact name per profile and run
-# (l2-proxy-results-<profile>-<run id>-<attempt>), so a second l2-proxy call with the same profile in
-# the CE run would fail its upload.
+# The Enterprise half of discovery-integration.yml, in its own workflow so that the nightly schedule
+# runs only the Enterprise jobs.
 #
 # l2-ee runs the l2-proxy default profile on Aerospike Enterprise through src/test/l5_driver.
 # env-tls runs src/test/discovery_env in conformance envs/tls-matching.sh: N-6 (TLS through the
@@ -17,7 +15,8 @@ name: Discovery integration (EE)
 # once and reports the layers it skips with report-skipped-layers. Drafts wait until they are ready
 # for review, as in the CE workflow. A schedule runs only from the default branch, so the nightly
 # starts once this file reaches master and then tests master; dispatch it on stage meanwhile. The
-# harness is pinned by commit in each job below.
+# harness is pinned in each job below to the conformance main commit L1 also uses; move them to the
+# v1.1.0 commit once it is tagged.
 
 on:
   pull_request:
@@ -65,7 +64,7 @@ jobs:
           echo "enterprise=${ENTERPRISE}" >> "${GITHUB_OUTPUT}"
           echo "layers=${layers}" >> "${GITHUB_OUTPUT}"
       - name: Report skipped layers
-        uses: aerospike/aerospike-client-conformance/.github/actions/report-skipped-layers@f0dfda5d49e0fcac2613df3fa29e4386201df11c
+        uses: aerospike/aerospike-client-conformance/.github/actions/report-skipped-layers@f0dfda5d49e0fcac2613df3fa29e4386201df11c # main
         with:
           layers: ${{ steps.gate.outputs.layers }}
 
@@ -73,7 +72,7 @@ jobs:
     name: L2 proxy (EE, default)
     needs: gate
     if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c # main
     with:
       client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -89,7 +88,7 @@ jobs:
     name: N-6 and TLS name matching (EE)
     needs: gate
     if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c # main
     with:
       environment: tls-matching
       command: bash src/test/discovery_env/run.sh tls-matching
@@ -102,7 +101,7 @@ jobs:
     name: N-17 CN-only certificate rejected (EE, expected to fail until the next major, FR-45)
     needs: gate
     if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c # main
     with:
       environment: tls-matching
       command: bash src/test/discovery_env/run.sh tls-matching n17

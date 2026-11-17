@@ -6,9 +6,10 @@ name: Discovery integration
 # from code and from the YAML file), env-collision (N-18 against a live node) and env-yaml
 # (pass-through and port-map from the YAML file) run src/test/discovery_env in conformance envs/
 # through test-envs.yaml. l2-ce builds the PR head SHA; the env jobs build what test-envs.yaml
-# checks out, the PR merge commit. The harness is pinned by commit in each job below; switch them
-# to the v1.1.0 tag once it exists. The Enterprise jobs (l2-proxy on EE, the TLS rows N-6 and N-17,
-# the certificate name matching cases) and the nightly schedule are in discovery-integration-ee.yml.
+# checks out, the PR merge commit. The harness is pinned in each job below to the conformance main
+# commit L1 also uses; move them to the v1.1.0 commit once it is tagged. The Enterprise jobs
+# (l2-proxy on EE, the TLS rows N-6 and N-17, the certificate name matching cases) and the nightly
+# schedule are in discovery-integration-ee.yml.
 
 on:
   pull_request:
@@ -30,7 +31,7 @@ jobs:
     name: L2 proxy (CE)
     # About an hour per run; drafts wait until they are ready for review.
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c # main
     with:
       client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -43,7 +44,7 @@ jobs:
   env-dns:
     name: N-4 DNS environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c # main
     with:
       environment: dns
       command: bash src/test/discovery_env/run.sh dns
@@ -53,7 +54,7 @@ jobs:
   env-collision:
     name: N-18 collision environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c # main
     with:
       environment: collision
       command: bash src/test/discovery_env/run.sh collision
@@ -63,7 +64,7 @@ jobs:
   env-yaml:
     name: YAML translation environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c # main
     with:
       environment: yaml
       command: bash src/test/discovery_env/run.sh yaml

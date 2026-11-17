@@ -21,7 +21,9 @@
  * client from the flags, runs a retrying load, writes what the client sees to stdout as JSON
  * lines and answers the commands it reads from stdin. It measures and reports; the harness
  * decides every row. With --tls-name, the seed and every node are TLS endpoints, each validated
- * against the tls-name the client holds for it.
+ * against the tls-name the client holds for it. With --client-log info or debug, the client's
+ * messages below warning level go to stderr as "client-log t=T LEVEL message" lines, so stdout
+ * keeps the contract's warning and error log lines only.
  *
  * Exit status: 0 after quit or end of input; 2 on bad flags, the reason on stderr; 3 when the
  * client could not be created (also when a certificate does not match), an error line on stdout
@@ -114,6 +116,7 @@ typedef struct l5_options_s {
 	char* set;
 	char* tls_name;
 	char* tls_ca_file;
+	as_log_level client_log;
 } l5_options;
 
 // Stdout carries JSON lines only, each flushed, ready first. Lines written before ready go to
@@ -245,7 +248,7 @@ static const char L5_USAGE[] =
 	"usage: l5_driver --seed HOST:PORT --shape pass-through|port-map [--port-map NODE=HOST:PORT,...]\n"
 	"                 [--on-miss strict|pass-through] [--user USER] --tend-interval MS --timeout MS\n"
 	"                 --namespace NS --set SET [--workers N] [--keys N]\n"
-	"                 [--tls-name NAME --tls-ca-file PATH]";
+	"                 [--tls-name NAME --tls-ca-file PATH] [--client-log warn|info|debug]";
 
 static uint64_t l5_start_ns;
 static l5_output* l5_log_output;
@@ -525,6 +528,23 @@ l5_output_error(l5_output* o, const char* message)
 	as_string_builder_destroy(&sb);
 }
 
+static const char*
+l5_log_level_name(as_log_level level)
+{
+	switch (level) {
+	case AS_LOG_LEVEL_ERROR:
+		return "ERROR";
+	case AS_LOG_LEVEL_WARN:
+		return "WARN";
+	case AS_LOG_LEVEL_INFO:
+		return "INFO";
+	case AS_LOG_LEVEL_DEBUG:
+		return "DEBUG";
+	default:
+		return "TRACE";
+	}
+}
+
 bool
 l5_log_callback(as_log_level level, const char* func, const char* file, uint32_t line,
 	const char* fmt, ...)
@@ -535,7 +555,7 @@ l5_log_callback(as_log_level level, const char* func, const char* file, uint32_t
 
 	l5_output* o = l5_log_output;
 
-	if (level > AS_LOG_LEVEL_WARN || !o) {
+	if (!o) {
 		return true;
 	}
 
@@ -545,9 +565,23 @@ l5_log_callback(as_log_level level, const char* func, const char* file, uint32_t
 	vsnprintf(msg, sizeof(msg), fmt, ap);
 	va_end(ap);
 
+	if (level > AS_LOG_LEVEL_WARN) {
+		// One stderr line per message: the harness copies stderr line by line.
+		for (char* p = msg; *p; p++) {
+			if (*p == '\n' || *p == '\r') {
+				*p = ' ';
+			}
+		}
+		pthread_mutex_lock(&o->lock);
+		fprintf(o->err, "client-log t=%" PRIu64 " %s %s\n", l5_now(), l5_log_level_name(level), msg);
+		fflush(o->err);
+		pthread_mutex_unlock(&o->lock);
+		return true;
+	}
+
 	as_string_builder sb;
 	as_string_builder_init(&sb, 256, true);
-	l5_json_string(&sb, "level", level == AS_LOG_LEVEL_ERROR ? "ERROR" : "WARN");
+	l5_json_string(&sb, "level", l5_log_level_name(level));
 	l5_json_string(&sb, "message", msg);
 	l5_output_write(o, L5_LINE_REPLY, "log", sb.data);
 	as_string_builder_destroy(&sb);
@@ -719,7 +753,7 @@ l5_options_destroy(l5_options* o)
 
 static const char* const L5_FLAGS[] = {
 	"--seed", "--shape", "--port-map", "--on-miss", "--user", "--tend-interval", "--timeout",
-	"--namespace", "--set", "--workers", "--keys", "--tls-name", "--tls-ca-file"
+	"--namespace", "--set", "--workers", "--keys", "--tls-name", "--tls-ca-file", "--client-log"
 };
 
 #define L5_FLAG_COUNT (sizeof(L5_FLAGS) / sizeof(L5_FLAGS[0]))
@@ -733,6 +767,7 @@ l5_parse_options(int argc, char** argv, const char* password, l5_options* o, cha
 	o->on_miss = AS_TRANSLATION_STRICT;
 	o->workers = 4;
 	o->keys = 1000;
+	o->client_log = AS_LOG_LEVEL_WARN;
 
 	bool seen[L5_FLAG_COUNT] = {false};
 	const char* shape = NULL;
@@ -830,6 +865,20 @@ l5_parse_options(int argc, char** argv, const char* password, l5_options* o, cha
 				return l5_fail(msg, size, "cannot read --tls-ca-file: %s", value);
 			}
 			o->tls_ca_file = l5_strdup(value);
+			break;
+		case 13:
+			if (strcmp(value, "warn") == 0) {
+				o->client_log = AS_LOG_LEVEL_WARN;
+			}
+			else if (strcmp(value, "info") == 0) {
+				o->client_log = AS_LOG_LEVEL_INFO;
+			}
+			else if (strcmp(value, "debug") == 0) {
+				o->client_log = AS_LOG_LEVEL_DEBUG;
+			}
+			else {
+				ok = false;
+			}
 			break;
 		}
 
@@ -2360,7 +2409,7 @@ main(int argc, char** argv)
 	static l5_output out;
 	l5_output_init(&out, stdout, stderr);
 	l5_log_output = &out;
-	as_log_set_level(AS_LOG_LEVEL_WARN);
+	as_log_set_level(opt.client_log);
 	as_log_set_callback(l5_log_callback);
 
 	as_config config;

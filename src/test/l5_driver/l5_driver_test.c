@@ -17,8 +17,8 @@
 
 /*
  * Unit tests of the L5 driver's own logic, with no server: JSON quoting, flag parsing, node
- * address formatting, the serve key search, the watch probe, the order of output lines and
- * quit during a watch. Built with L5_DRIVER_NO_MAIN by "make l5-driver-test".
+ * address formatting, the serve key search, the watch probe, the order of output lines, client
+ * log routing and quit during a watch. Built with L5_DRIVER_NO_MAIN by "make l5-driver-test".
  */
 #include "l5_driver/l5_driver.c"
 
@@ -218,6 +218,7 @@ TEST(test_l5_options_valid, "a valid port-map run keeps name and HOST:PORT keys 
 	assert_string_eq(o.ns, "test");
 	assert_string_eq(o.set, "l2");
 	assert_null(o.user);
+	assert_int_eq(o.client_log, AS_LOG_LEVEL_WARN);
 
 	as_config config;
 	as_error err;
@@ -281,12 +282,12 @@ TEST(test_l5_options_tls, "--tls-name and --tls-ca-file make the seed a TLS host
 	assert_true(seed_ok);
 }
 
-TEST(test_l5_options_shapes, "pass-through, explicit on-miss, bracketed IPv6 seed, workers and user")
+TEST(test_l5_options_shapes, "pass-through, explicit on-miss, bracketed IPv6 seed, workers, user and client log")
 {
 	char* argv[] = {
 		"l5_driver", "--seed", "[::1]:3000", "--shape", "pass-through", "--on-miss", "pass-through",
 		"--user", "admin", "--tend-interval", "250", "--timeout", "1000", "--namespace", "test",
-		"--set", "s", "--workers", "64", "--keys", "10"
+		"--set", "s", "--workers", "64", "--keys", "10", "--client-log", "debug"
 	};
 	l5_options o;
 	assert_int_eq(parse(ARGC(argv), argv, "secret", &o), 0);
@@ -298,6 +299,7 @@ TEST(test_l5_options_shapes, "pass-through, explicit on-miss, bracketed IPv6 see
 	assert_string_eq(o.password, "secret");
 	assert_int_eq(o.workers, 64);
 	assert_int_eq(o.keys, 10);
+	assert_int_eq(o.client_log, AS_LOG_LEVEL_DEBUG);
 
 	as_config config;
 	as_error err;
@@ -331,6 +333,12 @@ TEST(test_l5_options_bad, "each bad flag is exit 2")
 	assert_int_eq(parse_with("--user", "admin", "secret"), 0);
 	assert_int_eq(parse_with("--keys", NULL, NULL), 2);
 	assert_int_eq(parse_with("stray", NULL, NULL), 2);
+	assert_int_eq(parse_with("--client-log", "warn", NULL), 0);
+	assert_int_eq(parse_with("--client-log", "info", NULL), 0);
+	assert_int_eq(parse_with("--client-log", "debug", NULL), 0);
+	assert_int_eq(parse_with("--client-log", "trace", NULL), 2);
+	assert_int_eq(parse_with("--client-log", "DEBUG", NULL), 2);
+	assert_int_eq(parse_with("--client-log", "", NULL), 2);
 
 	char* twice[] = {
 		"l5_driver", "--seed", "h:1", "--seed", "h:2", "--shape", "pass-through", "--tend-interval", "250",
@@ -546,6 +554,49 @@ TEST(test_l5_output_order, "lines before ready go to stderr, failures before rea
 	assert_int_eq(dropped, 0);
 	assert_true(before_on_stderr);
 	assert_true(monotonic);
+}
+
+TEST(test_l5_client_log, "warnings and errors are stdout log lines; info and debug are one stderr line each with t, before ready too")
+{
+	FILE* out = tmpfile();
+	FILE* err = tmpfile();
+	l5_output o;
+	l5_output_init(&o, out, err);
+	l5_log_output = &o;
+
+	l5_log_callback(AS_LOG_LEVEL_INFO, "f", "file.c", 2, "Add node %s %s", "A1", "10.0.0.1:3000");
+	l5_output_open(&o, "7.6.2", "pass-through");
+	l5_log_callback(AS_LOG_LEVEL_WARN, "f", "file.c", 1, "warn %d", 1);
+	l5_log_callback(AS_LOG_LEVEL_DEBUG, "f", "file.c", 3, "Change node address %s\r\n%s", "A1", "B1");
+	l5_log_callback(AS_LOG_LEVEL_ERROR, "f", "file.c", 4, "error %d", 4);
+	l5_log_output = NULL;
+	l5_log_callback(AS_LOG_LEVEL_INFO, "f", "file.c", 5, "after the driver");
+
+	char* stdout_text = contents(out);
+	char* stderr_text = contents(err);
+	fclose(out);
+	fclose(err);
+
+	uint32_t stdout_logs = count(stdout_text, "\"type\":\"log\"");
+	bool warn = strstr(stdout_text, "\"level\":\"WARN\",\"message\":\"warn 1\"") != NULL;
+	bool error = strstr(stdout_text, "\"level\":\"ERROR\",\"message\":\"error 4\"") != NULL;
+	bool stdout_clean = !strstr(stdout_text, "Add node") && !strstr(stdout_text, "Change node");
+	const char* info = strstr(stderr_text, "client-log t=");
+	bool info_line = info == stderr_text && strstr(info, " INFO Add node A1 10.0.0.1:3000\n");
+	bool debug_line = strstr(stderr_text, " DEBUG Change node address A1  B1\n") != NULL;
+	uint32_t stderr_lines = count(stderr_text, "\n");
+	bool unset = !strstr(stderr_text, "after the driver");
+	free(stdout_text);
+	free(stderr_text);
+
+	assert_int_eq(stdout_logs, 2);
+	assert_true(warn);
+	assert_true(error);
+	assert_true(stdout_clean);
+	assert_true(info_line);
+	assert_true(debug_line);
+	assert_int_eq(stderr_lines, 2);
+	assert_true(unset);
 }
 
 TEST(test_l5_snapshot_json, "snapshot nodes keep their order, reachable may be null, owners skip nodes without partitions")
@@ -788,6 +839,7 @@ SUITE(l5_driver_suite, "L5 driver logic without a server")
 	suite_add(test_l5_serve_keys);
 	suite_add(test_l5_probe);
 	suite_add(test_l5_output_order);
+	suite_add(test_l5_client_log);
 	suite_add(test_l5_snapshot_json);
 	suite_add(test_l5_signature);
 	suite_add(test_l5_heartbeat);

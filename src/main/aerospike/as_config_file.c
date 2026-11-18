@@ -3735,6 +3735,12 @@ as_config_file_apply_discovery(aerospike* as, as_yaml_discovery* d, as_error* er
 	}
 
 	if (d->provider != AS_YAML_PROVIDER_UNSET) {
+		if (config->discovery.provider_registered) {
+			as_log_warn("Seed provider %s registered in code is replaced by "
+				"static.client.discovery.provider %s in %s", config->discovery.provider.name,
+				as_yaml_providers[d->provider - 1], path);
+		}
+
 		if (has_provider) {
 			provider.name = provider_name;
 		}
@@ -3742,6 +3748,14 @@ as_config_file_apply_discovery(aerospike* as, as_yaml_discovery* d, as_error* er
 	}
 
 	if (d->translator != AS_YAML_TRANSLATOR_UNSET || (d->set & AS_YAML_SET_STATIC_MAP)) {
+		if (config->translation.provider_registered) {
+			// static_map without provider implies static-map.
+			as_log_warn("Address translator %s registered in code is replaced by "
+				"static.client.translation.provider %s in %s", config->translation.provider.name,
+				d->translator == AS_YAML_TRANSLATOR_UNSET ? "static-map" :
+				as_yaml_translators[d->translator - 1], path);
+		}
+
 		if (has_translator) {
 			translator.name = translator_name;
 		}

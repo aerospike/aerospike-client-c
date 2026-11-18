@@ -67,8 +67,8 @@ Rules:
   `udata`, which destroys nothing.
 - Registration fails with `AEROSPIKE_ERR_PARAM` while a client created from the config is
   connected.
-- A YAML provider or translator replaces, and destroys, the code registration; see
-  [YAML configuration](yaml-config-discovery.md#staticclientdiscovery).
+- A YAML provider or translator replaces, and destroys, the code registration, and logs a
+  warning naming both; see [YAML configuration](yaml-config-discovery.md#staticclientdiscovery).
 
 Lifecycle, which differs from the Java client:
 
@@ -303,7 +303,8 @@ The full contract, including HTTPS trust (`ca_file`, `ca_path`) and the hook rul
   the runtime (for example acquire the Python GIL); `destroy` must not.
 - Error contract: return hosts copied with `as_seed_candidates_append()` and `AEROSPIKE_OK`, or a
   non-OK status with `err` set; the client then keeps the previous seeds, and at initialization
-  falls back to the configured seeds.
+  falls back to the configured seeds. A result with an empty host name, a host name over 255
+  bytes or port 0 fails the same way, except for a configured seed returned as given.
 - The thread that calls `aerospike_connect()`, `aerospike_close()` or `aerospike_destroy()` must not
   hold anything the callback needs. Node.js calls `aerospike_connect()` from a worker thread; close
   and destroy may run on the JS main thread while its loop is the registered event loop, because

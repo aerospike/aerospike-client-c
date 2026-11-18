@@ -481,6 +481,7 @@ TEST(cf_every_discovery_key, "every discovery field, ip_map and use_services_alt
 		}
 	}
 	assert_int_eq(cf_log_find(AS_LOG_LEVEL_ERROR, ""), 0);
+	assert_int_eq(cf_log_find(AS_LOG_LEVEL_WARN, "registered in code is replaced"), 0);
 	cf_close(client);
 }
 
@@ -566,6 +567,9 @@ TEST(cf_static_map, "static_map entries land in ip_map, keep the port and reset 
 	assert_true(ok);
 	assert_int_eq(cf_log_find(AS_LOG_LEVEL_INFO,
 		"Set static.client.translation.static_map[10.0.0.1] = 192.168.0.1"), 1);
+	assert_int_eq(cf_log_find(AS_LOG_LEVEL_WARN, "Address translator code-translator registered "
+		"in code is replaced by static.client.translation.provider static-map in "), 1);
+	assert_int_eq(cf_log_find(AS_LOG_LEVEL_WARN, "Seed provider code-provider"), 0);
 
 	cf_close(client);
 	assert_int_eq(cf_provider_destroys, 1);
@@ -597,6 +601,10 @@ TEST(cf_overrides_code, "a file provider and translator replace the code ones, e
 	assert_string_eq(c->discovery.provider.name, "dns");
 	assert_true(c->translation.provider_registered);
 	assert_string_eq(c->translation.provider.name, "pass-through");
+	assert_int_eq(cf_log_find(AS_LOG_LEVEL_WARN, "Seed provider code-provider registered in "
+		"code is replaced by static.client.discovery.provider dns in "), 1);
+	assert_int_eq(cf_log_find(AS_LOG_LEVEL_WARN, "Address translator code-translator registered "
+		"in code is replaced by static.client.translation.provider pass-through in "), 1);
 
 	cf_close(client);
 	assert_int_eq(cf_provider_destroys, 1);
@@ -628,6 +636,7 @@ TEST(cf_absent_keeps_code, "a file with only merge_policy keeps the code plugins
 	assert_int_eq(c->discovery.refresh_timeout_ms, 900);
 	assert_int_eq(c->discovery.tend_refresh_deadline_ms, 60);
 	assert_int_eq(c->translation.on_miss, AS_TRANSLATION_STRICT);
+	assert_int_eq(cf_log_find(AS_LOG_LEVEL_WARN, "registered in code is replaced"), 0);
 
 	cf_close(client);
 	assert_int_eq(cf_provider_destroys, 1);
@@ -650,6 +659,10 @@ TEST(cf_static_resets, "provider static and translation provider static-map rese
 	assert_false(client->config.discovery.provider_registered);
 	assert_false(client->config.translation.provider_registered);
 	assert_null(client->config.ip_map);
+	assert_int_eq(cf_log_find(AS_LOG_LEVEL_WARN, "Seed provider code-provider registered in "
+		"code is replaced by static.client.discovery.provider static in "), 1);
+	assert_int_eq(cf_log_find(AS_LOG_LEVEL_WARN, "Address translator code-translator registered "
+		"in code is replaced by static.client.translation.provider static-map in "), 1);
 	cf_close(client);
 	assert_int_eq(cf_provider_destroys, 1);
 	assert_int_eq(cf_translator_destroys, 1);

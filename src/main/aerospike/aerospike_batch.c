@@ -240,6 +240,7 @@ typedef struct as_batch_complete_task_s {
 
 typedef struct {
 	as_event_executor executor;
+	as_cluster* cluster;
 	as_batch_records* records;
 	as_txn* txn;
 	uint64_t* versions;
@@ -449,6 +450,11 @@ as_batch_complete_async(as_event_executor* executor)
 		as_async_batch_executor* e = (as_async_batch_executor*)executor;
 
 		destroy_versions(e->versions);
+
+		// A batch with per-key errors still completed.
+		if (! executor->err) {
+			as_cluster_add_call_latency(e->cluster, AS_LATENCY_TYPE_BATCH, executor->metrics_call_begin);
+		}
 
 		if (e->error_row && ! executor->err) {
 			as_error err;
@@ -2224,6 +2230,60 @@ as_batch_get_node(
 	return AEROSPIKE_OK;
 }
 
+static inline const char*
+as_batch_key_ns(as_vector* records, as_key* keys, uint32_t offset)
+{
+	if (keys) {
+		return keys[offset].ns;
+	}
+
+	as_batch_base_record* rec = as_vector_get(records, offset);
+	return rec->key.ns;
+}
+
+// Namespace of the keys in one node sub-batch, used for its namespace metrics.
+// A sub-batch with keys from more than one namespace records under the empty
+// namespace. A split retry keeps the namespace of the sub-batch it came from.
+// See as_node_prepare_metrics().
+static const char*
+as_batch_offsets_ns(as_cluster* cluster, as_vector* offsets, as_vector* records, as_key* keys)
+{
+	const char* ns = NULL;
+
+	for (uint32_t i = 0; i < offsets->size; i++) {
+		uint32_t offset = *(uint32_t*)as_vector_get(offsets, i);
+		const char* key_ns = as_batch_key_ns(records, keys, offset);
+
+		if (! ns) {
+			ns = key_ns;
+		}
+		else if (strcmp(ns, key_ns) != 0) {
+			return NULL;
+		}
+	}
+
+	if (! ns) {
+		return NULL;
+	}
+
+	// Must use global namespace due to reference equality logic in as_node_find_namespace().
+	return as_partition_tables_get_ns(cluster, ns);
+}
+
+static const char*
+as_batch_task_ns(as_batch_task* task)
+{
+	as_cluster* cluster = task->as->cluster;
+
+	if (task->type == BATCH_TYPE_RECORDS) {
+		as_batch_task_records* btr = (as_batch_task_records*)task;
+		return as_batch_offsets_ns(cluster, &task->offsets, btr->records, NULL);
+	}
+
+	as_batch_task_keys* btk = (as_batch_task_keys*)task;
+	return as_batch_offsets_ns(cluster, &task->offsets, NULL, btk->keys);
+}
+
 static inline void
 as_batch_command_init(
 	as_command* cmd, as_batch_task* task, const as_policy_batch* policy, uint8_t* buf, size_t size,
@@ -2234,7 +2294,6 @@ as_batch_command_init(
 	cmd->policy = &policy->base;
 	cmd->node = task->node;
 	cmd->key = NULL;       // Not referenced when node set.
-	cmd->ns = NULL;
 	cmd->partition = NULL; // Not referenced when node set.
 	cmd->parse_results_fn = as_batch_parse_records;
 	cmd->udata = task;
@@ -2255,12 +2314,14 @@ as_batch_command_init(
 
 	if (! parent) {
 		// Normal batch.
+		cmd->ns = as_batch_task_ns(task);
 		cmd->replica_index = task->replica_index;
 		cmd->replica_index_sc = task->replica_index_sc;
 		as_command_start_timer(cmd);
 	}
 	else {
 		// Split retry mode.  Do not reset timer.
+		cmd->ns = parent->ns;
 		cmd->replica_index = parent->replica_index;
 		cmd->replica_index_sc = parent->replica_index_sc;
 		cmd->iteration = parent->iteration;
@@ -3552,7 +3613,8 @@ as_batch_keys_execute(
 	)
 {
 	as_cluster* cluster = as->cluster;
-	bool sampled = as_cluster_sample_command(cluster);
+	uint64_t call_begin;
+	bool sampled = as_cluster_sample_command(cluster, &call_begin);
 	uint32_t n_keys = batch->keys.size;
 	
 	if (n_keys == 0) {
@@ -3752,7 +3814,14 @@ as_batch_keys_execute(
 	}
 	batch_results_free(results, n_keys);
 
-	if (status == AEROSPIKE_OK && error_row) {
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	// A batch with per-key errors still completed.
+	as_cluster_add_call_latency(cluster, AS_LATENCY_TYPE_BATCH, call_begin);
+
+	if (error_row) {
 		return as_error_set_message(err, AEROSPIKE_BATCH_FAILED,
 			"One or more batch sub-commands failed");
 	}
@@ -3884,7 +3953,8 @@ as_batch_execute_sync(
 static inline as_async_batch_command*
 as_batch_command_create(
 	as_cluster* cluster, const as_policy_batch* policy, as_batch_replica* rep, as_node* node,
-	as_async_batch_executor* executor, size_t size, uint8_t flags, uint8_t* ubuf, uint32_t ubuf_size
+	const char* ns, as_async_batch_executor* executor, size_t size, uint8_t flags, uint8_t* ubuf,
+	uint32_t ubuf_size
 	)
 {
 	// Allocate enough memory to cover, then, round up memory size in 8KB increments to reduce
@@ -3902,7 +3972,7 @@ as_batch_command_create(
 	cmd->event_loop = executor->executor.event_loop;
 	cmd->cluster = cluster;
 	cmd->node = node;
-	cmd->ns = NULL;
+	cmd->ns = ns;
 	cmd->partition = NULL;
 	cmd->udata = executor;  // Overload udata to be the executor.
 	cmd->parse_results = as_batch_async_parse_records;
@@ -3987,10 +4057,12 @@ as_batch_execute_async(
 				break;
 			}
 
+			const char* ns = as_batch_offsets_ns(as->cluster, &batch_node->offsets, records, NULL);
+
 			if (! (policy->base.compress && bb.size > AS_COMPRESS_THRESHOLD)) {
 				// Send uncompressed command.
 				as_async_batch_command* bc = as_batch_command_create(as->cluster, policy, rep,
-					batch_node->node, executor, bb.size, flags, NULL, 0);
+					batch_node->node, ns, executor, bb.size, flags, NULL, 0);
 
 				as_event_command* cmd = &bc->command;
 
@@ -4013,7 +4085,7 @@ as_batch_execute_async(
 				size_t comp_size = as_command_compress_max_size(size);
 
 				as_async_batch_command* bc = as_batch_command_create(as->cluster, policy, rep,
-					batch_node->node, executor, comp_size, flags, ubuf, (uint32_t)size);
+					batch_node->node, ns, executor, comp_size, flags, ubuf, (uint32_t)size);
 
 				as_event_command* cmd = &bc->command;
 
@@ -4071,11 +4143,12 @@ as_batch_records_execute(
 	)
 {
 	as_cluster* cluster = as->cluster;
+	uint64_t call_begin = 0;
 	bool sampled = false;
 
 	// The async entry point already counted this user batch.
 	if (!async_executor) {
-		sampled = as_cluster_sample_command(cluster);
+		sampled = as_cluster_sample_command(cluster, &call_begin);
 	}
 
 	as_vector* list = &records->list;
@@ -4178,6 +4251,9 @@ as_batch_records_execute(
 			return status;
 		}
 
+		// A batch with per-key errors still completed.
+		as_cluster_add_call_latency(cluster, AS_LATENCY_TYPE_BATCH, call_begin);
+
 		if (error_row) {
 			return as_error_set_message(err, AEROSPIKE_BATCH_FAILED,
 				"One or more batch sub-commands failed");
@@ -4193,7 +4269,8 @@ as_batch_records_execute_async(
 	as_event_loop* event_loop, uint8_t txn_attr, bool has_write
 	)
 {
-	bool sampled = as_cluster_sample_command(as->cluster);
+	uint64_t call_begin;
+	bool sampled = as_cluster_sample_command(as->cluster, &call_begin);
 	// Check for empty batch.
 	if (records->list.size == 0) {
 		destroy_versions(versions);
@@ -4204,6 +4281,7 @@ as_batch_records_execute_async(
 	// Batch will be split up into a command for each node.
 	// Allocate batch data shared by each command.
 	as_async_batch_executor* be = cf_malloc(sizeof(as_async_batch_executor));
+	be->cluster = as->cluster;
 	be->records = records;
 	be->txn = txn;
 	be->versions = versions;
@@ -4230,6 +4308,7 @@ as_batch_records_execute_async(
 	exec->notify = true;
 	exec->valid = true;
 	exec->metrics_sample_decision = sampled;
+	exec->metrics_call_begin = call_begin;
 
 	return as_batch_records_execute(as, err, policy, records, txn, versions, be, txn_attr, has_write);
 }
@@ -4469,7 +4548,8 @@ as_batch_retry_command_create(
 	cmd->event_loop = parent->event_loop;
 	cmd->cluster = parent->cluster;
 	cmd->node = node;
-	cmd->ns = NULL;
+	// See as_batch_offsets_ns().
+	cmd->ns = parent->ns;
 	cmd->partition = NULL;
 	cmd->udata = parent->udata;  // Overload udata to be the executor.
 	cmd->parse_results = parent->parse_results;

@@ -38,6 +38,17 @@
 		BF2AA7E618BEBFA500E54AF3 /* as_batch.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7C018BEBFA400E54AF3 /* as_batch.c */; };
 		BF2AA7E818BEBFA500E54AF3 /* as_config.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7C218BEBFA400E54AF3 /* as_config.c */; };
 		BF2AA7E918BEBFA500E54AF3 /* as_error.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7C318BEBFA400E54AF3 /* as_error.c */; };
+		D15C0A001000000000000002 /* as_discovery.h in Headers */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000001 /* as_discovery.h */; };
+		D15C0A001000000000000004 /* as_discovery.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000003 /* as_discovery.c */; };
+		D15C0A001000000000000006 /* as_seed_manager.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000005 /* as_seed_manager.c */; };
+		D15C0A001000000000000008 /* as_dns.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000007 /* as_dns.c */; };
+		D15C0A00100000000000000A /* as_dns_internal.h in Headers */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000009 /* as_dns_internal.h */; };
+		D15C0A00100000000000000C /* as_aws.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A00100000000000000B /* as_aws.c */; };
+		D15C0A001000000000000016 /* as_aws_credentials.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000015 /* as_aws_credentials.c */; };
+		D15C0A00100000000000000E /* as_aws_http.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A00100000000000000D /* as_aws_http.c */; };
+		D15C0A001000000000000010 /* as_aws_parse.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A00100000000000000F /* as_aws_parse.c */; };
+		D15C0A001000000000000012 /* as_aws_sigv4.c in Sources */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000011 /* as_aws_sigv4.c */; };
+		D15C0A001000000000000014 /* as_aws_private.h in Headers */ = {isa = PBXBuildFile; fileRef = D15C0A001000000000000013 /* as_aws_private.h */; };
 		BF2AA7EA18BEBFA500E54AF3 /* as_key.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7C418BEBFA400E54AF3 /* as_key.c */; };
 		BF2AA7ED18BEBFA500E54AF3 /* as_operations.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7C718BEBFA400E54AF3 /* as_operations.c */; };
 		BF2AA7EE18BEBFA500E54AF3 /* as_policy.c in Sources */ = {isa = PBXBuildFile; fileRef = BF2AA7C818BEBFA400E54AF3 /* as_policy.c */; };
@@ -432,6 +443,17 @@
 		BFC65B471C921E9E0079DF5A /* as_cluster.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_cluster.h; path = ../src/include/aerospike/as_cluster.h; sourceTree = "<group>"; };
 		BFC65B481C921E9E0079DF5A /* as_command.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_command.h; path = ../src/include/aerospike/as_command.h; sourceTree = "<group>"; };
 		BFC65B491C921E9E0079DF5A /* as_config.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_config.h; path = ../src/include/aerospike/as_config.h; sourceTree = "<group>"; };
+		D15C0A001000000000000001 /* as_discovery.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_discovery.h; path = ../src/include/aerospike/as_discovery.h; sourceTree = "<group>"; };
+		D15C0A001000000000000003 /* as_discovery.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_discovery.c; path = ../src/main/aerospike/as_discovery.c; sourceTree = "<group>"; };
+		D15C0A001000000000000005 /* as_seed_manager.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_seed_manager.c; path = ../src/main/aerospike/as_seed_manager.c; sourceTree = "<group>"; };
+		D15C0A001000000000000007 /* as_dns.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_dns.c; path = ../src/main/aerospike/as_dns.c; sourceTree = "<group>"; };
+		D15C0A001000000000000009 /* as_dns_internal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_dns_internal.h; path = ../src/main/aerospike/as_dns_internal.h; sourceTree = "<group>"; };
+		D15C0A00100000000000000B /* as_aws.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_aws.c; path = ../src/main/aerospike/as_aws.c; sourceTree = "<group>"; };
+		D15C0A001000000000000015 /* as_aws_credentials.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_aws_credentials.c; path = ../src/main/aerospike/as_aws_credentials.c; sourceTree = "<group>"; };
+		D15C0A00100000000000000D /* as_aws_http.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_aws_http.c; path = ../src/main/aerospike/as_aws_http.c; sourceTree = "<group>"; };
+		D15C0A00100000000000000F /* as_aws_parse.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_aws_parse.c; path = ../src/main/aerospike/as_aws_parse.c; sourceTree = "<group>"; };
+		D15C0A001000000000000011 /* as_aws_sigv4.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = as_aws_sigv4.c; path = ../src/main/aerospike/as_aws_sigv4.c; sourceTree = "<group>"; };
+		D15C0A001000000000000013 /* as_aws_private.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_aws_private.h; path = ../src/main/aerospike/as_aws_private.h; sourceTree = "<group>"; };
 		BFC65B4A1C921E9E0079DF5A /* as_error.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_error.h; path = ../src/include/aerospike/as_error.h; sourceTree = "<group>"; };
 		BFC65B4B1C921E9E0079DF5A /* as_event_internal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_event_internal.h; path = ../src/include/aerospike/as_event_internal.h; sourceTree = "<group>"; };
 		BFC65B4C1C921E9E0079DF5A /* as_event.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = as_event.h; path = ../src/include/aerospike/as_event.h; sourceTree = "<group>"; };
@@ -573,6 +595,12 @@
 				BFE3C39A1D62720800AA7F20 /* as_address.c */,
 				BFC38AE01948F7CA000C53D9 /* as_admin.c */,
 				BF26CF831BFE7C7900E143DC /* as_async.c */,
+				D15C0A00100000000000000B /* as_aws.c */,
+				D15C0A001000000000000015 /* as_aws_credentials.c */,
+				D15C0A00100000000000000D /* as_aws_http.c */,
+				D15C0A00100000000000000F /* as_aws_parse.c */,
+				D15C0A001000000000000013 /* as_aws_private.h */,
+				D15C0A001000000000000011 /* as_aws_sigv4.c */,
 				BF2AA7C018BEBFA400E54AF3 /* as_batch.c */,
 				BF457A8722B1B6F700409D04 /* as_bit_operations.c */,
 				BF90C76B22AB154A0062D920 /* as_cdt_internal.c */,
@@ -581,6 +609,9 @@
 				BF8EEB2C1A2CED34000F2B00 /* as_command.c */,
 				BF2AA7C218BEBFA400E54AF3 /* as_config.c */,
 				BF88520E2D8B4CB50076DFEC /* as_config_file.c */,
+				D15C0A001000000000000003 /* as_discovery.c */,
+				D15C0A001000000000000007 /* as_dns.c */,
+				D15C0A001000000000000009 /* as_dns_internal.h */,
 				BFB1CB572E6B6C02006171E9 /* as_conn_recover.c */,
 				BF2AA7C318BEBFA400E54AF3 /* as_error.c */,
 				BF8EABF51BF3C2800027EF45 /* as_event_ev.c */,
@@ -615,6 +646,7 @@
 				BF2AA7CB18BEBFA500E54AF3 /* as_record_iterator.c */,
 				BF2AA7CC18BEBFA500E54AF3 /* as_record.c */,
 				BF2AA7CD18BEBFA500E54AF3 /* as_scan.c */,
+				D15C0A001000000000000005 /* as_seed_manager.c */,
 				BF26A38819C2621000AE763C /* as_shm_cluster.c */,
 				BF219F0F1A622C23001E321C /* as_socket.c */,
 				BF8122FF2F00000100000001 /* as_string_operations.c */,
@@ -789,6 +821,7 @@
 				BFC65B481C921E9E0079DF5A /* as_command.h */,
 				BFC65B491C921E9E0079DF5A /* as_config.h */,
 				BF88520C2D8B4C9A0076DFEC /* as_config_file.h */,
+				D15C0A001000000000000001 /* as_discovery.h */,
 				BFEAF6312228638E00FB4248 /* as_conn_pool.h */,
 				BFB1CB512E6B6B2A006171E9 /* as_conn_recover.h */,
 				BFA5B20F20FD3FA4002AF0BB /* as_cpu.h */,
@@ -857,6 +890,9 @@
 				BF8123002F00000100000001 /* as_string_operations.h in Headers */,
 				BFC65B761C921E9E0079DF5A /* as_event_internal.h in Headers */,
 				BFC65B741C921E9E0079DF5A /* as_config.h in Headers */,
+				D15C0A001000000000000002 /* as_discovery.h in Headers */,
+				D15C0A00100000000000000A /* as_dns_internal.h in Headers */,
+				D15C0A001000000000000014 /* as_aws_private.h in Headers */,
 				BFC65B791C921E9E0079DF5A /* as_job.h in Headers */,
 				BF90C76A22AB143C0062D920 /* as_cdt_internal.h in Headers */,
 				BF1C2ADF20BE031B00868695 /* aerospike_stats.h in Headers */,
@@ -1122,12 +1158,20 @@
 				BFBA106718B7D8B300A64E68 /* as_string.c in Sources */,
 				BF8EF4D02AE1B47B00FEEC3A /* ltablib.c in Sources */,
 				BF2AA7E818BEBFA500E54AF3 /* as_config.c in Sources */,
+				D15C0A001000000000000004 /* as_discovery.c in Sources */,
+				D15C0A001000000000000008 /* as_dns.c in Sources */,
+				D15C0A001000000000000006 /* as_seed_manager.c in Sources */,
 				BF2AA7CF18BEBFA500E54AF3 /* _bin.c in Sources */,
 				BFBD205318BC3436009ED931 /* mod_lua_iterator.c in Sources */,
 				BF820B6D21151272006E6CD7 /* mod_lua_system.c in Sources */,
 				BFBA106518B7D8B300A64E68 /* as_serializer.c in Sources */,
 				BF90C76C22AB154A0062D920 /* as_cdt_internal.c in Sources */,
 				BF26CF841BFE7C7900E143DC /* as_async.c in Sources */,
+				D15C0A00100000000000000C /* as_aws.c in Sources */,
+				D15C0A001000000000000016 /* as_aws_credentials.c in Sources */,
+				D15C0A00100000000000000E /* as_aws_http.c in Sources */,
+				D15C0A001000000000000010 /* as_aws_parse.c in Sources */,
+				D15C0A001000000000000012 /* as_aws_sigv4.c in Sources */,
 				BFBA04AF1947AA9C00F9924E /* crypt_blowfish.c in Sources */,
 				BFBB64831905D5B500682A6E /* as_cluster.c in Sources */,
 				BFBA105C18B7D8B300A64E68 /* as_map.c in Sources */,

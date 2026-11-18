@@ -623,8 +623,10 @@ as_event_add_success_latency(as_event_command* cmd)
 	uint64_t now = cf_getns();
 
 	// See as_command_add_latencies().
-	uint64_t command_elapsed = now - cmd->command_begin;
-	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, command_elapsed);
+	if (cmd->metrics_whole_call) {
+		uint64_t command_elapsed = now - cmd->command_begin;
+		as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, command_elapsed);
+	}
 
 	if (!cmd->metrics_sample_decision) {
 		return;

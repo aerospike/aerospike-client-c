@@ -177,6 +177,8 @@ typedef struct as_event_command {
 	as_latency_type latency_type;
 	// See as_command.metrics_sample_decision.
 	bool metrics_sample_decision;
+	// See as_command.metrics_whole_call.
+	bool metrics_whole_call;
 } as_event_command;
 
 typedef struct {
@@ -201,18 +203,23 @@ typedef struct as_event_executor {
 	bool valid;
 	// User-call sampler decision. Partition retries reuse it.
 	bool metrics_sample_decision;
+	// Start of the user call's cluster latency sample. 0 when not sampled.
+	// Partition retries reuse it. See as_cluster_add_call_latency().
+	uint64_t metrics_call_begin;
 } as_event_executor;
 
 /**
  * @private
- * Store a sampler decision on this command. count_command increments
- * cluster.command.count for a user call. Node sub-commands pass false.
- * See as_command.metrics_sample_decision.
+ * Store a sampler decision on this command. count_command is true when this
+ * command is the whole user call. It increments cluster.command.count and
+ * records v3 command latency. Node sub-commands pass false.
+ * See as_command.metrics_sample_decision and as_command.metrics_whole_call.
  */
 static inline void
 as_event_command_apply_sample(as_event_command* cmd, bool sampled, bool count_command)
 {
 	cmd->metrics_sample_decision = sampled;
+	cmd->metrics_whole_call = count_command;
 
 	if (cmd->metrics_sample_decision && count_command) {
 		as_incr_uint64(&cmd->cluster->command_count);

@@ -258,7 +258,8 @@ typedef struct as_command_s {
 	// Monotonic nanoseconds from cf_getns() at the start of this command.
 	// 0 when the v3 command latency sample is not taken.
 	// Elapsed time is cf_getns() minus this value and includes retries.
-	// A successful command records that elapsed time as v3 command latency.
+	// A successful command records that elapsed time as v3 command latency
+	// when metrics_whole_call is true.
 	// Namespace latency starts here only for a batch sub-batch.
 	// See as_node_rpc_latency_begin().
 	uint64_t command_begin;
@@ -281,6 +282,11 @@ typedef struct as_command_s {
 	// are recorded on each failed attempt. See as_node_add_attempt_failure().
 	// See as_cluster_sample_operational() and as_command_execute_key().
 	bool metrics_sample_decision;
+	// True when this command is the whole user call, so its success records v3
+	// command latency. False for batch, scan, and query node commands and
+	// single-key batch fallbacks. Their user call records it once instead.
+	// See as_cluster_add_call_latency().
+	bool metrics_whole_call;
 } as_command;
 
 /**
@@ -729,7 +735,8 @@ as_command_send(
  * When inherit_sample is false, this command draws the sampler and increments
  * command_count when sampled, the same as as_command_execute(). When
  * inherit_sample is true, metrics_sampled is the user-call decision, and this
- * command does not draw again or increment command_count.
+ * command does not draw again, increment command_count, or record v3 command
+ * latency. See as_command.metrics_whole_call.
  */
 as_status
 as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, bool metrics_sampled);

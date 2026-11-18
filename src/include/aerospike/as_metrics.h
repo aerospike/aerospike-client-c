@@ -487,11 +487,14 @@ typedef struct as_metrics_snapshot_s {
 	uint32_t nodes_count;
 
 	/**
-	 * Final samples for nodes that left, one entry per node name. Included in
-	 * on-demand snapshots and kept when no exporter is installed. Cleared only
-	 * after a successful periodic export.
-	 * A node that rejoins keeps its entry. If it leaves again before that
-	 * export, its counters and histogram buckets are added into the same entry.
+	 * Final samples for nodes that left, one entry per node name. Each exporter
+	 * receives an entry until one of its exports succeeds, so an exporter that
+	 * fails or is suspended still gets the final sample later. An entry is
+	 * removed after every exporter has exported it. On-demand snapshots include
+	 * every entry that is kept and do not remove any. Entries are kept when no
+	 * exporter is installed.
+	 * A node that rejoins before that export leaves this list. Its live entry in
+	 * `nodes` continues the counters and histogram buckets from before it left.
 	 */
 	as_metrics_node_snapshot** nodes_departed;
 
@@ -502,8 +505,8 @@ typedef struct as_metrics_snapshot_s {
 
 	/**
 	 * True when `nodes_departed` has reached its cap of 256 entries. Nodes that
-	 * departed after that, before the next successful periodic export, may be
-	 * missing from the list.
+	 * departed after that, before every exporter exported the earlier entries,
+	 * may be missing from the list.
 	 */
 	bool nodes_departed_possibly_truncated;
 
@@ -524,9 +527,11 @@ typedef struct as_metrics_snapshot_s {
 
 	/**
 	 * v3 command latency, one entry per `AS_LATENCY_TYPE_*`.
-	 * One sample per command for total elapsed time including retries.
-	 * A retry can move the command to another node, so this series is
-	 * cluster-wide. Recorded while operational metrics are enabled.
+	 * One sample per successful sampled user call for total elapsed time
+	 * including retries. A batch, scan, or query records one sample that covers
+	 * all of its nodes. A failed call records no sample. A retry can move the
+	 * command to another node, so this series is cluster-wide. Recorded while
+	 * operational metrics are enabled.
 	 * An on-demand snapshot after disable still returns the last values.
 	 * The learn-metrics file does not write this series.
 	 */
@@ -951,6 +956,14 @@ as_metrics_runtime_node_close(as_error* err, struct as_cluster_s* cluster, struc
  */
 void
 as_metrics_departed_destroy(struct as_cluster_s* cluster);
+
+/**
+ * @private
+ * Move a rejoined node's nodes_departed entry to as_node.metrics_prior.
+ * Caller holds as_cluster.metrics_lock.
+ */
+AS_EXTERN void
+as_metrics_node_rejoin(struct as_cluster_s* cluster, struct as_node_s* node);
 
 /**
  * Enable periodic metrics collection and the export timer.

@@ -211,6 +211,7 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->conn_tls_handshake_failures = 0;
 	node->conn_auth_failures = 0;
 	node->conn_latency = NULL;
+	node->metrics_prior = NULL;
 	node->conn_iter = 0;
 
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;
@@ -323,6 +324,7 @@ as_node_destroy(as_node* node)
 	if (conn_latency) {
 		as_latency_release(conn_latency);
 	}
+	as_metrics_node_snapshot_destroy(node->metrics_prior);
 	cf_free(node);
 }
 
@@ -1634,7 +1636,8 @@ as_node_append_metrics(as_node* node, const char* ns)
 as_ns_metrics*
 as_node_prepare_metrics(as_node* node, const char* ns)
 {
-	// Namespace will be NULL for batch and creating min connections.
+	// Namespace will be NULL for a batch sub-batch with keys from more than one
+	// namespace and for creating min connections.
 	if (!ns) {
 		ns = as_ns_empty;
 	}

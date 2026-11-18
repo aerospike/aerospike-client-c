@@ -344,10 +344,12 @@ call_provider(as_seed_manager* m, as_error* err, as_seed_candidates* candidates)
 		}
 
 		if (host->port == 0) {
-			as_seed_candidates_destroy(candidates);
-			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
+			// Format before destroy: the message reads the candidate's name.
+			as_error_update(err, AEROSPIKE_ERR_CLIENT,
 				"Seed provider returned candidate %s with a port out of range 1-65535 at index %u",
 				host->name, i);
+			as_seed_candidates_destroy(candidates);
+			return err->code;
 		}
 	}
 	return AEROSPIKE_OK;

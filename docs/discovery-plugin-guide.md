@@ -180,11 +180,13 @@ For every policy:
   hosts again, plus any delay of the provider's own, such as EC2's eventual consistency.
 - The built-in providers reach an empty list differently. `aws-tags` returns an empty result when
   no running instance matches its filters, so `replace`, and `merge` or `discovery_only` without
-  configured seeds, publish an empty list. `dns` reports a failure when no name resolves, so the previous seeds are
-  kept. To keep a fallback endpoint while discovery returns nothing, use `merge` or
-  `discovery_only` with configured seeds.
+  configured seeds, publish an empty list. `dns` reports a failure when no name resolves, so the
+  previous seeds are kept. To keep a fallback endpoint while discovery returns nothing, use `merge`
+  or `discovery_only` with configured seeds.
 - At initialization a failed refresh counts as an empty result. When the merged list is then empty,
-  `aerospike_connect()` fails with `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED`.
+  `aerospike_connect()` fails with `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED`. A successful empty result
+  is not a discovery failure: with no configured seeds, `aerospike_connect()` fails with
+  `AEROSPIKE_ERR_CLIENT` and `No seed host to connect to`.
 - **Late initial refresh** (`thread` mode): when the initial refresh does not return within
   `refresh_timeout_ms`, `aerospike_connect()` continues with the configured seeds alone (every policy
   gives them, because there is no discovered host yet) and fails with

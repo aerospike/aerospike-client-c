@@ -79,7 +79,6 @@ extern char** environ;
 // Macros
 //---------------------------------
 
-#define FIXTURE_SET_VERSION "1.1.0"
 #define RUNTIME "c"
 
 enum { EXIT_MATCH = 0, EXIT_MISMATCH = 1, EXIT_ERROR = 2 };
@@ -2019,33 +2018,15 @@ known_kind(const char* kind, const char** out)
 	return false;
 }
 
+// The fixture set is not versioned; the workflows pin it by commit.
 static void
-load_version(void)
+check_checkout(void)
 {
-	char* path = xasprintf("%s/VERSION", g_fixtures);
-	FILE* fp = fopen(path, "r");
+	char* path = xasprintf("%s/schema/fixture.schema.json", g_fixtures);
+	struct stat st;
 
-	if (!fp) {
-		die("not a conformance fixture set, cannot open %s: %s", path, strerror(errno));
-	}
-
-	char version[64] = {0};
-
-	if (!fgets(version, sizeof(version), fp)) {
-		version[0] = '\0';
-	}
-	fclose(fp);
-
-	size_t len = strlen(version);
-
-	while (len && (version[len - 1] == '\n' || version[len - 1] == '\r' ||
-		version[len - 1] == ' ' || version[len - 1] == '\t')) {
-		version[--len] = '\0';
-	}
-
-	if (strcmp(version, FIXTURE_SET_VERSION)) {
-		die("conformance fixture set %s found, %s expected: check out that release or update "
-			"the runner and declarations", version, FIXTURE_SET_VERSION);
+	if (stat(path, &st) || !S_ISREG(st.st_mode)) {
+		die("not an aerospike-client-conformance checkout, %s not found", path);
 	}
 	free(path);
 }
@@ -2124,7 +2105,7 @@ load_file(fixture_file* f)
 static void
 load_fixtures(void)
 {
-	load_version();
+	check_checkout();
 
 	const char* roots[] = {"discovery", "tls"};
 
@@ -2320,8 +2301,6 @@ write_report(row** sorted)
 	sb_quote(&b, RUNTIME);
 	sb_text(&b, ",\n  \"clientVersion\": ");
 	sb_quote(&b, aerospike_client_version);
-	sb_text(&b, ",\n  \"fixtureSetVersion\": ");
-	sb_quote(&b, FIXTURE_SET_VERSION);
 	sb_printf(&b, ",\n  \"counts\": {\"pass\": %u, \"fail\": %u, \"unsupported\": %u, "
 		"\"blocked\": %u},\n  \"rows\": [", counts[0], counts[1], counts[2], counts[3]);
 

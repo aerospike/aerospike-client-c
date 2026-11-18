@@ -1428,7 +1428,8 @@ SUITE(l2_n18_suite, "N-18 two peers on one port-map listener (default profile)")
 	suite_add(n18_two_peers_port_map);
 }
 
-// DISCOVERY_PROXY_MAP: <listener>:<port>, comma separated, in node order.
+// DISCOVERY_PROXY_MAP: <listener>:<port>, comma separated, in node order. On edition ee it also
+// lists each node's TLS listener as <listener>-tls; the tests use the clear listeners only.
 static void
 l2_parse_proxy_map(const char* value)
 {
@@ -1453,10 +1454,14 @@ l2_parse_proxy_map(const char* value)
 			exit(1);
 		}
 
-		l2_listener* l = &l2_listeners[l2_listeners_size++];
-		memcpy(l->proxy, entry, (size_t)(colon - entry));
-		l->proxy[colon - entry] = '\0';
-		l->port = (uint16_t)port;
+		bool tls = colon - entry > 4 && memcmp(colon - 4, "-tls", 4) == 0;
+
+		if (! tls) {
+			l2_listener* l = &l2_listeners[l2_listeners_size++];
+			memcpy(l->proxy, entry, (size_t)(colon - entry));
+			l->proxy[colon - entry] = '\0';
+			l->port = (uint16_t)port;
+		}
 		entry += len;
 
 		if (*entry == ',') {

@@ -68,6 +68,9 @@ struct as_node_s;
 struct as_node_s*
 as_peers_find_local_node(as_vector* nodes, const char* name);
 
+/**
+ * Append node unless the same node, not only a node with the same name, is already in nodes.
+ */
 void
 as_peers_append_unique_node(as_vector* nodes, struct as_node_s* node);
 

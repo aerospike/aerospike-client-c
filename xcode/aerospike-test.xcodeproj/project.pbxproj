@@ -26,6 +26,7 @@
 		BF8123042F10000300000001 /* discovery_seed_manager.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000300000002 /* discovery_seed_manager.c */; };
 		BF8123042F10000400000001 /* discovery_dns.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000400000002 /* discovery_dns.c */; };
 		BF8123042F10000500000001 /* discovery_fake_node.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000500000002 /* discovery_fake_node.c */; };
+		BF8123042F10000B00000001 /* discovery_nodes.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000B00000002 /* discovery_nodes.c */; };
 		BF8123042F10000700000001 /* discovery_aws.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000700000002 /* discovery_aws.c */; };
 		BF8123042F10000800000001 /* discovery_aws_stub.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000800000002 /* discovery_aws_stub.c */; };
 		BF8123042F10000A00000001 /* discovery_config_file.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000A00000002 /* discovery_config_file.c */; };
@@ -126,6 +127,7 @@
 		BF8123042F10000300000002 /* discovery_seed_manager.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_seed_manager.c; path = ../src/test/discovery_seed_manager.c; sourceTree = SOURCE_ROOT; };
 		BF8123042F10000400000002 /* discovery_dns.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_dns.c; path = ../src/test/discovery_dns.c; sourceTree = SOURCE_ROOT; };
 		BF8123042F10000500000002 /* discovery_fake_node.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_fake_node.c; path = ../src/test/discovery_fake_node.c; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000B00000002 /* discovery_nodes.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_nodes.c; path = ../src/test/discovery_nodes.c; sourceTree = SOURCE_ROOT; };
 		BF8123042F10000600000002 /* discovery_fake_node.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = discovery_fake_node.h; path = ../src/test/discovery_fake_node.h; sourceTree = SOURCE_ROOT; };
 		BF8123042F10000700000002 /* discovery_aws.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_aws.c; path = ../src/test/discovery_aws.c; sourceTree = SOURCE_ROOT; };
 		BF8123042F10000800000002 /* discovery_aws_stub.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_aws_stub.c; path = ../src/test/discovery_aws_stub.c; sourceTree = SOURCE_ROOT; };
@@ -295,6 +297,7 @@
 				BF8123042F10000400000002 /* discovery_dns.c */,
 				BF8123042F10000500000002 /* discovery_fake_node.c */,
 				BF8123042F10000600000002 /* discovery_fake_node.h */,
+				BF8123042F10000B00000002 /* discovery_nodes.c */,
 				BF8123042F10000700000002 /* discovery_aws.c */,
 				BF8123042F10000800000002 /* discovery_aws_stub.c */,
 				BF8123042F10000900000002 /* discovery_aws_stub.h */,
@@ -568,6 +571,7 @@
 				BF8123042F10000300000001 /* discovery_seed_manager.c in Sources */,
 				BF8123042F10000400000001 /* discovery_dns.c in Sources */,
 				BF8123042F10000500000001 /* discovery_fake_node.c in Sources */,
+				BF8123042F10000B00000001 /* discovery_nodes.c in Sources */,
 				BF8123042F10000700000001 /* discovery_aws.c in Sources */,
 				BF8123042F10000800000001 /* discovery_aws_stub.c in Sources */,
 				BF8123042F10000A00000001 /* discovery_config_file.c in Sources */,

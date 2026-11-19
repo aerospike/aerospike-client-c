@@ -19,6 +19,7 @@
 #include <aerospike/as_discovery.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
+#include <aerospike/as_lookup_internal.h>
 #include <aerospike/as_string_builder.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <stdlib.h>
@@ -53,13 +54,13 @@ as_peers_find_local_node(as_vector* nodes, const char* name)
 static as_node*
 as_peers_find_cluster_node(as_cluster* cluster, const char* name)
 {
-	// Check global list of nodes for duplicate.
+	// Check global list of nodes for duplicate. The last node of a name holds it.
 	// This function runs in tend thread, so volatile nodes reference not necessary.
 	as_nodes* nodes = cluster->nodes;
 	as_node* node;
 	
-	for (uint32_t i = 0; i < nodes->size; i++) {
-		node = nodes->array[i];
+	for (uint32_t i = nodes->size; i > 0; i--) {
+		node = nodes->array[i - 1];
 		
 		if (strcmp(node->name, name) == 0) {
 			return node;
@@ -235,10 +236,13 @@ as_peers_parse_host(char* p, as_host* host, char* last)
 void
 as_peers_append_unique_node(as_vector* /* <as_node*> */ nodes, as_node* node)
 {
-	// Avoid adding duplicate nodes.
-	if (! as_peers_find_local_node(nodes, node->name)) {
-		as_vector_append(nodes, &node);
+	// Compare references, not names, so two nodes with one name can both be removed.
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		if (as_vector_get_ptr(nodes, i) == node) {
+			return;
+		}
 	}
+	as_vector_append(nodes, &node);
 }
 
 
@@ -898,6 +902,44 @@ as_peers_find_validated_collision(
 	return true;
 }
 
+// Accept check of the addresses of one peer host.
+typedef struct as_peers_accept_s {
+	as_peers* peers;
+	as_cluster* cluster;
+	as_node* node;
+	as_vector* records;
+	uint32_t index;
+	as_host* host;
+	uint32_t mismatches;
+	bool collided;
+} as_peers_accept;
+
+// A collision is checked before the name, so a colliding node is never reported as a mismatch.
+static as_lookup_verdict
+as_peers_accept_node(as_node_info* info, void* udata)
+{
+	as_peers_accept* a = udata;
+	as_peer_record* rec = as_vector_get(a->records, a->index);
+	char other[AS_NODE_NAME_SIZE];
+
+	if (as_peers_find_validated_collision(a->peers, a->cluster, a->node, a->records, a->index,
+		info, other)) {
+		as_peers_record_collision(a->peers, a->cluster, rec->node_name, other, a->host->name,
+			a->host->port);
+		a->collided = true;
+		return AS_LOOKUP_STOP;
+	}
+
+	if (strcmp(info->name, rec->node_name) == 0) {
+		return AS_LOOKUP_ACCEPT;
+	}
+
+	as_log_warn("Peer node %s is different than actual node %s for host %s %d",
+				rec->node_name, info->name, a->host->name, a->host->port);
+	a->mismatches++;
+	return AS_LOOKUP_NEXT;
+}
+
 static as_peers_validation
 as_peers_validate_node(
 	as_peers* peers, as_cluster* cluster, as_node* node, as_vector* records, uint32_t index,
@@ -908,7 +950,6 @@ as_peers_validate_node(
 		return AS_PEERS_FAILED;
 	}
 
-	as_peer_record* rec = as_vector_get(records, index);
 	as_error err;
 	as_error_init(&err);
 
@@ -922,43 +963,42 @@ as_peers_validate_node(
 	}
 
 	as_node_info node_info;
-	struct sockaddr* addr;
-	char other[AS_NODE_NAME_SIZE];
 	as_peers_validation result = AS_PEERS_FAILED;
 	bool alternate_missing;
+	as_peers_accept accept = {
+		.peers = peers,
+		.cluster = cluster,
+		.node = node,
+		.records = records,
+		.index = index,
+		.host = host,
+		.mismatches = 0,
+		.collided = false
+	};
 
-	while (as_lookup_next(&iter, &addr)) {
-		status = as_lookup_node(cluster, &err, host, addr, false, &node_info, &alternate_missing);
+	// A host with several addresses validates the first address whose connect completes, and
+	// goes on to its other addresses when that node is not the peer.
+	status = as_lookup_validate_any(cluster, &err, host, &iter, as_peers_accept_node, &accept,
+		&node_info, &alternate_missing);
 
-		if (status == AEROSPIKE_OK) {
-			if (as_peers_find_validated_collision(peers, cluster, node, records, index, &node_info,
-				other)) {
-				as_peers_record_collision(peers, cluster, rec->node_name, other, host->name,
-					host->port);
-				as_node_info_destroy(&node_info);
-				result = AS_PEERS_COLLIDED;
-				break;
-			}
-
-			if (strcmp(node_info.name, rec->node_name) == 0) {
-				as_peers_create_node(peers, cluster, host, iter.hostname_is_alias, &node_info);
-				result = AS_PEERS_VALIDATED;
-				break;
-			}
-			else {
-				as_node_info_destroy(&node_info);
-				as_log_warn("Peer node %s is different than actual node %s for host %s %d",
-							rec->node_name, node_info.name, host->name, host->port);
-			}
+	if (status == AEROSPIKE_OK) {
+		as_peers_create_node(peers, cluster, host, iter.hostname_is_alias, &node_info);
+		result = AS_PEERS_VALIDATED;
+	}
+	else {
+		if (accept.collided) {
+			result = AS_PEERS_COLLIDED;
 		}
-		else {
+		else if (accept.mismatches == 0) {
+			// A mismatch has already logged its own warning.
 			as_log_warn("Failed to connect to peer %s %d. %s %s",
 						host->name, host->port, as_error_string(status), err.message);
+		}
 
-			// Keep an actionable error, such as missing alternate addresses, for initialization.
-			if (alternate_missing || as_peers_is_topology_error(status)) {
-				as_peers_record_error(peers, &err, alternate_missing);
-			}
+		// Keep an actionable error, such as missing alternate addresses, for initialization,
+		// even when another address was the wrong node or collided.
+		if (alternate_missing || as_peers_is_topology_error(status)) {
+			as_peers_record_error(peers, &err, alternate_missing);
 		}
 	}
 	as_lookup_end(&iter);

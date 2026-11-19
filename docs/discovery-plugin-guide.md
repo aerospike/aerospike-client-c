@@ -67,8 +67,8 @@ Rules:
   `udata`, which destroys nothing.
 - Registration fails with `AEROSPIKE_ERR_PARAM` while a client created from the config is
   connected.
-- A YAML provider or translator replaces, and destroys, the code registration; see
-  [YAML configuration](yaml-config-discovery.md#staticclientdiscovery).
+- A YAML provider or translator replaces, and destroys, the code registration, and logs a
+  warning naming both; see [YAML configuration](yaml-config-discovery.md#staticclientdiscovery).
 
 Lifecycle, which differs from the Java client:
 
@@ -148,8 +148,8 @@ tend deadline. In `tend` mode such a provider would keep overrunning and be swit
 | `on_cluster_view_changed` | As `translate`. Optional. | As `translate`. |
 | `destroy` | As the provider's `destroy`. Optional. | As the provider's `destroy`. |
 
-`translate` running on the application thread during initialization is a C client difference: in
-the Java client and in the spec it runs on the tend thread only.
+`translate` running on the application thread during initialization departs from the spec, which
+names the tend thread only. The Java client does the same while it seeds the cluster.
 
 The `aws-tags` credentials hook runs its `get` on the discovery thread with the time left of the
 refresh's `timeout_ms`, and its `destroy` follows the provider `destroy` rules.
@@ -180,11 +180,13 @@ For every policy:
   hosts again, plus any delay of the provider's own, such as EC2's eventual consistency.
 - The built-in providers reach an empty list differently. `aws-tags` returns an empty result when
   no running instance matches its filters, so `replace`, and `merge` or `discovery_only` without
-  configured seeds, publish an empty list. `dns` reports a failure when no name resolves, so the previous seeds are
-  kept. To keep a fallback endpoint while discovery returns nothing, use `merge` or
-  `discovery_only` with configured seeds.
+  configured seeds, publish an empty list. `dns` reports a failure when no name resolves, so the
+  previous seeds are kept. To keep a fallback endpoint while discovery returns nothing, use `merge`
+  or `discovery_only` with configured seeds.
 - At initialization a failed refresh counts as an empty result. When the merged list is then empty,
-  `aerospike_connect()` fails with `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED`.
+  `aerospike_connect()` fails with `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED`. A successful empty result
+  is not a discovery failure: with no configured seeds, `aerospike_connect()` fails with
+  `AEROSPIKE_ERR_CLIENT` and `No seed host to connect to`.
 - **Late initial refresh** (`thread` mode): when the initial refresh does not return within
   `refresh_timeout_ms`, `aerospike_connect()` continues with the configured seeds alone (every policy
   gives them, because there is no discovered host yet) and fails with
@@ -303,7 +305,8 @@ The full contract, including HTTPS trust (`ca_file`, `ca_path`) and the hook rul
   the runtime (for example acquire the Python GIL); `destroy` must not.
 - Error contract: return hosts copied with `as_seed_candidates_append()` and `AEROSPIKE_OK`, or a
   non-OK status with `err` set; the client then keeps the previous seeds, and at initialization
-  falls back to the configured seeds.
+  falls back to the configured seeds. A result with an empty host name, a host name over 255
+  bytes or port 0 fails the same way, except for a configured seed returned as given.
 - The thread that calls `aerospike_connect()`, `aerospike_close()` or `aerospike_destroy()` must not
   hold anything the callback needs. Node.js calls `aerospike_connect()` from a worker thread; close
   and destroy may run on the JS main thread while its loop is the registered event loop, because
@@ -368,12 +371,10 @@ differs in these points:
 | --- | --- | --- |
 | Validation errors | `AEROSPIKE_ERR_PARAM` (-2). | `CLIENT_ERROR` (-1). |
 | `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED` | Also on reconnect while a previous refresh is running, and for ordinary `dns` and `aws-tags` refresh failures; see [Status codes](#status-codes). | Startup with no usable seed. |
-| `translate` thread | The tend thread, and the application thread during cluster initialization; see [Thread context](#thread-context). | The tend thread only, as in the spec. |
 | Registrations across close | A sync client keeps them across `aerospike_close()` and reconnect, and releases them at `aerospike_destroy()`; an async client releases them at close; see [Registration and ownership](#registration-and-ownership). | The provider is closed when the client closes; a translator has no close method. |
 | `ip_map` | Also rewrites configured seeds, and is ignored with a warning while another translator is registered; see [Built-ins](#built-ins). | Applies to the addresses servers advertise; no warning. |
 | Static `use_services_alternate` on reload | Not re-applied; only `dynamic.client.use_service_alternative` changes a running client. | Re-applied. |
 | aws-tags timeouts | One `timeout_ms`, default 5000; `init_timeout_ms` is accepted and ignored. | `timeout_ms` 2000, and `init_timeout_ms` 10000 for the first refresh. |
-| `refresh_timeout_ms` default | 10000, as in the spec. | 2000. |
 
 ## Connection idle behind load balancers
 

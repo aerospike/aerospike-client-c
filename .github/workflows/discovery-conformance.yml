@@ -2,9 +2,9 @@ name: Discovery conformance
 
 # L1: run the aerospike-client-conformance fixture set through the C built-ins with
 # src/test/conformance/conformance_runner.c and gate the report against c-declared.yaml.
-# It needs no Aerospike server, so it is separate from pr-open.yml. The fixture set is pinned
-# in two places below to the conformance main commit the integration workflows also use; move
-# both to the v1.1.0 commit once it is tagged.
+# It needs no Aerospike server, so it is separate from pr-open.yml. The fixture set is not
+# versioned: it is pinned in two places below to the conformance main commit the integration
+# workflows also use. A pin move updates c-declared.yaml in the same change.
 
 on:
   pull_request:
@@ -47,12 +47,12 @@ jobs:
           build aws-real-probe
           build conformance
 
-      # Fixture set 1.1.0, conformance main of 2026-11-16
+      # Conformance main of 2026-11-17
       - name: Checkout conformance fixtures
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: aerospike/aerospike-client-conformance
-          ref: f0dfda5d49e0fcac2613df3fa29e4386201df11c
+          ref: a30c0787dede434f15be3622e7007dc57b55209d
           path: conformance
 
       # The collect action and the schema step pip-install into whatever python3 is on PATH, so
@@ -95,7 +95,7 @@ jobs:
 
       - name: Collect conformance report
         if: ${{ !cancelled() && steps.l1.outcome != 'skipped' }}
-        uses: aerospike/aerospike-client-conformance/.github/actions/collect-conformance-report@f0dfda5d49e0fcac2613df3fa29e4386201df11c # main, fixture set 1.1.0
+        uses: aerospike/aerospike-client-conformance/.github/actions/collect-conformance-report@a30c0787dede434f15be3622e7007dc57b55209d # main
         with:
           reports-directory: target/conformance
           fixtures-directory: conformance

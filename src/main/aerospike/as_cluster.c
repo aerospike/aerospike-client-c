@@ -24,6 +24,7 @@
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
+#include <aerospike/as_lookup_internal.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_peers.h>
 #include <aerospike/as_random.h>
@@ -224,7 +225,7 @@ as_cluster_validate_size(as_cluster* cluster, as_error* err, uint32_t* size)
 /**
  * Add nodes using copy on write semantics.
  */
-void
+static void
 as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 {
 	// Log node additions.
@@ -343,15 +344,200 @@ as_cluster_translate_address(
 		found, &mapped, out);
 }
 
-static void
-as_cluster_add_peer_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ peer_nodes)
+static bool
+as_cluster_find_node_by_reference(as_vector* /* <as_node*> */ nodes_to_remove, as_node* filter);
+
+// Return true if a node of the array other than the nodes being removed has the name.
+static bool
+as_cluster_has_live_name(as_nodes* nodes, as_vector* /* <as_node*> */ remove, const char* name)
 {
-	// A collision can still drop a validated peer until it is added, so its connections are
-	// created only now.
-	for (uint32_t i = 0; i < peer_nodes->size; i++) {
-		as_node_create_min_connections(as_vector_get_ptr(peer_nodes, i));
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+
+		if (strcmp(node->name, name) == 0 && ! as_cluster_find_node_by_reference(remove, node)) {
+			return true;
+		}
 	}
-	as_cluster_add_nodes(cluster, peer_nodes);
+	return false;
+}
+
+static void
+as_cluster_close_node(as_cluster* cluster, as_node* node)
+{
+	// There is no need to delete nodes from partition tables because the nodes
+	// have already been set to inactive. Further connection requests will result
+	// in an exception and a different node will be tried.
+	as_error err;
+	as_status status = AEROSPIKE_OK;
+
+	pthread_mutex_lock(&cluster->metrics_lock);
+
+	if (cluster->metrics_enabled) {
+		status = as_metrics_runtime_node_close(&err, cluster, node);
+	}
+	pthread_mutex_unlock(&cluster->metrics_lock);
+
+	if (status != AEROSPIKE_OK) {
+		// Metrics failures should not interrupt cluster tend.
+		// Log warning and continue processing.
+		as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
+	}
+	as_node_deactivate(node);
+}
+
+/**
+ * Remove and add nodes in one copy on write swap: log and notify each change, update the feature
+ * flags and put the old array on the garbage collector stack. Removed nodes are released with the
+ * old array, and are neither closed nor removed from shared memory here.
+ */
+void
+as_cluster_replace_nodes_copy(
+	as_cluster* cluster, as_vector* /* <as_node*> */ add, as_vector* /* <as_node*> */ remove
+	)
+{
+	as_nodes* nodes_old = cluster->nodes;
+	uint32_t keep = 0;
+
+	for (uint32_t i = 0; i < nodes_old->size; i++) {
+		if (! as_cluster_find_node_by_reference(remove, nodes_old->array[i])) {
+			keep++;
+		}
+	}
+
+	as_nodes* nodes_new = as_nodes_create(keep + add->size);
+	uint32_t count = 0;
+
+	for (uint32_t i = 0; i < nodes_old->size; i++) {
+		as_node* node = nodes_old->array[i];
+
+		if (as_cluster_find_node_by_reference(remove, node)) {
+			as_log_info("Remove node %s %s", node->name, as_node_get_address_string(node));
+			as_cluster_event_notify(cluster, node, AS_CLUSTER_REMOVE_NODE);
+			// Released when nodes_old is destroyed.
+		}
+		else {
+			// Reserve because nodes_old releases its nodes when destroyed.
+			as_node_reserve(node);
+			nodes_new->array[count++] = node;
+		}
+	}
+
+	for (uint32_t i = 0; i < add->size; i++) {
+		// New nodes already have ref_count set to 1, so no need to reserve.
+		as_node* node = as_vector_get_ptr(add, i);
+		as_log_info("Add node %s %s", node->name, as_node_get_address_string(node));
+		as_cluster_event_notify(cluster, node, AS_CLUSTER_ADD_NODE);
+		nodes_new->array[count++] = node;
+	}
+
+	set_nodes(cluster, nodes_new);
+
+	cluster->has_partition_query = as_cluster_has_partition_query(nodes_new);
+	cluster->has_order_by = as_cluster_has_order_by(nodes_new);
+	cluster->has_query_ops_projection_ext = as_cluster_has_query_ops_projection_ext(nodes_new);
+
+	if (nodes_new->size == 0) {
+		as_cluster_event_notify(cluster, NULL, AS_CLUSTER_DISCONNECTED);
+	}
+
+	// Put old nodes on garbage collector stack.
+	as_gc_item item;
+	item.data = nodes_old;
+	item.release_fn = (as_release_fn)release_nodes;
+	as_vector_append(cluster->gc, &item);
+}
+
+/**
+ * Add and remove nodes in one copy on write swap, so readers never see two nodes with one name
+ * and the name of a replaced node is never missing. A node is registered under its name only
+ * when no node added after it has the same name, so an older node of that name is removed too.
+ * A newcomer whose name is still held is dropped. Removed nodes are deactivated only after the
+ * swap is published. On return add holds the added nodes and remove is cleared. Return true if
+ * any node was added.
+ */
+static bool
+as_cluster_swap_nodes(
+	as_cluster* cluster, as_vector* /* <as_node*> */ add, as_vector* /* <as_node*> */ remove
+	)
+{
+	as_nodes* nodes_old = cluster->nodes;
+
+	for (uint32_t i = 0; i < nodes_old->size; i++) {
+		as_node* node = nodes_old->array[i];
+
+		for (uint32_t j = i + 1; j < nodes_old->size; j++) {
+			if (strcmp(nodes_old->array[j]->name, node->name) == 0) {
+				as_peers_append_unique_node(remove, node);
+				break;
+			}
+		}
+	}
+
+	uint32_t add_size = 0;
+
+	for (uint32_t i = 0; i < add->size; i++) {
+		as_node* node = as_vector_get_ptr(add, i);
+		bool duplicate = as_cluster_has_live_name(nodes_old, remove, node->name);
+
+		for (uint32_t j = 0; j < add_size && ! duplicate; j++) {
+			duplicate = strcmp(((as_node*)as_vector_get_ptr(add, j))->name, node->name) == 0;
+		}
+
+		if (duplicate) {
+			// The newcomer has no connections other than its tend socket yet.
+			as_log_warn("Drop duplicate node %s %s", node->name, as_node_get_address_string(node));
+			as_node_release(node);
+			continue;
+		}
+		as_vector_set(add, add_size++, &node);
+	}
+	add->size = add_size;
+
+	if (add->size == 0 && remove->size == 0) {
+		return false;
+	}
+
+	// A collision can still drop a validated peer until it is added, so its connections are
+	// created only now. The published array still holds only active nodes meanwhile.
+	for (uint32_t i = 0; i < add->size; i++) {
+		as_node_create_min_connections(as_vector_get_ptr(add, i));
+	}
+
+	as_cluster_replace_nodes_copy(cluster, add, remove);
+	as_lookup_prune_valid_addresses(cluster, cluster->nodes);
+
+	for (uint32_t i = 0; i < remove->size; i++) {
+		as_cluster_close_node(cluster, as_vector_get_ptr(remove, i));
+	}
+
+	if (cluster->shm_info) {
+		if (remove->size > 0) {
+			// Shared memory keeps one slot per node name. A slot whose name is added again
+			// keeps its active flag, and as_shm_add_nodes() changes its address in place, so
+			// other processes never see the name missing.
+			as_vector cleared;
+			as_vector_inita(&cleared, sizeof(as_node*), remove->size);
+
+			for (uint32_t i = 0; i < remove->size; i++) {
+				as_node* node = as_vector_get_ptr(remove, i);
+
+				if (! as_peers_find_local_node(add, node->name)) {
+					as_vector_append(&cleared, &node);
+				}
+			}
+
+			if (cleared.size > 0) {
+				as_shm_remove_nodes(cluster, &cleared);
+			}
+			as_vector_destroy(&cleared);
+		}
+
+		if (add->size > 0) {
+			as_shm_add_nodes(cluster, add);
+		}
+	}
+	as_vector_clear(remove);
+	return add->size > 0;
 }
 
 static void
@@ -387,14 +573,11 @@ as_cluster_refresh_peers(as_cluster* cluster, as_peers* peers)
 			}
 		}
 
-		if (peer_nodes->size > 0) {
-			// Add new peer nodes to cluster.
-			as_cluster_add_peer_nodes(cluster, peer_nodes);
-			as_vector_clear(&nodes);
-		}
-		else {
+		// Add new peer nodes and remove the nodes they replace in one swap.
+		if (! as_cluster_swap_nodes(cluster, peer_nodes, &peers->nodes_to_remove)) {
 			break;
 		}
+		as_vector_clear(&nodes);
 	}
 	as_vector_destroy(&nodes);
 }
@@ -622,66 +805,6 @@ as_cluster_find_node_by_reference(as_vector* /* <as_node*> */ nodes_to_remove, a
 	return false;
 }
 
-/**
- * Remove nodes using copy on write semantics.
- */
-void
-as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove)
-{
-	// Create temporary nodes array.
-	// Since nodes are only marked for deletion using node references in the nodes array,
-	// and the tend thread is the only thread modifying nodes, we are guaranteed that nodes
-	// in nodes_to_remove exist.  Therefore, we know the final array size.
-	as_nodes* nodes_old = cluster->nodes;
-	as_nodes* nodes_new = as_nodes_create(nodes_old->size - nodes_to_remove->size);
-	as_node* node;
-	uint32_t count = 0;
-		
-	// Add nodes that are not in remove list.
-	for (uint32_t i = 0; i < nodes_old->size; i++) {
-		node = nodes_old->array[i];
-		
-		if (as_cluster_find_node_by_reference(nodes_to_remove, node)) {
-			as_log_info("Remove node %s %s", node->name, as_node_get_address_string(node));
-			as_cluster_event_notify(cluster, node, AS_CLUSTER_REMOVE_NODE);
-			// No need to release node here because it will be released when nodes_old is destroyed.
-		}
-		else {
-			if (count < nodes_new->size) {
-				// This node need to be reserved because when nodes_old is destroyed,
-				// this node will also be released.
-				as_node_reserve(node);
-				nodes_new->array[count++] = node;
-			}
-			else {
-				as_log_error("Remove node error. Node count exceeded %u, %s %s", count, node->name, as_node_get_address_string(node));
-			}
-		}
-	}
-		
-	// Do sanity check to make sure assumptions are correct.
-	if (count < nodes_new->size) {
-		as_log_warn("Node remove mismatch. Expected %u Received %u", nodes_new->size, count);
-	}
-
-	// Replace nodes with copy.
-	set_nodes(cluster, nodes_new);
-
-	cluster->has_partition_query = as_cluster_has_partition_query(nodes_new);
-	cluster->has_order_by = as_cluster_has_order_by(nodes_new);
-	cluster->has_query_ops_projection_ext = as_cluster_has_query_ops_projection_ext(nodes_new);
-
-	if (nodes_new->size == 0) {
-		as_cluster_event_notify(cluster, NULL, AS_CLUSTER_DISCONNECTED);
-	}
-
-	// Put old nodes on garbage collector stack.
-	as_gc_item item;
-	item.data = nodes_old;
-	item.release_fn = (as_release_fn)release_nodes;
-	as_vector_append(cluster->gc, &item);
-}
-
 bool
 as_cluster_sample_operational(as_cluster* cluster)
 {
@@ -747,43 +870,6 @@ as_cluster_add_command_latency(as_cluster* cluster, as_latency_type latency_type
 	}
 
 	as_latency_add(cluster->command_latency[latency_type], elapsed_nanos);
-}
-
-static void
-as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove)
-{
-	// There is no need to delete nodes from partition tables because the nodes
-	// have already been set to inactive. Further connection requests will result
-	// in an exception and a different node will be tried.
-	as_error err;
-	
-	// Set node to inactive.
-	for (uint32_t i = 0; i < nodes_to_remove->size; i++) {
-		as_node* node = as_vector_get_ptr(nodes_to_remove, i);
-		as_status status = AEROSPIKE_OK;
-
-		pthread_mutex_lock(&cluster->metrics_lock);
-
-		if (cluster->metrics_enabled) {
-			status = as_metrics_runtime_node_close(&err, cluster, node);
-		}
-		pthread_mutex_unlock(&cluster->metrics_lock);
-		
-		if (status != AEROSPIKE_OK) {
-			// Metrics failures should not interrupt cluster tend.
-			// Log warning and continue processing.
-			as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
-		}
-		as_node_deactivate(node);
-	}
-
-	// Remove all nodes at once to avoid copying entire array multiple times.
-	as_cluster_remove_nodes_copy(cluster, nodes_to_remove);
-	
-	// Update shared memory nodes.
-	if (cluster->shm_info) {
-		as_shm_remove_nodes(cluster, nodes_to_remove);
-	}
 }
 
 static as_status
@@ -1108,20 +1194,14 @@ as_cluster_tend_nodes(as_cluster* cluster, as_error* err, bool is_init)
 
 			// Remove nodes determined by refreshed peers.
 			as_cluster_find_nodes_to_remove(cluster, &peers);
-
-			// Remove nodes in a batch.
-			if (peers.nodes_to_remove.size > 0) {
-				as_cluster_remove_nodes(cluster, &peers.nodes_to_remove);
-				nodes = cluster->nodes;
-			}
 		}
 
-		// Add peer nodes to cluster.
-		if (peers.nodes.size > 0) {
-			as_cluster_add_peer_nodes(cluster, &peers.nodes);
+		// Add peer nodes and remove the nodes they replace in one swap. The swap also runs
+		// without peer changes, so a node that no longer holds its name is removed on every tend.
+		if (as_cluster_swap_nodes(cluster, &peers.nodes, &peers.nodes_to_remove)) {
 			as_cluster_refresh_peers(cluster, &peers);
-			nodes = cluster->nodes;
 		}
+		nodes = cluster->nodes;
 	}
 
 	cluster->invalid_node_count += as_peers_invalid_count(&peers);
@@ -2029,6 +2109,7 @@ as_cluster_destroy(as_cluster* cluster)
 	// Release everything in garbage collector.
 	as_cluster_gc(cluster->gc);
 	as_vector_destroy(cluster->gc);
+	as_lookup_destroy_valid_addresses(cluster);
 		
 	// Flush and destroy the timeout recovery queue.
 	// Pending recover entries still own their sockets; abort closes them

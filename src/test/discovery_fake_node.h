@@ -33,6 +33,10 @@
 
 typedef struct fnode_s fnode;
 
+struct as_cluster_s;
+
+#define FNODE_MAX_FILLERS 8
+
 struct fnode_s {
 	int listen_fd;
 	uint16_t port;
@@ -43,6 +47,9 @@ struct fnode_s {
 	bool running;
 	char name[32];
 
+	// IPv4 address the node listens on.
+	char host[32];
+
 	// Reply to peers-clear-std and peers-clear-alt. Empty for no peers. service-clear-alt
 	// answers this node's own address.
 	char peers[256];
@@ -50,9 +57,35 @@ struct fnode_s {
 	// Accept and immediately close every connection.
 	bool reject;
 
+	// Claim every partition of namespace test, so the client keeps the node even when no peer
+	// lists it.
+	bool partitions;
+
+	// Listen with a full accept backlog and never accept, so a further connect hangs.
+	bool silent;
+	int fillers[FNODE_MAX_FILLERS];
+	int n_fillers;
+
+	// Accept every connection and never read from it or reply. The TCP connect completes.
+	bool mute;
+
+	// Answer service-clear-alt with an empty reply.
+	bool empty_alt;
+
+	// Reply to peers-generation.
+	uint32_t peers_gen;
+
 	uint32_t requests;
 	uint32_t tends;
 	uint32_t rejects;
+	uint32_t accepts;
+
+	// Admin logins, answered with AEROSPIKE_SECURITY_NOT_ENABLED, which the client takes as a
+	// successful login.
+	uint32_t logins;
+
+	// cf_getus() at the first accept.
+	uint64_t first_accept_us;
 
 	// Called by the server thread before the first request it answers.
 	void (*on_first)(fnode* n);
@@ -66,6 +99,10 @@ fnode_init(fnode* n, const char* name);
 // Listen on 127.0.0.1:port, or an ephemeral port when port is zero.
 bool
 fnode_listen(fnode* n, uint16_t port);
+
+// Listen on the IPv4 address host and port, or an ephemeral port when port is zero.
+bool
+fnode_listen_on(fnode* n, const char* host, uint16_t port);
 
 bool
 fnode_start(fnode* n, const char* name);
@@ -88,12 +125,45 @@ fnode_set_reject(fnode* n, bool reject);
 void
 fnode_set_peers(fnode* n, const char* peers);
 
+void
+fnode_set_partitions(fnode* n, bool partitions);
+
+// Stop or resume accepting. A silent node fills its accept backlog, so the kernel drops further
+// SYNs and a connect to it hangs until its deadline (Linux). Return false when silent and no
+// connect hangs.
+bool
+fnode_set_silent(fnode* n, bool silent);
+
+void
+fnode_set_mute(fnode* n, bool mute);
+
+void
+fnode_set_empty_alt(fnode* n, bool empty_alt);
+
+// Increment the peers-generation reply, so a client refreshes the peers of n.
+void
+fnode_bump_peers_generation(fnode* n);
+
+uint64_t
+fnode_first_accept_us(fnode* n);
+
 bool
 fnode_wait(fnode* n, const uint32_t* field, uint32_t target, uint32_t timeout_ms);
 
-// Format "127.0.0.1:port".
+// Format "host:port".
 const char*
 fnode_addr(const fnode* n, char* buf, size_t size);
+
+// Return false and copy the name to dup, when not NULL, if two nodes of the cluster have one
+// name.
+bool
+discovery_one_node_per_name(struct as_cluster_s* cluster, char* dup, size_t size);
+
+// Install the resolver of the discovery_nodes tests, where unregistered names resolve through
+// the system. as_lookup_set_resolver() must not run while a lookup runs, so this is called once,
+// before the shared test client connects, and never removed.
+void
+discovery_nodes_resolver_install(void);
 
 // Number of open descriptors of this process, or -1 when unknown. Sockets connected to a node of
 // the shared test client are not counted: its tend thread trims idle ones at any time.

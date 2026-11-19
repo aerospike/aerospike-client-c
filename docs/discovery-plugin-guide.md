@@ -148,8 +148,8 @@ tend deadline. In `tend` mode such a provider would keep overrunning and be swit
 | `on_cluster_view_changed` | As `translate`. Optional. | As `translate`. |
 | `destroy` | As the provider's `destroy`. Optional. | As the provider's `destroy`. |
 
-`translate` running on the application thread during initialization is a C client difference: in
-the Java client and in the spec it runs on the tend thread only.
+`translate` running on the application thread during initialization departs from the spec, which
+names the tend thread only. The Java client does the same while it seeds the cluster.
 
 The `aws-tags` credentials hook runs its `get` on the discovery thread with the time left of the
 refresh's `timeout_ms`, and its `destroy` follows the provider `destroy` rules.
@@ -371,12 +371,10 @@ differs in these points:
 | --- | --- | --- |
 | Validation errors | `AEROSPIKE_ERR_PARAM` (-2). | `CLIENT_ERROR` (-1). |
 | `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED` | Also on reconnect while a previous refresh is running, and for ordinary `dns` and `aws-tags` refresh failures; see [Status codes](#status-codes). | Startup with no usable seed. |
-| `translate` thread | The tend thread, and the application thread during cluster initialization; see [Thread context](#thread-context). | The tend thread only, as in the spec. |
 | Registrations across close | A sync client keeps them across `aerospike_close()` and reconnect, and releases them at `aerospike_destroy()`; an async client releases them at close; see [Registration and ownership](#registration-and-ownership). | The provider is closed when the client closes; a translator has no close method. |
 | `ip_map` | Also rewrites configured seeds, and is ignored with a warning while another translator is registered; see [Built-ins](#built-ins). | Applies to the addresses servers advertise; no warning. |
 | Static `use_services_alternate` on reload | Not re-applied; only `dynamic.client.use_service_alternative` changes a running client. | Re-applied. |
 | aws-tags timeouts | One `timeout_ms`, default 5000; `init_timeout_ms` is accepted and ignored. | `timeout_ms` 2000, and `init_timeout_ms` 10000 for the first refresh. |
-| `refresh_timeout_ms` default | 10000, as in the spec. | 2000. |
 
 ## Connection idle behind load balancers
 

@@ -848,6 +848,12 @@ typedef struct as_address_translator_s {
  * valid only for the call. To keep it, take a reference with as_val_reserve() and release it
  * with as_val_destroy(). Iteration order is not part of the contract.
  *
+ * From the config file, options holds every key of the block except provider and the built-in
+ * sections, typed as the Java client's YAML parser (SnakeYAML) types them: as_nil, as_boolean,
+ * as_integer, as_double, as_string, as_arraylist, or as_orderedmap with string or integer
+ * keys. A timestamp, or an integer outside the int64 range, is an as_string. See "Option values"
+ * in docs/yaml-config-discovery.md.
+ *
  * @ingroup discovery_api
  */
 typedef as_status (*as_seed_provider_factory)(as_error* err, const as_map* options,

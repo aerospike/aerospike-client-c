@@ -49,7 +49,9 @@ The keys do not depend on the file's `version`. The expected versions are `1.0.0
   `translation`, `dns` and `aws`; the rest of the file applies. Inside those blocks the log names
   the full path (`Unexpected field: static.client.discovery.consul`); directly under
   `static.client` it reads `Unexpected field: client.<name>`, or `Unexpected section` or
-  `Unexpected sequence` for a map or list value.
+  `Unexpected sequence` for a map or list value. Under a registered provider or translator name,
+  the other keys of `discovery` and `translation` are not logged: they become the factory's
+  options (see [Registered providers and translators](#registered-providers-and-translators)).
 
 ## `static.client`
 
@@ -75,7 +77,7 @@ static value, not to the code value.
 
 | Key | Type | Values | Default | `as_config` field |
 | --- | --- | --- | --- | --- |
-| `provider` | string | `static`, `dns`, `aws-tags` | `static` | `discovery.provider` |
+| `provider` | string | `static`, `dns`, `aws-tags`, or a registered name | `static` | `discovery.provider` |
 | `dns` | map | see [`static.client.discovery.dns`](#staticclientdiscoverydns) | none | `discovery.provider` (with `provider: dns`) |
 | `aws` | map | see [`static.client.discovery.aws`](#staticclientdiscoveryaws) | none | `discovery.provider` (with `provider: aws-tags`) |
 | `merge_policy` | string | `merge`, `replace`, `discovery_only` | `merge` | `discovery.merge_policy` |
@@ -91,6 +93,7 @@ static value, not to the code value.
 | `static` | None: the code registration is destroyed and the default static provider over the configured seeds is used, the same as registering nothing. |
 | `dns` | The built-in DNS provider built from the `dns` block, as `as_config_set_dns_seed_provider()` would. |
 | `aws-tags` | The built-in AWS EC2 provider built from the `aws` block, as `as_config_set_aws_seed_provider()` would. |
+| a registered name | The provider returned by the factory registered under that name with `as_config_register_seed_provider()`, called with the block's other keys as options; see [Registered providers and translators](#registered-providers-and-translators). |
 
 A provider from the file replaces, and destroys, a provider registered in code before
 `aerospike_init()` or `aerospike_new()`, and logs at warning level:
@@ -187,7 +190,7 @@ environment variables, which are read once, when the provider is built at `aeros
 
 | Key | Type | Values | Default | `as_config` field |
 | --- | --- | --- | --- | --- |
-| `provider` | string | `static-map`, `port-map`, `pass-through` | `static-map` | `translation.provider` |
+| `provider` | string | `static-map`, `port-map`, `pass-through`, or a registered name | `static-map` | `translation.provider` |
 | `on_miss` | string | `pass_through`, `strict` | `pass_through` | `translation.on_miss` |
 | `static_map` | map of string to string | advertised host to the host to connect to; the port is kept | none | `ip_map`, `ip_map_size` (with `provider: static-map`) |
 | `port_map` | map of string to string | key: an advertised `host:port` (IPv6 host in brackets) or a node name; value: the `host:port` to connect to | none | `translation.provider` (with `provider: port-map`) |
@@ -199,6 +202,7 @@ environment variables, which are read once, when the provider is built at `aeros
 | `static-map` | None: the code translator is destroyed and the default static map over `ip_map` is used. With `static_map`, that map replaces `ip_map`. |
 | `port-map` | The built-in port-map translator over `port_map`, which is required, as `as_config_set_port_map_translator()` would. |
 | `pass-through` | The built-in pass-through translator, as `as_config_set_pass_through_translator()` would. Use it with `use_services_alternate: true` when each node advertises a client-reachable alternate address and port. |
+| a registered name | The translator returned by the factory registered under that name with `as_config_register_address_translator()`, called with the block's other keys as options; see [Registered providers and translators](#registered-providers-and-translators). |
 
 A translator from the file replaces, and destroys, a translator registered in code, and logs
 `Address translator <name> registered in code is replaced by static.client.translation.provider
@@ -220,6 +224,114 @@ quoted, because `[` starts a YAML flow sequence: `"[2001:db8::1]:3000": "lb.exam
 Quoting every key and value keeps the file readable by other clients too, where an unquoted
 `host:port` can be read as a number.
 
+## Registered providers and translators
+
+A seed provider or address translator written for the application is registered in code under a
+name, and the file selects it with `provider: <name>`:
+
+```c
+as_config config;
+as_config_init(&config);
+as_config_provider_set_path(&config, "/etc/aerospike/client.yml");
+
+as_error err;
+as_config_register_seed_provider(&config, "consul", consul_factory, consul_destroy, consul_state,
+	&err);
+
+aerospike as;
+aerospike_init(&as, &config);
+```
+
+```yaml
+version: 1.2.0
+static:
+  client:
+    discovery:
+      provider: consul
+      merge_policy: merge
+      service: aerospike
+      endpoints:
+        - 127.0.0.1:8500
+```
+
+- **Register first.** The file is read inside `aerospike_init()` and `aerospike_new()`, so the
+  name must be registered on the `as_config` passed there. A name that is not registered makes
+  the file invalid, and the error lists the built-in and registered names:
+  `Invalid static.client.discovery.provider: consul. valid values: static, dns, aws-tags`.
+  Translators are registered with `as_config_register_address_translator()`; the two sets of
+  names are separate. The factory contract is in the [plugin guide](discovery-plugin-guide.md).
+- **Options.** The factory receives every key of the block except `provider` and the built-in
+  sections (`dns`, `aws`, `static_map`, `port_map`, which stay invalid with a registered name),
+  as an `as_orderedmap` keyed by the key as written. The client settings of the block
+  (`merge_policy`, `execution_mode`, the discovery integers, `on_miss`) are applied to the client
+  as usual and passed in the options too.
+- **When the factory runs.** Once, while the file is loaded, on the thread that calls
+  `aerospike_init()` or `aerospike_new()`. A sync `aerospike_close()` destroys the instance and
+  `aerospike_connect()` calls the factory again with the same options. The `static` section is
+  not reloaded, so the factory is not called again when the file changes; changed options need a
+  new client.
+- **Option errors.** A value the client cannot type (below) makes the file invalid only under a
+  registered name, and the error names its full path:
+  `Invalid static.client.discovery.x.a[1].b: 'z' is not a valid !!int`. With a built-in provider
+  the same keys are only logged as unexpected fields.
+
+### Option values
+
+Values are typed as SnakeYAML 2.6, which the Java client reads the file with, types them, so a
+file shared with Java gives a factory the same values.
+
+| YAML value | `as_val` |
+| --- | --- |
+| Plain `~`, `null`, `Null`, `NULL`, or nothing | `as_nil` |
+| Plain `yes`, `no`, `true`, `false`, `on`, `off`, lowercase, capitalized or uppercase | `as_boolean` |
+| Plain integer: decimal, `0b` binary, `0x` hex, `0` octal, base 60 (`1:30` is 90), `_` separators | `as_integer` |
+| Plain float: `1.5`, `1e5`, `.5`, `.inf`, `-.Inf`, `.nan`, base 60 (`1:30.5`), `_` separators | `as_double` |
+| Any other scalar, any quoted scalar, a timestamp such as `2001-12-14` | `as_string` |
+| Sequence | `as_arraylist` |
+| Mapping, with string or integer keys | `as_orderedmap` |
+
+- **Tags** run SnakeYAML's constructor for the type, which accepts more than the plain forms:
+  `!!float 1` is 1.0, as are `!!float .5f` and `!!float 0x1.8p1` (3.0, Java's hex form);
+  `!!int _1` is 1; `!!bool` takes any case (`!!bool tRuE`) and gives nil for another value;
+  `!!null` always gives nil; `!!str` gives the string; `!!timestamp` checks the format and gives
+  the string. `!!map` and `!!seq` are accepted on collections. The non-specific tag `!` types a
+  scalar as if it were plain, whatever its quotes: `! '5'` is 5. Any other tag (`!!binary`,
+  `!!set`, `!!omap`, `!!pairs`, `!local`) is an option error.
+- **Base 60** follows Java's arithmetic, which wraps at 32 bits: `100000:00:00:00` is 125163520.
+- **Floats** do not depend on the process locale: `1.5` is 1.5 under a locale whose decimal
+  point is a comma.
+- **Differences from Java:** a timestamp arrives as its string, not a date; an integer outside
+  the int64 range arrives as its string, not a BigInteger; a map key inside an option must be a
+  string or an integer.
+
+### Anchors, aliases and merge keys
+
+- **Aliases to scalars** work everywhere in the file, client settings and built-in sections
+  included, and keep the anchor's tag and quotes: `merge_policy: *policy`. An anchor defined
+  again replaces the earlier one.
+- **Aliases to collections** (a map or a list) work in factory options and in content the client
+  skips. In options the alias reuses the collection, which must be defined in the factory options
+  of either block; an alias to a collection defined elsewhere (outside the blocks, or in `dns`,
+  `aws`, `static_map` or `port_map`) is an option error, as is a recursive alias (`&r [*r]`),
+  which Java accepts. Where the client parses the value itself, a client setting or a built-in
+  section, the file is invalid:
+  `Invalid static.client.ip_map: YAML aliases to collections are not supported for client settings`.
+- **Merge keys** (`<<`, or a key tagged `!!merge`) in an option map take a map, a list of maps,
+  or an alias to either. Keys written in the map win over merged ones, the last of a repeated
+  key wins, and among merged maps the earlier one wins. A source reached by an alias keeps its
+  own merges. Inside a source written inline, a repeated key keeps its last value and the
+  source's own keys win over its merges, where SnakeYAML keeps the first:
+  `{<<: {a: 1, a: 2}}` gives `a: 2` here and `a: 1` in Java.
+- **Merge keys directly under `discovery` or `translation`** add options the same way, after the
+  block's own keys, whatever the provider; with a built-in provider the merged keys are logged as
+  unexpected fields. A merged `provider`, client setting or built-in section that the block does
+  not also set makes the file invalid, because Java applies it and this client does not:
+  `Invalid static.client.discovery.merge_policy: client settings from YAML merge keys (<<) are not supported`.
+  Any problem with such a merge value, for example a value that is not a map or a list of maps,
+  or an alias without a value to reuse, fails the file for every provider.
+- Merge keys are not applied elsewhere: under `static.client`, for example, `<<` is an unknown
+  key. Java applies them there.
+
 ## Invalid settings
 
 Any of the following makes the whole file invalid. The client logs one error,
@@ -229,6 +341,19 @@ registrations set in code. Code registrations are not destroyed.
 
 - A YAML syntax error anywhere in the file, including inside a section the client does not read.
   The detail is the libyaml problem and its offset.
+- SnakeYAML's file-wide limits, anywhere in the file, which Java enforces the same way:
+  - a value nested in more than 50 collections, counting every collection open around it from
+    the top of the file: `YAML nesting deeper than 50 levels: line 7, column 57`;
+  - an alias whose anchor is not defined before it: `Undefined YAML alias *zz: line 7, column 10`;
+  - more than 50 aliases to collections:
+    `More than 50 YAML aliases to collections: line 8, column 211`.
+- A key that is not a scalar, at any level the client parses:
+  `Invalid static.client: expected scalar keys, not a sequence`, or
+  `Invalid top-level key: expected a scalar, not a sequence`.
+- An alias to a collection where the client parses the value itself (see
+  [Anchors, aliases and merge keys](#anchors-aliases-and-merge-keys)), and a merge key directly
+  under `discovery` or `translation` that brings in `provider`, a client setting or a built-in
+  section.
 - An unknown enum value, for example
   `Invalid static.client.discovery.execution_mode: background. valid values: thread, tend`. The
   same applies to `provider`, `merge_policy`, `dns.record_type`, `aws.address_field`,
@@ -258,6 +383,11 @@ registrations set in code. Code registrations are not destroyed.
   not an IP address, a malformed `region` or `endpoint`, a filter named `instance-state-name`, or
   a `port_map` entry without a valid port: `Invalid static.client.discovery.dns: <reason>`, and
   the same for `static.client.discovery.aws` and `static.client.translation.port_map`.
+- With a registered name: a factory that fails
+  (`Invalid static.client.discovery.provider: consul. factory failed: <message>`) or returns an
+  invalid table (`... factory returned an invalid provider`, or `translator`), and an option
+  value the client
+  cannot type (see [Option values](#option-values)).
 
 Example error:
 

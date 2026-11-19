@@ -57,6 +57,8 @@ Register a plugin on the `as_config` before `aerospike_init()` or `aerospike_new
 | `as_config_set_dns_seed_provider()`, `as_config_set_aws_seed_provider()` | a built-in provider from its configuration |
 | `as_config_set_port_map_translator()`, `as_config_set_pass_through_translator()` | a built-in translator |
 | `as_config_set_binding_seed_provider()` | a provider implemented by a language binding; see [Language bindings](#language-bindings) |
+| `as_config_register_seed_provider()`, `as_config_register_address_translator()` | a factory under a name, which the config file (`provider: <name>`) or a select call picks; registering builds nothing; see [Registered providers and translators](yaml-config-discovery.md#registered-providers-and-translators) |
+| `as_config_select_seed_provider()`, `as_config_select_address_translator()` | the instance a registered factory builds from the options passed, as the config file would |
 
 Rules:
 
@@ -73,12 +75,18 @@ Rules:
 Lifecycle, which differs from the Java client:
 
 - **Sync client** (no async event loops, or libevent single-thread mode): `aerospike_close()`
-  keeps the registrations, so the same `aerospike` object can reconnect with them.
-  `aerospike_destroy()` releases them.
-- **Async client**: `aerospike_close()` releases them, whether the client was connected or not.
-  A later `aerospike_connect()` on the same object fails with
-  `Seed provider was released by aerospike_close(). Register it again` (or the translator
-  equivalent) until a plugin is registered again.
+  destroys every provider and translator instance. `aerospike_connect()` on the same `aerospike`
+  object builds again the ones the client knows how to build: the built-ins set with their
+  setters, and the plugins selected by the config file or by `as_config_select_*()`, whose
+  factory is called again with the same options. A rebuild or factory error fails that connect.
+  A table registered directly (`as_config_set_seed_provider()`,
+  `as_config_set_address_translator()`, `as_config_set_binding_seed_provider()`) cannot be
+  rebuilt: connect fails with `Seed provider was released by aerospike_close(). Register it
+  again` (or the translator equivalent) until it is registered again. Registered factories stay
+  until `aerospike_destroy()`.
+- **Async client**: `aerospike_close()` releases every registration, factories and selections
+  included, whether the client was connected or not. A later `aerospike_connect()` on the same
+  object fails with the same message until a plugin is registered again.
 
 When a refresh is still running as the registration ends, `destroy` runs later on the discovery
 thread, after the refresh returns; see [Thread context](#thread-context).
@@ -138,7 +146,7 @@ tend deadline. In `tend` mode such a provider would keep overrunning and be swit
 | `refresh` | A non-periodic, non-binding provider: once, on the application thread that connects. `thread` mode with a periodic provider, and every binding provider: every call, the initial one included, on the discovery thread. `tend` mode: the initial call on the connecting thread, later calls on the tend thread. | Within one `aerospike` object no two calls overlap, across close, re-registration and reconnect included. In `tend`, return within `tend_refresh_deadline_ms`. |
 | `needs_periodic_refresh` | Once per connect, on the connecting thread. | Must return without blocking or waiting for another thread. |
 | `supports_deadline` | Once per connect, on the connecting thread. Optional. | Must return without blocking or waiting for another thread. |
-| `destroy` | The thread that ends the registration (`aerospike_destroy()`, `as_config_destroy()`, a replacing setter or async `aerospike_close()`), or the discovery thread when a refresh is still running, once it returns. Optional. | Must never block or wait for another thread, because that thread may be the caller. It may run after `aerospike_close()` or `aerospike_destroy()` has returned. |
+| `destroy` | The thread that ends the registration or the instance (`aerospike_destroy()`, `as_config_destroy()`, a replacing setter, or `aerospike_close()`, sync or async), or the discovery thread when a refresh is still running, once it returns. Optional. | Must never block or wait for another thread, because that thread may be the caller. It may run after `aerospike_close()` or `aerospike_destroy()` has returned. |
 
 `as_address_translator`:
 
@@ -371,7 +379,9 @@ differs in these points:
 | --- | --- | --- |
 | Validation errors | `AEROSPIKE_ERR_PARAM` (-2). | `CLIENT_ERROR` (-1). |
 | `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED` | Also on reconnect while a previous refresh is running, and for ordinary `dns` and `aws-tags` refresh failures; see [Status codes](#status-codes). | Startup with no usable seed. |
-| Registrations across close | A sync client keeps them across `aerospike_close()` and reconnect, and releases them at `aerospike_destroy()`; an async client releases them at close; see [Registration and ownership](#registration-and-ownership). | The provider is closed when the client closes; a translator has no close method. |
+| Plugins across close | A sync `aerospike_close()` destroys every instance, and reconnect rebuilds the built-in, file-selected and code-selected ones; a table registered directly must be registered again. An async client releases every registration at close; see [Registration and ownership](#registration-and-ownership). | The provider is closed when the client closes; a translator has no close method. |
+| Selecting a registered name from code | `as_config_select_seed_provider()` and `as_config_select_address_translator()` call the factory at once, and again on every reconnect after a sync close. | Only the config file selects a registered name; the factory runs once, when the client is constructed. |
+| YAML factory options | Typed as SnakeYAML types them, with these differences: a timestamp is a string, an integer outside int64 is a string, map keys must be strings or integers, `!!binary`, `!!set`, `!!omap` and `!!pairs` are rejected, an alias to a collection is reused only as an option (a recursive one is rejected), inline merge sources keep their last duplicate, and merge keys apply only in options and directly under the blocks; see [Option values](yaml-config-discovery.md#option-values). | SnakeYAML 2.6. |
 | `ip_map` | Also rewrites configured seeds, and is ignored with a warning while another translator is registered; see [Built-ins](#built-ins). | Applies to the addresses servers advertise; no warning. |
 | Static `use_services_alternate` on reload | Not re-applied; only `dynamic.client.use_service_alternative` changes a running client. | Re-applied. |
 | aws-tags timeouts | One `timeout_ms`, default 5000; `init_timeout_ms` is accepted and ignored. | `timeout_ms` 2000, and `init_timeout_ms` 10000 for the first refresh. |

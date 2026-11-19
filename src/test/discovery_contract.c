@@ -1542,9 +1542,6 @@ TEST(discovery_live_lifecycle, "U-1 sync close destroys direct instances once; r
 	assert_int_eq(other, 0);
 }
 
-void
-aerospike_destroy_internal(aerospike* as);
-
 // Connect to the test cluster with translation.on_miss set, then close. connected is true when
 // connect created a cluster.
 static as_status
@@ -1571,7 +1568,10 @@ connect_on_miss(as_translation_miss_policy on_miss, as_error* err, bool* connect
 		}
 	}
 	else {
-		aerospike_destroy_internal(client);
+		// aerospike_destroy() does nothing in async mode, and aerospike_destroy_internal() is not
+		// exported from the Windows DLL.
+		as_config_destroy(&client->config);
+		cf_free(client);
 	}
 	return status;
 }

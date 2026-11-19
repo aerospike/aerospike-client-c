@@ -1713,6 +1713,13 @@ run_collision(collision_kind kind, bool reversed, bool healthy_peer, as_status e
 	}
 	fake_node_set_peers(&s, 1, list, NULL);
 
+	if (healthy_peer) {
+		// D references the seed so that the seed is not dropped as an unreferenced node.
+		char seed_list[128];
+		format(seed_list, sizeof(seed_list), "[[S,,[127.0.0.1:%u]]]", s.port);
+		fake_node_set_peers(&d, 1, seed_list, NULL);
+	}
+
 	as_config config;
 	fake_client c;
 	as_error err;

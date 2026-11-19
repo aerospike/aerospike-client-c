@@ -141,7 +141,8 @@ typedef enum as_seed_merge_policy_e {
 } as_seed_merge_policy;
 
 /**
- * Behavior when a translator has no mapping for an advertised endpoint.
+ * Behavior when a translator has no mapping for an advertised endpoint. Any
+ * other value fails aerospike_connect() with AEROSPIKE_ERR_PARAM.
  *
  * Default: AS_TRANSLATION_PASS_THROUGH
  *

@@ -1542,6 +1542,67 @@ TEST(discovery_live_lifecycle, "U-1 sync close destroys direct instances once; r
 	assert_int_eq(other, 0);
 }
 
+void
+aerospike_destroy_internal(aerospike* as);
+
+// Connect to the test cluster with translation.on_miss set, then close. connected is true when
+// connect created a cluster.
+static as_status
+connect_on_miss(as_translation_miss_policy on_miss, as_error* err, bool* connected)
+{
+	as_config config;
+	as_config_init(&config);
+	as_config_add_hosts(&config, g_host, (uint16_t)g_port);
+	as_config_set_user(&config, as->config.user, as->config.password);
+	config.use_services_alternate = as->config.use_services_alternate;
+	config.auth_mode = as->config.auth_mode;
+	config.translation.on_miss = on_miss;
+
+	aerospike* client = aerospike_new(&config);
+	as_status status = aerospike_connect(client, err);
+	*connected = client->cluster != NULL;
+
+	if (client->cluster) {
+		as_error close_err;
+		aerospike_close(client, &close_err);
+
+		if (as_event_loop_size == 0 || as_event_single_thread) {
+			aerospike_destroy(client);
+		}
+	}
+	else {
+		aerospike_destroy_internal(client);
+	}
+	return status;
+}
+
+TEST(discovery_on_miss_range, "U-2 FR-44 an on_miss other than pass-through or strict fails connect with AEROSPIKE_ERR_PARAM")
+{
+	if (as->config.tls.enable) {
+		info("skipped: on_miss test does not copy TLS configuration");
+		return;
+	}
+
+	as_error err;
+	bool connected;
+	const int invalid[] = {2, -1};
+
+	for (int i = 0; i < 2; i++) {
+		char expected[64];
+		snprintf(expected, sizeof(expected), "Invalid translation on_miss: %d", invalid[i]);
+		as_status status = connect_on_miss((as_translation_miss_policy)invalid[i], &err,
+			&connected);
+		assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+		assert_not_null(strstr(err.message, expected));
+		assert_false(connected);
+	}
+
+	assert_int_eq(connect_on_miss(AS_TRANSLATION_PASS_THROUGH, &err, &connected), AEROSPIKE_OK);
+	assert_true(connected);
+	assert_int_eq(connect_on_miss(AS_TRANSLATION_STRICT, &err, &connected), AEROSPIKE_OK);
+	assert_true(connected);
+}
+
 //---------------------------------
 // Tests: named factories
 //---------------------------------
@@ -2237,6 +2298,7 @@ SUITE(discovery_contract, "pluggable discovery contract tests")
 	suite_add(discovery_registration_same_udata);
 	suite_add(discovery_binding_mode);
 	suite_add(discovery_live_lifecycle);
+	suite_add(discovery_on_miss_range);
 	suite_add(discovery_factory_registration);
 	suite_add(discovery_factory_select);
 	suite_add(discovery_factory_select_rejections);

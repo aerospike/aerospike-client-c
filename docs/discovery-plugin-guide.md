@@ -217,6 +217,8 @@ false (no mapping) for an advertised endpoint:
   the translator, the node, the advertised `host:port` and the source list, and the peer is retried
   on every tend. A miss alone does not fail `aerospike_connect()`.
 
+Any other `on_miss` value fails `aerospike_connect()` with `AEROSPIKE_ERR_PARAM`.
+
 A translator returns false for a miss and leaves the policy to the client; it does not implement
 either behaviour itself. The `pass-through` built-in always maps, so it succeeds even with
 `strict`.

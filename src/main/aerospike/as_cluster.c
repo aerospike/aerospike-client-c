@@ -1734,6 +1734,12 @@ as_cluster_create(aerospike* as, as_error* err)
 			"Password authentication is disabled for PKI-only users. Please authenticate using your certificate.");
 	}
 
+	if (config->translation.on_miss != AS_TRANSLATION_PASS_THROUGH &&
+		config->translation.on_miss != AS_TRANSLATION_STRICT) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid translation on_miss: %d",
+			(int)config->translation.on_miss);
+	}
+
 	// Validates the discovery settings. The provider is not refreshed yet.
 	as_seed_manager* seed_manager;
 

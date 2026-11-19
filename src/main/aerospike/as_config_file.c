@@ -17,13 +17,21 @@
 #include <aerospike/as_config_file.h>
 #include <aerospike/aerospike.h>
 #include <aerospike/as_cluster.h>
+#include <aerospike/as_config_internal.h>
 #include <aerospike/as_discovery.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_metrics_internal.h>
+#include <aerospike/as_arraylist.h>
+#include <aerospike/as_boolean.h>
+#include <aerospike/as_double.h>
+#include <aerospike/as_integer.h>
+#include <aerospike/as_nil.h>
+#include <aerospike/as_orderedmap.h>
 #include <aerospike/as_string.h>
 #include <aerospike/as_string_builder.h>
 #include <ctype.h>
 #include <errno.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -58,14 +66,16 @@ typedef enum {
 	AS_YAML_PROVIDER_UNSET,
 	AS_YAML_PROVIDER_STATIC,
 	AS_YAML_PROVIDER_DNS,
-	AS_YAML_PROVIDER_AWS
+	AS_YAML_PROVIDER_AWS,
+	AS_YAML_PROVIDER_REGISTERED
 } as_yaml_provider;
 
 typedef enum {
 	AS_YAML_TRANSLATOR_UNSET,
 	AS_YAML_TRANSLATOR_STATIC_MAP,
 	AS_YAML_TRANSLATOR_PORT_MAP,
-	AS_YAML_TRANSLATOR_PASS_THROUGH
+	AS_YAML_TRANSLATOR_PASS_THROUGH,
+	AS_YAML_TRANSLATOR_REGISTERED
 } as_yaml_translator;
 
 typedef struct {
@@ -87,9 +97,25 @@ typedef struct {
 	as_aws_seed_provider_config aws; // region, tls_name and endpoint owned
 	as_yaml_provider provider;
 	as_yaml_translator translator;
+	char* provider_name;   // AS_YAML_PROVIDER_REGISTERED, owned
+	char* translator_name; // AS_YAML_TRANSLATOR_REGISTERED, owned
+	uint32_t provider_index;   // registry index of provider_name
+	uint32_t translator_index; // registry index of translator_name
+	as_map* provider_options;   // factory options of a registered provider, owned
+	as_map* translator_options; // factory options of a registered translator, owned
 	bool use_services_alternate;
 	uint32_t set;
 } as_yaml_discovery;
+
+// Factory options captured while a discovery or translation block is parsed. They are kept only
+// when the block's provider is a registered name.
+typedef struct {
+	as_orderedmap* map;
+	as_vector unknown; // char*, owned: top-level keys logged as unexpected for a built-in
+	char deferred[AS_ERROR_MESSAGE_MAX_SIZE]; // first error that only a registered name raises
+	const char* path;  // block path
+	const char* key;   // top-level key being captured
+} as_yaml_options;
 
 typedef struct {
 	yaml_parser_t parser;
@@ -98,6 +124,8 @@ typedef struct {
 	as_config* config;
 	const char* name;
 	as_yaml_discovery* disc; // NULL on reload
+	as_yaml_options* opts;   // set while a discovery or translation block is parsed
+	const char* alias_path;  // value named by an alias error from the skip functions
 	as_error err;
 	bool init;
 } as_yaml;
@@ -139,44 +167,89 @@ as_parse_next(as_yaml* yaml)
 	return true;
 }
 
-static bool
-as_skip_section(as_yaml* yaml);
+// path names the value that holds the alias, or is NULL when the caller has no path.
+static void
+as_alias_error(as_yaml* yaml, const char* path)
+{
+	if (path) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid %s: YAML aliases are not supported", path);
+		return;
+	}
 
+	as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+		"YAML aliases are not supported: line %zu, column %zu",
+		yaml->event.start_mark.line + 1, yaml->event.start_mark.column + 1);
+}
+
+static bool
+as_skip_value(as_yaml* yaml);
+
+// Skip the pairs of a mapping whose start event is consumed, through its end event.
+static bool
+as_skip_open_mapping(as_yaml* yaml)
+{
+	while (as_parse_next(yaml)) {
+		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+			return true;
+		}
+
+		// Key, which may itself be a collection.
+		if (!as_skip_value(yaml)) {
+			return false;
+		}
+
+		if (!as_parse_next(yaml)) {
+			return false;
+		}
+
+		if (!as_skip_value(yaml)) {
+			return false;
+		}
+	}
+	return false;
+}
+
+// Skip the items of a sequence whose start event is consumed, through its end event.
+static bool
+as_skip_sequence(as_yaml* yaml)
+{
+	while (as_parse_next(yaml)) {
+		if (yaml->event.type == YAML_SEQUENCE_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+			return true;
+		}
+
+		if (!as_skip_value(yaml)) {
+			return false;
+		}
+	}
+	return false;
+}
+
+// Skip the value whose first event is current. An alias is an error, reported with
+// yaml->alias_path.
 static bool
 as_skip_value(as_yaml* yaml)
 {
 	switch (yaml->event.type) {
 		case YAML_MAPPING_START_EVENT:
 			yaml_event_delete(&yaml->event);
-
-			// Parse name/value pairs.
-			while (as_parse_next(yaml)) {
-				if (yaml->event.type == YAML_MAPPING_END_EVENT) {
-					yaml_event_delete(&yaml->event);
-					break;
-				}
-				yaml_event_delete(&yaml->event);
-
-				if (!as_parse_next(yaml)) {
-					return false;
-				}
-
-				if (!as_skip_value(yaml)) {
-					return false;
-				}
-			}
-			return true;
+			return as_skip_open_mapping(yaml);
 
 		case YAML_SEQUENCE_START_EVENT:
 			yaml_event_delete(&yaml->event);
-
-			while (as_skip_section(yaml)) {
-			}
-			return true;
+			return as_skip_sequence(yaml);
 
 		case YAML_SCALAR_EVENT:
 			yaml_event_delete(&yaml->event);
 			return true;
+
+		case YAML_ALIAS_EVENT:
+			as_alias_error(yaml, yaml->alias_path);
+			yaml_event_delete(&yaml->event);
+			return false;
 
 		default:
 			yaml_event_delete(&yaml->event);
@@ -198,11 +271,15 @@ as_skip_section(as_yaml* yaml)
 	return true;
 }
 
-static void
-as_skip_sequence(as_yaml* yaml)
+// Skip a value with path naming it in an alias error.
+static bool
+as_skip_path(as_yaml* yaml, const char* path)
 {
-	while (as_skip_section(yaml)) {
-	}
+	const char* saved = yaml->alias_path;
+	yaml->alias_path = path;
+	bool rv = as_skip_value(yaml);
+	yaml->alias_path = saved;
+	return rv;
 }
 
 static inline void
@@ -1353,28 +1430,6 @@ as_parse_report_dir(as_yaml* yaml, const char* name, const char* value, as_metri
 }
 
 static bool
-as_skip_open_mapping(as_yaml* yaml)
-{
-	while (as_parse_next(yaml)) {
-		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
-			yaml_event_delete(&yaml->event);
-			return true;
-		}
-
-		yaml_event_delete(&yaml->event);
-
-		if (!as_parse_next(yaml)) {
-			return false;
-		}
-
-		if (!as_skip_value(yaml)) {
-			return false;
-		}
-	}
-	return false;
-}
-
-static bool
 as_parse_latency_unit(as_yaml* yaml, const char* name, const char* value, as_metrics_policy* policy)
 {
 	as_metrics_latency_unit unit;
@@ -1699,8 +1754,6 @@ as_parse_policy(as_yaml* yaml, as_parse_policy_fn fn)
 
 #define AS_YAML_COUNT(a) (sizeof(a) / sizeof((a)[0]))
 
-static const char* const as_yaml_providers[] = {"static", "dns", "aws-tags"};
-static const char* const as_yaml_translators[] = {"static-map", "port-map", "pass-through"};
 static const char* const as_yaml_merge_policies[] = {"merge", "replace", "discovery_only"};
 static const char* const as_yaml_execution_modes[] = {"thread", "tend"};
 static const char* const as_yaml_record_types[] = {"a", "srv"};
@@ -1750,6 +1803,8 @@ as_event_kind(yaml_event_type_t type)
 			return "a map";
 		case YAML_SEQUENCE_START_EVENT:
 			return "a sequence";
+		case YAML_ALIAS_EVENT:
+			return "an alias";
 		default:
 			return "an unsupported value";
 	}
@@ -1781,32 +1836,15 @@ as_kind_error(as_yaml* yaml, const char* path, const char* name, const char* exp
 	return false;
 }
 
-// Log an unknown key and skip its value, whatever its kind.
+// Log an unknown key and skip its value, whatever its kind. An alias anywhere in it is an error.
 static bool
 as_skip_field(as_yaml* yaml, const char* path, const char* name)
 {
 	as_log_info("Unexpected field: %s.%s", path, name);
 
-	switch (yaml->event.type) {
-		case YAML_SCALAR_EVENT:
-			yaml_event_delete(&yaml->event);
-			return true;
-
-		case YAML_MAPPING_START_EVENT:
-			yaml_event_delete(&yaml->event);
-			return as_skip_open_mapping(yaml);
-
-		case YAML_SEQUENCE_START_EVENT:
-			yaml_event_delete(&yaml->event);
-			as_skip_sequence(yaml);
-			return true;
-
-		default:
-			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s.%s: %s", path, name,
-				as_event_kind(yaml->event.type));
-			yaml_event_delete(&yaml->event);
-			return false;
-	}
+	char key[AS_YAML_PATH_SIZE];
+	as_yaml_path(key, path, name);
+	return as_skip_path(yaml, key);
 }
 
 static bool
@@ -1947,6 +1985,811 @@ as_yaml_discovery_destroy(as_yaml_discovery* d)
 	as_vector_destroy(&d->dns_names);
 	as_vector_destroy(&d->dns_servers);
 	as_vector_destroy(&d->aws_filters);
+	cf_free(d->provider_name);
+	cf_free(d->translator_name);
+	as_val_destroy(d->provider_options);
+	as_val_destroy(d->translator_options);
+}
+
+//---------------------------------
+// Static Functions: factory options
+//---------------------------------
+
+// Factory options follow the YAML 1.1 resolver of SnakeYAML 2.6, which Java loads the file with,
+// so a file shared with Java gives a factory the same values.
+
+#define AS_YAML_TAG_PREFIX "tag:yaml.org,2002:"
+#define AS_YAML_OPTIONS_DEPTH 50
+#define AS_YAML_REASON_SIZE 256
+
+typedef enum {
+	AS_YAML_TYPE_STR,
+	AS_YAML_TYPE_NULL,
+	AS_YAML_TYPE_BOOL,
+	AS_YAML_TYPE_INT,
+	AS_YAML_TYPE_FLOAT,
+	AS_YAML_TYPE_MERGE
+} as_yaml_type;
+
+static inline bool
+as_yaml_is_dec(char c)
+{
+	return c >= '0' && c <= '9';
+}
+
+static inline bool
+as_yaml_is_digit(char c, uint32_t base)
+{
+	switch (base) {
+		case 2:
+			return c == '0' || c == '1';
+		case 8:
+			return c >= '0' && c <= '7';
+		case 10:
+			return as_yaml_is_dec(c);
+		default:
+			return as_yaml_is_dec(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+	}
+}
+
+static inline const char*
+as_yaml_skip_sign(const char* p)
+{
+	return (*p == '-' || *p == '+') ? p + 1 : p;
+}
+
+// [digit][digit_]* in base. Returns the end, or NULL when p does not start with a digit.
+static const char*
+as_yaml_match_run(const char* p, uint32_t base)
+{
+	if (!as_yaml_is_digit(*p, base)) {
+		return NULL;
+	}
+
+	do {
+		p++;
+	} while (as_yaml_is_digit(*p, base) || *p == '_');
+	return p;
+}
+
+// [0-9_]*
+static const char*
+as_yaml_skip_dec(const char* p)
+{
+	while (as_yaml_is_dec(*p) || *p == '_') {
+		p++;
+	}
+	return p;
+}
+
+// (?::[0-5]?[0-9])+ Returns the end, or NULL.
+static const char*
+as_yaml_match_sexagesimal(const char* p)
+{
+	const char* start = p;
+
+	while (*p == ':') {
+		p++;
+
+		if (*p >= '0' && *p <= '5' && as_yaml_is_dec(p[1])) {
+			p += 2;
+		}
+		else if (as_yaml_is_dec(*p)) {
+			p++;
+		}
+		else {
+			return NULL;
+		}
+	}
+	return p == start ? NULL : p;
+}
+
+// [eE][-+]?[0-9]+ through the end.
+static bool
+as_yaml_match_exponent(const char* p)
+{
+	if (*p != 'e' && *p != 'E') {
+		return false;
+	}
+
+	p = as_yaml_skip_sign(p + 1);
+
+	if (!as_yaml_is_dec(*p)) {
+		return false;
+	}
+
+	while (as_yaml_is_dec(*p)) {
+		p++;
+	}
+	return *p == '\0';
+}
+
+// Resolver.INT: [-+]?0b_*[0-1][0-1_]* | [-+]?0_*[0-7][0-7_]* | [-+]?(?:0|[1-9][0-9_]*) |
+// [-+]?0x_*[0-9a-fA-F][0-9a-fA-F_]* | [-+]?[1-9][0-9_]*(?::[0-5]?[0-9])+
+static bool
+as_yaml_match_int(const char* value)
+{
+	const char* p = as_yaml_skip_sign(value);
+	const char* e;
+
+	if (p[0] == '0' && (p[1] == 'b' || p[1] == 'x')) {
+		const char* q = p + 2;
+
+		while (*q == '_') {
+			q++;
+		}
+		e = as_yaml_match_run(q, p[1] == 'b' ? 2 : 16);
+		return e && *e == '\0';
+	}
+
+	if (p[0] == '0') {
+		if (p[1] == '\0') {
+			return true;
+		}
+
+		const char* q = p + 1;
+
+		while (*q == '_') {
+			q++;
+		}
+		e = as_yaml_match_run(q, 8);
+		return e && *e == '\0';
+	}
+
+	if (*p < '1' || *p > '9') {
+		return false;
+	}
+
+	e = as_yaml_match_run(p, 10);
+
+	if (*e == '\0') {
+		return true;
+	}
+
+	e = as_yaml_match_sexagesimal(e);
+	return e && *e == '\0';
+}
+
+// Resolver.FLOAT: [-+]?[0-9][0-9_]*\.[0-9_]*(?:[eE][-+]?[0-9]+)? |
+// [-+]?[0-9][0-9_]*[eE][-+]?[0-9]+ | [-+]?\.[0-9_]+(?:[eE][-+]?[0-9]+)? |
+// [-+]?[0-9][0-9_]*(?::[0-5]?[0-9])+\.[0-9_]* | [-+]?\.(?:inf|Inf|INF) | \.(?:nan|NaN|NAN)
+static bool
+as_yaml_match_float(const char* value)
+{
+	if (strcmp(value, ".nan") == 0 || strcmp(value, ".NaN") == 0 || strcmp(value, ".NAN") == 0) {
+		return true;
+	}
+
+	const char* p = as_yaml_skip_sign(value);
+
+	if (strcmp(p, ".inf") == 0 || strcmp(p, ".Inf") == 0 || strcmp(p, ".INF") == 0) {
+		return true;
+	}
+
+	if (*p == '.') {
+		p++;
+
+		if (!as_yaml_is_dec(*p) && *p != '_') {
+			return false;
+		}
+		p = as_yaml_skip_dec(p);
+		return *p == '\0' || as_yaml_match_exponent(p);
+	}
+
+	if (!as_yaml_is_dec(*p)) {
+		return false;
+	}
+
+	const char* q = as_yaml_skip_dec(p + 1);
+
+	if (*q == '.') {
+		const char* r = as_yaml_skip_dec(q + 1);
+
+		if (*r == '\0' || as_yaml_match_exponent(r)) {
+			return true;
+		}
+	}
+
+	if (as_yaml_match_exponent(q)) {
+		return true;
+	}
+
+	q = as_yaml_match_sexagesimal(q);
+
+	if (!q || *q != '.') {
+		return false;
+	}
+	return *as_yaml_skip_dec(q + 1) == '\0';
+}
+
+static bool
+as_yaml_match_bool(const char* value, bool* out)
+{
+	static const char* const names[] = {
+		"yes", "Yes", "YES", "true", "True", "TRUE", "on", "On", "ON",
+		"no", "No", "NO", "false", "False", "FALSE", "off", "Off", "OFF"
+	};
+
+	for (uint32_t i = 0; i < AS_YAML_COUNT(names); i++) {
+		if (strcmp(value, names[i]) == 0) {
+			*out = i < 9;
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool
+as_yaml_match_null(const char* value)
+{
+	return value[0] == '\0' || strcmp(value, "~") == 0 || strcmp(value, "null") == 0 ||
+		strcmp(value, "Null") == 0 || strcmp(value, "NULL") == 0;
+}
+
+// Implicit type of a plain scalar. SnakeYAML tries a pattern only up to a length: 10 for bool,
+// null and merge, 1024 for int and float.
+static as_yaml_type
+as_yaml_resolve(const char* value, size_t len)
+{
+	bool b;
+
+	if (len <= 10 && as_yaml_match_bool(value, &b)) {
+		return AS_YAML_TYPE_BOOL;
+	}
+
+	if (len <= 1024 && as_yaml_match_int(value)) {
+		return AS_YAML_TYPE_INT;
+	}
+
+	if (len <= 1024 && as_yaml_match_float(value)) {
+		return AS_YAML_TYPE_FLOAT;
+	}
+
+	if (strcmp(value, "<<") == 0) {
+		return AS_YAML_TYPE_MERGE;
+	}
+
+	if (len <= 10 && as_yaml_match_null(value)) {
+		return AS_YAML_TYPE_NULL;
+	}
+	return AS_YAML_TYPE_STR;
+}
+
+// Copy value without the '_' separators.
+static char*
+as_yaml_strip(const char* value)
+{
+	char* out = cf_malloc(strlen(value) + 1);
+	char* q = out;
+
+	for (const char* p = value; *p; p++) {
+		if (*p != '_') {
+			*q++ = *p;
+		}
+	}
+	*q = '\0';
+	return out;
+}
+
+static bool
+as_yaml_accumulate(uint64_t* acc, uint64_t base, uint64_t digit)
+{
+	if (*acc > (UINT64_MAX - digit) / base) {
+		return false;
+	}
+	*acc = *acc * base + digit;
+	return true;
+}
+
+static bool
+as_yaml_parse_base(const char* p, uint32_t base, uint64_t* out)
+{
+	uint64_t acc = 0;
+
+	for (; *p; p++) {
+		char c = *p;
+		uint64_t d = as_yaml_is_dec(c) ? (uint64_t)(c - '0') :
+			(uint64_t)((c | 0x20) - 'a' + 10);
+
+		if (!as_yaml_accumulate(&acc, base, d)) {
+			return false;
+		}
+	}
+	*out = acc;
+	return true;
+}
+
+// Base 60: 1:30 is 90.
+static bool
+as_yaml_parse_sexagesimal(const char* p, uint64_t* out)
+{
+	uint64_t acc = 0;
+
+	while (*p) {
+		char* end;
+		errno = 0;
+		unsigned long long part = strtoull(p, &end, 10);
+
+		if (errno != 0 || !as_yaml_accumulate(&acc, 60, part)) {
+			return false;
+		}
+		p = *end == ':' ? end + 1 : end;
+	}
+	*out = acc;
+	return true;
+}
+
+// ConstructYamlInt. False when the value is outside int64; Java would give a BigInteger.
+static bool
+as_yaml_to_int(const char* value, int64_t* out)
+{
+	char* s = as_yaml_strip(value);
+	const char* p = s;
+	bool neg = *p == '-';
+	p = as_yaml_skip_sign(p);
+
+	uint64_t mag = 0;
+	bool ok;
+
+	if (strcmp(p, "0") == 0) {
+		ok = true;
+	}
+	else if (p[0] == '0' && p[1] == 'b') {
+		ok = as_yaml_parse_base(p + 2, 2, &mag);
+	}
+	else if (p[0] == '0' && p[1] == 'x') {
+		ok = as_yaml_parse_base(p + 2, 16, &mag);
+	}
+	else if (p[0] == '0') {
+		ok = as_yaml_parse_base(p + 1, 8, &mag);
+	}
+	else if (strchr(p, ':')) {
+		ok = as_yaml_parse_sexagesimal(p, &mag);
+	}
+	else {
+		ok = as_yaml_parse_base(p, 10, &mag);
+	}
+	cf_free(s);
+
+	if (!ok) {
+		return false;
+	}
+
+	if (neg) {
+		if (mag > (uint64_t)INT64_MAX + 1) {
+			return false;
+		}
+		*out = mag == (uint64_t)INT64_MAX + 1 ? INT64_MIN : -(int64_t)mag;
+		return true;
+	}
+
+	if (mag > (uint64_t)INT64_MAX) {
+		return false;
+	}
+	*out = (int64_t)mag;
+	return true;
+}
+
+// ConstructYamlFloat.
+static bool
+as_yaml_to_double(const char* value, double* out)
+{
+	char* s = as_yaml_strip(value);
+	const char* p = s;
+	double sign = *p == '-' ? -1.0 : 1.0;
+	p = as_yaml_skip_sign(p);
+
+	double v = 0.0;
+	bool ok = true;
+
+	if (strcmp(p, ".inf") == 0 || strcmp(p, ".Inf") == 0 || strcmp(p, ".INF") == 0) {
+		v = INFINITY;
+	}
+	else if (strcmp(p, ".nan") == 0 || strcmp(p, ".NaN") == 0 || strcmp(p, ".NAN") == 0) {
+		v = NAN;
+	}
+	else if (strchr(p, ':')) {
+		while (*p && ok) {
+			char* end;
+			double part = strtod(p, &end);
+			ok = end != p;
+			v = v * 60.0 + part;
+			p = *end == ':' ? end + 1 : end;
+		}
+	}
+	else {
+		char* end;
+		v = strtod(p, &end);
+		ok = end != p && *end == '\0';
+	}
+	cf_free(s);
+
+	if (!ok) {
+		return false;
+	}
+	*out = sign * v;
+	return true;
+}
+
+// Tag as written: !!int for a core tag.
+static void
+as_yaml_tag_name(const char* tag, char* out, size_t size)
+{
+	size_t len = sizeof(AS_YAML_TAG_PREFIX) - 1;
+
+	if (strncmp(tag, AS_YAML_TAG_PREFIX, len) == 0) {
+		snprintf(out, size, "!!%s", tag + len);
+		return;
+	}
+	snprintf(out, size, "%s", tag);
+}
+
+// Core tag name after the prefix, or NULL for another tag.
+static const char*
+as_yaml_core_tag(const char* tag)
+{
+	size_t len = sizeof(AS_YAML_TAG_PREFIX) - 1;
+	return strncmp(tag, AS_YAML_TAG_PREFIX, len) == 0 ? tag + len : NULL;
+}
+
+// A collection may carry no tag, the non-specific tag or its own core tag.
+static bool
+as_yaml_collection_tag(const yaml_event_t* event, bool map, char* reason, size_t size)
+{
+	const char* tag = (const char*)(map ? event->data.mapping_start.tag :
+		event->data.sequence_start.tag);
+
+	if (!tag || strcmp(tag, "!") == 0) {
+		return true;
+	}
+
+	const char* core = as_yaml_core_tag(tag);
+
+	if (core && strcmp(core, map ? "map" : "seq") == 0) {
+		return true;
+	}
+
+	char name[128];
+	as_yaml_tag_name(tag, name, sizeof(name));
+	snprintf(reason, size, "unsupported tag %s", name);
+	return false;
+}
+
+// Type a scalar event as an option value: plain scalars by the resolver, quoted ones as strings,
+// tagged ones by their tag when the value matches the tag's resolver pattern. Returns NULL with
+// reason for any other tag, a mismatch or a merge key.
+static as_val*
+as_yaml_option_scalar(const yaml_event_t* event, char* reason, size_t size)
+{
+	const char* value = (const char*)event->data.scalar.value;
+	const char* tag = (const char*)event->data.scalar.tag;
+	as_yaml_type type = AS_YAML_TYPE_STR;
+
+	if (!tag) {
+		if (event->data.scalar.style == YAML_PLAIN_SCALAR_STYLE) {
+			type = as_yaml_resolve(value, event->data.scalar.length);
+		}
+	}
+	else if (strcmp(tag, "!") != 0) {
+		const char* core = as_yaml_core_tag(tag);
+		bool b;
+		bool match;
+
+		if (!core) {
+			match = false;
+		}
+		else if (strcmp(core, "str") == 0) {
+			match = true;
+		}
+		else if (strcmp(core, "int") == 0) {
+			match = as_yaml_match_int(value);
+			type = AS_YAML_TYPE_INT;
+		}
+		else if (strcmp(core, "float") == 0) {
+			match = as_yaml_match_float(value);
+			type = AS_YAML_TYPE_FLOAT;
+		}
+		else if (strcmp(core, "bool") == 0) {
+			match = as_yaml_match_bool(value, &b);
+			type = AS_YAML_TYPE_BOOL;
+		}
+		else if (strcmp(core, "null") == 0) {
+			match = as_yaml_match_null(value);
+			type = AS_YAML_TYPE_NULL;
+		}
+		else if (strcmp(core, "merge") == 0) {
+			match = true;
+			type = AS_YAML_TYPE_MERGE;
+		}
+		else {
+			match = false;
+			core = NULL;
+		}
+
+		char name[128];
+		as_yaml_tag_name(tag, name, sizeof(name));
+
+		if (!core) {
+			snprintf(reason, size, "unsupported tag %s", name);
+			return NULL;
+		}
+
+		if (!match) {
+			snprintf(reason, size, "'%.100s' is not a valid %s", value, name);
+			return NULL;
+		}
+	}
+
+	switch (type) {
+		case AS_YAML_TYPE_NULL:
+			return (as_val*)&as_nil;
+
+		case AS_YAML_TYPE_BOOL: {
+			bool b = false;
+			as_yaml_match_bool(value, &b);
+			return (as_val*)as_boolean_new(b);
+		}
+
+		case AS_YAML_TYPE_INT: {
+			int64_t i;
+
+			if (as_yaml_to_int(value, &i)) {
+				return (as_val*)as_integer_new(i);
+			}
+			// Outside int64: kept as written.
+			return (as_val*)as_string_new_strdup(value);
+		}
+
+		case AS_YAML_TYPE_FLOAT: {
+			double d;
+
+			if (!as_yaml_to_double(value, &d)) {
+				snprintf(reason, size, "'%.100s' is not a valid float", value);
+				return NULL;
+			}
+			return (as_val*)as_double_new(d);
+		}
+
+		case AS_YAML_TYPE_MERGE:
+			snprintf(reason, size, "YAML merge keys (<<) are not supported");
+			return NULL;
+
+		default:
+			return (as_val*)as_string_new_strdup(value);
+	}
+}
+
+// Record the first error that makes the options invalid. It is raised at the end of the block,
+// and only when the block's provider is a registered name.
+static void
+as_options_defer(as_yaml_options* o, const char* fmt, ...)
+{
+	if (o->deferred[0]) {
+		return;
+	}
+
+	va_list ap;
+	va_start(ap, fmt);
+	vsnprintf(o->deferred, sizeof(o->deferred), fmt, ap);
+	va_end(ap);
+}
+
+static bool
+as_yaml_capture(as_yaml* yaml, uint32_t depth, as_val** out);
+
+// Capture the pairs of a mapping whose start event is consumed, through its end event.
+static bool
+as_yaml_capture_map(as_yaml* yaml, uint32_t depth, bool keep, as_val** out)
+{
+	as_yaml_options* o = yaml->opts;
+	as_orderedmap* map = as_orderedmap_new(8);
+
+	while (as_parse_next(yaml)) {
+		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+
+			if (keep) {
+				*out = (as_val*)map;
+			}
+			else {
+				as_orderedmap_destroy(map);
+			}
+			return true;
+		}
+
+		as_val* key;
+
+		if (!as_yaml_capture(yaml, depth, &key)) {
+			break;
+		}
+
+		if (key && as_val_type(key) != AS_STRING && as_val_type(key) != AS_INTEGER) {
+			as_options_defer(o, "Invalid %s.%s: map keys must be strings or integers", o->path,
+				o->key);
+			as_val_destroy(key);
+			key = NULL;
+		}
+
+		as_val* val = NULL;
+
+		if (!as_parse_next(yaml) || !as_yaml_capture(yaml, depth, &val)) {
+			as_val_destroy(key);
+			break;
+		}
+
+		// A repeated key keeps the last value.
+		if (!key || !val || as_orderedmap_set(map, key, val) != 0) {
+			as_val_destroy(key);
+			as_val_destroy(val);
+		}
+	}
+	as_orderedmap_destroy(map);
+	return false;
+}
+
+// Capture the items of a sequence whose start event is consumed, through its end event.
+static bool
+as_yaml_capture_seq(as_yaml* yaml, uint32_t depth, bool keep, as_val** out)
+{
+	as_arraylist* list = as_arraylist_new(8, 8);
+
+	while (as_parse_next(yaml)) {
+		if (yaml->event.type == YAML_SEQUENCE_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+
+			if (keep) {
+				*out = (as_val*)list;
+			}
+			else {
+				as_arraylist_destroy(list);
+			}
+			return true;
+		}
+
+		as_val* val;
+
+		if (!as_yaml_capture(yaml, depth, &val)) {
+			break;
+		}
+
+		if (val && as_arraylist_append(list, val) != AS_ARRAYLIST_OK) {
+			as_val_destroy(val);
+		}
+	}
+	as_arraylist_destroy(list);
+	return false;
+}
+
+// Capture the value whose first event is current into out: as_string, as_integer, as_double,
+// as_boolean, as_nil, as_arraylist or as_orderedmap. An alias is an error. Problems that only
+// matter for a registered name are deferred, and out is then NULL.
+static bool
+as_yaml_capture(as_yaml* yaml, uint32_t depth, as_val** out)
+{
+	as_yaml_options* o = yaml->opts;
+	char reason[AS_YAML_REASON_SIZE];
+	*out = NULL;
+
+	switch (yaml->event.type) {
+		case YAML_SCALAR_EVENT:
+			*out = as_yaml_option_scalar(&yaml->event, reason, sizeof(reason));
+
+			if (!*out) {
+				as_options_defer(o, "Invalid %s.%s: %s", o->path, o->key, reason);
+			}
+			yaml_event_delete(&yaml->event);
+			return true;
+
+		case YAML_MAPPING_START_EVENT:
+		case YAML_SEQUENCE_START_EVENT: {
+			bool map = yaml->event.type == YAML_MAPPING_START_EVENT;
+			bool keep = as_yaml_collection_tag(&yaml->event, map, reason, sizeof(reason));
+
+			if (!keep) {
+				as_options_defer(o, "Invalid %s.%s: %s", o->path, o->key, reason);
+			}
+
+			char key[AS_YAML_PATH_SIZE];
+			as_yaml_path(key, o->path, o->key);
+
+			if (depth >= AS_YAML_OPTIONS_DEPTH) {
+				as_options_defer(o, "Invalid %s: nested deeper than %u levels", key,
+					AS_YAML_OPTIONS_DEPTH);
+				return as_skip_path(yaml, key);
+			}
+			yaml_event_delete(&yaml->event);
+
+			if (map) {
+				return as_yaml_capture_map(yaml, depth + 1, keep, out);
+			}
+			return as_yaml_capture_seq(yaml, depth + 1, keep, out);
+		}
+
+		case YAML_ALIAS_EVENT: {
+			char key[AS_YAML_PATH_SIZE];
+			as_yaml_path(key, o->path, o->key);
+			as_alias_error(yaml, key);
+			yaml_event_delete(&yaml->event);
+			return false;
+		}
+
+		default:
+			as_expected_error(yaml, YAML_SCALAR_EVENT);
+			yaml_event_delete(&yaml->event);
+			return false;
+	}
+}
+
+// Add a top-level option. Takes val.
+static void
+as_options_set(as_yaml_options* o, const char* name, as_val* val)
+{
+	as_string* key = as_string_new_strdup(name);
+
+	if (as_orderedmap_set(o->map, (as_val*)key, val) != 0) {
+		as_string_destroy(key);
+		as_val_destroy(val);
+	}
+}
+
+// Parse a provider or translator name: a built-in, else a name registered in code. index is -1
+// for a built-in, whose position is in builtin.
+static bool
+as_parse_plugin_name(
+	as_yaml* yaml, const char* path, const char* value, const char* const* builtins,
+	uint32_t size, const struct as_plugin_registry_s* registry, uint32_t* builtin,
+	int32_t* index
+	)
+{
+	for (uint32_t i = 0; i < size; i++) {
+		if (strcmp(value, builtins[i]) == 0) {
+			*builtin = i;
+			*index = -1;
+			return true;
+		}
+	}
+
+	*index = as_plugin_registry_find(registry, value);
+
+	if (*index >= 0) {
+		return true;
+	}
+
+	as_string_builder sb;
+	as_string_builder_init(&sb, 256, true);
+
+	for (uint32_t i = 0; i < size; i++) {
+		if (i > 0) {
+			as_string_builder_append(&sb, ", ");
+		}
+		as_string_builder_append(&sb, builtins[i]);
+	}
+
+	uint32_t n = as_plugin_registry_size(registry);
+
+	for (uint32_t i = 0; i < n; i++) {
+		as_string_builder_append(&sb, ", ");
+		as_string_builder_append(&sb, as_plugin_registry_name(registry, i));
+	}
+
+	as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s. valid values: %s",
+		path, value, sb.data);
+	as_string_builder_destroy(&sb);
+	return false;
+}
+
+static const char*
+as_yaml_provider_label(const as_yaml_discovery* d)
+{
+	return d->provider == AS_YAML_PROVIDER_REGISTERED ? d->provider_name :
+		as_config_builtin_providers[d->provider - 1];
+}
+
+static const char*
+as_yaml_translator_label(const as_yaml_discovery* d)
+{
+	return d->translator == AS_YAML_TRANSLATOR_REGISTERED ? d->translator_name :
+		as_config_builtin_translators[d->translator - 1];
 }
 
 // Parse the name/value pairs of a mapping whose start event is consumed, through the end event.
@@ -1958,6 +2801,12 @@ as_parse_block(as_yaml* yaml, const char* path, as_parse_block_fn fn)
 		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
 			yaml_event_delete(&yaml->event);
 			return true;
+		}
+
+		if (yaml->event.type == YAML_ALIAS_EVENT) {
+			as_alias_error(yaml, path);
+			yaml_event_delete(&yaml->event);
+			return false;
 		}
 
 		if (yaml->event.type != YAML_SCALAR_EVENT) {
@@ -1972,6 +2821,14 @@ as_parse_block(as_yaml* yaml, const char* path, as_parse_block_fn fn)
 		yaml_event_delete(&yaml->event);
 
 		if (!as_parse_next(yaml)) {
+			return false;
+		}
+
+		if (yaml->event.type == YAML_ALIAS_EVENT) {
+			char key[AS_YAML_PATH_SIZE];
+			as_yaml_path(key, path, name);
+			as_alias_error(yaml, key);
+			yaml_event_delete(&yaml->event);
 			return false;
 		}
 
@@ -1998,6 +2855,13 @@ as_parse_string_seq(as_yaml* yaml, const char* path, as_vector* out)
 			as_string_builder_append_char(&sb, ']');
 			as_log_info("%s", sb.data);
 			return true;
+		}
+
+		if (yaml->event.type == YAML_ALIAS_EVENT) {
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+				"Invalid %s[%u]: YAML aliases are not supported", path, i);
+			yaml_event_delete(&yaml->event);
+			return false;
 		}
 
 		if (yaml->event.type != YAML_SCALAR_EVENT) {
@@ -2029,6 +2893,12 @@ as_parse_addr_map(as_yaml* yaml, const char* path, as_vector* out)
 			return true;
 		}
 
+		if (yaml->event.type == YAML_ALIAS_EVENT) {
+			as_alias_error(yaml, path);
+			yaml_event_delete(&yaml->event);
+			return false;
+		}
+
 		if (yaml->event.type != YAML_SCALAR_EVENT) {
 			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: expected scalar keys, not %s",
 				path, as_event_kind(yaml->event.type));
@@ -2040,6 +2910,14 @@ as_parse_addr_map(as_yaml* yaml, const char* path, as_vector* out)
 		yaml_event_delete(&yaml->event);
 
 		if (!as_parse_next(yaml)) {
+			cf_free(orig);
+			return false;
+		}
+
+		if (yaml->event.type == YAML_ALIAS_EVENT) {
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+				"Invalid %s[%s]: YAML aliases are not supported", path, orig);
+			yaml_event_delete(&yaml->event);
 			cf_free(orig);
 			return false;
 		}
@@ -2327,10 +3205,6 @@ as_parse_discovery_field(as_yaml* yaml, const char* path, const char* name)
 		return as_parse_block(yaml, key, as_parse_aws_field);
 	}
 
-	if (!as_yaml_known(name, as_yaml_discovery_scalars)) {
-		return as_skip_field(yaml, path, name);
-	}
-
 	if (yaml->event.type != YAML_SCALAR_EVENT) {
 		return as_kind_error(yaml, path, name, "a scalar");
 	}
@@ -2341,9 +3215,21 @@ as_parse_discovery_field(as_yaml* yaml, const char* path, const char* name)
 	bool rv;
 
 	if (strcmp(name, "provider") == 0) {
-		if ((rv = as_parse_enum(yaml, key, value, as_yaml_providers,
-				AS_YAML_COUNT(as_yaml_providers), &v))) {
-			d->provider = (as_yaml_provider)(v + 1);
+		int32_t index;
+
+		if ((rv = as_parse_plugin_name(yaml, key, value, as_config_builtin_providers,
+				AS_CONFIG_BUILTIN_PROVIDERS, discovery->registry, &v, &index))) {
+			cf_free(d->provider_name);
+			d->provider_name = NULL;
+
+			if (index >= 0) {
+				d->provider = AS_YAML_PROVIDER_REGISTERED;
+				d->provider_name = cf_strdup(value);
+				d->provider_index = (uint32_t)index;
+			}
+			else {
+				d->provider = (as_yaml_provider)(v + 1);
+			}
 		}
 	}
 	else if (strcmp(name, "merge_policy") == 0) {
@@ -2399,10 +3285,6 @@ as_parse_translation_field(as_yaml* yaml, const char* path, const char* name)
 		return as_parse_staged_map(yaml, path, name, &d->port_map, AS_YAML_SET_PORT_MAP);
 	}
 
-	if (!as_yaml_known(name, as_yaml_translation_scalars)) {
-		return as_skip_field(yaml, path, name);
-	}
-
 	if (yaml->event.type != YAML_SCALAR_EVENT) {
 		return as_kind_error(yaml, path, name, "a scalar");
 	}
@@ -2414,9 +3296,21 @@ as_parse_translation_field(as_yaml* yaml, const char* path, const char* name)
 	bool rv;
 
 	if (strcmp(name, "provider") == 0) {
-		if ((rv = as_parse_enum(yaml, key, value, as_yaml_translators,
-				AS_YAML_COUNT(as_yaml_translators), &v))) {
-			d->translator = (as_yaml_translator)(v + 1);
+		int32_t index;
+
+		if ((rv = as_parse_plugin_name(yaml, key, value, as_config_builtin_translators,
+				AS_CONFIG_BUILTIN_TRANSLATORS, yaml->config->translation.registry, &v, &index))) {
+			cf_free(d->translator_name);
+			d->translator_name = NULL;
+
+			if (index >= 0) {
+				d->translator = AS_YAML_TRANSLATOR_REGISTERED;
+				d->translator_name = cf_strdup(value);
+				d->translator_index = (uint32_t)index;
+			}
+			else {
+				d->translator = (as_yaml_translator)(v + 1);
+			}
 		}
 	}
 	else {
@@ -2431,6 +3325,175 @@ as_parse_translation_field(as_yaml* yaml, const char* path, const char* name)
 		as_log_info("Set %s = %s", key, value);
 	}
 	yaml_event_delete(&yaml->event);
+	return rv;
+}
+
+// A key of the discovery or translation block whose value's first event is current. Every key
+// except provider and the built-in sections is captured as a factory option.
+static bool
+as_parse_plugin_field(as_yaml* yaml, const char* path, const char* name, bool discovery)
+{
+	as_yaml_options* o = yaml->opts;
+	char key[AS_YAML_PATH_SIZE];
+	as_yaml_path(key, path, name);
+
+	if (yaml->event.type == YAML_ALIAS_EVENT) {
+		as_alias_error(yaml, key);
+		yaml_event_delete(&yaml->event);
+		return false;
+	}
+
+	bool section = discovery ?
+		strcmp(name, "dns") == 0 || strcmp(name, "aws") == 0 :
+		strcmp(name, "static_map") == 0 || strcmp(name, "port_map") == 0;
+	bool known = section || as_yaml_known(name,
+		discovery ? as_yaml_discovery_scalars : as_yaml_translation_scalars);
+	o->key = name;
+
+	if (!known) {
+		as_val* val;
+
+		if (!as_yaml_capture(yaml, 0, &val)) {
+			return false;
+		}
+
+		if (val) {
+			as_options_set(o, name, val);
+		}
+
+		char* unknown = cf_strdup(name);
+		as_vector_append(&o->unknown, &unknown);
+		return true;
+	}
+
+	if (!section && strcmp(name, "provider") != 0 && yaml->event.type == YAML_SCALAR_EVENT) {
+		// Typed here, then parsed by the client as usual.
+		char reason[AS_YAML_REASON_SIZE];
+		as_val* val = as_yaml_option_scalar(&yaml->event, reason, sizeof(reason));
+
+		if (val) {
+			as_options_set(o, name, val);
+		}
+		else {
+			as_options_defer(o, "Invalid %s: %s", key, reason);
+		}
+	}
+
+	return discovery ? as_parse_discovery_field(yaml, path, name) :
+		as_parse_translation_field(yaml, path, name);
+}
+
+static bool
+as_parse_plugin_pairs(as_yaml* yaml, const char* path, bool discovery)
+{
+	as_yaml_options* o = yaml->opts;
+
+	while (as_parse_next(yaml)) {
+		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+			return true;
+		}
+
+		if (yaml->event.type == YAML_ALIAS_EVENT) {
+			as_alias_error(yaml, path);
+			yaml_event_delete(&yaml->event);
+			return false;
+		}
+
+		if (yaml->event.type != YAML_SCALAR_EVENT) {
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: expected scalar keys, not %s",
+				path, as_event_kind(yaml->event.type));
+			yaml_event_delete(&yaml->event);
+			return false;
+		}
+
+		// Full key: a factory receives it whole.
+		char* name = cf_strdup(as_yaml_scalar(yaml));
+		char reason[AS_YAML_REASON_SIZE];
+		as_val* k = as_yaml_option_scalar(&yaml->event, reason, sizeof(reason));
+		bool string_key = as_val_type(k) == AS_STRING;
+
+		if (!k) {
+			as_options_defer(o, "Invalid %s: %s", path, reason);
+		}
+		else if (!string_key) {
+			as_options_defer(o, "Invalid key '%s' in %s: expected a string", name, path);
+		}
+		as_val_destroy(k);
+		yaml_event_delete(&yaml->event);
+
+		if (!as_parse_next(yaml)) {
+			cf_free(name);
+			return false;
+		}
+
+		bool rv;
+
+		if (string_key) {
+			rv = as_parse_plugin_field(yaml, path, name, discovery);
+			cf_free(name);
+		}
+		else {
+			// An unexpected key for a built-in provider.
+			char key[AS_YAML_PATH_SIZE];
+			as_yaml_path(key, path, name);
+			as_vector_append(&o->unknown, &name);
+			rv = as_skip_path(yaml, key);
+		}
+
+		if (!rv) {
+			return false;
+		}
+	}
+	return false;
+}
+
+// Parse a discovery or translation block whose start event is consumed. Its options are kept
+// for a registered provider; for a built-in one the unexpected keys are logged instead.
+static bool
+as_parse_plugin_block(as_yaml* yaml, const char* path, bool discovery)
+{
+	as_yaml_options o;
+	o.map = as_orderedmap_new(8);
+	as_vector_init(&o.unknown, sizeof(char*), 4);
+	o.deferred[0] = '\0';
+	o.path = path;
+	o.key = NULL;
+
+	yaml->opts = &o;
+	bool rv = as_parse_plugin_pairs(yaml, path, discovery);
+	yaml->opts = NULL;
+
+	as_yaml_discovery* d = yaml->disc;
+	bool registered = discovery ? d->provider == AS_YAML_PROVIDER_REGISTERED :
+		d->translator == AS_YAML_TRANSLATOR_REGISTERED;
+
+	if (rv && registered) {
+		if (o.deferred[0]) {
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "%s", o.deferred);
+			rv = false;
+		}
+		else {
+			as_map** options = discovery ? &d->provider_options : &d->translator_options;
+			as_val_destroy(*options);
+			*options = (as_map*)o.map;
+			o.map = NULL;
+		}
+	}
+
+	for (uint32_t i = 0; i < o.unknown.size; i++) {
+		char* name = *(char**)as_vector_get(&o.unknown, i);
+
+		if (rv && !registered) {
+			as_log_info("Unexpected field: %s.%s", path, name);
+		}
+		cf_free(name);
+	}
+	as_vector_destroy(&o.unknown);
+
+	if (o.map) {
+		as_orderedmap_destroy(o.map);
+	}
 	return rv;
 }
 
@@ -2490,8 +3553,7 @@ as_parse_static_client_field(as_yaml* yaml, const char* path, const char* name)
 			return as_kind_error(yaml, path, name, "a map");
 		}
 		yaml_event_delete(&yaml->event);
-		return as_parse_block(yaml, key,
-			name[0] == 'd' ? as_parse_discovery_field : as_parse_translation_field);
+		return as_parse_plugin_block(yaml, key, name[0] == 'd');
 	}
 
 	switch (yaml->event.type) {
@@ -2512,8 +3574,7 @@ as_parse_static_client_field(as_yaml* yaml, const char* path, const char* name)
 				return as_skip_open_mapping(yaml);
 			}
 			as_log_info("Unexpected sequence: %s.%s", yaml->name, name);
-			as_skip_sequence(yaml);
-			return true;
+			return as_skip_sequence(yaml);
 		}
 
 		default:
@@ -2606,8 +3667,7 @@ as_parse_dynamic_client(as_yaml* yaml)
 			}
 			else {
 				as_log_info("Unexpected sequence: %s.%s", yaml->name, name);
-				as_skip_sequence(yaml);
-				rv = true;
+				rv = as_skip_sequence(yaml);
 			}
 
 			if (!rv) {
@@ -2856,6 +3916,8 @@ as_config_file_read(
 	yaml.config = config;
 	yaml.name = NULL;
 	yaml.disc = disc;
+	yaml.opts = NULL;
+	yaml.alias_path = NULL;
 	yaml.init = init;
 	as_error_init(&yaml.err);
 
@@ -3489,12 +4551,6 @@ as_cluster_update(
 	return status;
 }
 
-void
-as_config_file_set_seed_provider(as_config* config, const as_seed_provider* owned);
-
-void
-as_config_file_set_translator(as_config* config, const as_address_translator* owned);
-
 static as_status
 as_apply_error(as_error* err, const char* path, const char* fmt, ...)
 {
@@ -3514,7 +4570,7 @@ as_apply_validate(as_yaml_discovery* d, const char* path, as_error* err)
 	bool static_map = (d->set & AS_YAML_SET_STATIC_MAP) != 0;
 	bool port_map = (d->set & AS_YAML_SET_PORT_MAP) != 0;
 	const char* translator = d->translator == AS_YAML_TRANSLATOR_UNSET ? NULL :
-		as_yaml_translators[d->translator - 1];
+		as_yaml_translator_label(d);
 
 	if (d->provider == AS_YAML_PROVIDER_DNS && !dns) {
 		return as_apply_error(err, path, "static.client.discovery.dns is required with provider dns");
@@ -3563,8 +4619,16 @@ as_apply_validate(as_yaml_discovery* d, const char* path, as_error* err)
 }
 
 static as_status
+as_apply_recipe_failed(as_seed_provider* provider, const char* path, as_error* err)
+{
+	provider->destroy(provider->udata);
+	return as_apply_error(err, path, "Failed to allocate seed provider recipe");
+}
+
+static as_status
 as_apply_build_provider(
-	as_yaml_discovery* d, const char* path, as_seed_provider* provider, as_error* err
+	as_yaml_discovery* d, const char* path, as_seed_provider* provider, as_plugin_recipe** recipe,
+	as_error* err
 	)
 {
 	as_error local;
@@ -3582,6 +4646,10 @@ as_apply_build_provider(
 		if (status != AEROSPIKE_OK) {
 			return as_apply_error(err, path, "Invalid static.client.discovery.dns: %s",
 				local.message);
+		}
+
+		if (!(*recipe = as_plugin_recipe_dns(&dns))) {
+			return as_apply_recipe_failed(provider, path, err);
 		}
 		return AEROSPIKE_OK;
 	}
@@ -3609,10 +4677,18 @@ as_apply_build_provider(
 	aws.filters_size = size;
 
 	status = as_discovery_aws_seed_provider(&local, &aws, provider);
-	cf_free(filters);
 
 	if (status != AEROSPIKE_OK) {
+		cf_free(filters);
 		return as_apply_error(err, path, "Invalid static.client.discovery.aws: %s", local.message);
+	}
+
+	// The file cannot set a credentials hook, so the recipe has no hook holder to adopt.
+	*recipe = as_plugin_recipe_aws(&aws);
+	cf_free(filters);
+
+	if (!*recipe) {
+		return as_apply_recipe_failed(provider, path, err);
 	}
 	return AEROSPIKE_OK;
 }
@@ -3660,26 +4736,63 @@ as_config_file_apply_discovery(aerospike* as, as_yaml_discovery* d, as_error* er
 
 	as_seed_provider provider;
 	memset(&provider, 0, sizeof(provider));
-	bool has_provider = d->provider == AS_YAML_PROVIDER_DNS || d->provider == AS_YAML_PROVIDER_AWS;
+	bool registered_provider = d->provider == AS_YAML_PROVIDER_REGISTERED;
+	bool has_provider = d->provider == AS_YAML_PROVIDER_DNS ||
+		d->provider == AS_YAML_PROVIDER_AWS || registered_provider;
 	char* provider_name = NULL;
+	as_plugin_recipe* provider_recipe = NULL;
 
 	as_address_translator translator;
 	memset(&translator, 0, sizeof(translator));
 	bool has_translator = false;
+	bool registered_translator = false;
 	char* translator_name = NULL;
+	as_plugin_recipe* translator_recipe = NULL;
 
 	as_vector* entries = NULL;
 	as_addr_map* map = NULL;
 
-	if (has_provider) {
-		status = as_apply_build_provider(d, path, &provider, err);
+	if (registered_provider) {
+		as_error local;
+
+		if (as_plugin_build_seed_provider(&local, config->discovery.registry, d->provider_index,
+				d->provider_options, &provider) != AEROSPIKE_OK) {
+			return as_apply_error(err, path, "Invalid static.client.discovery.provider: %s. %s",
+				d->provider_name, local.message);
+		}
+		// The build copied the name.
+		provider_name = (char*)provider.name;
+
+		if (!(provider_recipe = as_plugin_recipe_factory(d->provider_index, d->provider_options,
+				false))) {
+			status = as_apply_error(err, path, "Failed to allocate seed provider recipe");
+			goto Release;
+		}
+	}
+	else if (has_provider) {
+		status = as_apply_build_provider(d, path, &provider, &provider_recipe, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
 		}
 	}
 
-	if (d->translator == AS_YAML_TRANSLATOR_PORT_MAP) {
+	if (d->translator == AS_YAML_TRANSLATOR_REGISTERED) {
+		as_error local;
+
+		if (as_plugin_build_translator(&local, config->translation.registry, d->translator_index,
+				d->translator_options, &translator) != AEROSPIKE_OK) {
+			status = as_apply_error(err, path, "Invalid static.client.translation.provider: %s. %s",
+				d->translator_name, local.message);
+			goto Release;
+		}
+		has_translator = true;
+		registered_translator = true;
+		translator_name = (char*)translator.name;
+		translator_recipe = as_plugin_recipe_factory(d->translator_index, d->translator_options,
+			true);
+	}
+	else if (d->translator == AS_YAML_TRANSLATOR_PORT_MAP) {
 		as_error local;
 
 		if (as_discovery_port_map_translator(&local, d->port_map.list, d->port_map.size,
@@ -3689,18 +4802,26 @@ as_config_file_apply_discovery(aerospike* as, as_yaml_discovery* d, as_error* er
 			goto Release;
 		}
 		has_translator = true;
+		translator_recipe = as_plugin_recipe_port_map(d->port_map.list, d->port_map.size);
 	}
 	else if (d->translator == AS_YAML_TRANSLATOR_PASS_THROUGH) {
 		as_discovery_pass_through_translator(&translator);
 		has_translator = true;
+		translator_recipe = as_plugin_recipe_pass_through();
 	}
 
-	if (has_provider && !(provider_name = cf_strdup(provider.name))) {
+	if (has_translator && !translator_recipe) {
+		status = as_apply_error(err, path, "Failed to allocate address translator recipe");
+		goto Release;
+	}
+
+	if (has_provider && !registered_provider && !(provider_name = cf_strdup(provider.name))) {
 		status = as_apply_error(err, path, "Failed to copy seed provider name");
 		goto Release;
 	}
 
-	if (has_translator && !(translator_name = cf_strdup(translator.name))) {
+	if (has_translator && !registered_translator &&
+			!(translator_name = cf_strdup(translator.name))) {
 		status = as_apply_error(err, path, "Failed to copy address translator name");
 		goto Release;
 	}
@@ -3738,13 +4859,13 @@ as_config_file_apply_discovery(aerospike* as, as_yaml_discovery* d, as_error* er
 		if (config->discovery.provider_registered) {
 			as_log_warn("Seed provider %s registered in code is replaced by "
 				"static.client.discovery.provider %s in %s", config->discovery.provider.name,
-				as_yaml_providers[d->provider - 1], path);
+				as_yaml_provider_label(d), path);
 		}
 
 		if (has_provider) {
 			provider.name = provider_name;
 		}
-		as_config_file_set_seed_provider(config, has_provider ? &provider : NULL);
+		as_config_install_seed_provider(config, has_provider ? &provider : NULL, provider_recipe);
 	}
 
 	if (d->translator != AS_YAML_TRANSLATOR_UNSET || (d->set & AS_YAML_SET_STATIC_MAP)) {
@@ -3753,13 +4874,14 @@ as_config_file_apply_discovery(aerospike* as, as_yaml_discovery* d, as_error* er
 			as_log_warn("Address translator %s registered in code is replaced by "
 				"static.client.translation.provider %s in %s", config->translation.provider.name,
 				d->translator == AS_YAML_TRANSLATOR_UNSET ? "static-map" :
-				as_yaml_translators[d->translator - 1], path);
+				as_yaml_translator_label(d), path);
 		}
 
 		if (has_translator) {
 			translator.name = translator_name;
 		}
-		as_config_file_set_translator(config, has_translator ? &translator : NULL);
+		as_config_install_translator(config, has_translator ? &translator : NULL,
+			translator_recipe);
 	}
 	return AEROSPIKE_OK;
 
@@ -3773,6 +4895,8 @@ Release:
 	}
 	cf_free(provider_name);
 	cf_free(translator_name);
+	as_plugin_recipe_destroy(provider_recipe);
+	as_plugin_recipe_destroy(translator_recipe);
 	return status;
 }
 

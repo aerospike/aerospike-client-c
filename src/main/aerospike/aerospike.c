@@ -17,6 +17,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_config.h>
 #include <aerospike/as_config_file.h>
+#include <aerospike/as_config_internal.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
@@ -257,6 +258,13 @@ aerospike_connect(aerospike* as, as_error* err)
 			"Address translator was released by aerospike_close(). Register it again");
 	}
 
+	// Build again what aerospike_close() released.
+	status = as_config_rebuild_plugins(&as->config, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
 	as_config* config = &as->config;
 	as_vector* hosts = config->hosts;
 	
@@ -323,7 +331,6 @@ aerospike_connect(aerospike* as, as_error* err)
 }
 
 as_status as_event_close_cluster(aerospike* as, as_error* err);
-void as_config_release_plugins(as_config* config);
 
 /**
  * Close connections to the cluster
@@ -361,11 +368,14 @@ aerospike_close(aerospike* as, as_error* err)
 			as_cluster_destroy(cluster);
 			as->cluster = NULL;
 			as->config.discovery.registration_locked = false;
+
+			// Instances go now; aerospike_connect() rebuilds those that have a recipe.
+			as_config_release_plugins(&as->config, true);
 		}
 	}
 	else if (as_event_loop_size > 0 && !as_event_single_thread) {
 		// aerospike_destroy() is a no-op in async mode, so release plugins here.
-		as_config_release_plugins(&as->config);
+		as_config_release_plugins(&as->config, false);
 	}
 	return err->code;
 }

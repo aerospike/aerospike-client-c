@@ -26,6 +26,7 @@
 #include <aerospike/as_aws_internal.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_config_internal.h>
 #include <aerospike/as_discovery.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_log.h>
@@ -4316,6 +4317,7 @@ client_sync_close(aerospike* as)
 	as_cluster_destroy(as->cluster);
 	as->cluster = NULL;
 	as->config.discovery.registration_locked = false;
+	as_config_release_plugins(&as->config, true);
 }
 
 static bool
@@ -4509,8 +4511,11 @@ boot_close_reconnect(boot_env* env, hook_state* hook)
 	uint32_t requests = aws_stub_requests(&env->s);
 	client_sync_close(as);
 
-	if (!as->config.discovery.provider_registered) {
-		failure = "sync close released the aws-tags registration";
+	if (as->config.discovery.provider_registered) {
+		failure = "sync close kept the aws-tags provider instance";
+	}
+	else if (!as->config.discovery.recipe || as->config.discovery.provider_released) {
+		failure = "sync close dropped the aws-tags registration";
 	}
 	else if (as_load_uint32_acq(&hook->destroys) != 0) {
 		failure = "sync close ran the hook destroy";
@@ -4524,6 +4529,9 @@ boot_close_reconnect(boot_env* env, hook_state* hook)
 	else if (aws_stub_requests(&env->s) <= requests) {
 		failure = "reconnect did not call DescribeInstances again";
 	}
+	else if (as_load_uint32_acq(&hook->destroys) != 0) {
+		failure = "reconnect ran the hook destroy";
+	}
 	client_close(as);
 
 	if (!failure && before >= 0 && settle(discovery_thread_count, before) != before) {
@@ -4536,7 +4544,7 @@ boot_close_reconnect(boot_env* env, hook_state* hook)
 	return failure;
 }
 
-TEST(aws_close_reconnect, "sync close keeps the aws-tags registration and reconnect calls EC2 again; destroy releases it and runs the hook destroy once")
+TEST(aws_close_reconnect, "sync close destroys the aws-tags instance and keeps its recipe; reconnect rebuilds it and calls EC2 again; the hook destroy runs once, at destroy")
 {
 	int fds = discovery_fd_count();
 	DISCOVERY_SCOPED(boot_env, env, boot_stop);
@@ -4551,8 +4559,8 @@ TEST(aws_close_reconnect, "sync close keeps the aws-tags registration and reconn
 	as_sleep(50);
 	assert_int_eq(as_load_uint32_acq(&hook.destroys), 1);
 
-	// The credentials have no expiry, so the reconnect reused them without calling get.
-	assert_int_eq(as_load_uint32_acq(&hook.gets), 1);
+	// The rebuilt provider starts with an empty credential cache, so it calls get once more.
+	assert_int_eq(as_load_uint32_acq(&hook.gets), 2);
 	assert_int_eq(settle(discovery_fd_count, fds), fds);
 }
 
@@ -4616,6 +4624,65 @@ TEST(aws_hook_deferred_destroy, "a hook blocked in get past refresh_timeout_ms b
 	assert_false(pthread_equal(h.destroy_thread, pthread_self()));
 }
 
+TEST(aws_hook_inflight_replaced, "a hook blocked in get at sync close outlives its replaced registration; its destroy runs once, after get returns")
+{
+	DISCOVERY_SCOPED(boot_env, env, boot_stop);
+	assert_true(boot_start(&env));
+
+	const uint32_t refresh_timeout = 300;
+	as_config config;
+	as_error err;
+	client_config(&config);
+	config.discovery.refresh_timeout_ms = refresh_timeout;
+
+	char url[64];
+	as_aws_seed_provider_config cfg;
+	aws_cfg(&cfg, stub_url(&env.s, false, "127.0.0.1", url, sizeof(url)));
+	cfg.port = env.a.port;
+	cfg.timeout_ms = refresh_timeout;
+	hook_state h;
+	hook_init(&h, &cfg);
+	h.expiration_ms = cf_clock_getabsolute() + 60000;
+	h.sleep_ms = 1500;
+	h.sleep_from = 2;
+	assert_int_eq(as_config_set_aws_seed_provider(&config, &cfg, &err), AEROSPIKE_OK);
+
+	aerospike* as = aerospike_new(&config);
+
+	if (aerospike_connect(as, &err) != AEROSPIKE_OK || !wait_count(&h.gets, 2, 5000)) {
+		client_close(as);
+		boot_stop(&env);
+		fail("connect failed or the second refresh did not call get");
+	}
+	as_sleep(20);
+
+	// The instance destroy is deferred behind the blocked get; the recipe still holds the hook.
+	client_sync_close(as);
+	uint32_t at_close = as_load_uint32_acq(&h.destroys);
+
+	// Replacing the registration drops the recipe's reference; the blocked instance keeps one.
+	as_aws_seed_provider_config plain;
+	aws_cfg(&plain, url);
+	plain.port = env.a.port;
+	as_status status = as_config_set_aws_seed_provider(&as->config, &plain, &err);
+	uint32_t at_replace = as_load_uint32_acq(&h.destroys);
+	bool get_running = !as_load_uint8_acq(&h.get_returned);
+
+	bool destroyed = wait_count(&h.destroys, 1, 5000);
+	client_close(as);
+	as_sleep(50);
+	boot_stop(&env);
+
+	assert_int_eq(at_close, 0);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(at_replace, 0);
+	assert_true(get_running);
+	assert_true(destroyed);
+	assert_int_eq(as_load_uint32_acq(&h.destroys), 1);
+	assert_true(h.destroyed_after_get);
+	assert_true(pthread_equal(h.destroy_thread, h.get_thread));
+}
+
 #else
 
 TEST(aws_fake_servers_skipped, "wire, TLS, deadline and client aws-tags tests need POSIX loopback servers")
@@ -4674,6 +4741,7 @@ SUITE(discovery_aws, "pluggable discovery aws-tags seed provider tests")
 	suite_add(aws_bootstrap);
 	suite_add(aws_close_reconnect);
 	suite_add(aws_hook_deferred_destroy);
+	suite_add(aws_hook_inflight_replaced);
 #else
 	suite_add(aws_fake_servers_skipped);
 #endif

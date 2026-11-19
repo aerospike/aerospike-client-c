@@ -24,6 +24,7 @@
 #include <aerospike/as_atomic.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_config_internal.h>
 #include <aerospike/as_discovery.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_log.h>
@@ -3126,6 +3127,7 @@ client_sync_close(aerospike* as)
 	as_cluster_destroy(as->cluster);
 	as->cluster = NULL;
 	as->config.discovery.registration_locked = false;
+	as_config_release_plugins(&as->config, true);
 }
 
 static bool
@@ -3332,8 +3334,11 @@ n4_close_reconnect(n4_env* env)
 	uint32_t queries = stub_count(&env->s, "seeds.n4.test/A");
 	client_sync_close(as);
 
-	if (!as->config.discovery.provider_registered) {
-		failure = "sync close released the DNS registration";
+	if (as->config.discovery.provider_registered) {
+		failure = "sync close kept the DNS provider instance";
+	}
+	else if (!as->config.discovery.recipe || as->config.discovery.provider_released) {
+		failure = "sync close dropped the DNS registration";
 	}
 	else if (before >= 0 && settle(discovery_thread_count, before) != before) {
 		failure = "sync close left the discovery thread running";
@@ -3343,6 +3348,10 @@ n4_close_reconnect(n4_env* env)
 	}
 	else if (stub_count(&env->s, "seeds.n4.test/A") <= queries) {
 		failure = "reconnect did not resolve DNS again";
+	}
+	else if (!as->config.discovery.provider_registered ||
+			strcmp(as->config.discovery.provider.name, "dns") != 0) {
+		failure = "reconnect did not rebuild the DNS provider";
 	}
 	client_close(as);
 
@@ -3383,7 +3392,7 @@ n4_close_reconnect(n4_env* env)
 	return failure;
 }
 
-TEST(dns_n4_close_reconnect, "N-4 precursor: sync close keeps the DNS registration and reconnect resolves again; destroy releases it")
+TEST(dns_n4_close_reconnect, "N-4 precursor: sync close destroys the DNS instance and keeps its recipe; reconnect rebuilds it and resolves again")
 {
 	int fds = discovery_fd_count();
 	DISCOVERY_SCOPED(n4_env, env, n4_stop);

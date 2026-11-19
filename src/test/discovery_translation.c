@@ -25,6 +25,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_config_internal.h>
 #include <aerospike/as_discovery.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_node.h>
@@ -490,6 +491,51 @@ TEST(translation_config_helpers, "U-7 native translator helpers validate, copy a
 		config.translation.provider.udata));
 	assert_string_eq(out.name, "h");
 	as_host_destroy(&out);
+
+	as_config_destroy(&config);
+}
+
+TEST(translation_builtin_recipes, "built-in translators are rebuilt after a close from a copy of the caller's table")
+{
+	as_config config;
+	as_error err;
+	char orig[8] = "A1";
+	char alt[16] = "h2:4000";
+	as_addr_map table[] = {{orig, alt}};
+	as_endpoint endpoint;
+	as_host out;
+
+	as_config_init(&config);
+	assert_int_eq(as_config_set_port_map_translator(&config, table, 1, &err), AEROSPIKE_OK);
+	snprintf(orig, sizeof(orig), "B1");
+	snprintf(alt, sizeof(alt), "x:1");
+
+	// What the sync close does, then what the reconnect does.
+	as_config_release_plugins(&config, true);
+	assert_false(config.translation.provider_registered);
+	assert_false(config.translation.provider_released);
+	assert_int_eq(as_config_rebuild_plugins(&config, &err), AEROSPIKE_OK);
+	assert_string_eq(config.translation.provider.name, "port-map");
+
+	endpoint_init(&endpoint, "A1", "tls", "h", 3000, AS_ENDPOINT_SOURCE_STANDARD);
+	assert_true(config.translation.provider.translate(&endpoint, &out,
+		config.translation.provider.udata));
+	assert_string_eq(out.name, "h2");
+	assert_int_eq(out.port, 4000);
+	as_host_destroy(&out);
+
+	assert_int_eq(as_config_set_pass_through_translator(&config, &err), AEROSPIKE_OK);
+	as_config_release_plugins(&config, true);
+	assert_int_eq(as_config_rebuild_plugins(&config, &err), AEROSPIKE_OK);
+	assert_string_eq(config.translation.provider.name, "pass-through");
+
+	// A code translator has no recipe.
+	as_address_translator code = config.translation.provider;
+	code.name = "code";
+	assert_int_eq(as_config_set_address_translator(&config, &code, &err), AEROSPIKE_OK);
+	assert_null(config.translation.recipe);
+	as_config_release_plugins(&config, true);
+	assert_true(config.translation.provider_released);
 
 	as_config_destroy(&config);
 }
@@ -2662,6 +2708,7 @@ SUITE(discovery_translation, "pluggable discovery translation, topology and TLS 
 	suite_add(translation_invalid_output);
 	suite_add(translation_source_unit);
 	suite_add(translation_config_helpers);
+	suite_add(translation_builtin_recipes);
 	suite_add(translation_tls_dns);
 	suite_add(translation_tls_wildcard);
 	suite_add(translation_tls_ip);

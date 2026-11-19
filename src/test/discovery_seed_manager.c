@@ -23,6 +23,7 @@
 #include <aerospike/aerospike.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_config_internal.h>
 #include <aerospike/as_discovery.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_sleep.h>
@@ -52,12 +53,6 @@
 //---------------------------------
 // Static Functions: shared helpers
 //---------------------------------
-
-#if !defined(_WIN32)
-// Private: called by aerospike_close() on an unconnected async client.
-void
-as_config_release_plugins(as_config* config);
-#endif
 
 static void
 hosts_add(as_vector* hosts, const char* name, const char* tls_name, uint16_t port)
@@ -2286,7 +2281,7 @@ TEST(seed_deferred_destroy_sites, "a registration that ends during its call is d
 #if !defined(_WIN32)
 	// Released by the close of an unconnected async client, then destroyed with the config.
 	assert_true(strand_call(&config, &fp));
-	as_config_release_plugins(&config);
+	as_config_release_plugins(&config, false);
 	assert_int_eq(fp_get(&fp, &fp.destroyed), 0);
 	fp_open(&fp);
 	assert_true(fp_wait(&fp, &fp.destroyed, 1, 5000));
@@ -2534,6 +2529,7 @@ client_sync_close(fclient* c)
 	as_cluster_destroy(c->as->cluster);
 	c->as->cluster = NULL;
 	c->as->config.discovery.registration_locked = false;
+	as_config_release_plugins(&c->as->config, true);
 }
 
 static uint32_t
@@ -3227,7 +3223,7 @@ TEST(seed_close_in_flight, "close waits for an in-flight refresh; destroy runs o
 	fnode_stop(&a);
 }
 
-TEST(seed_close_reconnect, "sync close stops discovery and keeps the registration; reconnect starts it again")
+TEST(seed_close_reconnect, "sync close stops discovery and destroys a direct provider; reconnect needs it registered again")
 {
 	DISCOVERY_SCOPED(fnode, a, fnode_stop);
 	assert_true(fnode_start(&a, "A"));
@@ -3250,12 +3246,23 @@ TEST(seed_close_reconnect, "sync close stops discovery and keeps the registratio
 
 	client_sync_close(&c);
 	assert_false(c.as->config.discovery.registration_locked);
-	assert_int_eq(fp.destroyed, 0);
+	assert_int_eq(fp_get(&fp, &fp.destroyed), 1);
+	assert_true(pthread_equal(fp.destroy_thread, pthread_self()));
+	assert_true(c.as->config.discovery.provider_released);
 
 	if (before >= 0) {
 		assert_int_eq(settle(discovery_thread_count, before), before);
 	}
 
+	// A direct instance has no recipe to rebuild it from.
+	assert_int_eq(aerospike_connect(c.as, &err), AEROSPIKE_ERR_PARAM);
+	assert_not_null(strstr(err.message, "released by aerospike_close"));
+	assert_not_null(strstr(err.message, "Register it again"));
+	assert_null(c.as->cluster);
+	assert_int_eq(fp_get(&fp, &fp.calls), 1);
+
+	assert_int_eq(fp_register(&c.as->config, &fp, &err), AEROSPIKE_OK);
+	assert_false(c.as->config.discovery.provider_released);
 	assert_int_eq(aerospike_connect(c.as, &err), AEROSPIKE_OK);
 	assert_true(has_node(c.as, "A"));
 	assert_int_eq(fp_get(&fp, &fp.calls), 2);
@@ -3266,8 +3273,8 @@ TEST(seed_close_reconnect, "sync close stops discovery and keeps the registratio
 	}
 
 	client_close(&c);
-	fp_settle(&fp);
-	assert_int_eq(fp.destroyed, 1);
+	assert_true(fp_wait(&fp, &fp.destroyed, 2, 5000));
+	assert_int_eq(fp.destroyed, 2);
 
 	if (before >= 0) {
 		assert_int_eq(settle(discovery_thread_count, before), before);
@@ -3378,30 +3385,41 @@ TEST(seed_reconnect_in_flight, "reconnect fails naming the provider while the pr
 	assert_int_eq(client_connect(&c, &config), AEROSPIKE_OK);
 	assert_true(fp_wait_blocked(&fp, 5000));
 
-	// The sync close gives up on the blocked call; the registration stays.
+	// The sync close gives up on the blocked call; the destroy of the direct provider waits
+	// for that call to return.
 	client_sync_close(&c);
 	uint32_t calls = fp_get(&fp, &fp.calls);
 	assert_int_eq(fp_get(&fp, &fp.destroyed), 0);
 
+	// A new registration does not end the wait for the previous connection's call.
+	fake_provider fp2;
+	fp_init(&fp2, true, false, addr);
+	assert_int_eq(fp_register(&c.as->config, &fp2, &err), AEROSPIKE_OK);
 	assert_int_eq(aerospike_connect(c.as, &err), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
 	assert_not_null(strstr(err.message, "Seed provider fake"));
 	assert_not_null(strstr(err.message, "previous connection"));
 	assert_null(c.as->cluster);
 	assert_false(c.as->config.discovery.registration_locked);
 	assert_int_eq(fp_get(&fp, &fp.calls), calls);
+	assert_int_eq(fp_get(&fp2, &fp2.calls), 0);
 
 	fp_open(&fp);
-	assert_true(fp_wait(&fp, &fp.finished, calls, 5000));
+	assert_true(fp_wait(&fp, &fp.destroyed, 1, 5000));
+	assert_true(fp_destroyed_off_thread(&fp));
+	assert_int_eq(fp_get(&fp, &fp.finished), calls);
 	assert_int_eq(aerospike_connect(c.as, &err), AEROSPIKE_OK);
 	assert_true(has_node(c.as, "A"));
 	assert_int_eq(fp_get(&fp, &fp.max_active), 1);
+	assert_true(fp_get(&fp2, &fp2.calls) >= 1);
 	client_close(&c);
-	fp_settle(&fp);
-	assert_int_eq(fp.destroyed, 1);
+	fp_settle(&fp2);
+	assert_int_eq(fp2.destroyed, 1);
+	assert_int_eq(fp_get(&fp, &fp.destroyed), 1);
 
 	if (before >= 0) {
 		assert_int_eq(settle(discovery_thread_count, before), before);
 	}
+	fp_free(&fp2);
 	fp_free(&fp);
 	fnode_stop(&a);
 }

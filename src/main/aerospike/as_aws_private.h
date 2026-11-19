@@ -140,6 +140,14 @@ typedef struct as_aws_endpoint_s {
 	bool valid;
 } as_aws_endpoint;
 
+// Credentials hook shared by the providers that a config builds from one
+// as_config_set_aws_seed_provider() call. The last release runs hook.destroy, possibly on the
+// discovery thread.
+typedef struct as_aws_hook_holder_s {
+	as_aws_credentials_hook hook;
+	uint32_t ref_count;
+} as_aws_hook_holder;
+
 // Immutable after creation except the credential cache, the resolved source and the cached IMDS
 // role, which only refresh writes.
 typedef struct as_aws_state_s {
@@ -163,6 +171,9 @@ typedef struct as_aws_state_s {
 
 	// Copied after the last construction failure path; get is NULL when there is no hook.
 	as_aws_credentials_hook hook;
+
+	// Referenced instead of running hook.destroy when the hook belongs to a recipe; or NULL.
+	as_aws_hook_holder* holder;
 
 	uint64_t (*now_ms)(void* udata);
 	void* now_udata;

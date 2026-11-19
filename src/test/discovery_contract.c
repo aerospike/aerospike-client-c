@@ -23,11 +23,19 @@
 #include <aerospike/aerospike_key.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_config_internal.h>
 #include <aerospike/as_conn_pool.h>
 #include <aerospike/as_discovery.h>
 #include <aerospike/as_event.h>
+#include <aerospike/as_hashmap.h>
+#include <aerospike/as_arraylist.h>
+#include <aerospike/as_nil.h>
+#include <aerospike/as_orderedmap.h>
+#include <aerospike/as_pair.h>
+#include <aerospike/as_record.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_socket.h>
+#include <aerospike/as_stringmap.h>
 #include <citrusleaf/cf_clock.h>
 
 #include "test.h"
@@ -229,6 +237,136 @@ file_contains_ci(const char* path, const char* needle, bool* found)
 	}
 	fclose(f);
 	return true;
+}
+
+//---------------------------------
+// Static Functions: factories
+//---------------------------------
+
+// A registered factory. Each instance gets its own heap udata that points back here.
+typedef struct plugin_s {
+	const char* name;
+	as_status fail;
+	bool invalid;
+	uint32_t calls;
+	uint32_t destroyed;
+	uint32_t released;
+	uint32_t destroyed_seq;
+	uint32_t released_seq;
+	as_val* options;
+} plugin;
+
+static uint32_t plugin_seq;
+
+static void
+plugin_reset(plugin* p, const char* name)
+{
+	memset(p, 0, sizeof(plugin));
+	p->name = name;
+}
+
+static void
+plugin_done(plugin* p)
+{
+	as_val_destroy(p->options);
+	p->options = NULL;
+}
+
+static void
+plugin_instance_destroy(void* udata)
+{
+	plugin* p = *(plugin**)udata;
+	p->destroyed++;
+	p->destroyed_seq = ++plugin_seq;
+	free(udata);
+}
+
+static void
+plugin_release(void* udata)
+{
+	plugin* p = udata;
+	p->released++;
+	p->released_seq = ++plugin_seq;
+}
+
+// Record the call and keep the options. Returns the instance udata, or NULL on a failure.
+static void*
+plugin_call(plugin* p, as_error* err, const as_map* options, as_status* status)
+{
+	p->calls++;
+	as_val_destroy(p->options);
+	p->options = as_val_reserve((as_val*)options);
+
+	if (p->fail != AEROSPIKE_OK) {
+		*status = as_error_update(err, p->fail, "%s unavailable", p->name);
+		return NULL;
+	}
+
+	plugin** udata = malloc(sizeof(plugin*));
+	*udata = p;
+	*status = AEROSPIKE_OK;
+	return udata;
+}
+
+static as_status
+provider_factory(as_error* err, const as_map* options, as_seed_provider* provider, void* udata)
+{
+	as_status status;
+	void* instance = plugin_call(udata, err, options, &status);
+
+	if (instance) {
+		init_provider(provider, ((plugin*)udata)->name, NULL);
+		provider->destroy = plugin_instance_destroy;
+		provider->udata = instance;
+
+		if (((plugin*)udata)->invalid) {
+			provider->refresh = NULL;
+		}
+	}
+	return status;
+}
+
+static as_status
+translator_factory(as_error* err, const as_map* options, as_address_translator* translator,
+	void* udata)
+{
+	as_status status;
+	void* instance = plugin_call(udata, err, options, &status);
+
+	if (instance) {
+		init_translator(translator, ((plugin*)udata)->name, NULL);
+		translator->destroy = plugin_instance_destroy;
+		translator->udata = instance;
+
+		if (((plugin*)udata)->invalid) {
+			translator->translate = NULL;
+		}
+	}
+	return status;
+}
+
+static bool
+is_orderedmap(const as_val* val)
+{
+	as_orderedmap probe;
+	as_orderedmap_init(&probe, 1);
+	bool rv = as_val_type(val) == AS_MAP && ((const as_map*)val)->hooks == probe._.hooks;
+	as_orderedmap_destroy(&probe);
+	return rv;
+}
+
+// as_val_tostring() of val compared with expected.
+static bool
+val_str_eq(const as_val* val, const char* expected)
+{
+	char* s = as_val_tostring(val);
+	bool rv = s && strcmp(s, expected) == 0;
+
+	if (!rv) {
+		info("got %s, expected %s", s ? s : "(null)", expected);
+	}
+	free(s);
+	return rv;
 }
 
 //---------------------------------
@@ -1130,6 +1268,15 @@ TEST(discovery_client_destroy_once, "U-1 unconnected client destroy releases reg
 	assert_int_eq(as_config_set_seed_provider(&config, &provider, &err), AEROSPIKE_OK);
 	assert_int_eq(as_config_set_address_translator(&config, &translator, &err), AEROSPIKE_OK);
 
+	plugin p;
+	plugin t;
+	plugin_reset(&p, "consul");
+	plugin_reset(&t, "nat-table");
+	assert_int_eq(as_config_register_seed_provider(&config, "consul", provider_factory,
+		plugin_release, &p, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_register_address_translator(&config, "nat-table", translator_factory,
+		plugin_release, &t, &err), AEROSPIKE_OK);
+
 	if (as_event_loop_size > 0 && !as_event_single_thread) {
 		// aerospike_destroy() does nothing in async mode, so close releases the registrations.
 		aerospike client;
@@ -1137,12 +1284,16 @@ TEST(discovery_client_destroy_once, "U-1 unconnected client destroy releases reg
 		aerospike_close(&client, &err);
 		assert_int_eq(destroyed, 1);
 		assert_int_eq(t_destroyed, 1);
+		assert_int_eq(p.released, 1);
+		assert_int_eq(t.released, 1);
 		assert_true(client.config.discovery.provider_released);
 		assert_true(client.config.translation.provider_released);
 
 		aerospike_close(&client, &err);
 		assert_int_eq(destroyed, 1);
 		assert_int_eq(t_destroyed, 1);
+		assert_int_eq(p.released, 1);
+		assert_int_eq(t.released, 1);
 
 		// A released registration blocks connect until it is registered again.
 		assert_int_eq(aerospike_connect(&client, &err), AEROSPIKE_ERR_PARAM);
@@ -1165,6 +1316,8 @@ TEST(discovery_client_destroy_once, "U-1 unconnected client destroy releases reg
 		as_config_destroy(&client.config);
 		assert_int_eq(destroyed, 2);
 		assert_int_eq(t_destroyed, 2);
+		assert_int_eq(p.released, 1);
+		assert_int_eq(t.released, 1);
 		return;
 	}
 
@@ -1176,12 +1329,15 @@ TEST(discovery_client_destroy_once, "U-1 unconnected client destroy releases reg
 	aerospike_close(client, &err);
 	aerospike_close(client, &err);
 	assert_int_eq(destroyed, 0);
+	assert_int_eq(p.released, 0);
 	assert_false(client->config.discovery.provider_released);
 	assert_false(client->config.translation.provider_released);
 
 	aerospike_destroy(client);
 	assert_int_eq(destroyed, 1);
 	assert_int_eq(t_destroyed, 1);
+	assert_int_eq(p.released, 1);
+	assert_int_eq(t.released, 1);
 }
 
 TEST(discovery_registration_same_udata, "U-1 re-registering the same udata destroys nothing")
@@ -1303,7 +1459,7 @@ TEST(discovery_binding_mode, "U-1 binding seed callbacks are thread mode only")
 	assert_int_eq(destroyed, 1);
 }
 
-TEST(discovery_live_lifecycle, "U-1 registrations survive close/reconnect and are destroyed once")
+TEST(discovery_live_lifecycle, "U-1 sync close destroys direct instances once; reconnect needs them registered again")
 {
 	if (as->config.tls.enable) {
 		info("skipped: lifecycle test does not copy TLS configuration");
@@ -1357,20 +1513,494 @@ TEST(discovery_live_lifecycle, "U-1 registrations survive close/reconnect and ar
 
 	aerospike_close(client, &err);
 	assert_false(client->config.discovery.registration_locked);
-	assert_int_eq(destroyed, 0);
-	assert_int_eq(t_destroyed, 0);
+	assert_int_eq(destroyed, 1);
+	assert_int_eq(t_destroyed, 1);
+	assert_true(client->config.discovery.provider_released);
+	assert_true(client->config.translation.provider_released);
+
+	// Direct instances have no recipe, so each must be registered again.
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message,
+		"Seed provider was released by aerospike_close(). Register it again");
+	assert_int_eq(as_config_set_seed_provider(&client->config, &provider, &err), AEROSPIKE_OK);
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message,
+		"Address translator was released by aerospike_close(). Register it again");
+	assert_int_eq(as_config_set_address_translator(&client->config, &translator, &err),
+		AEROSPIKE_OK);
+	assert_null(client->cluster);
 
 	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_OK);
 	aerospike_close(client, &err);
 	aerospike_close(client, &err);
-	assert_int_eq(destroyed, 0);
-	assert_int_eq(t_destroyed, 0);
+	assert_int_eq(destroyed, 2);
+	assert_int_eq(t_destroyed, 2);
 
 	aerospike_destroy(client);
-	assert_int_eq(destroyed, 1);
-	assert_int_eq(t_destroyed, 1);
+	assert_int_eq(destroyed, 2);
+	assert_int_eq(t_destroyed, 2);
 	assert_int_eq(other, 0);
 }
+
+//---------------------------------
+// Tests: named factories
+//---------------------------------
+
+#define assert_message(__err, __needle) \
+	if (!strstr((__err).message, __needle)) { \
+		fail("message '%s' lacks '%s'", (__err).message, __needle); \
+	}
+
+#define fail(fmt, ...) \
+	return atf_assert_log(__result__, "", __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+
+TEST(discovery_factory_registration, "registration rejects built-in, duplicate and invalid names, and a failed registration keeps udata")
+{
+	as_config config;
+	as_error err;
+	plugin p;
+	plugin_reset(&p, "consul");
+	as_config_init(&config);
+
+	static const char* const providers[] = {"static", "dns", "aws-tags"};
+	static const char* const translators[] = {"static-map", "port-map", "pass-through"};
+	char needle[64];
+
+	for (uint32_t i = 0; i < 3; i++) {
+		assert_int_eq(as_config_register_seed_provider(&config, providers[i], provider_factory,
+			plugin_release, &p, &err), AEROSPIKE_ERR_PARAM);
+		snprintf(needle, sizeof(needle), "'%s': built-in name", providers[i]);
+		assert_message(err, needle);
+
+		assert_int_eq(as_config_register_address_translator(&config, translators[i],
+			translator_factory, plugin_release, &p, &err), AEROSPIKE_ERR_PARAM);
+		snprintf(needle, sizeof(needle), "'%s': built-in name", translators[i]);
+		assert_message(err, needle);
+	}
+
+	assert_int_eq(as_config_register_seed_provider(&config, "consul", provider_factory,
+		plugin_release, &p, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_register_address_translator(&config, "nat-table", translator_factory,
+		plugin_release, &p, &err), AEROSPIKE_OK);
+
+	assert_int_eq(as_config_register_seed_provider(&config, "consul", provider_factory,
+		plugin_release, &p, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Invalid seed provider name 'consul': already registered");
+	assert_int_eq(as_config_register_address_translator(&config, "nat-table", translator_factory,
+		plugin_release, &p, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Invalid address translator name 'nat-table': already registered");
+
+	// Providers and translators have separate names.
+	assert_int_eq(as_config_register_address_translator(&config, "consul", translator_factory,
+		plugin_release, &p, &err), AEROSPIKE_OK);
+
+	assert_int_eq(as_config_register_seed_provider(&config, NULL, provider_factory,
+		plugin_release, &p, &err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_register_seed_provider(&config, "", provider_factory,
+		plugin_release, &p, &err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_register_seed_provider(&config, "etcd", NULL, plugin_release, &p,
+		&err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Invalid seed provider factory for 'etcd': null");
+	assert_int_eq(as_config_register_seed_provider(NULL, "etcd", provider_factory,
+		plugin_release, &p, &err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_register_address_translator(&config, NULL, translator_factory,
+		plugin_release, &p, &err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_register_address_translator(&config, "etcd", NULL, plugin_release,
+		&p, &err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_register_address_translator(NULL, "etcd", translator_factory,
+		plugin_release, &p, &err), AEROSPIKE_ERR_PARAM);
+
+	// A NULL destroy is allowed.
+	assert_int_eq(as_config_register_seed_provider(&config, "etcd", provider_factory, NULL, &p,
+		&err), AEROSPIKE_OK);
+
+	// Registering builds nothing, and a failed registration leaves udata with the caller.
+	assert_int_eq(p.calls, 0);
+	assert_int_eq(p.released, 0);
+
+	as_config_destroy(&config);
+	assert_int_eq(p.released, 3);
+	assert_int_eq(p.calls, 0);
+}
+
+TEST(discovery_factory_select, "select builds from a registered factory with a client-owned ordered copy of the options")
+{
+	as_config config;
+	as_error err;
+	plugin p;
+	plugin t;
+	plugin_reset(&p, "consul");
+	plugin_reset(&t, "nat-table");
+	as_config_init(&config);
+
+	assert_int_eq(as_config_register_seed_provider(&config, "consul", provider_factory,
+		plugin_release, &p, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_register_address_translator(&config, "nat-table", translator_factory,
+		plugin_release, &t, &err), AEROSPIKE_OK);
+
+	// NULL options: an empty map.
+	assert_int_eq(as_config_select_seed_provider(&config, "consul", NULL, &err), AEROSPIKE_OK);
+	assert_int_eq(p.calls, 1);
+	assert_true(config.discovery.provider_registered);
+	assert_string_eq(config.discovery.provider.name, "consul");
+	assert_true(is_orderedmap(p.options));
+	assert_true(val_str_eq(p.options, "{}"));
+
+	// A stack hashmap destroyed right after the call arrives as an ordered copy, a pair as a list.
+	as_hashmap map;
+	as_hashmap_init(&map, 8);
+	as_stringmap_set_str((as_map*)&map, "service", "aerospike");
+	as_stringmap_set_int64((as_map*)&map, "port", 3000);
+	as_arraylist* endpoints = as_arraylist_new(2, 0);
+	as_arraylist_append_str(endpoints, "127.0.0.1:1");
+	as_stringmap_set_list((as_map*)&map, "endpoints", (as_list*)endpoints);
+	as_stringmap_set((as_map*)&map, "pair", (as_val*)as_pair_new((as_val*)as_integer_new(1),
+		(as_val*)as_string_new_strdup("x")));
+	as_stringmap_set_double((as_map*)&map, "ratio", 0.5);
+	as_stringmap_set((as_map*)&map, "none", (as_val*)&as_nil);
+
+	assert_int_eq(as_config_select_seed_provider(&config, "consul", (as_map*)&map, &err),
+		AEROSPIKE_OK);
+	as_hashmap_destroy(&map);
+	assert_int_eq(p.calls, 2);
+	assert_int_eq(p.destroyed, 1);
+	assert_true(is_orderedmap(p.options));
+	assert_true(val_str_eq(p.options, "{\"endpoints\":[\"127.0.0.1:1\"], \"none\":NIL, "
+		"\"pair\":[1, \"x\"], \"port\":3000, \"ratio\":0.5, \"service\":\"aerospike\"}"));
+
+	// A value that cannot be copied fails the select and keeps the current instance.
+	as_orderedmap bad;
+	as_orderedmap_init(&bad, 1);
+	as_stringmap_set((as_map*)&bad, "rec", (as_val*)as_record_new(1));
+	assert_int_eq(as_config_select_seed_provider(&config, "consul", (as_map*)&bad, &err),
+		AEROSPIKE_ERR_PARAM);
+	as_orderedmap_destroy(&bad);
+	assert_message(err, "Invalid seed provider 'consul': Invalid options: cannot copy");
+	assert_int_eq(p.calls, 2);
+	assert_int_eq(p.destroyed, 1);
+	assert_true(config.discovery.provider_registered);
+
+	// A factory failure keeps the current instance.
+	p.fail = AEROSPIKE_ERR_CLIENT;
+	assert_int_eq(as_config_select_seed_provider(&config, "consul", NULL, &err),
+		AEROSPIKE_ERR_CLIENT);
+	assert_message(err, "Invalid seed provider 'consul': factory failed: consul unavailable");
+	assert_int_eq(p.calls, 3);
+	assert_int_eq(p.destroyed, 1);
+	assert_true(config.discovery.provider_registered);
+	p.fail = AEROSPIKE_OK;
+
+	// An invalid result is destroyed once and keeps the current instance.
+	p.invalid = true;
+	assert_int_eq(as_config_select_seed_provider(&config, "consul", NULL, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Invalid seed provider 'consul': factory returned an invalid provider");
+	assert_int_eq(p.calls, 4);
+	assert_int_eq(p.destroyed, 2);
+	assert_true(config.discovery.provider_registered);
+	p.invalid = false;
+
+	assert_int_eq(as_config_select_address_translator(&config, "nat-table", NULL, &err),
+		AEROSPIKE_OK);
+	assert_int_eq(t.calls, 1);
+	assert_string_eq(config.translation.provider.name, "nat-table");
+
+	t.invalid = true;
+	assert_int_eq(as_config_select_address_translator(&config, "nat-table", NULL, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_message(err,
+		"Invalid address translator 'nat-table': factory returned an invalid translator");
+	assert_int_eq(t.destroyed, 1);
+	assert_true(config.translation.provider_registered);
+
+	// A code setter replaces a selected instance.
+	uint32_t code = 0;
+	as_address_translator translator;
+	init_translator(&translator, "code", &code);
+	assert_int_eq(as_config_set_address_translator(&config, &translator, &err), AEROSPIKE_OK);
+	assert_int_eq(t.destroyed, 2);
+
+	// Instances are destroyed before the factories are released.
+	as_config_destroy(&config);
+	assert_int_eq(p.destroyed, 3);
+	assert_int_eq(p.released, 1);
+	assert_true(p.released_seq > p.destroyed_seq);
+	assert_int_eq(t.destroyed, 2);
+	assert_int_eq(t.released, 1);
+	assert_int_eq(code, 1);
+	plugin_done(&p);
+	plugin_done(&t);
+}
+
+TEST(discovery_factory_select_rejections, "select rejects a NULL config, a missing, built-in or unregistered name, and a connected client")
+{
+	as_config config;
+	as_error err;
+	plugin p;
+	plugin_reset(&p, "consul");
+	as_config_init(&config);
+
+	assert_int_eq(as_config_select_seed_provider(&config, "consul", NULL, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Invalid seed provider name 'consul': not registered");
+
+	assert_int_eq(as_config_register_seed_provider(&config, "consul", provider_factory,
+		plugin_release, &p, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_register_address_translator(&config, "nat-table", translator_factory,
+		plugin_release, &p, &err), AEROSPIKE_OK);
+
+	assert_int_eq(as_config_select_seed_provider(NULL, "consul", NULL, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_select_seed_provider(&config, NULL, NULL, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_select_seed_provider(&config, "", NULL, &err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_select_seed_provider(&config, "eureka", NULL, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Invalid seed provider name 'eureka': not registered");
+	assert_int_eq(as_config_select_seed_provider(&config, "static", NULL, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Invalid seed provider name 'static': built-in name, use its own setter");
+
+	assert_int_eq(as_config_select_address_translator(NULL, "nat-table", NULL, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_select_address_translator(&config, NULL, NULL, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_select_address_translator(&config, "consul", NULL, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Invalid address translator name 'consul': not registered");
+	assert_int_eq(as_config_select_address_translator(&config, "pass-through", NULL, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_message(err,
+		"Invalid address translator name 'pass-through': built-in name, use its own setter");
+
+	// As while connected.
+	config.discovery.registration_locked = true;
+	assert_int_eq(as_config_select_seed_provider(&config, "consul", NULL, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Seed provider cannot be replaced while the client is connected");
+	assert_int_eq(as_config_select_address_translator(&config, "nat-table", NULL, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Address translator cannot be replaced while the client is connected");
+	assert_int_eq(as_config_register_seed_provider(&config, "etcd", provider_factory,
+		plugin_release, &p, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Invalid seed provider name 'etcd': cannot register while the client is "
+		"connected");
+	config.discovery.registration_locked = false;
+
+	assert_int_eq(p.calls, 0);
+	assert_false(config.discovery.provider_registered);
+	assert_false(config.translation.provider_registered);
+	as_config_destroy(&config);
+	assert_int_eq(p.released, 2);
+}
+
+TEST(discovery_factory_recipe, "a selected factory is rebuilt from its index and its own options after a close, also after more registrations")
+{
+	as_config config;
+	as_error err;
+	plugin p;
+	plugin t;
+	plugin extra;
+	plugin_reset(&p, "consul");
+	plugin_reset(&t, "nat-table");
+	plugin_reset(&extra, "extra");
+	as_config_init(&config);
+
+	assert_int_eq(as_config_register_seed_provider(&config, "consul", provider_factory,
+		plugin_release, &p, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_register_address_translator(&config, "nat-table", translator_factory,
+		plugin_release, &t, &err), AEROSPIKE_OK);
+
+	// The caller's map is gone before the rebuild.
+	as_hashmap map;
+	as_hashmap_init(&map, 4);
+	as_stringmap_set_str((as_map*)&map, "service", "aerospike");
+	as_stringmap_set_int64((as_map*)&map, "port", 3000);
+	assert_int_eq(as_config_select_seed_provider(&config, "consul", (as_map*)&map, &err),
+		AEROSPIKE_OK);
+	as_hashmap_destroy(&map);
+	assert_int_eq(as_config_select_address_translator(&config, "nat-table", NULL, &err),
+		AEROSPIKE_OK);
+
+	// The recipe and the factory each hold the copied options.
+	assert_int_eq(p.options->count, 2);
+
+	// Ten more registrations grow the registry; the recipe keeps its index.
+	char names[10][16];
+
+	for (uint32_t i = 0; i < 10; i++) {
+		snprintf(names[i], sizeof(names[i]), "extra%u", i);
+		assert_int_eq(as_config_register_seed_provider(&config, names[i], provider_factory,
+			plugin_release, &extra, &err), AEROSPIKE_OK);
+	}
+
+	// What the sync close does.
+	as_config_release_plugins(&config, true);
+	assert_int_eq(p.destroyed, 1);
+	assert_int_eq(t.destroyed, 1);
+	assert_false(config.discovery.provider_registered);
+	assert_false(config.translation.provider_registered);
+	assert_false(config.discovery.provider_released);
+	assert_false(config.translation.provider_released);
+	assert_not_null(config.discovery.recipe);
+	assert_int_eq(p.released, 0);
+
+	assert_int_eq(as_config_rebuild_plugins(&config, &err), AEROSPIKE_OK);
+	assert_int_eq(p.calls, 2);
+	assert_int_eq(t.calls, 2);
+	assert_int_eq(extra.calls, 0);
+	assert_string_eq(config.discovery.provider.name, "consul");
+	assert_string_eq(config.translation.provider.name, "nat-table");
+	assert_true(is_orderedmap(p.options));
+	assert_true(val_str_eq(p.options, "{\"port\":3000, \"service\":\"aerospike\"}"));
+
+	// A rebuild with an instance in place builds nothing.
+	assert_int_eq(as_config_rebuild_plugins(&config, &err), AEROSPIKE_OK);
+	assert_int_eq(p.calls, 2);
+
+	// A failed rebuild keeps the recipe, so a later connect tries again.
+	as_config_release_plugins(&config, true);
+	p.fail = AEROSPIKE_ERR_CLIENT;
+	assert_int_eq(as_config_rebuild_plugins(&config, &err), AEROSPIKE_ERR_CLIENT);
+	assert_message(err, "Failed to rebuild the seed provider: factory failed: consul unavailable");
+	assert_false(config.discovery.provider_registered);
+	assert_false(config.translation.provider_registered);
+	assert_not_null(config.discovery.recipe);
+	p.fail = AEROSPIKE_OK;
+	assert_int_eq(as_config_rebuild_plugins(&config, &err), AEROSPIKE_OK);
+	assert_int_eq(p.calls, 4);
+	assert_int_eq(t.calls, 3);
+	assert_int_eq(p.destroyed, 2);
+
+	// A code setter drops the recipe and its options reference, once.
+	uint32_t code = 0;
+	as_seed_provider provider;
+	init_provider(&provider, "code", &code);
+	assert_int_eq(as_config_set_seed_provider(&config, &provider, &err), AEROSPIKE_OK);
+	assert_int_eq(p.destroyed, 3);
+	assert_null(config.discovery.recipe);
+	assert_int_eq(p.options->count, 1);
+
+	// Without a recipe the code instance is released for good.
+	as_config_release_plugins(&config, true);
+	assert_int_eq(code, 1);
+	assert_true(config.discovery.provider_released);
+	assert_false(config.translation.provider_released);
+
+	as_config_destroy(&config);
+	assert_int_eq(p.destroyed, 3);
+	assert_int_eq(t.destroyed, 3);
+	assert_int_eq(p.released, 1);
+	assert_int_eq(t.released, 1);
+	assert_int_eq(extra.released, 10);
+	assert_true(t.released_seq > t.destroyed_seq);
+	assert_int_eq(code, 1);
+	plugin_done(&p);
+	plugin_done(&t);
+	plugin_done(&extra);
+}
+
+TEST(discovery_recipe_unconnected_close, "the close of an unconnected async client drops recipes and registries for good")
+{
+	as_config config;
+	as_error err;
+	plugin p;
+	plugin_reset(&p, "consul");
+	as_config_init(&config);
+
+	assert_int_eq(as_config_register_seed_provider(&config, "consul", provider_factory,
+		plugin_release, &p, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_select_seed_provider(&config, "consul", NULL, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_set_pass_through_translator(&config, &err), AEROSPIKE_OK);
+	assert_not_null(config.translation.recipe);
+
+	as_config_release_plugins(&config, false);
+	assert_int_eq(p.destroyed, 1);
+	assert_int_eq(p.released, 1);
+	assert_true(p.released_seq > p.destroyed_seq);
+	assert_null(config.discovery.recipe);
+	assert_null(config.translation.recipe);
+	assert_true(config.discovery.provider_released);
+	assert_true(config.translation.provider_released);
+
+	assert_int_eq(as_config_rebuild_plugins(&config, &err), AEROSPIKE_OK);
+	assert_int_eq(p.calls, 1);
+	assert_false(config.discovery.provider_registered);
+
+	as_config_destroy(&config);
+	assert_int_eq(p.destroyed, 1);
+	assert_int_eq(p.released, 1);
+	plugin_done(&p);
+}
+
+TEST(discovery_live_factory_reconnect, "a selected factory is destroyed at sync close and rebuilt by reconnect; each instance is destroyed once")
+{
+	if (as->config.tls.enable) {
+		info("skipped: lifecycle test does not copy TLS configuration");
+		return;
+	}
+
+	as_config config;
+	as_error err;
+	plugin p;
+	plugin t;
+	plugin_reset(&p, "consul");
+	plugin_reset(&t, "nat-table");
+
+	as_config_init(&config);
+	as_config_add_hosts(&config, g_host, (uint16_t)g_port);
+	as_config_set_user(&config, as->config.user, as->config.password);
+	config.use_services_alternate = as->config.use_services_alternate;
+	config.auth_mode = as->config.auth_mode;
+
+	assert_int_eq(as_config_register_seed_provider(&config, "consul", provider_factory,
+		plugin_release, &p, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_register_address_translator(&config, "nat-table", translator_factory,
+		plugin_release, &t, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_select_seed_provider(&config, "consul", NULL, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_select_address_translator(&config, "nat-table", NULL, &err),
+		AEROSPIKE_OK);
+
+	aerospike* client = aerospike_new(&config);
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_OK);
+
+	if (as_event_loop_size > 0 && !as_event_single_thread) {
+		// Async close destroys the client, instances first.
+		aerospike_close(client, &err);
+		assert_int_eq(p.destroyed, 1);
+		assert_int_eq(t.destroyed, 1);
+		assert_int_eq(p.released, 1);
+		assert_true(p.released_seq > p.destroyed_seq);
+		plugin_done(&p);
+		plugin_done(&t);
+		return;
+	}
+
+	aerospike_close(client, &err);
+	assert_int_eq(p.destroyed, 1);
+	assert_int_eq(t.destroyed, 1);
+	assert_int_eq(p.released, 0);
+
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_OK);
+	assert_int_eq(p.calls, 2);
+	assert_int_eq(t.calls, 2);
+	assert_string_eq(client->config.discovery.provider.name, "consul");
+	aerospike_close(client, &err);
+	aerospike_close(client, &err);
+	assert_int_eq(p.destroyed, 2);
+	assert_int_eq(t.destroyed, 2);
+
+	aerospike_destroy(client);
+	assert_int_eq(p.destroyed, 2);
+	assert_int_eq(t.destroyed, 2);
+	assert_int_eq(p.calls, 2);
+	assert_int_eq(p.released, 1);
+	assert_int_eq(t.released, 1);
+	plugin_done(&p);
+	plugin_done(&t);
+}
+
+#undef fail
 
 // AWS documented TCP idle timeout of Network Load Balancer listeners (default) and PrivateLink
 // endpoints.
@@ -1607,6 +2237,12 @@ SUITE(discovery_contract, "pluggable discovery contract tests")
 	suite_add(discovery_registration_same_udata);
 	suite_add(discovery_binding_mode);
 	suite_add(discovery_live_lifecycle);
+	suite_add(discovery_factory_registration);
+	suite_add(discovery_factory_select);
+	suite_add(discovery_factory_select_rejections);
+	suite_add(discovery_factory_recipe);
+	suite_add(discovery_recipe_unconnected_close);
+	suite_add(discovery_live_factory_reconnect);
 	suite_add(discovery_idle_reap_under_lb_timeout);
 	suite_add(discovery_idle_reap_live);
 }

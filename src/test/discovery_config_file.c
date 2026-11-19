@@ -27,6 +27,7 @@
 #include <aerospike/as_config.h>
 #include <aerospike/as_config_internal.h>
 #include <aerospike/as_discovery.h>
+#include <aerospike/as_double.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_host.h>
 #include <aerospike/as_log.h>
@@ -44,6 +45,7 @@
 #if defined(_MSC_VER)
 #include <windows.h>
 #else
+#include <locale.h>
 #include <unistd.h>
 #endif
 
@@ -1067,21 +1069,45 @@ static const cf_invalid cf_invalid_rows[] = {
 	{"    translation:\n      provider: nat-table\n      port_map:\n        A1: \"h:3000\"\n",
 	 "static.client.translation.port_map is only valid with provider port-map, not 'nat-table'"},
 
-	// Tagged option values (stricter than SnakeYAML's constructors).
+	// Option values SnakeYAML's constructors reject.
 	{"    discovery:\n      provider: consul\n      x: !!int abc\n",
 	 "Invalid static.client.discovery.x: 'abc' is not a valid !!int"},
-	{"    discovery:\n      provider: consul\n      x: !!float 1\n",
-	 "Invalid static.client.discovery.x: '1' is not a valid !!float"},
-	{"    discovery:\n      provider: consul\n      x: !!null x\n",
-	 "Invalid static.client.discovery.x: 'x' is not a valid !!null"},
-	{"    discovery:\n      provider: consul\n      x: !!bool tRuE\n",
-	 "Invalid static.client.discovery.x: 'tRuE' is not a valid !!bool"},
+	{"    discovery:\n      provider: consul\n      x: !!int 0x\n",
+	 "Invalid static.client.discovery.x: '0x' is not a valid !!int"},
+	{"    discovery:\n      provider: consul\n      x: !!int 08\n",
+	 "Invalid static.client.discovery.x: '08' is not a valid !!int"},
+	{"    discovery:\n      provider: consul\n      x: !!int --5\n",
+	 "Invalid static.client.discovery.x: '--5' is not a valid !!int"},
+	{"    discovery:\n      provider: consul\n      x: !!int 1::30\n",
+	 "Invalid static.client.discovery.x: '1::30' is not a valid !!int"},
+	{"    discovery:\n      provider: consul\n      x: !!int ''\n",
+	 "Invalid static.client.discovery.x: '' is not a valid !!int"},
+	{"    discovery:\n      provider: consul\n      x: -10000:00:00:00\n",
+	 "Invalid static.client.discovery.x: '-10000:00:00:00' is not a valid !!int"},
+	{"    discovery:\n      provider: consul\n      x: !!float 0x1.8\n",
+	 "Invalid static.client.discovery.x: '0x1.8' is not a valid !!float"},
+	{"    discovery:\n      provider: consul\n      x: !!float infinity\n",
+	 "Invalid static.client.discovery.x: 'infinity' is not a valid !!float"},
+	{"    discovery:\n      provider: consul\n      x: !!float 1::30\n",
+	 "Invalid static.client.discovery.x: '1::30' is not a valid !!float"},
+	{"    discovery:\n      provider: consul\n      x: !!float 1.5x\n",
+	 "Invalid static.client.discovery.x: '1.5x' is not a valid !!float"},
+	{"    discovery:\n      provider: consul\n      x: !!timestamp foo\n",
+	 "Invalid static.client.discovery.x: 'foo' is not a valid !!timestamp"},
+	{"    discovery:\n      provider: consul\n      x: !!timestamp 2001-12-14 21:59\n",
+	 "Invalid static.client.discovery.x: '2001-12-14 21:59' is not a valid !!timestamp"},
+	{"    discovery:\n      provider: consul\n      x: <<\n",
+	 "Invalid static.client.discovery.x: a YAML merge key (<<) is not a value"},
+	{"    discovery:\n      provider: consul\n      x: [!!merge m]\n",
+	 "Invalid static.client.discovery.x[0]: a YAML merge key (<<) is not a value"},
+	{"    discovery:\n      provider: consul\n      x: {a: [1, {b: !!int z}]}\n",
+	 "Invalid static.client.discovery.x.a[1].b: 'z' is not a valid !!int"},
 	{"    discovery:\n      provider: consul\n      x: !foo x\n",
 	 "Invalid static.client.discovery.x: unsupported tag !foo"},
 	{"    discovery:\n      provider: consul\n      x: !!binary aGk=\n",
 	 "Invalid static.client.discovery.x: unsupported tag !!binary"},
 	{"    translation:\n      provider: nat-table\n      x:\n        - !!omap [a]\n",
-	 "Invalid static.client.translation.x: unsupported tag !!omap"},
+	 "Invalid static.client.translation.x[0]: unsupported tag !!omap"},
 	{"    discovery:\n      merge_policy: !!int merge\n      provider: consul\n",
 	 "Invalid static.client.discovery.merge_policy: 'merge' is not a valid !!int"},
 
@@ -1091,13 +1117,15 @@ static const cf_invalid cf_invalid_rows[] = {
 	{"    discovery:\n      provider: consul\n      x:\n        true: a\n",
 	 "Invalid static.client.discovery.x: map keys must be strings or integers"},
 	{"    discovery:\n      provider: consul\n      x: {a: [{~: 1}]}\n",
+	 "Invalid static.client.discovery.x.a[0]: map keys must be strings or integers"},
+	{"    discovery:\n      provider: consul\n      x: {[a]: 1, b: !!int z}\n",
 	 "Invalid static.client.discovery.x: map keys must be strings or integers"},
 	{"    discovery:\n      provider: consul\n      x: &a 1\n      y: *a\n",
 	 "Invalid static.client.discovery.y: YAML aliases are not supported"},
 	{"    discovery:\n      provider: consul\n      x: &a 1\n      y: [2, *a]\n",
-	 "Invalid static.client.discovery.y: YAML aliases are not supported"},
+	 "Invalid static.client.discovery.y[1]: YAML aliases are not supported"},
 	{"    discovery:\n      provider: dns\n      x: &a 1\n      y:\n        z: *a\n",
-	 "Invalid static.client.discovery.y: YAML aliases are not supported"},
+	 "Invalid static.client.discovery.y.z: YAML aliases are not supported"},
 	{"    discovery:\n      provider: consul\n      x: &a 1\n      *a : 2\n",
 	 "Invalid static.client.discovery: YAML aliases are not supported"},
 	{"    discovery:\n      provider: dns\n      dns:\n        names: [seeds.example.com]\n"
@@ -1108,12 +1136,25 @@ static const cf_invalid cf_invalid_rows[] = {
 	{"    discovery:\n      provider: consul\n      x:\n        <<: {a: 1}\n",
 	 "Invalid static.client.discovery.x: YAML merge keys (<<) are not supported"},
 	{"    discovery:\n      provider: consul\n      ? !!merge m\n      : {a: 1}\n",
-	 "Invalid static.client.discovery: YAML merge keys (<<) are not supported"}
+	 "Invalid static.client.discovery: YAML merge keys (<<) are not supported"},
+
+	// Keys that are not scalars end the file at any level.
+	{"[a]: b\n", "Invalid top-level key: expected a scalar, not a sequence"},
+	{"  {a: 1}: b\n", "Invalid static: expected scalar keys, not a map"},
+	{"    [a]: b\n", "Invalid static.client: expected scalar keys, not a sequence"},
+	{"dynamic:\n  [a]: b\n", "Invalid dynamic: expected scalar keys, not a sequence"},
+	{"dynamic:\n  client:\n    [a]: b\n",
+	 "Invalid dynamic.client: expected scalar keys, not a sequence"},
+	{"dynamic:\n  read:\n    [a]: b\n",
+	 "Invalid dynamic.read: expected scalar keys, not a sequence"},
+	{"dynamic:\n  metrics:\n    labels:\n      [a]: b\n",
+	 "Invalid dynamic.metrics.labels: expected scalar keys, not a sequence"},
+	{"dynamic:\n  client:\n    rack_ids: [1, [2]]\n", "Expected event 6. Received event: 7"}
 };
 
-// Flow sequences nested depth deep around 1.
+// Flow sequences nested depth deep around inner.
 static void
-cf_nested(char* buf, size_t size, uint32_t depth)
+cf_nested(char* buf, size_t size, uint32_t depth, const char* inner)
 {
 	size_t len = 0;
 
@@ -1121,7 +1162,7 @@ cf_nested(char* buf, size_t size, uint32_t depth)
 		buf[len++] = '[';
 	}
 
-	len += snprintf(buf + len, size - len, "1");
+	len += snprintf(buf + len, size - len, "%s", inner);
 
 	for (uint32_t i = 0; i < depth && len < size - 1; i++) {
 		buf[len++] = ']';
@@ -1132,16 +1173,29 @@ cf_nested(char* buf, size_t size, uint32_t depth)
 TEST(cf_invalid_keeps_code, "an invalid file is rejected as a whole: code plugins kept, no key applied, one error naming the key")
 {
 	uint32_t rows = sizeof(cf_invalid_rows) / sizeof(cf_invalid_rows[0]);
-	char deep[160];
-	cf_nested(deep, sizeof(deep), 51);
-	char deep_body[256];
-	snprintf(deep_body, sizeof(deep_body),
-		"    discovery:\n      provider: consul\n      x: %s\n", deep);
-	cf_invalid deep_row = {deep_body,
-		"Invalid static.client.discovery.x: nested deeper than 50 levels"};
 
-	for (uint32_t i = 0; i <= rows; i++) {
-		const cf_invalid* row = i < rows ? &cf_invalid_rows[i] : &deep_row;
+	// SnakeYAML's limit counts every open collection of the file: an option value opens inside
+	// four, so 48 empty lists are too deep; a skipped dns value inside five, so a scalar in 46
+	// lists is; an unknown top-level section inside one.
+	char deep[3][160];
+	char deep_body[3][256];
+	cf_nested(deep[0], sizeof(deep[0]), 48, "");
+	cf_nested(deep[1], sizeof(deep[1]), 46, "1");
+	cf_nested(deep[2], sizeof(deep[2]), 51, "");
+	snprintf(deep_body[0], sizeof(deep_body[0]),
+		"    discovery:\n      provider: consul\n      x: %s\n", deep[0]);
+	snprintf(deep_body[1], sizeof(deep_body[1]),
+		"    discovery:\n      provider: dns\n      dns:\n        extra: %s\n", deep[1]);
+	snprintf(deep_body[2], sizeof(deep_body[2]), "zz: %s\n", deep[2]);
+	const cf_invalid deep_rows[] = {
+		{deep_body[0], "YAML nesting deeper than 50 levels: line 7, column 57"},
+		{deep_body[1], "YAML nesting deeper than 50 levels: line 8, column 62"},
+		{deep_body[2], "YAML nesting deeper than 50 levels: line 5, column 55"}
+	};
+	uint32_t total = rows + sizeof(deep_rows) / sizeof(deep_rows[0]);
+
+	for (uint32_t i = 0; i < total; i++) {
+		const cf_invalid* row = i < rows ? &cf_invalid_rows[i] : &deep_rows[i - rows];
 		char body[CF_BODY_MAX];
 		snprintf(body, sizeof(body), CF_HEAD "    max_connections_per_node: 60\n%s", row->body);
 
@@ -1679,13 +1733,56 @@ static const cf_typed cf_typed_rows[] = {
 	{"2001-12-14t21:59:43.10-05:00", AS_STRING, "\"2001-12-14t21:59:43.10-05:00\""},
 	{"hello world", AS_STRING, "\"hello world\""},
 
-	// Tags.
+	// Base 60 wraps as Java's 32-bit int does.
+	{"100000:00:00:00", AS_INTEGER, "125163520"},
+	{"10000:00:00:00", AS_INTEGER, "-2134967296"},
+	{"-0x8000000000000000", AS_INTEGER, "-9223372036854775808"},
+
+	// Tags: the non-specific ! resolves any style; a core tag runs SnakeYAML's constructor.
 	{"!!str 5", AS_STRING, "\"5\""},
-	{"!!int \"5\"", AS_INTEGER, "5"},
-	{"!!float 1.5", AS_DOUBLE, "1.5"},
-	{"!!bool yes", AS_BOOLEAN, "true"},
+	{"! 5", AS_INTEGER, "5"},
+	{"! '5'", AS_INTEGER, "5"},
+	{"! \"yes\"", AS_BOOLEAN, "true"},
 	{"!!null ~", AS_NIL, "NIL"},
-	{"! 5", AS_STRING, "\"5\""},
+	{"!!null x", AS_NIL, "NIL"},
+	{"!!bool yes", AS_BOOLEAN, "true"},
+	{"!!bool tRuE", AS_BOOLEAN, "true"},
+	{"!!bool YES", AS_BOOLEAN, "true"},
+	{"!!bool maybe", AS_NIL, "NIL"},
+	{"!!bool 1", AS_NIL, "NIL"},
+	{"!!int \"5\"", AS_INTEGER, "5"},
+	{"!!int _1", AS_INTEGER, "1"},
+	{"!!int ++5", AS_INTEGER, "5"},
+	{"!!int +-5", AS_INTEGER, "-5"},
+	{"!!int 0x-5", AS_INTEGER, "-5"},
+	{"!!int 1:-5", AS_INTEGER, "55"},
+	{"!!int 1:+5", AS_INTEGER, "65"},
+	{"!!int '1:'", AS_INTEGER, "1"},
+	{"!!int ':'", AS_INTEGER, "0"},
+	{"!!int 4294967296:0", AS_INTEGER, "0"},
+	{"!!int 9223372036854775808", AS_STRING, "\"9223372036854775808\""},
+	{"!!float 1.5", AS_DOUBLE, "1.5"},
+	{"!!float 1", AS_DOUBLE, "1"},
+	{"!!float 1_000", AS_DOUBLE, "1000"},
+	{"!!float 1e3", AS_DOUBLE, "1000"},
+	{"!!float .5f", AS_DOUBLE, "0.5"},
+	{"!!float 1.e5", AS_DOUBLE, "100000"},
+	{"!!float ' 1.5 '", AS_DOUBLE, "1.5"},
+	{"!!float Infinity", AS_DOUBLE, "inf"},
+	{"!!float --1", AS_DOUBLE, "1"},
+	{"!!float 0x1.8p1", AS_DOUBLE, "3"},
+	{"!!float 0x.8p1", AS_DOUBLE, "1"},
+	{"!!float 1:30.5e1", AS_DOUBLE, "365"},
+	{"!!float 1:-30", AS_DOUBLE, "30"},
+	{"!!float 1.5e3:0", AS_DOUBLE, "90000"},
+	{"!!float ':'", AS_DOUBLE, "0"},
+	{"!!float 1000000000000000000000000000000.0e-30", AS_DOUBLE, "1"},
+	{"!!float 0.0000000000000000000000000000001e31", AS_DOUBLE, "1"},
+	{"!!float 1e400", AS_DOUBLE, "inf"},
+	{"!!float -1e99999999999999999999", AS_DOUBLE, "-inf"},
+	{"!!float 1e-99999999999999999999", AS_DOUBLE, "0"},
+	{"!!timestamp 2001-12-14", AS_STRING, "\"2001-12-14\""},
+	{"!!timestamp 2001-12-14 21:59:43.10 -5", AS_STRING, "\"2001-12-14 21:59:43.10 -5\""},
 	{"!!map {a: 1}", AS_MAP, "{\"a\":1}"},
 	{"!!seq [1]", AS_LIST, "[1]"},
 
@@ -1696,16 +1793,18 @@ static const cf_typed cf_typed_rows[] = {
 	{"{\"<<\": 1}", AS_MAP, "{\"<<\":1}"}
 };
 
-TEST(cf_registered_typing, "option values follow SnakeYAML's resolver, tags are checked, and collections keep their types")
+TEST(cf_registered_typing, "option values follow SnakeYAML's resolver and tag constructors, and collections keep their types")
 {
 	uint32_t rows = sizeof(cf_typed_rows) / sizeof(cf_typed_rows[0]);
-	// The deepest accepted nesting prints as written.
-	char deep[160];
-	cf_nested(deep, sizeof(deep), 50);
-	cf_typed deep_row = {deep, AS_LIST, deep};
+	// The deepest accepted nesting under the block prints as written.
+	char deep[2][160];
+	cf_nested(deep[0], sizeof(deep[0]), 47, "");
+	cf_nested(deep[1], sizeof(deep[1]), 46, "1");
+	const cf_typed deep_rows[] = {{deep[0], AS_LIST, deep[0]}, {deep[1], AS_LIST, deep[1]}};
+	uint32_t total = rows + sizeof(deep_rows) / sizeof(deep_rows[0]);
 
-	for (uint32_t i = 0; i <= rows; i++) {
-		const cf_typed* row = i < rows ? &cf_typed_rows[i] : &deep_row;
+	for (uint32_t i = 0; i < total; i++) {
+		const cf_typed* row = i < rows ? &cf_typed_rows[i] : &deep_rows[i - rows];
 		char body[CF_BODY_MAX];
 		snprintf(body, sizeof(body), CF_HEAD
 			"    discovery:\n"
@@ -1790,6 +1889,72 @@ TEST(cf_registered_keys, "option keys: a long key arrives whole, a quoted << is 
 	cf_close(client);
 	assert_int_eq(errors, 0);
 	assert_int_eq(found, 4);
+}
+
+#if !defined(_MSC_VER)
+// Locales whose decimal point is a comma; machines have some of them.
+static const char* const cf_comma_locales[] = {
+	"de_DE.UTF-8", "de_DE.utf8", "en_DK.UTF-8", "en_DK.utf8", "fr_FR.UTF-8", "fr_FR.utf8",
+	"nl_NL.UTF-8", "nl_NL.utf8"
+};
+#endif
+
+TEST(cf_registered_locale, "option floats do not depend on the locale's decimal point")
+{
+#if defined(_MSC_VER)
+	info("skipped: no per-thread locale");
+#else
+	locale_t loc = (locale_t)0;
+
+	for (uint32_t i = 0; !loc && i < sizeof(cf_comma_locales) / sizeof(cf_comma_locales[0]); i++) {
+		loc = newlocale(LC_NUMERIC_MASK, cf_comma_locales[i], (locale_t)0);
+	}
+
+	if (!loc) {
+		info("skipped: no locale with a comma decimal point");
+		return;
+	}
+
+	// The file is read on the calling thread, so only this thread's locale changes.
+	locale_t prev = uselocale(loc);
+	bool comma = strcmp(localeconv()->decimal_point, ",") == 0;
+
+	as_config config;
+	as_config_init(&config);
+	assert_true(cf_register(&config));
+	aerospike* client = cf_init(&config, CF_HEAD
+		"    discovery:\n"
+		"      provider: consul\n"
+		"      a: 1.5\n"
+		"      b: !!float 12.5e-1\n"
+		"      c: 1:30.5\n"
+		"      d: !!float 0x1.8p1\n"
+		"      e: -.25\n");
+	uselocale(prev);
+	freelocale(loc);
+	assert_not_null(client);
+	uint32_t errors = cf_log_find(AS_LOG_LEVEL_ERROR, "");
+	cf_close(client);
+
+	static const char* const names[] = {"a", "b", "c", "d", "e"};
+	static const double expected[] = {1.5, 1.25, 90.5, 3.0, -0.25};
+	uint32_t matched = 0;
+
+	for (uint32_t i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+		as_double* d = as_double_fromval(cf_option(&cf_providers[0], names[i]));
+
+		if (d && as_double_get(d) == expected[i]) {
+			matched++;
+		}
+		else {
+			info("option %s: %s", names[i], d ? "wrong value" : "not a double");
+		}
+	}
+	cf_plugins_done();
+	assert_true(comma);
+	assert_int_eq(errors, 0);
+	assert_int_eq(matched, 5);
+#endif
 }
 
 //---------------------------------
@@ -2504,6 +2669,7 @@ SUITE(discovery_config_file, "YAML discovery and translation keys")
 	suite_add(cf_registrations_carry);
 	suite_add(cf_registered_typing);
 	suite_add(cf_registered_keys);
+	suite_add(cf_registered_locale);
 #if defined(DISCOVERY_FAKE_SERVERS)
 	suite_add(cf_dns_provider);
 	suite_add(cf_aws_provider);

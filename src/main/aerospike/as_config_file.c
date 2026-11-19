@@ -58,6 +58,9 @@
 
 #define AS_YAML_PATH_SIZE 256
 
+// SnakeYAML's LoaderOptions default: a node may open with at most 50 collections open around it.
+#define AS_YAML_DEPTH_MAX 50
+
 //---------------------------------
 // Types
 //---------------------------------
@@ -113,8 +116,8 @@ typedef struct {
 	as_orderedmap* map;
 	as_vector unknown; // char*, owned: top-level keys logged as unexpected for a built-in
 	char deferred[AS_ERROR_MESSAGE_MAX_SIZE]; // first error that only a registered name raises
-	const char* path;  // block path
-	const char* key;   // top-level key being captured
+	char cur[AS_YAML_PATH_SIZE]; // path of the value being captured, ending in ... when cut
+	uint32_t len;                // length of cur
 } as_yaml_options;
 
 typedef struct {
@@ -127,6 +130,8 @@ typedef struct {
 	as_yaml_options* opts;   // set while a discovery or translation block is parsed
 	const char* alias_path;  // value named by an alias error from the skip functions
 	as_error err;
+	uint32_t depth;          // open collections
+	bool failed;             // as_parse_next raised an error; every later call fails
 	bool init;
 } as_yaml;
 
@@ -157,14 +162,65 @@ as_parser_error(as_yaml* yaml)
 		parser->problem_mark.line + 1, parser->problem_mark.column + 1, parser->problem);
 }
 
-static inline bool
+// Read the next event. An error here fails the whole file, even when the caller only stops a
+// loop on it: as_config_file_read() checks yaml->failed.
+static bool
 as_parse_next(as_yaml* yaml)
 {
-	if (!yaml_parser_parse(&yaml->parser, &yaml->event)) {
-		as_parser_error(yaml);
+	if (yaml->failed) {
 		return false;
 	}
+
+	if (!yaml_parser_parse(&yaml->parser, &yaml->event)) {
+		as_parser_error(yaml);
+		yaml->failed = true;
+		return false;
+	}
+
+	switch (yaml->event.type) {
+		case YAML_SCALAR_EVENT:
+		case YAML_SEQUENCE_START_EVENT:
+		case YAML_MAPPING_START_EVENT:
+			if (yaml->depth > AS_YAML_DEPTH_MAX) {
+				as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+					"YAML nesting deeper than %u levels: line %zu, column %zu", AS_YAML_DEPTH_MAX,
+					yaml->event.start_mark.line + 1, yaml->event.start_mark.column + 1);
+				yaml_event_delete(&yaml->event);
+				yaml->failed = true;
+				return false;
+			}
+
+			if (yaml->event.type != YAML_SCALAR_EVENT) {
+				yaml->depth++;
+			}
+			break;
+
+		case YAML_SEQUENCE_END_EVENT:
+		case YAML_MAPPING_END_EVENT:
+			yaml->depth--;
+			break;
+
+		default:
+			break;
+	}
 	return true;
+}
+
+static const char*
+as_event_kind(yaml_event_type_t type)
+{
+	switch (type) {
+		case YAML_SCALAR_EVENT:
+			return "a scalar";
+		case YAML_MAPPING_START_EVENT:
+			return "a map";
+		case YAML_SEQUENCE_START_EVENT:
+			return "a sequence";
+		case YAML_ALIAS_EVENT:
+			return "an alias";
+		default:
+			return "an unsupported value";
+	}
 }
 
 // path names the value that holds the alias, or is NULL when the caller has no path.
@@ -331,6 +387,41 @@ as_parse_scalar(as_yaml* yaml, char* out, int size)
 	}
 
 	as_strncpy(out, (const char*)yaml->event.data.scalar.value, size);
+	yaml_event_delete(&yaml->event);
+	return true;
+}
+
+// Read the next key of the mapping at path (NULL for the top level) into name. Returns false at
+// the end of the mapping with *end set, or on an error with *end clear.
+static bool
+as_parse_key(as_yaml* yaml, const char* path, char* name, int size, bool* end)
+{
+	*end = false;
+
+	if (!as_parse_next(yaml)) {
+		return false;
+	}
+
+	if (yaml->event.type == YAML_MAPPING_END_EVENT) {
+		yaml_event_delete(&yaml->event);
+		*end = true;
+		return false;
+	}
+
+	if (yaml->event.type != YAML_SCALAR_EVENT) {
+		if (path) {
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+				"Invalid %s: expected scalar keys, not %s", path, as_event_kind(yaml->event.type));
+		}
+		else {
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+				"Invalid top-level key: expected a scalar, not %s", as_event_kind(yaml->event.type));
+		}
+		yaml_event_delete(&yaml->event);
+		return false;
+	}
+
+	as_strncpy(name, (const char*)yaml->event.data.scalar.value, size);
 	yaml_event_delete(&yaml->event);
 	return true;
 }
@@ -586,7 +677,24 @@ as_parse_vector_int32(as_yaml* yaml, const char* name, as_vector** out, uint32_t
 	as_vector* list = as_vector_create(sizeof(int), 8);
 	int32_t v;
 
-	while (as_prepare_scalar(yaml)) {
+	while (true) {
+		if (!as_parse_next(yaml)) {
+			as_vector_destroy(list);
+			return false;
+		}
+
+		if (yaml->event.type == YAML_SEQUENCE_END_EVENT) {
+			yaml_event_delete(&yaml->event);
+			break;
+		}
+
+		if (yaml->event.type != YAML_SCALAR_EVENT) {
+			as_expected_error(yaml, YAML_SCALAR_EVENT);
+			yaml_event_delete(&yaml->event);
+			as_vector_destroy(list);
+			return false;
+		}
+
 		const char* value = (const char*)yaml->event.data.scalar.value;
 		bool rv = as_parse_int32(yaml, name, value, &v);
 
@@ -1318,13 +1426,19 @@ as_parse_labels(as_yaml* yaml, as_metrics_policy* policy, uint32_t field)
 
 	char name[256];
 	char value[256];
+	bool end;
 
-	while (as_parse_scalar(yaml, name, sizeof(name))) {
+	while (as_parse_key(yaml, "dynamic.metrics.labels", name, sizeof(name), &end)) {
 		if (!as_parse_scalar(yaml, value, sizeof(value))) {
 			as_metrics_policy_destroy_labels(policy);
 			return false;
 		}
 		as_metrics_policy_add_label(policy, name, value);
+	}
+
+	if (!end) {
+		as_metrics_policy_destroy_labels(policy);
+		return false;
 	}
 
 	as_string_builder sb;
@@ -1695,7 +1809,7 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 typedef bool (*as_parse_policy_fn) (as_yaml* yaml, const char* name, const char* value, as_policies* base);
 
 static bool
-as_parse_policy(as_yaml* yaml, as_parse_policy_fn fn)
+as_parse_policy(as_yaml* yaml, const char* section, as_parse_policy_fn fn)
 {
 	as_policies* base = &yaml->config->policies;
 
@@ -1703,9 +1817,13 @@ as_parse_policy(as_yaml* yaml, as_parse_policy_fn fn)
 		return false;
 	}
 
-	char name[256];
+	char path[AS_YAML_PATH_SIZE];
+	snprintf(path, sizeof(path), "dynamic.%.200s", section);
 
-	while (as_parse_scalar(yaml, name, sizeof(name))) {
+	char name[256];
+	bool end;
+
+	while (as_parse_key(yaml, path, name, sizeof(name), &end)) {
 		if (!as_parse_next(yaml)) {
 			return false;
 		}
@@ -1721,15 +1839,17 @@ as_parse_policy(as_yaml* yaml, as_parse_policy_fn fn)
 				break;
 			}
 
-			case YAML_SEQUENCE_START_EVENT: {
-				yaml_event_delete(&yaml->event);
-				rv = fn(yaml, name, "", base);
-				break;
-			}
-
+			case YAML_SEQUENCE_START_EVENT:
 			case YAML_MAPPING_START_EVENT: {
+				bool map = yaml->event.type == YAML_MAPPING_START_EVENT;
 				yaml_event_delete(&yaml->event);
 				rv = fn(yaml, name, "", base);
+
+				// Only metrics.labels and metrics.extended consume the collection.
+				if (rv && !(fn == as_parse_metrics &&
+					(strcmp(name, "labels") == 0 || strcmp(name, "extended") == 0))) {
+					rv = map ? as_skip_open_mapping(yaml) : as_skip_sequence(yaml);
+				}
 				break;
 			}
 
@@ -1745,7 +1865,7 @@ as_parse_policy(as_yaml* yaml, as_parse_policy_fn fn)
 			return rv;
 		}
 	}
-	return true;
+	return end;
 }
 
 //---------------------------------
@@ -1791,23 +1911,6 @@ as_yaml_known(const char* name, const char* const* names)
 		}
 	}
 	return false;
-}
-
-static const char*
-as_event_kind(yaml_event_type_t type)
-{
-	switch (type) {
-		case YAML_SCALAR_EVENT:
-			return "a scalar";
-		case YAML_MAPPING_START_EVENT:
-			return "a map";
-		case YAML_SEQUENCE_START_EVENT:
-			return "a sequence";
-		case YAML_ALIAS_EVENT:
-			return "an alias";
-		default:
-			return "an unsupported value";
-	}
 }
 
 static inline const char*
@@ -1995,12 +2098,17 @@ as_yaml_discovery_destroy(as_yaml_discovery* d)
 // Static Functions: factory options
 //---------------------------------
 
-// Factory options follow the YAML 1.1 resolver of SnakeYAML 2.6, which Java loads the file with,
-// so a file shared with Java gives a factory the same values.
+// Factory options are typed by the resolver and tag constructors of SnakeYAML 2.6, which Java
+// loads the file with, so a file shared with Java gives a factory the same values. Where they
+// differ: a timestamp is its string, not a date; an integer outside int64 is its string, not a
+// BigInteger; a map key must be a string or an integer; !!binary, !!set, !!omap, !!pairs and
+// local tags are rejected; YAML aliases and merge keys are rejected.
 
 #define AS_YAML_TAG_PREFIX "tag:yaml.org,2002:"
-#define AS_YAML_OPTIONS_DEPTH 50
 #define AS_YAML_REASON_SIZE 256
+
+// Exponent magnitude a float is clamped to; far past the range of a double.
+#define AS_YAML_EXP_MAX 1000000000
 
 typedef enum {
 	AS_YAML_TYPE_STR,
@@ -2008,6 +2116,7 @@ typedef enum {
 	AS_YAML_TYPE_BOOL,
 	AS_YAML_TYPE_INT,
 	AS_YAML_TYPE_FLOAT,
+	AS_YAML_TYPE_TIMESTAMP,
 	AS_YAML_TYPE_MERGE
 } as_yaml_type;
 
@@ -2281,80 +2390,16 @@ as_yaml_accumulate(uint64_t* acc, uint64_t base, uint64_t digit)
 	return true;
 }
 
-static bool
-as_yaml_parse_base(const char* p, uint32_t base, uint64_t* out)
+// Java's int: the low 32 bits, two's complement.
+static inline int32_t
+as_yaml_int32(uint32_t v)
 {
-	uint64_t acc = 0;
-
-	for (; *p; p++) {
-		char c = *p;
-		uint64_t d = as_yaml_is_dec(c) ? (uint64_t)(c - '0') :
-			(uint64_t)((c | 0x20) - 'a' + 10);
-
-		if (!as_yaml_accumulate(&acc, base, d)) {
-			return false;
-		}
-	}
-	*out = acc;
-	return true;
+	return v <= INT32_MAX ? (int32_t)v : (int32_t)(v - 2147483648u) - INT32_MAX - 1;
 }
 
-// Base 60: 1:30 is 90.
 static bool
-as_yaml_parse_sexagesimal(const char* p, uint64_t* out)
+as_yaml_to_int64(uint64_t mag, bool neg, int64_t* out)
 {
-	uint64_t acc = 0;
-
-	while (*p) {
-		char* end;
-		errno = 0;
-		unsigned long long part = strtoull(p, &end, 10);
-
-		if (errno != 0 || !as_yaml_accumulate(&acc, 60, part)) {
-			return false;
-		}
-		p = *end == ':' ? end + 1 : end;
-	}
-	*out = acc;
-	return true;
-}
-
-// ConstructYamlInt. False when the value is outside int64; Java would give a BigInteger.
-static bool
-as_yaml_to_int(const char* value, int64_t* out)
-{
-	char* s = as_yaml_strip(value);
-	const char* p = s;
-	bool neg = *p == '-';
-	p = as_yaml_skip_sign(p);
-
-	uint64_t mag = 0;
-	bool ok;
-
-	if (strcmp(p, "0") == 0) {
-		ok = true;
-	}
-	else if (p[0] == '0' && p[1] == 'b') {
-		ok = as_yaml_parse_base(p + 2, 2, &mag);
-	}
-	else if (p[0] == '0' && p[1] == 'x') {
-		ok = as_yaml_parse_base(p + 2, 16, &mag);
-	}
-	else if (p[0] == '0') {
-		ok = as_yaml_parse_base(p + 1, 8, &mag);
-	}
-	else if (strchr(p, ':')) {
-		ok = as_yaml_parse_sexagesimal(p, &mag);
-	}
-	else {
-		ok = as_yaml_parse_base(p, 10, &mag);
-	}
-	cf_free(s);
-
-	if (!ok) {
-		return false;
-	}
-
 	if (neg) {
 		if (mag > (uint64_t)INT64_MAX + 1) {
 			return false;
@@ -2370,37 +2415,368 @@ as_yaml_to_int(const char* value, int64_t* out)
 	return true;
 }
 
-// ConstructYamlFloat.
+// Long.parseLong of [p, end): an optional sign, then decimal digits that fit int64.
 static bool
-as_yaml_to_double(const char* value, double* out)
+as_yaml_parse_long(const char* p, const char* end, int64_t* out)
+{
+	bool neg = false;
+
+	if (p < end && (*p == '-' || *p == '+')) {
+		neg = *p == '-';
+		p++;
+	}
+
+	if (p == end) {
+		return false;
+	}
+
+	uint64_t mag = 0;
+
+	for (; p < end; p++) {
+		if (!as_yaml_is_dec(*p) || !as_yaml_accumulate(&mag, 10, (uint64_t)(*p - '0'))) {
+			return false;
+		}
+	}
+	return as_yaml_to_int64(mag, neg, out);
+}
+
+// SnakeYAML's createNumber(): Java parses the digits p in base, with "-" before them when neg, so
+// p may carry a sign of its own only when neg is clear. *big is set for a value outside int64,
+// which Java gives as a BigInteger.
+static bool
+as_yaml_create_number(const char* p, bool neg, uint32_t base, int64_t* out, bool* big)
+{
+	if (*p == '-' || *p == '+') {
+		if (neg) {
+			return false;
+		}
+		neg = *p == '-';
+		p++;
+	}
+
+	if (*p == '\0') {
+		return false;
+	}
+
+	uint64_t mag = 0;
+	bool over = false;
+
+	for (; *p; p++) {
+		if (!as_yaml_is_digit(*p, base)) {
+			return false;
+		}
+
+		uint64_t d = as_yaml_is_dec(*p) ? (uint64_t)(*p - '0') : (uint64_t)((*p | 0x20) - 'a' + 10);
+
+		if (!over && !as_yaml_accumulate(&mag, base, d)) {
+			over = true;
+		}
+	}
+	*big = over || !as_yaml_to_int64(mag, neg, out);
+	return true;
+}
+
+// ConstructYamlInt base 60. Java parses each part with Long.parseLong and adds it times a power
+// of 60 into a 32-bit int, so the result wraps. String.split(":") drops trailing empty parts.
+static bool
+as_yaml_int_sexagesimal(const char* p, bool neg, int64_t* out)
+{
+	const char* end = p + strlen(p);
+
+	while (end > p && end[-1] == ':') {
+		end--;
+	}
+
+	uint32_t acc = 0;
+
+	while (p < end) {
+		const char* q = memchr(p, ':', (size_t)(end - p));
+
+		if (!q) {
+			q = end;
+		}
+
+		int64_t part;
+
+		if (!as_yaml_parse_long(p, q, &part)) {
+			return false;
+		}
+		acc = acc * 60u + (uint32_t)part;
+		p = q < end ? q + 1 : end;
+	}
+
+	int32_t v = as_yaml_int32(acc);
+
+	// Java then parses "-" and the int's digits, which fails on a second sign.
+	if (neg && v < 0) {
+		return false;
+	}
+	*out = neg ? -(int64_t)v : v;
+	return true;
+}
+
+// ConstructYamlInt. False where Java fails; *big is set for a value outside int64.
+static bool
+as_yaml_construct_int(const char* value, int64_t* out, bool* big)
 {
 	char* s = as_yaml_strip(value);
 	const char* p = s;
-	double sign = *p == '-' ? -1.0 : 1.0;
-	p = as_yaml_skip_sign(p);
+	bool neg = false;
+	bool ok;
 
+	*big = false;
+
+	if (*p == '-' || *p == '+') {
+		neg = *p == '-';
+		p++;
+	}
+
+	if (s[0] == '\0') {
+		ok = false;
+	}
+	else if (strcmp(p, "0") == 0) {
+		*out = 0;
+		ok = true;
+	}
+	else if (p[0] == '0' && p[1] == 'b') {
+		ok = as_yaml_create_number(p + 2, neg, 2, out, big);
+	}
+	else if (p[0] == '0' && p[1] == 'x') {
+		ok = as_yaml_create_number(p + 2, neg, 16, out, big);
+	}
+	else if (p[0] == '0') {
+		ok = as_yaml_create_number(p + 1, neg, 8, out, big);
+	}
+	else if (strchr(p, ':')) {
+		ok = as_yaml_int_sexagesimal(p, neg, out);
+	}
+	else {
+		ok = as_yaml_create_number(p, neg, 10, out, big);
+	}
+	cf_free(s);
+	return ok;
+}
+
+static inline bool
+as_yaml_is_space(char c)
+{
+	return (unsigned char)c <= ' ';
+}
+
+// Java's Double.parseDouble of [value, value + len): trimmed, an optional sign, then NaN,
+// Infinity, a decimal or a hex float with a p exponent, and an optional f, F, d or D. strtod gets
+// the digits without the point, so the locale's decimal point does not matter.
+static bool
+as_yaml_parse_double(const char* value, size_t len, double* out)
+{
+	const char* p = value;
+	const char* end = value + len;
+
+	while (p < end && as_yaml_is_space(*p)) {
+		p++;
+	}
+
+	while (end > p && as_yaml_is_space(end[-1])) {
+		end--;
+	}
+
+	bool neg = false;
+
+	if (p < end && (*p == '-' || *p == '+')) {
+		neg = *p == '-';
+		p++;
+	}
+
+	size_t n = (size_t)(end - p);
+
+	if (n == 3 && memcmp(p, "NaN", 3) == 0) {
+		*out = NAN;
+		return true;
+	}
+
+	if (n == 8 && memcmp(p, "Infinity", 8) == 0) {
+		*out = neg ? -INFINITY : INFINITY;
+		return true;
+	}
+
+	bool hex = n >= 2 && p[0] == '0' && (p[1] == 'x' || p[1] == 'X');
+	uint32_t base = hex ? 16 : 10;
+
+	if (hex) {
+		p += 2;
+	}
+
+	const char* int_start = p;
+
+	while (p < end && as_yaml_is_digit(*p, base)) {
+		p++;
+	}
+
+	const char* int_end = p;
+	const char* frac_start = p;
+	const char* frac_end = p;
+
+	if (p < end && *p == '.') {
+		frac_start = ++p;
+
+		while (p < end && as_yaml_is_digit(*p, base)) {
+			p++;
+		}
+		frac_end = p;
+	}
+
+	if (int_end == int_start && frac_end == frac_start) {
+		return false;
+	}
+
+	int64_t exp = 0;
+
+	if (p < end && (*p | 0x20) == (hex ? 'p' : 'e')) {
+		p++;
+
+		bool exp_neg = false;
+
+		if (p < end && (*p == '-' || *p == '+')) {
+			exp_neg = *p == '-';
+			p++;
+		}
+
+		if (p == end || !as_yaml_is_dec(*p)) {
+			return false;
+		}
+
+		for (; p < end && as_yaml_is_dec(*p); p++) {
+			if (exp < AS_YAML_EXP_MAX) {
+				exp = exp * 10 + (*p - '0');
+			}
+		}
+
+		if (exp > AS_YAML_EXP_MAX) {
+			exp = AS_YAML_EXP_MAX;
+		}
+
+		if (exp_neg) {
+			exp = -exp;
+		}
+	}
+	else if (hex) {
+		return false;
+	}
+
+	if (p < end && (*p == 'f' || *p == 'F' || *p == 'd' || *p == 'D')) {
+		p++;
+	}
+
+	if (p != end) {
+		return false;
+	}
+
+	size_t int_len = (size_t)(int_end - int_start);
+	size_t frac_len = (size_t)(frac_end - frac_start);
+	int64_t shift = frac_len > AS_YAML_EXP_MAX ? AS_YAML_EXP_MAX : (int64_t)frac_len;
+
+	// Each hex digit is 4 bits of a binary exponent.
+	exp -= hex ? 4 * shift : shift;
+
+	char* buf = cf_malloc(int_len + frac_len + 32);
+	char* q = buf;
+
+	if (hex) {
+		*q++ = '0';
+		*q++ = 'x';
+	}
+	memcpy(q, int_start, int_len);
+	q += int_len;
+	memcpy(q, frac_start, frac_len);
+	q += frac_len;
+	snprintf(q, 32, "%c%lld", hex ? 'p' : 'e', (long long)exp);
+
+	// Out of range is not an error: the result is then infinite or zero, as in Java.
+	char* stop;
+	double d = strtod(buf, &stop);
+	bool ok = *stop == '\0';
+	cf_free(buf);
+
+	if (!ok) {
+		return false;
+	}
+	*out = neg ? -d : d;
+	return true;
+}
+
+// ASCII case-insensitive equality with lower, which is lowercase.
+static bool
+as_yaml_ieq(const char* value, const char* lower)
+{
+	for (; *value && *lower; value++, lower++) {
+		char c = *value >= 'A' && *value <= 'Z' ? (char)(*value | 0x20) : *value;
+
+		if (c != *lower) {
+			return false;
+		}
+	}
+	return *value == *lower;
+}
+
+// ConstructYamlFloat. False where Java fails.
+static bool
+as_yaml_construct_float(const char* value, double* out)
+{
+	char* s = as_yaml_strip(value);
+	const char* p = s;
+	double sign = 1.0;
 	double v = 0.0;
 	bool ok = true;
 
-	if (strcmp(p, ".inf") == 0 || strcmp(p, ".Inf") == 0 || strcmp(p, ".INF") == 0) {
+	if (*p == '-' || *p == '+') {
+		sign = *p == '-' ? -1.0 : 1.0;
+		p++;
+	}
+
+	if (s[0] == '\0') {
+		ok = false;
+	}
+	else if (as_yaml_ieq(p, ".inf")) {
 		v = INFINITY;
 	}
-	else if (strcmp(p, ".nan") == 0 || strcmp(p, ".NaN") == 0 || strcmp(p, ".NAN") == 0) {
+	else if (as_yaml_ieq(p, ".nan")) {
 		v = NAN;
 	}
 	else if (strchr(p, ':')) {
-		while (*p && ok) {
-			char* end;
-			double part = strtod(p, &end);
-			ok = end != p;
-			v = v * 60.0 + part;
-			p = *end == ':' ? end + 1 : end;
+		// Base 60: Java adds the parts from the last, each times a 32-bit int power of 60.
+		const char* end = p + strlen(p);
+
+		while (end > p && end[-1] == ':') {
+			end--;
+		}
+
+		uint32_t bes = 1;
+		const char* q = end;
+
+		while (end > p) {
+			const char* start = q;
+
+			while (start > p && start[-1] != ':') {
+				start--;
+			}
+
+			double part;
+
+			if (!as_yaml_parse_double(start, (size_t)(q - start), &part)) {
+				ok = false;
+				break;
+			}
+			v += part * (double)as_yaml_int32(bes);
+			bes *= 60u;
+
+			if (start == p) {
+				break;
+			}
+			q = start - 1;
 		}
 	}
 	else {
-		char* end;
-		v = strtod(p, &end);
-		ok = end != p && *end == '\0';
+		ok = as_yaml_parse_double(p, strlen(p), &v);
 	}
 	cf_free(s);
 
@@ -2409,6 +2785,123 @@ as_yaml_to_double(const char* value, double* out)
 	}
 	*out = sign * v;
 	return true;
+}
+
+// ConstructYamlBool: any case, and null for another value.
+static as_val*
+as_yaml_construct_bool(const char* value)
+{
+	static const char* const names[] = {"yes", "true", "on", "no", "false", "off"};
+
+	for (uint32_t i = 0; i < AS_YAML_COUNT(names); i++) {
+		if (as_yaml_ieq(value, names[i])) {
+			return (as_val*)as_boolean_new(i < 3);
+		}
+	}
+	return (as_val*)&as_nil;
+}
+
+// Between min and max decimal digits, as many as there are.
+static bool
+as_yaml_skip_digits(const char** p, uint32_t min, uint32_t max)
+{
+	uint32_t n = 0;
+
+	while (n < max && as_yaml_is_dec(**p)) {
+		(*p)++;
+		n++;
+	}
+	return n >= min;
+}
+
+// SnakeYAML's timestamp constructor pattern: [0-9]{4}-[0-9]{1,2}-[0-9]{1,2}, optionally then
+// (?:[Tt]|[ \t]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]*)? and
+// (?:[ \t]*(?:Z|[-+][0-9]{1,2}(?::(?:[0-9]{2})?)?))?
+static bool
+as_yaml_match_timestamp(const char* p)
+{
+	if (!as_yaml_skip_digits(&p, 4, 4) || *p != '-') {
+		return false;
+	}
+	p++;
+
+	if (!as_yaml_skip_digits(&p, 1, 2) || *p != '-') {
+		return false;
+	}
+	p++;
+
+	if (!as_yaml_skip_digits(&p, 1, 2)) {
+		return false;
+	}
+
+	if (*p == '\0') {
+		return true;
+	}
+
+	if (*p == 'T' || *p == 't') {
+		p++;
+	}
+	else if (*p == ' ' || *p == '\t') {
+		while (*p == ' ' || *p == '\t') {
+			p++;
+		}
+	}
+	else {
+		return false;
+	}
+
+	if (!as_yaml_skip_digits(&p, 1, 2) || *p != ':') {
+		return false;
+	}
+	p++;
+
+	if (!as_yaml_skip_digits(&p, 2, 2) || *p != ':') {
+		return false;
+	}
+	p++;
+
+	if (!as_yaml_skip_digits(&p, 2, 2)) {
+		return false;
+	}
+
+	if (*p == '.') {
+		p++;
+
+		while (as_yaml_is_dec(*p)) {
+			p++;
+		}
+	}
+
+	if (*p == '\0') {
+		return true;
+	}
+
+	// Blanks only before a time zone.
+	while (*p == ' ' || *p == '\t') {
+		p++;
+	}
+
+	if (*p == 'Z') {
+		return p[1] == '\0';
+	}
+
+	if (*p != '-' && *p != '+') {
+		return false;
+	}
+	p++;
+
+	if (!as_yaml_skip_digits(&p, 1, 2)) {
+		return false;
+	}
+
+	if (*p == ':') {
+		p++;
+
+		if (as_yaml_is_dec(p[0]) && as_yaml_is_dec(p[1])) {
+			p += 2;
+		}
+	}
+	return *p == '\0';
 }
 
 // Tag as written: !!int for a core tag.
@@ -2455,103 +2948,98 @@ as_yaml_collection_tag(const yaml_event_t* event, bool map, char* reason, size_t
 	return false;
 }
 
-// Type a scalar event as an option value: plain scalars by the resolver, quoted ones as strings,
-// tagged ones by their tag when the value matches the tag's resolver pattern. Returns NULL with
-// reason for any other tag, a mismatch or a merge key.
+// Type of a scalar event: an untagged plain scalar, or a scalar of any style with the
+// non-specific tag !, by the resolver; another untagged scalar is a string; a core tag by its
+// name. Returns false for another tag.
+static bool
+as_yaml_scalar_type(const yaml_event_t* event, as_yaml_type* type)
+{
+	const char* tag = (const char*)event->data.scalar.tag;
+
+	if (!tag || strcmp(tag, "!") == 0) {
+		bool resolve = tag || event->data.scalar.style == YAML_PLAIN_SCALAR_STYLE;
+		*type = resolve ? as_yaml_resolve((const char*)event->data.scalar.value,
+			event->data.scalar.length) : AS_YAML_TYPE_STR;
+		return true;
+	}
+
+	static const char* const names[] = {"str", "null", "bool", "int", "float", "timestamp", "merge"};
+	const char* core = as_yaml_core_tag(tag);
+
+	for (uint32_t i = 0; core && i < AS_YAML_COUNT(names); i++) {
+		if (strcmp(core, names[i]) == 0) {
+			*type = (as_yaml_type)i;
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool
+as_yaml_is_merge(const yaml_event_t* event)
+{
+	as_yaml_type type;
+	return event->type == YAML_SCALAR_EVENT && as_yaml_scalar_type(event, &type) &&
+		type == AS_YAML_TYPE_MERGE;
+}
+
+// Type a scalar event as an option value, with SnakeYAML's constructor for its type. Returns NULL
+// with reason where Java fails: another tag, a value its constructor rejects, or a merge key.
 static as_val*
 as_yaml_option_scalar(const yaml_event_t* event, char* reason, size_t size)
 {
 	const char* value = (const char*)event->data.scalar.value;
 	const char* tag = (const char*)event->data.scalar.tag;
-	as_yaml_type type = AS_YAML_TYPE_STR;
+	as_yaml_type type;
+	char name[128];
 
-	if (!tag) {
-		if (event->data.scalar.style == YAML_PLAIN_SCALAR_STYLE) {
-			type = as_yaml_resolve(value, event->data.scalar.length);
-		}
-	}
-	else if (strcmp(tag, "!") != 0) {
-		const char* core = as_yaml_core_tag(tag);
-		bool b;
-		bool match;
-
-		if (!core) {
-			match = false;
-		}
-		else if (strcmp(core, "str") == 0) {
-			match = true;
-		}
-		else if (strcmp(core, "int") == 0) {
-			match = as_yaml_match_int(value);
-			type = AS_YAML_TYPE_INT;
-		}
-		else if (strcmp(core, "float") == 0) {
-			match = as_yaml_match_float(value);
-			type = AS_YAML_TYPE_FLOAT;
-		}
-		else if (strcmp(core, "bool") == 0) {
-			match = as_yaml_match_bool(value, &b);
-			type = AS_YAML_TYPE_BOOL;
-		}
-		else if (strcmp(core, "null") == 0) {
-			match = as_yaml_match_null(value);
-			type = AS_YAML_TYPE_NULL;
-		}
-		else if (strcmp(core, "merge") == 0) {
-			match = true;
-			type = AS_YAML_TYPE_MERGE;
-		}
-		else {
-			match = false;
-			core = NULL;
-		}
-
-		char name[128];
+	if (!as_yaml_scalar_type(event, &type)) {
 		as_yaml_tag_name(tag, name, sizeof(name));
-
-		if (!core) {
-			snprintf(reason, size, "unsupported tag %s", name);
-			return NULL;
-		}
-
-		if (!match) {
-			snprintf(reason, size, "'%.100s' is not a valid %s", value, name);
-			return NULL;
-		}
+		snprintf(reason, size, "unsupported tag %s", name);
+		return NULL;
 	}
 
 	switch (type) {
 		case AS_YAML_TYPE_NULL:
 			return (as_val*)&as_nil;
 
-		case AS_YAML_TYPE_BOOL: {
-			bool b = false;
-			as_yaml_match_bool(value, &b);
-			return (as_val*)as_boolean_new(b);
-		}
+		case AS_YAML_TYPE_BOOL:
+			return as_yaml_construct_bool(value);
 
 		case AS_YAML_TYPE_INT: {
 			int64_t i;
+			bool big;
 
-			if (as_yaml_to_int(value, &i)) {
-				return (as_val*)as_integer_new(i);
+			if (!as_yaml_construct_int(value, &i, &big)) {
+				snprintf(reason, size, "'%.100s' is not a valid !!int", value);
+				return NULL;
 			}
-			// Outside int64: kept as written.
-			return (as_val*)as_string_new_strdup(value);
+
+			if (big) {
+				return (as_val*)as_string_new_strdup(value);
+			}
+			return (as_val*)as_integer_new(i);
 		}
 
 		case AS_YAML_TYPE_FLOAT: {
 			double d;
 
-			if (!as_yaml_to_double(value, &d)) {
-				snprintf(reason, size, "'%.100s' is not a valid float", value);
+			if (!as_yaml_construct_float(value, &d)) {
+				snprintf(reason, size, "'%.100s' is not a valid !!float", value);
 				return NULL;
 			}
 			return (as_val*)as_double_new(d);
 		}
 
+		case AS_YAML_TYPE_TIMESTAMP:
+			if (!as_yaml_match_timestamp(value)) {
+				snprintf(reason, size, "'%.100s' is not a valid !!timestamp", value);
+				return NULL;
+			}
+			return (as_val*)as_string_new_strdup(value);
+
 		case AS_YAML_TYPE_MERGE:
-			snprintf(reason, size, "YAML merge keys (<<) are not supported");
+			snprintf(reason, size, "a YAML merge key (<<) is not a value");
 			return NULL;
 
 		default:
@@ -2574,12 +3062,43 @@ as_options_defer(as_yaml_options* o, const char* fmt, ...)
 	va_end(ap);
 }
 
+// Append prefix and segment to the path of the value being captured. Returns the length to
+// restore with as_options_pop(). A path that does not fit ends in "...", and stays so.
+static uint32_t
+as_options_push(as_yaml_options* o, const char* prefix, const char* segment)
+{
+	const uint32_t limit = AS_YAML_PATH_SIZE - 4;
+	uint32_t len = o->len;
+
+	if (len > limit) {
+		return len;
+	}
+
+	int n = snprintf(o->cur + len, AS_YAML_PATH_SIZE - len, "%s%s", prefix, segment);
+
+	if (n < 0 || len + (uint32_t)n > limit) {
+		memcpy(o->cur + limit, "...", 4);
+		o->len = AS_YAML_PATH_SIZE - 1;
+	}
+	else {
+		o->len = len + (uint32_t)n;
+	}
+	return len;
+}
+
+static inline void
+as_options_pop(as_yaml_options* o, uint32_t len)
+{
+	o->cur[len] = '\0';
+	o->len = len;
+}
+
 static bool
-as_yaml_capture(as_yaml* yaml, uint32_t depth, as_val** out);
+as_yaml_capture(as_yaml* yaml, as_val** out);
 
 // Capture the pairs of a mapping whose start event is consumed, through its end event.
 static bool
-as_yaml_capture_map(as_yaml* yaml, uint32_t depth, bool keep, as_val** out)
+as_yaml_capture_map(as_yaml* yaml, bool keep, as_val** out)
 {
 	as_yaml_options* o = yaml->opts;
 	as_orderedmap* map = as_orderedmap_new(8);
@@ -2597,22 +3116,37 @@ as_yaml_capture_map(as_yaml* yaml, uint32_t depth, bool keep, as_val** out)
 			return true;
 		}
 
-		as_val* key;
+		// The value's path names it by the key as written; a collection key is [?].
+		char segment[AS_YAML_PATH_SIZE];
+		bool scalar = yaml->event.type == YAML_SCALAR_EVENT;
+		as_val* key = NULL;
 
-		if (!as_yaml_capture(yaml, depth, &key)) {
-			break;
+		if (scalar) {
+			as_strncpy(segment, (const char*)yaml->event.data.scalar.value, sizeof(segment));
 		}
 
-		if (key && as_val_type(key) != AS_STRING && as_val_type(key) != AS_INTEGER) {
-			as_options_defer(o, "Invalid %s.%s: map keys must be strings or integers", o->path,
-				o->key);
-			as_val_destroy(key);
-			key = NULL;
+		if (as_yaml_is_merge(&yaml->event)) {
+			as_options_defer(o, "Invalid %s: YAML merge keys (<<) are not supported", o->cur);
+			yaml_event_delete(&yaml->event);
+		}
+		else {
+			if (!as_yaml_capture(yaml, &key)) {
+				break;
+			}
+
+			if (key && as_val_type(key) != AS_STRING && as_val_type(key) != AS_INTEGER) {
+				as_options_defer(o, "Invalid %s: map keys must be strings or integers", o->cur);
+				as_val_destroy(key);
+				key = NULL;
+			}
 		}
 
 		as_val* val = NULL;
+		uint32_t len = scalar ? as_options_push(o, ".", segment) : as_options_push(o, "", "[?]");
+		bool ok = as_parse_next(yaml) && as_yaml_capture(yaml, &val);
+		as_options_pop(o, len);
 
-		if (!as_parse_next(yaml) || !as_yaml_capture(yaml, depth, &val)) {
+		if (!ok) {
 			as_val_destroy(key);
 			break;
 		}
@@ -2629,11 +3163,12 @@ as_yaml_capture_map(as_yaml* yaml, uint32_t depth, bool keep, as_val** out)
 
 // Capture the items of a sequence whose start event is consumed, through its end event.
 static bool
-as_yaml_capture_seq(as_yaml* yaml, uint32_t depth, bool keep, as_val** out)
+as_yaml_capture_seq(as_yaml* yaml, bool keep, as_val** out)
 {
+	as_yaml_options* o = yaml->opts;
 	as_arraylist* list = as_arraylist_new(8, 8);
 
-	while (as_parse_next(yaml)) {
+	for (uint32_t i = 0; as_parse_next(yaml); i++) {
 		if (yaml->event.type == YAML_SEQUENCE_END_EVENT) {
 			yaml_event_delete(&yaml->event);
 
@@ -2646,9 +3181,15 @@ as_yaml_capture_seq(as_yaml* yaml, uint32_t depth, bool keep, as_val** out)
 			return true;
 		}
 
-		as_val* val;
+		char segment[16];
+		snprintf(segment, sizeof(segment), "[%u]", i);
 
-		if (!as_yaml_capture(yaml, depth, &val)) {
+		as_val* val;
+		uint32_t len = as_options_push(o, "", segment);
+		bool ok = as_yaml_capture(yaml, &val);
+		as_options_pop(o, len);
+
+		if (!ok) {
 			break;
 		}
 
@@ -2664,7 +3205,7 @@ as_yaml_capture_seq(as_yaml* yaml, uint32_t depth, bool keep, as_val** out)
 // as_boolean, as_nil, as_arraylist or as_orderedmap. An alias is an error. Problems that only
 // matter for a registered name are deferred, and out is then NULL.
 static bool
-as_yaml_capture(as_yaml* yaml, uint32_t depth, as_val** out)
+as_yaml_capture(as_yaml* yaml, as_val** out)
 {
 	as_yaml_options* o = yaml->opts;
 	char reason[AS_YAML_REASON_SIZE];
@@ -2675,7 +3216,7 @@ as_yaml_capture(as_yaml* yaml, uint32_t depth, as_val** out)
 			*out = as_yaml_option_scalar(&yaml->event, reason, sizeof(reason));
 
 			if (!*out) {
-				as_options_defer(o, "Invalid %s.%s: %s", o->path, o->key, reason);
+				as_options_defer(o, "Invalid %s: %s", o->cur, reason);
 			}
 			yaml_event_delete(&yaml->event);
 			return true;
@@ -2686,32 +3227,20 @@ as_yaml_capture(as_yaml* yaml, uint32_t depth, as_val** out)
 			bool keep = as_yaml_collection_tag(&yaml->event, map, reason, sizeof(reason));
 
 			if (!keep) {
-				as_options_defer(o, "Invalid %s.%s: %s", o->path, o->key, reason);
-			}
-
-			char key[AS_YAML_PATH_SIZE];
-			as_yaml_path(key, o->path, o->key);
-
-			if (depth >= AS_YAML_OPTIONS_DEPTH) {
-				as_options_defer(o, "Invalid %s: nested deeper than %u levels", key,
-					AS_YAML_OPTIONS_DEPTH);
-				return as_skip_path(yaml, key);
+				as_options_defer(o, "Invalid %s: %s", o->cur, reason);
 			}
 			yaml_event_delete(&yaml->event);
 
 			if (map) {
-				return as_yaml_capture_map(yaml, depth + 1, keep, out);
+				return as_yaml_capture_map(yaml, keep, out);
 			}
-			return as_yaml_capture_seq(yaml, depth + 1, keep, out);
+			return as_yaml_capture_seq(yaml, keep, out);
 		}
 
-		case YAML_ALIAS_EVENT: {
-			char key[AS_YAML_PATH_SIZE];
-			as_yaml_path(key, o->path, o->key);
-			as_alias_error(yaml, key);
+		case YAML_ALIAS_EVENT:
+			as_alias_error(yaml, o->cur);
 			yaml_event_delete(&yaml->event);
 			return false;
-		}
 
 		default:
 			as_expected_error(yaml, YAML_SCALAR_EVENT);
@@ -3348,12 +3877,14 @@ as_parse_plugin_field(as_yaml* yaml, const char* path, const char* name, bool di
 		strcmp(name, "static_map") == 0 || strcmp(name, "port_map") == 0;
 	bool known = section || as_yaml_known(name,
 		discovery ? as_yaml_discovery_scalars : as_yaml_translation_scalars);
-	o->key = name;
 
 	if (!known) {
 		as_val* val;
+		uint32_t len = as_options_push(o, ".", name);
+		bool rv = as_yaml_capture(yaml, &val);
+		as_options_pop(o, len);
 
-		if (!as_yaml_capture(yaml, 0, &val)) {
+		if (!rv) {
 			return false;
 		}
 
@@ -3410,10 +3941,14 @@ as_parse_plugin_pairs(as_yaml* yaml, const char* path, bool discovery)
 		// Full key: a factory receives it whole.
 		char* name = cf_strdup(as_yaml_scalar(yaml));
 		char reason[AS_YAML_REASON_SIZE];
-		as_val* k = as_yaml_option_scalar(&yaml->event, reason, sizeof(reason));
+		bool merge = as_yaml_is_merge(&yaml->event);
+		as_val* k = merge ? NULL : as_yaml_option_scalar(&yaml->event, reason, sizeof(reason));
 		bool string_key = as_val_type(k) == AS_STRING;
 
-		if (!k) {
+		if (merge) {
+			as_options_defer(o, "Invalid %s: YAML merge keys (<<) are not supported", path);
+		}
+		else if (!k) {
 			as_options_defer(o, "Invalid %s: %s", path, reason);
 		}
 		else if (!string_key) {
@@ -3457,8 +3992,9 @@ as_parse_plugin_block(as_yaml* yaml, const char* path, bool discovery)
 	o.map = as_orderedmap_new(8);
 	as_vector_init(&o.unknown, sizeof(char*), 4);
 	o.deferred[0] = '\0';
-	o.path = path;
-	o.key = NULL;
+	o.len = 0;
+	o.cur[0] = '\0';
+	as_options_push(&o, "", path);
 
 	yaml->opts = &o;
 	bool rv = as_parse_plugin_pairs(yaml, path, discovery);
@@ -3605,8 +4141,9 @@ as_parse_dynamic_client(as_yaml* yaml)
 	yaml->name = "client";
 
 	char name[256];
+	bool end;
 
-	while (as_parse_scalar(yaml, name, sizeof(name))) {
+	while (as_parse_key(yaml, "dynamic.client", name, sizeof(name), &end)) {
 		if (!as_parse_next(yaml)) {
 			return false;
 		}
@@ -3680,7 +4217,7 @@ as_parse_dynamic_client(as_yaml* yaml)
 			return false;
 		}
 	}
-	return true;
+	return end;
 }
 
 static bool
@@ -3692,8 +4229,9 @@ as_parse_static(as_yaml* yaml)
 
 	char name[256];
 	bool rv;
+	bool end;
 
-	while (as_parse_scalar(yaml, name, sizeof(name))) {
+	while (as_parse_key(yaml, "static", name, sizeof(name), &end)) {
 		if (! yaml->init) {
 			// Do not process static fields on a dynamic update.
 			rv = as_skip_section(yaml);
@@ -3710,7 +4248,7 @@ as_parse_static(as_yaml* yaml)
 			return false;
 		}
 	}
-	return true;
+	return end;
 }
 
 static bool
@@ -3722,43 +4260,44 @@ as_parse_dynamic(as_yaml* yaml)
 
 	char name[256];
 	bool rv;
+	bool end;
 
-	while (as_parse_scalar(yaml, name, sizeof(name))) {
+	while (as_parse_key(yaml, "dynamic", name, sizeof(name), &end)) {
 		if (strcmp(name, "client") == 0) {
 			rv = as_parse_dynamic_client(yaml);
 		}
 		else if (strcmp(name, "read") == 0) {
-			rv = as_parse_policy(yaml, as_parse_read);
+			rv = as_parse_policy(yaml, name, as_parse_read);
 		}
 		else if (strcmp(name, "write") == 0) {
-			rv = as_parse_policy(yaml, as_parse_write);
+			rv = as_parse_policy(yaml, name, as_parse_write);
 		}
 		else if (strcmp(name, "query") == 0) {
-			rv = as_parse_policy(yaml, as_parse_query);
+			rv = as_parse_policy(yaml, name, as_parse_query);
 		}
 		else if (strcmp(name, "scan") == 0) {
-			rv = as_parse_policy(yaml, as_parse_scan);
+			rv = as_parse_policy(yaml, name, as_parse_scan);
 		}
 		else if (strcmp(name, "batch_read") == 0) {
-			rv = as_parse_policy(yaml, as_parse_batch_read);
+			rv = as_parse_policy(yaml, name, as_parse_batch_read);
 		}
 		else if (strcmp(name, "batch_write") == 0) {
-			rv = as_parse_policy(yaml, as_parse_batch_write);
+			rv = as_parse_policy(yaml, name, as_parse_batch_write);
 		}
 		else if (strcmp(name, "batch_udf") == 0) {
-			rv = as_parse_policy(yaml, as_parse_batch_udf);
+			rv = as_parse_policy(yaml, name, as_parse_batch_udf);
 		}
 		else if (strcmp(name, "batch_delete") == 0) {
-			rv = as_parse_policy(yaml, as_parse_batch_delete);
+			rv = as_parse_policy(yaml, name, as_parse_batch_delete);
 		}
 		else if (strcmp(name, "txn_verify") == 0) {
-			rv = as_parse_policy(yaml, as_parse_txn_verify);
+			rv = as_parse_policy(yaml, name, as_parse_txn_verify);
 		}
 		else if (strcmp(name, "txn_roll") == 0) {
-			rv = as_parse_policy(yaml, as_parse_txn_roll);
+			rv = as_parse_policy(yaml, name, as_parse_txn_roll);
 		}
 		else if (strcmp(name, "metrics") == 0) {
-			rv = as_parse_policy(yaml, as_parse_metrics);
+			rv = as_parse_policy(yaml, name, as_parse_metrics);
 		}
 		else {
 			as_log_info("Unexpected section: %s", name);
@@ -3769,7 +4308,7 @@ as_parse_dynamic(as_yaml* yaml)
 			return false;
 		}
 	}
-	return true;
+	return end;
 }
 
 static bool
@@ -3806,8 +4345,9 @@ as_parse_yaml(as_yaml* yaml)
 
 	char name[256];
 	bool rv;
+	bool end;
 
-	while (as_parse_scalar(yaml, name, sizeof(name))) {
+	while (as_parse_key(yaml, NULL, name, sizeof(name), &end)) {
 		if (strcmp(name, "version") == 0) {
 			rv = as_parse_version(yaml);
 		}
@@ -3826,7 +4366,7 @@ as_parse_yaml(as_yaml* yaml)
 			return false;
 		}
 	}
-	return true;
+	return end;
 }
 
 #if 0
@@ -3918,6 +4458,8 @@ as_config_file_read(
 	yaml.disc = disc;
 	yaml.opts = NULL;
 	yaml.alias_path = NULL;
+	yaml.depth = 0;
+	yaml.failed = false;
 	yaml.init = init;
 	as_error_init(&yaml.err);
 
@@ -3931,10 +4473,13 @@ as_config_file_read(
 	bool rv = as_parse_yaml(&yaml);
 	//bool rv = parse_debug(&yaml.parser);
 
-	// Key loops end on any parse failure, so a syntax error can surface as a success or as an
-	// unrelated event error. The parser problem is the cause either way.
+	// A syntax error can surface as an unrelated event error. The parser problem is the cause.
 	if (yaml.parser.error != YAML_NO_ERROR) {
 		as_parser_error(&yaml);
+		rv = false;
+	}
+
+	if (yaml.failed) {
 		rv = false;
 	}
 

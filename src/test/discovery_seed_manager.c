@@ -2197,9 +2197,9 @@ TEST(seed_reconnect_wait, "a new manager waits at most refresh_timeout_ms for a 
 
 	assert_true(strand_call(&config, &fp));
 
-	// Still running: creation fails with the discovery code, names the provider and calls nothing.
+	// Still running: creation fails with a client error, names the provider and calls nothing.
 	uint64_t begin = cf_getms();
-	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_CLIENT);
 	uint64_t elapsed = cf_getms() - begin;
 	assert_true(elapsed >= 190);
 	assert_true(elapsed < 2000);
@@ -3395,7 +3395,7 @@ TEST(seed_reconnect_in_flight, "reconnect fails naming the provider while the pr
 	fake_provider fp2;
 	fp_init(&fp2, true, false, addr);
 	assert_int_eq(fp_register(&c.as->config, &fp2, &err), AEROSPIKE_OK);
-	assert_int_eq(aerospike_connect(c.as, &err), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(aerospike_connect(c.as, &err), AEROSPIKE_ERR_CLIENT);
 	assert_not_null(strstr(err.message, "Seed provider fake"));
 	assert_not_null(strstr(err.message, "previous connection"));
 	assert_null(c.as->cluster);

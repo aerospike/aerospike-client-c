@@ -686,9 +686,8 @@ typedef struct as_seed_provider_s {
 	 * same aerospike object has not returned, aerospike_connect() waits at most
 	 * refresh_timeout_ms for it. This applies whichever provider is registered
 	 * now, including one registered while the old call was still running. If
-	 * the old call is still running, connect fails with
-	 * AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, names the provider in the message and
-	 * starts nothing.
+	 * the old call is still running, connect fails with AEROSPIKE_ERR_CLIENT,
+	 * names the provider in the message and starts nothing.
 	 */
 	as_status (*refresh)(as_error* err, const as_seed_candidate_context* context,
 		as_seed_candidates* candidates, void* udata);
@@ -1240,8 +1239,8 @@ as_dns_seed_provider_config_init(as_dns_seed_provider_config* config);
  * When some names resolve, their hosts are returned and each failed name is
  * logged at warning level. When no name yields a host (NXDOMAIN, SERVFAIL,
  * REFUSED, timeout, an empty or malformed answer, or no resolvable SRV target),
- * refresh returns AEROSPIKE_ERR_SEED_DISCOVERY_FAILED naming each name and its
- * failure, and the client keeps its previous seeds.
+ * refresh returns AEROSPIKE_ERR_CLIENT naming each name and its failure, and
+ * the client keeps its previous seeds.
  *
  * The configuration is validated and copied, and the system resolvers are read,
  * once per provider; later changes to the configuration or to the system
@@ -1287,7 +1286,7 @@ as_aws_seed_provider_config_init(as_aws_seed_provider_config* config);
  * longer than 255 bytes or contains whitespace or control characters, are skipped and counted
  * at debug level. An empty result is a success. Any failed page, HTTP error, timeout, response
  * whose root element is not DescribeInstancesResponse or allocation failure fails the refresh
- * with AEROSPIKE_ERR_SEED_DISCOVERY_FAILED and a message that starts with
+ * with AEROSPIKE_ERR_CLIENT and a message that starts with
  * "AWS EC2 seed provider: " and includes the AWS error code and request id when EC2 returns
  * them; the client then keeps its previous seeds. Seeds returned by a seed provider are used as
  * returned, unless one equals a configured seed by name and port, so rewriting provider seeds

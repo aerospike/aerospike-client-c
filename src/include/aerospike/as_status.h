@@ -43,7 +43,7 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_TRANSLATION_COLLISION = -26,
 
 	/**
-	 * A seed discovery provider failed.
+	 * The seed provider failed at initialization and no configured seed is left.
 	 */
 	AEROSPIKE_ERR_SEED_DISCOVERY_FAILED = -27,
 

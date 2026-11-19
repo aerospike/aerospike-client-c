@@ -2287,8 +2287,8 @@ TEST(cf_dns_provider, "the dns provider from the file uses its servers and timeo
 	close(fd);
 
 	assert_true(yaml_ms != UINT64_MAX && default_ms != UINT64_MAX);
-	assert_int_eq(status, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
-	assert_int_eq(default_status, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(status, AEROSPIKE_ERR_CLIENT);
+	assert_int_eq(default_status, AEROSPIKE_ERR_CLIENT);
 
 	if (yaml_ms < 250 || yaml_ms > 5000 || default_ms >= 250) {
 		fail("refresh took %" PRIu64 " ms with timeout_ms 600 and %" PRIu64 " ms by default",

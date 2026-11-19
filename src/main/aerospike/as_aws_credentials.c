@@ -131,7 +131,7 @@ aws_alloc_failed(as_error* err)
 static as_status
 aws_fail(as_error* err, const char* message)
 {
-	return as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, message);
+	return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, message);
 }
 
 static bool
@@ -445,7 +445,7 @@ aws_read_token_file(as_error* err, const char* name, const char* path, as_aws_bu
 	char reason[256];
 
 	if (aws_read_file(path, buf, reason, sizeof(reason)) != AWS_FILE_OK) {
-		return as_aws_errorf(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, NULL, 0,
+		return as_aws_errorf(err, AEROSPIKE_ERR_CLIENT, NULL, 0,
 			AWS_PREFIX "failed to read %s: %s", name, reason);
 	}
 	return AEROSPIKE_OK;
@@ -460,17 +460,17 @@ aws_static(as_error* err, const char* action, const char* access_key_id,
 	const char* secret_access_key, const char* session_token, as_aws_credentials* out)
 {
 	if (!as_aws_valid_key(access_key_id)) {
-		return as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX "%s returned an invalid access key id", action);
 	}
 
 	if (!as_aws_visible(secret_access_key)) {
-		return as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX "%s returned an invalid secret access key", action);
 	}
 
 	if (session_token && !as_aws_visible(session_token)) {
-		return as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX "%s returned an invalid session token", action);
 	}
 
@@ -486,29 +486,29 @@ aws_temporary(as_error* err, const char* action, const char* access_key_id,
 	as_aws_credentials* out)
 {
 	if (!aws_present(access_key_id) || !aws_present(secret_access_key) || !expiration) {
-		return as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX "%s response has no credentials", action);
 	}
 
 	if (!as_aws_valid_key(access_key_id)) {
-		return as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX "%s returned an invalid access key id", action);
 	}
 
 	if (!as_aws_visible(secret_access_key)) {
-		return as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX "%s returned an invalid secret access key", action);
 	}
 
 	if (session_token && !as_aws_visible(session_token)) {
-		return as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX "%s returned an invalid session token", action);
 	}
 
 	uint64_t expiration_ms;
 
 	if (!as_aws_iso8601(expiration, &expiration_ms)) {
-		return as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX "%s returned an invalid expiration", action);
 	}
 
@@ -526,7 +526,7 @@ aws_json_credentials(as_error* err, const char* action, const char* invalid,
 	as_aws_json json;
 
 	if (!as_aws_json_parse(response->body, response->body_size, &json)) {
-		return as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, AWS_PREFIX "%s",
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, AWS_PREFIX "%s",
 			invalid);
 	}
 
@@ -546,7 +546,7 @@ aws_send(as_error* err, const as_aws_state* st, const char* action, const char* 
 	memset(response, 0, sizeof(as_aws_http_response));
 
 	if (!endpoint->valid) {
-		return as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX "%s failed: invalid URL", action);
 	}
 
@@ -609,7 +609,7 @@ aws_profile(as_error* err, const as_aws_state* st, as_aws_credentials* out, bool
 		as_status status = AEROSPIKE_OK;
 
 		if (rc == AWS_FILE_FAILED) {
-			status = as_aws_errorf(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, NULL, 0,
+			status = as_aws_errorf(err, AEROSPIKE_ERR_CLIENT, NULL, 0,
 				AWS_PREFIX "failed to read %s: %s", path, reason);
 		}
 		as_aws_buf_destroy(&buf);
@@ -802,7 +802,7 @@ aws_ecs(as_error* err, as_aws_state* st, uint64_t deadline_ns, as_aws_credential
 	}
 
 	if (response.status != 200) {
-		status = as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX AWS_ECS " failed: HTTP %d", response.status);
 	}
 	else {
@@ -827,7 +827,7 @@ aws_imds_role(as_error* err, as_aws_state* st, const as_aws_header* auth,
 	}
 
 	if (response.status != 200) {
-		status = as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX AWS_IMDS_ROLE " failed: HTTP %d (no instance profile attached?)",
 			response.status);
 		as_aws_http_response_destroy(&response, true);
@@ -889,7 +889,7 @@ aws_imds_credentials(as_error* err, as_aws_state* st, const as_aws_header* auth,
 	}
 
 	if (response.status != 200) {
-		status = as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX AWS_IMDS_CREDENTIALS " failed: HTTP %d", response.status);
 		as_aws_http_response_destroy(&response, true);
 		return status;
@@ -905,7 +905,7 @@ aws_imds_credentials(as_error* err, as_aws_state* st, const as_aws_header* auth,
 	const char* code = as_aws_json_get(&json, "Code");
 
 	if (code && strcmp(code, "Success") != 0) {
-		status = as_aws_errorf(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, secrets, 1,
+		status = as_aws_errorf(err, AEROSPIKE_ERR_CLIENT, secrets, 1,
 			AWS_PREFIX AWS_IMDS_CREDENTIALS " failed: %s", code);
 	}
 	else {
@@ -931,7 +931,7 @@ aws_imds(as_error* err, as_aws_state* st, uint64_t deadline_ns, as_aws_credentia
 	}
 
 	if (response.status != 200) {
-		status = as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX AWS_IMDS_TOKEN " failed: HTTP %d", response.status);
 		as_aws_http_response_destroy(&response, true);
 		return status;
@@ -985,7 +985,7 @@ aws_hook(as_error* err, as_aws_state* st, uint64_t deadline_ns, as_aws_credentia
 			*out = result;
 			memset(&result, 0, sizeof(result));
 		}
-		status = as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			AWS_PREFIX "credentials hook timed out after %ums", timeout_ms);
 	}
 	else if (rv != AEROSPIKE_OK) {
@@ -994,11 +994,11 @@ aws_hook(as_error* err, as_aws_state* st, uint64_t deadline_ns, as_aws_credentia
 		if (hook_err.message[0]) {
 			const char* secrets[] = {st->cache.secret_access_key, st->cache.session_token,
 				result.secret_access_key, result.session_token};
-			status = as_aws_errorf(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, secrets, 4,
+			status = as_aws_errorf(err, AEROSPIKE_ERR_CLIENT, secrets, 4,
 				AWS_PREFIX "credentials hook failed: %s", hook_err.message);
 		}
 		else {
-			status = as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+			status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
 				AWS_PREFIX "credentials hook failed: status %d", (int)rv);
 		}
 	}
@@ -1100,7 +1100,7 @@ aws_resolve(as_error* err, as_aws_state* st, uint64_t deadline_ns, as_aws_creden
 		if (strncmp(reason, AWS_PREFIX, sizeof(AWS_PREFIX) - 1) == 0) {
 			reason += sizeof(AWS_PREFIX) - 1;
 		}
-		status = as_aws_errorf(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, NULL, 0,
+		status = as_aws_errorf(err, AEROSPIKE_ERR_CLIENT, NULL, 0,
 			AWS_PREFIX AWS_NO_SOURCE "%s", reason);
 	}
 	return status;

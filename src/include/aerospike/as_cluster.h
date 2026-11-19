@@ -851,8 +851,7 @@ as_seed_inflight_defer_destroy(as_seed_inflight* inflight, void (*destroy)(void*
 /**
  * @private
  * Wait at most timeout_ms for a running discovery-thread call to return. Returns
- * AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, naming the provider, when it is still running. Accepts a
- * NULL tracker.
+ * AEROSPIKE_ERR_CLIENT, naming the provider, when it is still running. Accepts a NULL tracker.
  */
 as_status
 as_seed_inflight_wait(as_seed_inflight* inflight, uint32_t timeout_ms, as_error* err);
@@ -865,8 +864,8 @@ as_seed_inflight_wait(as_seed_inflight* inflight, uint32_t timeout_ms, as_error*
  * needs_periodic_refresh and supports_deadline; does not call refresh. A manager that will run a
  * discovery thread takes a reference on config->discovery.inflight.
  *
- * Returns AEROSPIKE_ERR_SEED_DISCOVERY_FAILED when the earlier refresh is still running,
- * AEROSPIKE_ERR_PARAM for an invalid discovery setting.
+ * Returns AEROSPIKE_ERR_CLIENT when the earlier refresh is still running, AEROSPIKE_ERR_PARAM for
+ * an invalid discovery setting.
  */
 AS_EXTERN as_status
 as_seed_manager_create(as_error* err, as_config* config, as_seed_manager** manager);

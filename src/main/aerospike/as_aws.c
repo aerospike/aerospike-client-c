@@ -514,7 +514,7 @@ aws_describe(as_error* err, const as_aws_state* st, const as_aws_credentials* cr
 
 	if (!as_aws_buf_ok(&body) || !as_aws_amz_date(as_aws_now_ms(st), amz_date)) {
 		as_aws_buf_destroy(&body);
-		return as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 			"AWS EC2 seed provider: failed to build the DescribeInstances request");
 	}
 
@@ -534,7 +534,7 @@ aws_describe(as_error* err, const as_aws_state* st, const as_aws_credentials* cr
 
 	if (!authorization) {
 		as_aws_buf_destroy(&body);
-		return as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 			"AWS EC2 seed provider: failed to sign the DescribeInstances request");
 	}
 	headers[0].value = authorization;
@@ -552,7 +552,7 @@ aws_describe(as_error* err, const as_aws_state* st, const as_aws_credentials* cr
 	as_status status = AEROSPIKE_OK;
 
 	if (rc == AS_AWS_HTTP_TIMEOUT) {
-		status = as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"AWS EC2 seed provider: " AWS_ACTION " timed out after %ums", st->timeout_ms);
 	}
 	else if (rc != AS_AWS_HTTP_OK) {
@@ -568,13 +568,13 @@ aws_describe(as_error* err, const as_aws_state* st, const as_aws_credentials* cr
 		*out = as_aws_xml_parse(response.body, response.body_size, reason, sizeof(reason));
 
 		if (!*out) {
-			status = as_aws_errorf(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, secrets, 3,
+			status = as_aws_errorf(err, AEROSPIKE_ERR_CLIENT, secrets, 3,
 				"AWS EC2 seed provider: invalid " AWS_ACTION " response: %s", reason);
 		}
 		else if (strcmp(as_aws_xml_name(as_aws_xml_root(*out)), AWS_ACTION "Response") != 0) {
 			as_aws_xml_destroy(*out);
 			*out = NULL;
-			status = as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+			status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 				"AWS EC2 seed provider: invalid " AWS_ACTION " response: the root element is not "
 				AWS_ACTION "Response");
 		}
@@ -651,7 +651,7 @@ aws_refresh(as_error* err, const as_seed_candidate_context* context,
 				char* copy = cf_strdup(address);
 
 				if (!copy) {
-					status = as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+					status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 						"AWS EC2 seed provider: failed to allocate an address");
 					break;
 				}
@@ -666,13 +666,13 @@ aws_refresh(as_error* err, const as_seed_candidate_context* context,
 		const char* next = as_aws_xml_text(root, "nextToken");
 
 		if (status == AEROSPIKE_OK && as_aws_xml_failed(doc)) {
-			status = as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+			status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 				"AWS EC2 seed provider: failed to allocate " AWS_ACTION " response text");
 		}
 
 		if (status == AEROSPIKE_OK && next && next[0]) {
 			if (token && strcmp(token, next) == 0) {
-				status = as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+				status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 					"AWS EC2 seed provider: invalid " AWS_ACTION
 					" response: pagination did not advance");
 			}
@@ -681,7 +681,7 @@ aws_refresh(as_error* err, const as_seed_candidate_context* context,
 				token = cf_strdup(next);
 
 				if (!token) {
-					status = as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+					status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 						"AWS EC2 seed provider: failed to allocate a page token");
 				}
 			}
@@ -715,7 +715,7 @@ aws_refresh(as_error* err, const as_seed_candidate_context* context,
 
 		if (!as_seed_candidates_append(candidates, address, st->tls_name, st->port)) {
 			aws_free_addresses(&addresses);
-			return as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 				"AWS EC2 seed provider: failed to append a seed candidate");
 		}
 		hosts++;

@@ -351,21 +351,13 @@ rows through them.
 | --- | --- | --- |
 | -25 | `AEROSPIKE_ERR_TRANSLATION_MISS` | A strict miss: logged for a peer that cannot be added, returned by the conformance entry points, and returned by `aerospike_connect()` instead of the generic connection error when initialization fails for another reason after a miss was recorded. |
 | -26 | `AEROSPIKE_ERR_TRANSLATION_COLLISION` | Two peers translated to one `host:port`: logged for each colliding peer, and returned in the same way as -25. |
-| -27 | `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED` | See below. |
+| -27 | `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED` | `aerospike_connect()`, when the initial refresh fails or times out and no configured seed is left to fall back on. |
 
-`AEROSPIKE_ERR_SEED_DISCOVERY_FAILED` is used in three cases:
-
-- `aerospike_connect()` returns it when the initial refresh fails or times out and no configured
-  seed is left to fall back on.
-- `aerospike_connect()` returns it on reconnect when a refresh left running by the previous
-  connection of the same `aerospike` object has not returned within `refresh_timeout_ms`. The
-  message names the provider, and nothing is started.
-- The `dns` and `aws-tags` providers return it for ordinary refresh failures too. After
-  initialization these only reach the log, as
-  `Seed provider dns refresh failed: AEROSPIKE_ERR_SEED_DISCOVERY_FAILED ... Keeping the previous seeds`.
-
-The spec defines -27 only for the first case. The reconnect case and the provider failures are C
-client behaviour.
+The `dns` and `aws-tags` providers fail a refresh with `AEROSPIKE_ERR_CLIENT` (-1). After
+initialization the failure only reaches the log, and the previous seeds are kept. A reconnect
+while a refresh left running by the previous connection of the same `aerospike` object has not
+returned within `refresh_timeout_ms` also fails with `AEROSPIKE_ERR_CLIENT`; the message names
+the provider, and nothing is started.
 
 Invalid discovery and translation settings, at registration or in `aerospike_connect()`, fail
 with `AEROSPIKE_ERR_PARAM` (-2).
@@ -378,7 +370,6 @@ differs in these points:
 | Topic | C client | Java client |
 | --- | --- | --- |
 | Validation errors | `AEROSPIKE_ERR_PARAM` (-2). | `CLIENT_ERROR` (-1). |
-| `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED` | Also on reconnect while a previous refresh is running, and for ordinary `dns` and `aws-tags` refresh failures; see [Status codes](#status-codes). | Startup with no usable seed. |
 | Plugins across close | A sync `aerospike_close()` destroys every instance, and reconnect rebuilds the built-in, file-selected and code-selected ones; a table registered directly must be registered again. An async client releases every registration at close; see [Registration and ownership](#registration-and-ownership). | The provider is closed when the client closes; a translator has no close method. |
 | Selecting a registered name from code | `as_config_select_seed_provider()` and `as_config_select_address_translator()` call the factory at once, and again on every reconnect after a sync close. | Only the config file selects a registered name; the factory runs once, when the client is constructed. |
 | YAML factory options | Typed as SnakeYAML types them, with a few differences; see [Option values](yaml-config-discovery.md#option-values). | SnakeYAML 2.6. |

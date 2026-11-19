@@ -1038,11 +1038,11 @@ as_aws_xml_error(as_error* err, const char* action, int status, const uint8_t* b
 	as_aws_xml_destroy(doc);
 
 	if (!text) {
-		return as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 			"AWS EC2 seed provider: failed to allocate an error message");
 	}
 
-	as_status rv = as_aws_errorf(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, secrets, secrets_size,
+	as_status rv = as_aws_errorf(err, AEROSPIKE_ERR_CLIENT, secrets, secrets_size,
 		"%s", text);
 	as_aws_free_secret(text);
 	return rv;

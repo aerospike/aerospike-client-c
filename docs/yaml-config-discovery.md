@@ -151,9 +151,9 @@ a local resolver answers reliably in time; in `thread` mode, the default, the 10
 
 Every returned host is a numeric IP address. When some names resolve, their hosts are returned
 and each failed name is logged at warning level. When no name yields a host, the refresh fails
-with `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED` and the previous seeds are kept; at initialization the
-client continues with the configured seeds, and `aerospike_connect()` fails with
-`AEROSPIKE_ERR_SEED_DISCOVERY_FAILED` only when there are none. The full behaviour is documented
+with `AEROSPIKE_ERR_CLIENT`, the failure is logged and the previous seeds are kept; at
+initialization the client continues with the configured seeds, and `aerospike_connect()` fails
+with `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED` only when there are none. The full behaviour is documented
 on `as_discovery_dns_seed_provider()` in `as_discovery.h`.
 
 ## `static.client.discovery.aws`

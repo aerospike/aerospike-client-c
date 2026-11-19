@@ -1710,8 +1710,8 @@ TEST(dns_all_failed, "U-4 when every name fails the refresh returns -27 naming e
 		&provider), AEROSPIKE_OK);
 
 	char buf[256];
-	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
-	assert_int_eq(err.code, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
+	assert_int_eq(err.code, AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(err.message, "DNS seed discovery failed for every name: "
 		"missing.example.com: NXDOMAIN; bad.example.com: SERVFAIL; other.example.com: empty answer; "
 		"refused.example.com: REFUSED; notimp.example.com: rcode 4");
@@ -1727,7 +1727,7 @@ TEST(dns_all_failed, "U-4 when every name fails the refresh returns -27 naming e
 	assert_int_eq(as_discovery_dns_seed_provider(&err, cfg, &provider), AEROSPIKE_OK);
 
 	log_start();
-	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	log_stop();
 	assert_string_eq(err.message, "DNS seed discovery failed for every name: "
 		"other.example.com: no SRV target resolved; _dot._tcp.example.com: empty answer; "
@@ -1785,7 +1785,7 @@ TEST(dns_failover, "resolvers are tried in order once per query, starting with t
 	const char* missing[] = {"missing.example.com"};
 	assert_int_eq(as_discovery_dns_seed_provider(&err, setup_init(&d, missing, 1, &good, &bad),
 		&provider), AEROSPIKE_OK);
-	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(err.message, "DNS seed discovery failed for every name: missing.example.com: NXDOMAIN");
 	assert_int_eq(stub_get(&good, &good.udp_queries), 1);
 	provider.destroy(provider.udata);
@@ -1809,7 +1809,7 @@ TEST(dns_failover, "resolvers are tried in order once per query, starting with t
 	// Every resolver failing reports the last non-timeout reason.
 	assert_int_eq(as_discovery_dns_seed_provider(&err, setup_init(&d, names, 1, &bad, &bad),
 		&provider), AEROSPIKE_OK);
-	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(err.message, "DNS seed discovery failed for every name: seeds.example.com: REFUSED");
 	provider.destroy(provider.udata);
 
@@ -2247,7 +2247,7 @@ TEST(dns_malformed, "malformed answers (pointer loops, bad lengths, counts, labe
 		uint64_t elapsed = cf_getms() - begin;
 		provider.destroy(provider.udata);
 
-		if (status != AEROSPIKE_ERR_SEED_DISCOVERY_FAILED || strcmp(err.message,
+		if (status != AEROSPIKE_ERR_CLIENT || strcmp(err.message,
 			"DNS seed discovery failed for every name: seeds.example.com: malformed answer") != 0 ||
 			elapsed >= 500) {
 			fail("case %s: status %d elapsed %llu message '%s'", cases[i].label, status,
@@ -2267,7 +2267,7 @@ TEST(dns_malformed, "malformed answers (pointer loops, bad lengths, counts, labe
 
 	char buf[256];
 	uint64_t begin = cf_getms();
-	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_true(cf_getms() - begin <= 100 + DNS_MARGIN_MS);
 	assert_string_eq(err.message, "DNS seed discovery failed for every name: seeds.example.com: timeout");
 	provider.destroy(provider.udata);
@@ -2367,8 +2367,7 @@ TEST(dns_deadline_unanswered, "an unanswered refresh returns within timeout_ms f
 		for (int i = 0; i < 3; i++) {
 			char buf[256];
 			uint64_t begin = cf_getns();
-			assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)),
-				AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+			assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 			uint64_t elapsed = (cf_getns() - begin) / 1000000;
 			info("unanswered servers=%d elapsed=%llu ms timeout=400 ms", servers,
 				(unsigned long long)elapsed);
@@ -2526,7 +2525,7 @@ TEST(dns_deadline_srv_targets, "unanswered SRV targets share the refresh budget 
 	log_start();
 	char buf[256];
 	uint64_t begin = cf_getms();
-	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	uint64_t elapsed = cf_getms() - begin;
 	log_stop();
 	info("unanswered SRV targets elapsed=%llu ms timeout=300 ms", (unsigned long long)elapsed);
@@ -2572,7 +2571,7 @@ TEST(dns_deadline_srv_targets, "unanswered SRV targets share the refresh budget 
 
 	log_start();
 	begin = cf_getms();
-	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	elapsed = cf_getms() - begin;
 	log_stop();
 	info("12 unanswered SRV targets elapsed=%llu ms timeout=60 ms", (unsigned long long)elapsed);
@@ -2625,7 +2624,7 @@ TEST(dns_deadline_tcp, "a truncated answer whose TCP retry hangs, after a silent
 
 	char buf[256];
 	uint64_t begin = cf_getms();
-	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	uint64_t elapsed = cf_getms() - begin;
 	info("truncated with hanging TCP elapsed=%llu ms timeout=200 ms", (unsigned long long)elapsed);
 	assert_true(elapsed <= 200 + DNS_MARGIN_MS);
@@ -2720,8 +2719,7 @@ TEST(dns_no_leaked_descriptors, "every transport path, error and failed construc
 		if (round == 1) {
 			stub_set(&tc, &tc.hang_tcp, true);
 			assert_int_eq(as_discovery_dns_seed_provider(&err, cfg, &provider), AEROSPIKE_OK);
-			assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)),
-				AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+			assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 			provider.destroy(provider.udata);
 		}
 	}
@@ -2982,7 +2980,7 @@ TEST(dns_snapshot_retention, "U-4 NXDOMAIN after a publication keeps the exact p
 		assert_int_eq(stats_of(m).publications, publications);
 		assert_int_eq(stats_of(m).failures, 1);
 		assert_int_eq(log_size(), 1);
-		assert_string_eq(log_line(0), "Seed provider dns refresh failed: AEROSPIKE_ERR_SEED_DISCOVERY_FAILED "
+		assert_string_eq(log_line(0), "Seed provider dns refresh failed: AEROSPIKE_ERR_CLIENT "
 			"DNS seed discovery failed for every name: seeds.example.com: NXDOMAIN. Keeping the "
 			"previous seeds");
 		as_seed_snapshot_release(after);

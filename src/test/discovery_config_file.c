@@ -1137,6 +1137,9 @@ static const cf_invalid cf_invalid_rows[] = {
 	{"    discovery:\n      provider: dns\n      dns:\n        names: [seeds.example.com]\n"
 	 "        extra: &m {a: 1}\n    translation:\n      provider: nat-table\n      x: *m\n",
 	 "Invalid static.client.translation.x: alias *m is to a collection in a built-in section"},
+	{"    discovery: &d\n      provider: static\n    translation:\n      provider: nat-table\n"
+	 "      x: *d\n",
+	 "Invalid static.client.translation.x: alias *d is to a whole discovery or translation block"},
 	{"    discovery:\n      provider: consul\n      x: &r [1, *r]\n",
 	 "Invalid static.client.discovery.x[1]: alias *r is recursive"},
 	{"    discovery:\n      provider: consul\n      m: &m [a]\n      merge_policy: *m\n",
@@ -1188,6 +1191,24 @@ static const cf_invalid cf_invalid_rows[] = {
 	{"    translation:\n      provider: nat-table\n      <<: {on_miss: strict}\n",
 	 "Invalid static.client.translation.on_miss: client settings from YAML merge keys (<<) are "
 	 "not supported"},
+	{"    <<: {max_connections_per_node: 7}\n",
+	 "Invalid static.client.<<: YAML merge keys (<<) are only supported in factory options"},
+	{"<<: {static: {}}\n", "Invalid <<: YAML merge keys (<<) are only supported in factory options"},
+	{"dynamic:\n  read:\n    <<: [{total_timeout: 5}]\n",
+	 "Invalid dynamic.read.<<: YAML merge keys (<<) are only supported in factory options"},
+	{"dynamic:\n  client:\n    ? !!merge m\n    : {timeout: 5}\n",
+	 "Invalid dynamic.client.m: YAML merge keys (<<) are only supported in factory options"},
+	{"dynamic:\n  metrics:\n    labels:\n      <<: {a: b}\n",
+	 "Invalid dynamic.metrics.labels.<<: YAML merge keys (<<) are only supported in factory "
+	 "options"},
+	{"dynamic:\n  metrics:\n    extended:\n      <<: {usage: {enabled: true}}\n",
+	 "Invalid dynamic.metrics.extended.<<: YAML merge keys (<<) are only supported in factory "
+	 "options"},
+	{"    discovery:\n      provider: dns\n      dns:\n        <<: {port: 53}\n        names: [x]\n",
+	 "Invalid static.client.discovery.dns.<<: YAML merge keys (<<) are only supported in factory "
+	 "options"},
+	{"    ip_map:\n      <<: {10.0.0.1: 10.0.0.2}\n",
+	 "Invalid static.client.ip_map.<<: YAML merge keys (<<) are only supported in factory options"},
 	{"    discovery:\n      provider: consul\n      <<: {1: a}\n",
 	 "Invalid key '1' in static.client.discovery: expected a string"},
 
@@ -1202,7 +1223,17 @@ static const cf_invalid cf_invalid_rows[] = {
 	 "Invalid dynamic.read: expected scalar keys, not a sequence"},
 	{"dynamic:\n  metrics:\n    labels:\n      [a]: b\n",
 	 "Invalid dynamic.metrics.labels: expected scalar keys, not a sequence"},
-	{"dynamic:\n  client:\n    rack_ids: [1, [2]]\n", "Expected event 6. Received event: 7"}
+	{"dynamic:\n  metrics:\n    labels: x\n    enable: true\n",
+	 "Invalid dynamic.metrics.labels: expected a map, not a scalar"},
+	{"dynamic:\n  metrics:\n    extended: [a]\n",
+	 "Invalid dynamic.metrics.extended: expected a map, not a sequence"},
+	{"dynamic:\n  metrics:\n    labels:\n      a: [1]\n",
+	 "Invalid dynamic.metrics.labels.a: expected a scalar, not a sequence"},
+	{"dynamic:\n  client:\n    rack_ids: [1, [2]]\n",
+	 "Invalid dynamic.client.rack_ids[1]: expected a scalar, not a sequence"},
+	{"m: &m [2]\ndynamic:\n  client:\n    rack_ids: [1, *m]\n",
+	 "Invalid dynamic.client.rack_ids[1]: YAML aliases to collections are not supported for "
+	 "client settings"}
 };
 
 // Flow sequences nested depth deep around inner.
@@ -2045,7 +2076,7 @@ TEST(cf_registered_aliases, "aliases and merge keys: scalar aliases anywhere, co
 		"    discovery:\n"
 		"      provider: dns\n"
 		"      merge_policy: merge\n"
-		"      <<: {merge_policy: replace, foo: 1}\n"
+		"      <<: {merge_policy: replace, foo: 1, 2: x}\n"
 		"      name: &n seeds.example.com\n"
 		"      dns:\n"
 		"        names: [*n]\n");
@@ -2053,12 +2084,14 @@ TEST(cf_registered_aliases, "aliases and merge keys: scalar aliases anywhere, co
 	bool merged = client->config.discovery.merge_policy == AS_SEED_MERGE;
 	errors = cf_log_find(AS_LOG_LEVEL_ERROR, "");
 	uint32_t foo = cf_log_find(AS_LOG_LEVEL_INFO, "Unexpected field: static.client.discovery.foo");
+	uint32_t two = cf_log_find(AS_LOG_LEVEL_INFO, "Unexpected field: static.client.discovery.2");
 	uint32_t names = cf_log_find(AS_LOG_LEVEL_INFO,
 		"Set static.client.discovery.dns.names = [seeds.example.com]");
 	cf_close(client);
 	assert_int_eq(errors, 0);
 	assert_true(merged);
 	assert_int_eq(foo, 1);
+	assert_int_eq(two, 1);
 	assert_int_eq(names, 1);
 
 	// SnakeYAML's limit allows 50 aliases to collections.

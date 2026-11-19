@@ -127,6 +127,7 @@ typedef struct {
 // Where an anchored collection is defined, which decides whether an alias can reuse its value.
 typedef enum {
 	AS_YAML_ORIGIN_OUTSIDE, // outside the discovery and translation blocks
+	AS_YAML_ORIGIN_BLOCK,   // a whole discovery or translation block
 	AS_YAML_ORIGIN_SECTION, // in dns, aws, static_map or port_map
 	AS_YAML_ORIGIN_OPTIONS  // in the factory options of a block
 } as_yaml_origin;
@@ -404,6 +405,10 @@ as_event_kind(yaml_event_type_t type)
 			return "a sequence";
 		case YAML_ALIAS_EVENT:
 			return "an alias";
+		case YAML_MAPPING_END_EVENT:
+			return "the end of a map";
+		case YAML_SEQUENCE_END_EVENT:
+			return "the end of a sequence";
 		default:
 			return "an unsupported value";
 	}
@@ -567,6 +572,28 @@ as_parse_scalar(as_yaml* yaml, char* out, int size)
 	return true;
 }
 
+static bool
+as_yaml_is_merge(const yaml_event_t* event);
+
+// A merge key, whose scalar event is current, in a mapping the client parses itself (path NULL
+// for the top level). Java applies the merge there and the client does not, so the file fails.
+static bool
+as_merge_error(as_yaml* yaml, const char* path)
+{
+	const char* key = (const char*)yaml->event.data.scalar.value;
+
+	if (path) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid %s.%s: YAML merge keys (<<) are only supported in factory options", path, key);
+	}
+	else {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+			"Invalid %s: YAML merge keys (<<) are only supported in factory options", key);
+	}
+	yaml_event_delete(&yaml->event);
+	return false;
+}
+
 // Read the next key of the mapping at path (NULL for the top level) into name. Returns false at
 // the end of the mapping with *end set, or on an error with *end clear.
 static bool
@@ -597,10 +624,20 @@ as_parse_key(as_yaml* yaml, const char* path, char* name, int size, bool* end)
 		return false;
 	}
 
+	if (as_yaml_is_merge(&yaml->event)) {
+		return as_merge_error(yaml, path);
+	}
+
 	as_strncpy(name, (const char*)yaml->event.data.scalar.value, size);
 	yaml_event_delete(&yaml->event);
 	return true;
 }
+
+static bool
+as_yaml_known(const char* name, const char* const* names);
+
+static bool
+as_kind_error(as_yaml* yaml, const char* path, const char* name, const char* expected);
 
 static bool
 as_parse_int32(as_yaml* yaml, const char* name, const char* value, int32_t* out)
@@ -848,12 +885,14 @@ as_rack_ids_equal(as_cluster* c1, as_config* c2)
 }
 
 static bool
-as_parse_vector_int32(as_yaml* yaml, const char* name, as_vector** out, uint32_t field)
+as_parse_vector_int32(
+	as_yaml* yaml, const char* path, const char* name, as_vector** out, uint32_t field
+	)
 {
 	as_vector* list = as_vector_create(sizeof(int), 8);
 	int32_t v;
 
-	while (true) {
+	for (uint32_t i = 0; ; i++) {
 		if (!as_parse_next(yaml)) {
 			as_vector_destroy(list);
 			return false;
@@ -865,7 +904,16 @@ as_parse_vector_int32(as_yaml* yaml, const char* name, as_vector** out, uint32_t
 		}
 
 		if (yaml->event.type != YAML_SCALAR_EVENT) {
-			as_expected_error(yaml, YAML_SCALAR_EVENT);
+			char item[AS_YAML_PATH_SIZE];
+			snprintf(item, sizeof(item), "%.100s.%.100s[%u]", path, name, i);
+
+			if (yaml->event.type == YAML_ALIAS_EVENT) {
+				as_alias_error(yaml, item);
+			}
+			else {
+				as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: expected a scalar, not %s",
+					item, as_event_kind(yaml->event.type));
+			}
 			yaml_event_delete(&yaml->event);
 			as_vector_destroy(list);
 			return false;
@@ -1605,10 +1653,19 @@ as_parse_labels(as_yaml* yaml, as_metrics_policy* policy, uint32_t field)
 	bool end;
 
 	while (as_parse_key(yaml, "dynamic.metrics.labels", name, sizeof(name), &end)) {
-		if (!as_parse_scalar(yaml, value, sizeof(value))) {
+		if (!as_parse_next(yaml)) {
 			as_metrics_policy_destroy_labels(policy);
 			return false;
 		}
+
+		if (yaml->event.type != YAML_SCALAR_EVENT) {
+			as_kind_error(yaml, "dynamic.metrics.labels", name, "a scalar");
+			as_metrics_policy_destroy_labels(policy);
+			return false;
+		}
+
+		as_strncpy(value, (const char*)yaml->event.data.scalar.value, sizeof(value));
+		yaml_event_delete(&yaml->event);
 		as_metrics_policy_add_label(policy, name, value);
 	}
 
@@ -1784,7 +1841,9 @@ as_parse_sampler_field(as_yaml* yaml, const char* name, as_metrics_policy* polic
 typedef bool (*as_parse_metrics_field_fn)(as_yaml* yaml, const char* name, as_metrics_policy* policy);
 
 static bool
-as_parse_open_mapping(as_yaml* yaml, as_parse_metrics_field_fn fn, as_metrics_policy* policy);
+as_parse_open_mapping(
+	as_yaml* yaml, const char* path, as_parse_metrics_field_fn fn, as_metrics_policy* policy
+	);
 
 static bool
 as_parse_operational_field(as_yaml* yaml, const char* name, as_metrics_policy* policy)
@@ -1793,7 +1852,8 @@ as_parse_operational_field(as_yaml* yaml, const char* name, as_metrics_policy* p
 		if (strcmp(name, "sampler") == 0) {
 			yaml_event_delete(&yaml->event);
 
-			if (!as_parse_open_mapping(yaml, as_parse_sampler_field, policy)) {
+			if (!as_parse_open_mapping(yaml, "dynamic.metrics.extended.operational.sampler",
+				as_parse_sampler_field, policy)) {
 				return false;
 			}
 
@@ -1843,8 +1903,11 @@ as_parse_operational_field(as_yaml* yaml, const char* name, as_metrics_policy* p
 	return rv;
 }
 
+// Parse the pairs of the mapping at path whose start event is consumed, through its end event.
 static bool
-as_parse_open_mapping(as_yaml* yaml, as_parse_metrics_field_fn fn, as_metrics_policy* policy)
+as_parse_open_mapping(
+	as_yaml* yaml, const char* path, as_parse_metrics_field_fn fn, as_metrics_policy* policy
+	)
 {
 	while (as_parse_next(yaml)) {
 		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
@@ -1853,9 +1916,14 @@ as_parse_open_mapping(as_yaml* yaml, as_parse_metrics_field_fn fn, as_metrics_po
 		}
 
 		if (yaml->event.type != YAML_SCALAR_EVENT) {
-			as_expected_error(yaml, YAML_SCALAR_EVENT);
+			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: expected scalar keys, not %s",
+				path, as_event_kind(yaml->event.type));
 			yaml_event_delete(&yaml->event);
 			return false;
+		}
+
+		if (as_yaml_is_merge(&yaml->event)) {
+			return as_merge_error(yaml, path);
 		}
 
 		char name[256];
@@ -1917,11 +1985,13 @@ as_parse_extended_field(as_yaml* yaml, const char* name, as_metrics_policy* poli
 	yaml_event_delete(&yaml->event);
 
 	if (strcmp(name, "operational") == 0) {
-		return as_parse_open_mapping(yaml, as_parse_operational_field, policy);
+		return as_parse_open_mapping(yaml, "dynamic.metrics.extended.operational",
+			as_parse_operational_field, policy);
 	}
 
 	if (strcmp(name, "usage") == 0) {
-		return as_parse_open_mapping(yaml, as_parse_usage_field, policy);
+		return as_parse_open_mapping(yaml, "dynamic.metrics.extended.usage", as_parse_usage_field,
+			policy);
 	}
 
 	as_log_info("Unexpected field: metrics.extended.%s", name);
@@ -1947,7 +2017,8 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 	}
 
 	if (strcmp(name, "extended") == 0) {
-		return as_parse_open_mapping(yaml, as_parse_extended_field, policy);
+		return as_parse_open_mapping(yaml, "dynamic.metrics.extended", as_parse_extended_field,
+			policy);
 	}
 
 	if (strcmp(name, "export_interval") == 0) {
@@ -1984,8 +2055,12 @@ as_parse_metrics(as_yaml* yaml, const char* name, const char* value, as_policies
 
 typedef bool (*as_parse_policy_fn) (as_yaml* yaml, const char* name, const char* value, as_policies* base);
 
+// Keys of dynamic.metrics whose value as_parse_metrics() parses as a whole map.
+static const char* const as_metrics_maps[] = {"labels", "extended", NULL};
+
+// maps lists the keys whose value fn consumes as a whole map, or is NULL.
 static bool
-as_parse_policy(as_yaml* yaml, const char* section, as_parse_policy_fn fn)
+as_parse_policy(as_yaml* yaml, const char* section, as_parse_policy_fn fn, const char* const* maps)
 {
 	as_policies* base = &yaml->config->policies;
 
@@ -2006,6 +2081,18 @@ as_parse_policy(as_yaml* yaml, const char* section, as_parse_policy_fn fn)
 
 		bool rv;
 
+		if (maps && as_yaml_known(name, maps)) {
+			if (yaml->event.type != YAML_MAPPING_START_EVENT) {
+				return as_kind_error(yaml, path, name, "a map");
+			}
+			yaml_event_delete(&yaml->event);
+
+			if (!fn(yaml, name, "", base)) {
+				return false;
+			}
+			continue;
+		}
+
 		switch (yaml->event.type) {
 			case YAML_SCALAR_EVENT: {
 				char* value = (char*)yaml->event.data.scalar.value;
@@ -2021,9 +2108,7 @@ as_parse_policy(as_yaml* yaml, const char* section, as_parse_policy_fn fn)
 				yaml_event_delete(&yaml->event);
 				rv = fn(yaml, name, "", base);
 
-				// Only metrics.labels and metrics.extended consume the collection.
-				if (rv && !(fn == as_parse_metrics &&
-					(strcmp(name, "labels") == 0 || strcmp(name, "extended") == 0))) {
+				if (rv) {
 					rv = map ? as_skip_open_mapping(yaml) : as_skip_sequence(yaml);
 				}
 				break;
@@ -2862,7 +2947,8 @@ as_yaml_parse_double(const char* value, size_t len, double* out)
 	// Each hex digit is 4 bits of a binary exponent.
 	exp -= hex ? 4 * shift : shift;
 
-	char* buf = cf_malloc(int_len + frac_len + 32);
+	size_t size = int_len + frac_len + 32;
+	char* buf = cf_malloc(size);
 	char* q = buf;
 
 	if (hex) {
@@ -2873,7 +2959,7 @@ as_yaml_parse_double(const char* value, size_t len, double* out)
 	q += int_len;
 	memcpy(q, frac_start, frac_len);
 	q += frac_len;
-	snprintf(q, 32, "%c%lld", hex ? 'p' : 'e', (long long)exp);
+	snprintf(q, size - (size_t)(q - buf), "%c%lld", hex ? 'p' : 'e', (long long)exp);
 
 	// Out of range is not an error: the result is then infinite or zero, as in Java.
 	char* stop;
@@ -3147,12 +3233,23 @@ as_yaml_scalar_type(const yaml_event_t* event, as_yaml_type* type)
 		return true;
 	}
 
-	static const char* const names[] = {"str", "null", "bool", "int", "float", "timestamp", "merge"};
+	static const struct {
+		const char* name;
+		as_yaml_type type;
+	} tags[] = {
+		{"str", AS_YAML_TYPE_STR},
+		{"null", AS_YAML_TYPE_NULL},
+		{"bool", AS_YAML_TYPE_BOOL},
+		{"int", AS_YAML_TYPE_INT},
+		{"float", AS_YAML_TYPE_FLOAT},
+		{"timestamp", AS_YAML_TYPE_TIMESTAMP},
+		{"merge", AS_YAML_TYPE_MERGE}
+	};
 	const char* core = as_yaml_core_tag(tag);
 
-	for (uint32_t i = 0; core && i < AS_YAML_COUNT(names); i++) {
-		if (strcmp(core, names[i]) == 0) {
-			*type = (as_yaml_type)i;
+	for (uint32_t i = 0; core && i < AS_YAML_COUNT(tags); i++) {
+		if (strcmp(core, tags[i].name) == 0) {
+			*type = tags[i].type;
 			return true;
 		}
 	}
@@ -3305,6 +3402,11 @@ as_yaml_alias_reason(const as_yaml_anchor* a, char* reason, size_t size)
 		case AS_YAML_ORIGIN_OUTSIDE:
 			snprintf(reason, size, "alias *%.100s is to a collection outside the discovery and "
 				"translation blocks", a->name);
+			break;
+
+		case AS_YAML_ORIGIN_BLOCK:
+			snprintf(reason, size, "alias *%.100s is to a whole discovery or translation block",
+				a->name);
 			break;
 
 		case AS_YAML_ORIGIN_SECTION:
@@ -3671,6 +3773,10 @@ as_parse_block(as_yaml* yaml, const char* path, as_parse_block_fn fn)
 			return false;
 		}
 
+		if (as_yaml_is_merge(&yaml->event)) {
+			return as_merge_error(yaml, path);
+		}
+
 		char name[256];
 		as_strncpy(name, as_yaml_scalar(yaml), sizeof(name));
 		yaml_event_delete(&yaml->event);
@@ -3760,6 +3866,10 @@ as_parse_addr_map(as_yaml* yaml, const char* path, as_vector* out)
 				path, as_event_kind(yaml->event.type));
 			yaml_event_delete(&yaml->event);
 			return false;
+		}
+
+		if (as_yaml_is_merge(&yaml->event)) {
+			return as_merge_error(yaml, path);
 		}
 
 		char* orig = cf_strdup(as_yaml_scalar(yaml));
@@ -4313,7 +4423,13 @@ as_apply_block_merges(as_yaml* yaml, const char* path, bool discovery)
 			if (as_val_type(key) != AS_STRING) {
 				char* s = as_val_tostring(key);
 				as_options_defer(o, "Invalid key '%s' in %s: expected a string", s, path);
-				cf_free(s);
+
+				if (as_yaml_names_has(&o->unknown, s)) {
+					cf_free(s);
+				}
+				else {
+					as_vector_append(&o->unknown, &s);
+				}
 				continue;
 			}
 
@@ -4424,6 +4540,13 @@ as_parse_plugin_block(as_yaml* yaml, const char* path, bool discovery)
 	o.len = 0;
 	o.cur[0] = '\0';
 	as_options_push(&o, "", path);
+
+	// The caller consumed the block's start event, so an anchor on it is the innermost open one.
+	as_yaml_anchor* block = as_yaml_anchor_by_id(yaml, yaml->open[yaml->depth - 1]);
+
+	if (block) {
+		block->origin = AS_YAML_ORIGIN_BLOCK;
+	}
 
 	yaml->opts = &o;
 	bool rv = as_parse_plugin_pairs(yaml, path, discovery);
@@ -4635,7 +4758,8 @@ as_parse_dynamic_client(as_yaml* yaml)
 			bool rv;
 
 			if (strcmp(name, "rack_ids") == 0) {
-				rv = as_parse_vector_int32(yaml, name, &yaml->config->rack_ids, AS_RACK_IDS);
+				rv = as_parse_vector_int32(yaml, "dynamic.client", name, &yaml->config->rack_ids,
+					AS_RACK_IDS);
 			}
 			else {
 				as_log_info("Unexpected sequence: %s.%s", yaml->name, name);
@@ -4702,37 +4826,37 @@ as_parse_dynamic(as_yaml* yaml)
 			rv = as_parse_dynamic_client(yaml);
 		}
 		else if (strcmp(name, "read") == 0) {
-			rv = as_parse_policy(yaml, name, as_parse_read);
+			rv = as_parse_policy(yaml, name, as_parse_read, NULL);
 		}
 		else if (strcmp(name, "write") == 0) {
-			rv = as_parse_policy(yaml, name, as_parse_write);
+			rv = as_parse_policy(yaml, name, as_parse_write, NULL);
 		}
 		else if (strcmp(name, "query") == 0) {
-			rv = as_parse_policy(yaml, name, as_parse_query);
+			rv = as_parse_policy(yaml, name, as_parse_query, NULL);
 		}
 		else if (strcmp(name, "scan") == 0) {
-			rv = as_parse_policy(yaml, name, as_parse_scan);
+			rv = as_parse_policy(yaml, name, as_parse_scan, NULL);
 		}
 		else if (strcmp(name, "batch_read") == 0) {
-			rv = as_parse_policy(yaml, name, as_parse_batch_read);
+			rv = as_parse_policy(yaml, name, as_parse_batch_read, NULL);
 		}
 		else if (strcmp(name, "batch_write") == 0) {
-			rv = as_parse_policy(yaml, name, as_parse_batch_write);
+			rv = as_parse_policy(yaml, name, as_parse_batch_write, NULL);
 		}
 		else if (strcmp(name, "batch_udf") == 0) {
-			rv = as_parse_policy(yaml, name, as_parse_batch_udf);
+			rv = as_parse_policy(yaml, name, as_parse_batch_udf, NULL);
 		}
 		else if (strcmp(name, "batch_delete") == 0) {
-			rv = as_parse_policy(yaml, name, as_parse_batch_delete);
+			rv = as_parse_policy(yaml, name, as_parse_batch_delete, NULL);
 		}
 		else if (strcmp(name, "txn_verify") == 0) {
-			rv = as_parse_policy(yaml, name, as_parse_txn_verify);
+			rv = as_parse_policy(yaml, name, as_parse_txn_verify, NULL);
 		}
 		else if (strcmp(name, "txn_roll") == 0) {
-			rv = as_parse_policy(yaml, name, as_parse_txn_roll);
+			rv = as_parse_policy(yaml, name, as_parse_txn_roll, NULL);
 		}
 		else if (strcmp(name, "metrics") == 0) {
-			rv = as_parse_policy(yaml, name, as_parse_metrics);
+			rv = as_parse_policy(yaml, name, as_parse_metrics, as_metrics_maps);
 		}
 		else {
 			as_log_info("Unexpected section: %s", name);

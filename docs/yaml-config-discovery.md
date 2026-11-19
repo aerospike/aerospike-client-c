@@ -277,8 +277,8 @@ static:
 
 ### Option values
 
-Values are typed as SnakeYAML 2.6, which the Java client reads the file with, types them, so a
-file shared with Java gives a factory the same values.
+Values are typed the way SnakeYAML 2.6, the parser the Java client reads the file with, types
+them, so a file shared with Java gives a factory the same values.
 
 | YAML value | `as_val` |
 | --- | --- |
@@ -291,7 +291,7 @@ file shared with Java gives a factory the same values.
 | Mapping, with string or integer keys | `as_orderedmap` |
 
 - **Tags** run SnakeYAML's constructor for the type, which accepts more than the plain forms:
-  `!!float 1` is 1.0, as are `!!float .5f` and `!!float 0x1.8p1` (3.0, Java's hex form);
+  `!!float 1` is 1.0, `!!float .5f` is 0.5 and `!!float 0x1.8p1` is 3.0 (Java's hex form);
   `!!int _1` is 1; `!!bool` takes any case (`!!bool tRuE`) and gives nil for another value;
   `!!null` always gives nil; `!!str` gives the string; `!!timestamp` checks the format and gives
   the string. `!!map` and `!!seq` are accepted on collections. The non-specific tag `!` types a
@@ -329,8 +329,11 @@ file shared with Java gives a factory the same values.
   `Invalid static.client.discovery.merge_policy: client settings from YAML merge keys (<<) are not supported`.
   Any problem with such a merge value, for example a value that is not a map or a list of maps,
   or an alias without a value to reuse, fails the file for every provider.
-- Merge keys are not applied elsewhere: under `static.client`, for example, `<<` is an unknown
-  key. Java applies them there.
+- **Merge keys anywhere else the client parses the map itself** (the top level, `static`,
+  `static.client`, `dns`, `aws`, `ip_map`, `static_map`, `port_map` and the `dynamic` sections)
+  make the file invalid, because Java applies them there and this client does not:
+  `Invalid static.client.<<: YAML merge keys (<<) are only supported in factory options`.
+  Content the client skips may use them.
 
 ## Invalid settings
 
@@ -350,10 +353,10 @@ registrations set in code. Code registrations are not destroyed.
 - A key that is not a scalar, at any level the client parses:
   `Invalid static.client: expected scalar keys, not a sequence`, or
   `Invalid top-level key: expected a scalar, not a sequence`.
-- An alias to a collection where the client parses the value itself (see
-  [Anchors, aliases and merge keys](#anchors-aliases-and-merge-keys)), and a merge key directly
+- An alias to a collection where the client parses the value itself, a merge key directly
   under `discovery` or `translation` that brings in `provider`, a client setting or a built-in
-  section.
+  section, and a merge key in any other map the client parses itself; see
+  [Anchors, aliases and merge keys](#anchors-aliases-and-merge-keys).
 - An unknown enum value, for example
   `Invalid static.client.discovery.execution_mode: background. valid values: thread, tend`. The
   same applies to `provider`, `merge_policy`, `dns.record_type`, `aws.address_field`,
@@ -386,8 +389,7 @@ registrations set in code. Code registrations are not destroyed.
 - With a registered name: a factory that fails
   (`Invalid static.client.discovery.provider: consul. factory failed: <message>`) or returns an
   invalid table (`... factory returned an invalid provider`, or `translator`), and an option
-  value the client
-  cannot type (see [Option values](#option-values)).
+  value the client cannot type (see [Option values](#option-values)).
 
 Example error:
 

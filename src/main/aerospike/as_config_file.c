@@ -58,8 +58,10 @@
 
 #define AS_YAML_PATH_SIZE 256
 
-// SnakeYAML's LoaderOptions default: a node may open with at most 50 collections open around it.
+// SnakeYAML's LoaderOptions defaults: a node may open with at most 50 collections open around it,
+// and a file may have at most 50 aliases to collections.
 #define AS_YAML_DEPTH_MAX 50
+#define AS_YAML_ALIASES_MAX 50
 
 //---------------------------------
 // Types
@@ -115,10 +117,35 @@ typedef struct {
 typedef struct {
 	as_orderedmap* map;
 	as_vector unknown; // char*, owned: top-level keys logged as unexpected for a built-in
+	as_vector names;   // char*, owned: the block's own string keys
+	as_vector sources; // as_orderedmap*, reserved: maps merged into the block
 	char deferred[AS_ERROR_MESSAGE_MAX_SIZE]; // first error that only a registered name raises
 	char cur[AS_YAML_PATH_SIZE]; // path of the value being captured, ending in ... when cut
 	uint32_t len;                // length of cur
 } as_yaml_options;
+
+// Where an anchored collection is defined, which decides whether an alias can reuse its value.
+typedef enum {
+	AS_YAML_ORIGIN_OUTSIDE, // outside the discovery and translation blocks
+	AS_YAML_ORIGIN_SECTION, // in dns, aws, static_map or port_map
+	AS_YAML_ORIGIN_OPTIONS  // in the factory options of a block
+} as_yaml_origin;
+
+// An anchor of the file. A redefined anchor replaces the earlier one.
+typedef struct {
+	char* name;             // owned
+	uint32_t id;            // collection id, 0 for a scalar
+	bool scalar;
+	bool open;              // the collection has not ended, so an alias to it is recursive
+	as_yaml_origin origin;
+	as_val* val;            // the collection as a factory option, owned
+	yaml_char_t* value;     // scalar copy, owned
+	size_t length;
+	yaml_char_t* tag;       // owned, NULL when untagged
+	int plain_implicit;
+	int quoted_implicit;
+	yaml_scalar_style_t style;
+} as_yaml_anchor;
 
 typedef struct {
 	yaml_parser_t parser;
@@ -128,9 +155,15 @@ typedef struct {
 	const char* name;
 	as_yaml_discovery* disc; // NULL on reload
 	as_yaml_options* opts;   // set while a discovery or translation block is parsed
-	const char* alias_path;  // value named by an alias error from the skip functions
 	as_error err;
+	as_vector anchors;       // as_yaml_anchor
+	as_yaml_anchor* alias;   // anchor of the current collection alias event, until the next event
+	uint32_t anchor_id;      // id of the anchored collection whose start event is current, else 0
+	uint32_t ids;            // collection ids given out
+	uint32_t open[AS_YAML_DEPTH_MAX + 1]; // id of each open collection by depth, 0 if not anchored
+	uint32_t aliases;        // aliases to collections so far
 	uint32_t depth;          // open collections
+	bool section;            // dns, aws, static_map or port_map is being parsed
 	bool failed;             // as_parse_next raised an error; every later call fails
 	bool init;
 } as_yaml;
@@ -162,6 +195,150 @@ as_parser_error(as_yaml* yaml)
 		parser->problem_mark.line + 1, parser->problem_mark.column + 1, parser->problem);
 }
 
+static as_yaml_anchor*
+as_yaml_anchor_find(as_yaml* yaml, const char* name)
+{
+	for (uint32_t i = 0; i < yaml->anchors.size; i++) {
+		as_yaml_anchor* a = as_vector_get(&yaml->anchors, i);
+
+		if (strcmp(a->name, name) == 0) {
+			return a;
+		}
+	}
+	return NULL;
+}
+
+static as_yaml_anchor*
+as_yaml_anchor_by_id(as_yaml* yaml, uint32_t id)
+{
+	for (uint32_t i = 0; id && i < yaml->anchors.size; i++) {
+		as_yaml_anchor* a = as_vector_get(&yaml->anchors, i);
+
+		if (a->id == id) {
+			return a;
+		}
+	}
+	return NULL;
+}
+
+// Free what the anchor holds besides its name.
+static void
+as_yaml_anchor_clear(as_yaml_anchor* a)
+{
+	as_val_destroy(a->val);
+	cf_free(a->value);
+	cf_free(a->tag);
+	a->val = NULL;
+	a->value = NULL;
+	a->tag = NULL;
+}
+
+static void
+as_yaml_anchors_destroy(as_yaml* yaml)
+{
+	for (uint32_t i = 0; i < yaml->anchors.size; i++) {
+		as_yaml_anchor* a = as_vector_get(&yaml->anchors, i);
+		as_yaml_anchor_clear(a);
+		cf_free(a->name);
+	}
+	as_vector_destroy(&yaml->anchors);
+}
+
+// Record the anchor of the current scalar or collection start event, if it has one.
+static void
+as_yaml_anchor_define(as_yaml* yaml)
+{
+	yaml_event_t* e = &yaml->event;
+	const char* name = (const char*)(e->type == YAML_SCALAR_EVENT ? e->data.scalar.anchor :
+		e->type == YAML_SEQUENCE_START_EVENT ? e->data.sequence_start.anchor :
+		e->data.mapping_start.anchor);
+
+	if (!name) {
+		return;
+	}
+
+	as_yaml_anchor* a = as_yaml_anchor_find(yaml, name);
+
+	if (a) {
+		as_yaml_anchor_clear(a);
+	}
+	else {
+		a = as_vector_reserve(&yaml->anchors);
+		a->name = cf_strdup(name);
+	}
+
+	a->origin = !yaml->opts ? AS_YAML_ORIGIN_OUTSIDE :
+		yaml->section ? AS_YAML_ORIGIN_SECTION : AS_YAML_ORIGIN_OPTIONS;
+
+	if (e->type != YAML_SCALAR_EVENT) {
+		a->id = ++yaml->ids;
+		a->scalar = false;
+		a->open = true;
+		yaml->anchor_id = a->id;
+		return;
+	}
+
+	a->id = 0;
+	a->scalar = true;
+	a->open = false;
+	a->length = e->data.scalar.length;
+	a->value = cf_malloc(a->length + 1);
+	memcpy(a->value, e->data.scalar.value, a->length + 1);
+	a->tag = e->data.scalar.tag ? (yaml_char_t*)cf_strdup((const char*)e->data.scalar.tag) : NULL;
+	a->plain_implicit = e->data.scalar.plain_implicit;
+	a->quoted_implicit = e->data.scalar.quoted_implicit;
+	a->style = e->data.scalar.style;
+}
+
+static bool
+as_yaml_event_error(as_yaml* yaml, const char* msg)
+{
+	as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "%s: line %zu, column %zu", msg,
+		yaml->event.start_mark.line + 1, yaml->event.start_mark.column + 1);
+	yaml_event_delete(&yaml->event);
+	yaml->failed = true;
+	return false;
+}
+
+// An alias to a scalar becomes a copy of the scalar, so every parser takes it as written there.
+// An alias to a collection stays, with its anchor in yaml->alias.
+static bool
+as_yaml_alias(as_yaml* yaml)
+{
+	yaml_event_t* e = &yaml->event;
+	as_yaml_anchor* a = as_yaml_anchor_find(yaml, (const char*)e->data.alias.anchor);
+	char msg[AS_YAML_PATH_SIZE];
+
+	if (!a) {
+		snprintf(msg, sizeof(msg), "Undefined YAML alias *%.200s", e->data.alias.anchor);
+		return as_yaml_event_error(yaml, msg);
+	}
+
+	if (!a->scalar) {
+		if (++yaml->aliases > AS_YAML_ALIASES_MAX) {
+			snprintf(msg, sizeof(msg), "More than %u YAML aliases to collections",
+				AS_YAML_ALIASES_MAX);
+			return as_yaml_event_error(yaml, msg);
+		}
+		yaml->alias = a;
+		return true;
+	}
+
+	yaml_mark_t start = e->start_mark;
+	yaml_mark_t end = e->end_mark;
+	yaml_event_delete(e);
+
+	if (!yaml_scalar_event_initialize(e, NULL, a->tag, a->value, (int)a->length,
+		a->plain_implicit, a->quoted_implicit, a->style)) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "YAML alias *%s: copy failed", a->name);
+		yaml->failed = true;
+		return false;
+	}
+	e->start_mark = start;
+	e->end_mark = end;
+	return true;
+}
+
 // Read the next event. An error here fails the whole file, even when the caller only stops a
 // loop on it: as_config_file_read() checks yaml->failed.
 static bool
@@ -177,28 +354,37 @@ as_parse_next(as_yaml* yaml)
 		return false;
 	}
 
+	yaml->alias = NULL;
+	yaml->anchor_id = 0;
+
 	switch (yaml->event.type) {
 		case YAML_SCALAR_EVENT:
 		case YAML_SEQUENCE_START_EVENT:
 		case YAML_MAPPING_START_EVENT:
 			if (yaml->depth > AS_YAML_DEPTH_MAX) {
-				as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
-					"YAML nesting deeper than %u levels: line %zu, column %zu", AS_YAML_DEPTH_MAX,
-					yaml->event.start_mark.line + 1, yaml->event.start_mark.column + 1);
-				yaml_event_delete(&yaml->event);
-				yaml->failed = true;
-				return false;
+				char msg[64];
+				snprintf(msg, sizeof(msg), "YAML nesting deeper than %u levels", AS_YAML_DEPTH_MAX);
+				return as_yaml_event_error(yaml, msg);
 			}
+			as_yaml_anchor_define(yaml);
 
 			if (yaml->event.type != YAML_SCALAR_EVENT) {
-				yaml->depth++;
+				yaml->open[yaml->depth++] = yaml->anchor_id;
 			}
 			break;
 
 		case YAML_SEQUENCE_END_EVENT:
-		case YAML_MAPPING_END_EVENT:
-			yaml->depth--;
+		case YAML_MAPPING_END_EVENT: {
+			as_yaml_anchor* a = as_yaml_anchor_by_id(yaml, yaml->open[--yaml->depth]);
+
+			if (a) {
+				a->open = false;
+			}
 			break;
+		}
+
+		case YAML_ALIAS_EVENT:
+			return as_yaml_alias(yaml);
 
 		default:
 			break;
@@ -223,18 +409,19 @@ as_event_kind(yaml_event_type_t type)
 	}
 }
 
-// path names the value that holds the alias, or is NULL when the caller has no path.
+// An alias to a collection where a client setting is parsed. path names the value that holds the
+// alias, or is NULL when the caller has no path.
 static void
 as_alias_error(as_yaml* yaml, const char* path)
 {
 	if (path) {
 		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
-			"Invalid %s: YAML aliases are not supported", path);
+			"Invalid %s: YAML aliases to collections are not supported for client settings", path);
 		return;
 	}
 
 	as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
-		"YAML aliases are not supported: line %zu, column %zu",
+		"YAML aliases to collections are not supported for client settings: line %zu, column %zu",
 		yaml->event.start_mark.line + 1, yaml->event.start_mark.column + 1);
 }
 
@@ -284,8 +471,7 @@ as_skip_sequence(as_yaml* yaml)
 	return false;
 }
 
-// Skip the value whose first event is current. An alias is an error, reported with
-// yaml->alias_path.
+// Skip the value whose first event is current.
 static bool
 as_skip_value(as_yaml* yaml)
 {
@@ -299,13 +485,9 @@ as_skip_value(as_yaml* yaml)
 			return as_skip_sequence(yaml);
 
 		case YAML_SCALAR_EVENT:
+		case YAML_ALIAS_EVENT:
 			yaml_event_delete(&yaml->event);
 			return true;
-
-		case YAML_ALIAS_EVENT:
-			as_alias_error(yaml, yaml->alias_path);
-			yaml_event_delete(&yaml->event);
-			return false;
 
 		default:
 			yaml_event_delete(&yaml->event);
@@ -327,20 +509,14 @@ as_skip_section(as_yaml* yaml)
 	return true;
 }
 
-// Skip a value with path naming it in an alias error.
-static bool
-as_skip_path(as_yaml* yaml, const char* path)
-{
-	const char* saved = yaml->alias_path;
-	yaml->alias_path = path;
-	bool rv = as_skip_value(yaml);
-	yaml->alias_path = saved;
-	return rv;
-}
-
 static inline void
 as_expected_error(as_yaml* yaml, yaml_event_type_t type)
 {
+	if (yaml->event.type == YAML_ALIAS_EVENT) {
+		as_alias_error(yaml, NULL);
+		return;
+	}
+
 	as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Expected event %d. Received event: %d Offset: %zu",
 		type, yaml->event.type, yaml->parser.offset);
 }
@@ -1933,21 +2109,26 @@ as_yaml_path(char* out, const char* path, const char* name)
 static bool
 as_kind_error(as_yaml* yaml, const char* path, const char* name, const char* expected)
 {
-	as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s.%s: expected %s, not %s",
-		path, name, expected, as_event_kind(yaml->event.type));
+	char key[AS_YAML_PATH_SIZE];
+	as_yaml_path(key, path, name);
+
+	if (yaml->event.type == YAML_ALIAS_EVENT) {
+		as_alias_error(yaml, key);
+	}
+	else {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: expected %s, not %s",
+			key, expected, as_event_kind(yaml->event.type));
+	}
 	yaml_event_delete(&yaml->event);
 	return false;
 }
 
-// Log an unknown key and skip its value, whatever its kind. An alias anywhere in it is an error.
+// Log an unknown key and skip its value, whatever its kind.
 static bool
 as_skip_field(as_yaml* yaml, const char* path, const char* name)
 {
 	as_log_info("Unexpected field: %s.%s", path, name);
-
-	char key[AS_YAML_PATH_SIZE];
-	as_yaml_path(key, path, name);
-	return as_skip_path(yaml, key);
+	return as_skip_value(yaml);
 }
 
 static bool
@@ -2099,10 +2280,13 @@ as_yaml_discovery_destroy(as_yaml_discovery* d)
 //---------------------------------
 
 // Factory options are typed by the resolver and tag constructors of SnakeYAML 2.6, which Java
-// loads the file with, so a file shared with Java gives a factory the same values. Where they
-// differ: a timestamp is its string, not a date; an integer outside int64 is its string, not a
-// BigInteger; a map key must be a string or an integer; !!binary, !!set, !!omap, !!pairs and
-// local tags are rejected; YAML aliases and merge keys are rejected.
+// loads the file with, so a file shared with Java gives a factory the same values, aliases and
+// merge keys included. Where they differ: a timestamp is its string, not a date; an integer
+// outside int64 is its string, not a BigInteger; a map key must be a string or an integer;
+// !!binary, !!set, !!omap, !!pairs and local tags are rejected; an alias to a collection reuses
+// only a collection captured as an option, so a recursive one is rejected; an inline merge
+// source keeps its last duplicate key and its own keys over its merges, where SnakeYAML keeps
+// the first.
 
 #define AS_YAML_TAG_PREFIX "tag:yaml.org,2002:"
 #define AS_YAML_REASON_SIZE 256
@@ -3096,18 +3280,148 @@ as_options_pop(as_yaml_options* o, uint32_t len)
 static bool
 as_yaml_capture(as_yaml* yaml, as_val** out);
 
-// Capture the pairs of a mapping whose start event is consumed, through its end event.
+// Keep a captured collection for the aliases to its anchor.
+static void
+as_yaml_anchor_store(as_yaml* yaml, uint32_t id, as_val* val)
+{
+	as_yaml_anchor* a = as_yaml_anchor_by_id(yaml, id);
+
+	if (a) {
+		as_val_destroy(a->val);
+		a->val = as_val_reserve(val);
+	}
+}
+
+// Why an alias to a collection has no value to reuse.
+static void
+as_yaml_alias_reason(const as_yaml_anchor* a, char* reason, size_t size)
+{
+	if (a->open) {
+		snprintf(reason, size, "alias *%.100s is recursive", a->name);
+		return;
+	}
+
+	switch (a->origin) {
+		case AS_YAML_ORIGIN_OUTSIDE:
+			snprintf(reason, size, "alias *%.100s is to a collection outside the discovery and "
+				"translation blocks", a->name);
+			break;
+
+		case AS_YAML_ORIGIN_SECTION:
+			snprintf(reason, size, "alias *%.100s is to a collection in a built-in section",
+				a->name);
+			break;
+
+		default:
+			snprintf(reason, size, "alias *%.100s is to a collection that is not an option",
+				a->name);
+			break;
+	}
+}
+
+static void
+as_yaml_sources_destroy(as_vector* sources)
+{
+	for (uint32_t i = 0; i < sources->size; i++) {
+		as_val_destroy(*(as_val**)as_vector_get(sources, i));
+	}
+	as_vector_destroy(sources);
+}
+
+// Add the value of a merge key, whose first event is current, to sources (as_orderedmap*,
+// reserved): a map, or each map of a list. Anything else gets SnakeYAML's error, deferred.
 static bool
-as_yaml_capture_map(as_yaml* yaml, bool keep, as_val** out)
+as_yaml_merge_sources(as_yaml* yaml, as_vector* sources)
+{
+	as_yaml_options* o = yaml->opts;
+	as_val* val;
+
+	if (!as_yaml_capture(yaml, &val)) {
+		return false;
+	}
+
+	switch (as_val_type(val)) {
+		case AS_UNDEF:
+			return true;
+
+		case AS_MAP:
+			as_vector_append(sources, &val);
+			return true;
+
+		case AS_LIST: {
+			as_list* list = (as_list*)val;
+			uint32_t size = as_list_size(list);
+
+			for (uint32_t i = 0; i < size; i++) {
+				as_val* item = as_list_get(list, i);
+
+				if (as_val_type(item) != AS_MAP) {
+					as_options_defer(o, "Invalid %s: expected a mapping for merging, but found %s",
+						o->cur, as_val_type(item) == AS_LIST ? "sequence" : "scalar");
+					continue;
+				}
+				as_val_reserve(item);
+				as_vector_append(sources, &item);
+			}
+			as_val_destroy(val);
+			return true;
+		}
+
+		default:
+			as_options_defer(o, "Invalid %s: expected a mapping or list of mappings for merging, "
+				"but found scalar", o->cur);
+			as_val_destroy(val);
+			return true;
+	}
+}
+
+// Add the pairs of sources whose keys map lacks, so explicit keys win, then earlier sources.
+static void
+as_yaml_merge(as_orderedmap* map, as_vector* sources)
+{
+	for (uint32_t i = 0; i < sources->size; i++) {
+		as_orderedmap* src = *(as_orderedmap**)as_vector_get(sources, i);
+		as_orderedmap_iterator it;
+		as_orderedmap_iterator_init(&it, src);
+
+		while (as_orderedmap_iterator_has_next(&it)) {
+			as_pair* p = (as_pair*)as_orderedmap_iterator_next(&it);
+			as_val* key = as_pair_1(p);
+			as_val* val = as_pair_2(p);
+
+			if (as_orderedmap_get(map, key)) {
+				continue;
+			}
+			as_val_reserve(key);
+			as_val_reserve(val);
+
+			if (as_orderedmap_set(map, key, val) != 0) {
+				as_val_destroy(key);
+				as_val_destroy(val);
+			}
+		}
+		as_orderedmap_iterator_destroy(&it);
+	}
+}
+
+// Capture the pairs of a mapping whose start event is consumed, through its end event. Merge keys
+// apply at the end, so the anchor id keeps the merged map.
+static bool
+as_yaml_capture_map(as_yaml* yaml, uint32_t id, bool keep, as_val** out)
 {
 	as_yaml_options* o = yaml->opts;
 	as_orderedmap* map = as_orderedmap_new(8);
+	as_vector sources;
+	as_vector_inita(&sources, sizeof(as_val*), 4);
 
 	while (as_parse_next(yaml)) {
 		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
 			yaml_event_delete(&yaml->event);
+			as_yaml_merge(map, &sources);
+			as_yaml_sources_destroy(&sources);
 
 			if (keep) {
+				as_yaml_anchor_store(yaml, id, (as_val*)map);
 				*out = (as_val*)map;
 			}
 			else {
@@ -3116,29 +3430,32 @@ as_yaml_capture_map(as_yaml* yaml, bool keep, as_val** out)
 			return true;
 		}
 
+		if (as_yaml_is_merge(&yaml->event)) {
+			yaml_event_delete(&yaml->event);
+
+			if (!as_parse_next(yaml) || !as_yaml_merge_sources(yaml, &sources)) {
+				break;
+			}
+			continue;
+		}
+
 		// The value's path names it by the key as written; a collection key is [?].
 		char segment[AS_YAML_PATH_SIZE];
 		bool scalar = yaml->event.type == YAML_SCALAR_EVENT;
-		as_val* key = NULL;
+		as_val* key;
 
 		if (scalar) {
 			as_strncpy(segment, (const char*)yaml->event.data.scalar.value, sizeof(segment));
 		}
 
-		if (as_yaml_is_merge(&yaml->event)) {
-			as_options_defer(o, "Invalid %s: YAML merge keys (<<) are not supported", o->cur);
-			yaml_event_delete(&yaml->event);
+		if (!as_yaml_capture(yaml, &key)) {
+			break;
 		}
-		else {
-			if (!as_yaml_capture(yaml, &key)) {
-				break;
-			}
 
-			if (key && as_val_type(key) != AS_STRING && as_val_type(key) != AS_INTEGER) {
-				as_options_defer(o, "Invalid %s: map keys must be strings or integers", o->cur);
-				as_val_destroy(key);
-				key = NULL;
-			}
+		if (key && as_val_type(key) != AS_STRING && as_val_type(key) != AS_INTEGER) {
+			as_options_defer(o, "Invalid %s: map keys must be strings or integers", o->cur);
+			as_val_destroy(key);
+			key = NULL;
 		}
 
 		as_val* val = NULL;
@@ -3157,13 +3474,14 @@ as_yaml_capture_map(as_yaml* yaml, bool keep, as_val** out)
 			as_val_destroy(val);
 		}
 	}
+	as_yaml_sources_destroy(&sources);
 	as_orderedmap_destroy(map);
 	return false;
 }
 
 // Capture the items of a sequence whose start event is consumed, through its end event.
 static bool
-as_yaml_capture_seq(as_yaml* yaml, bool keep, as_val** out)
+as_yaml_capture_seq(as_yaml* yaml, uint32_t id, bool keep, as_val** out)
 {
 	as_yaml_options* o = yaml->opts;
 	as_arraylist* list = as_arraylist_new(8, 8);
@@ -3173,6 +3491,7 @@ as_yaml_capture_seq(as_yaml* yaml, bool keep, as_val** out)
 			yaml_event_delete(&yaml->event);
 
 			if (keep) {
+				as_yaml_anchor_store(yaml, id, (as_val*)list);
 				*out = (as_val*)list;
 			}
 			else {
@@ -3202,8 +3521,8 @@ as_yaml_capture_seq(as_yaml* yaml, bool keep, as_val** out)
 }
 
 // Capture the value whose first event is current into out: as_string, as_integer, as_double,
-// as_boolean, as_nil, as_arraylist or as_orderedmap. An alias is an error. Problems that only
-// matter for a registered name are deferred, and out is then NULL.
+// as_boolean, as_nil, as_arraylist or as_orderedmap. An alias to a collection reuses its value.
+// Problems that only matter for a registered name are deferred, and out is then NULL.
 static bool
 as_yaml_capture(as_yaml* yaml, as_val** out)
 {
@@ -3225,6 +3544,7 @@ as_yaml_capture(as_yaml* yaml, as_val** out)
 		case YAML_SEQUENCE_START_EVENT: {
 			bool map = yaml->event.type == YAML_MAPPING_START_EVENT;
 			bool keep = as_yaml_collection_tag(&yaml->event, map, reason, sizeof(reason));
+			uint32_t id = yaml->anchor_id;
 
 			if (!keep) {
 				as_options_defer(o, "Invalid %s: %s", o->cur, reason);
@@ -3232,15 +3552,21 @@ as_yaml_capture(as_yaml* yaml, as_val** out)
 			yaml_event_delete(&yaml->event);
 
 			if (map) {
-				return as_yaml_capture_map(yaml, keep, out);
+				return as_yaml_capture_map(yaml, id, keep, out);
 			}
-			return as_yaml_capture_seq(yaml, keep, out);
+			return as_yaml_capture_seq(yaml, id, keep, out);
 		}
 
 		case YAML_ALIAS_EVENT:
-			as_alias_error(yaml, o->cur);
+			if (yaml->alias->val) {
+				*out = as_val_reserve(yaml->alias->val);
+			}
+			else {
+				as_yaml_alias_reason(yaml->alias, reason, sizeof(reason));
+				as_options_defer(o, "Invalid %s: %s", o->cur, reason);
+			}
 			yaml_event_delete(&yaml->event);
-			return false;
+			return true;
 
 		default:
 			as_expected_error(yaml, YAML_SCALAR_EVENT);
@@ -3387,8 +3713,9 @@ as_parse_string_seq(as_yaml* yaml, const char* path, as_vector* out)
 		}
 
 		if (yaml->event.type == YAML_ALIAS_EVENT) {
-			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
-				"Invalid %s[%u]: YAML aliases are not supported", path, i);
+			char item[AS_YAML_PATH_SIZE];
+			snprintf(item, sizeof(item), "%.200s[%u]", path, i);
+			as_alias_error(yaml, item);
 			yaml_event_delete(&yaml->event);
 			return false;
 		}
@@ -3444,8 +3771,9 @@ as_parse_addr_map(as_yaml* yaml, const char* path, as_vector* out)
 		}
 
 		if (yaml->event.type == YAML_ALIAS_EVENT) {
-			as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
-				"Invalid %s[%s]: YAML aliases are not supported", path, orig);
+			char item[AS_YAML_PATH_SIZE];
+			snprintf(item, sizeof(item), "%.200s[%.50s]", path, orig);
+			as_alias_error(yaml, item);
 			yaml_event_delete(&yaml->event);
 			cf_free(orig);
 			return false;
@@ -3857,6 +4185,32 @@ as_parse_translation_field(as_yaml* yaml, const char* path, const char* name)
 	return rv;
 }
 
+static bool
+as_yaml_section(const char* name, bool discovery)
+{
+	return discovery ? strcmp(name, "dns") == 0 || strcmp(name, "aws") == 0 :
+		strcmp(name, "static_map") == 0 || strcmp(name, "port_map") == 0;
+}
+
+// A key the client parses itself: provider, a setting or a built-in section.
+static bool
+as_yaml_block_key(const char* name, bool discovery)
+{
+	return as_yaml_section(name, discovery) || as_yaml_known(name,
+		discovery ? as_yaml_discovery_scalars : as_yaml_translation_scalars);
+}
+
+static bool
+as_yaml_names_has(const as_vector* names, const char* name)
+{
+	for (uint32_t i = 0; i < names->size; i++) {
+		if (strcmp(*(char**)as_vector_get((as_vector*)names, i), name) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
 // A key of the discovery or translation block whose value's first event is current. Every key
 // except provider and the built-in sections is captured as a factory option.
 static bool
@@ -3866,17 +4220,14 @@ as_parse_plugin_field(as_yaml* yaml, const char* path, const char* name, bool di
 	char key[AS_YAML_PATH_SIZE];
 	as_yaml_path(key, path, name);
 
-	if (yaml->event.type == YAML_ALIAS_EVENT) {
+	bool section = as_yaml_section(name, discovery);
+	bool known = as_yaml_block_key(name, discovery);
+
+	if (known && yaml->event.type == YAML_ALIAS_EVENT) {
 		as_alias_error(yaml, key);
 		yaml_event_delete(&yaml->event);
 		return false;
 	}
-
-	bool section = discovery ?
-		strcmp(name, "dns") == 0 || strcmp(name, "aws") == 0 :
-		strcmp(name, "static_map") == 0 || strcmp(name, "port_map") == 0;
-	bool known = section || as_yaml_known(name,
-		discovery ? as_yaml_discovery_scalars : as_yaml_translation_scalars);
 
 	if (!known) {
 		as_val* val;
@@ -3910,8 +4261,87 @@ as_parse_plugin_field(as_yaml* yaml, const char* path, const char* name, bool di
 		}
 	}
 
-	return discovery ? as_parse_discovery_field(yaml, path, name) :
+	if (!section) {
+		return discovery ? as_parse_discovery_field(yaml, path, name) :
+			as_parse_translation_field(yaml, path, name);
+	}
+
+	yaml->section = true;
+	bool rv = discovery ? as_parse_discovery_field(yaml, path, name) :
 		as_parse_translation_field(yaml, path, name);
+	yaml->section = false;
+	return rv;
+}
+
+// The value of a merge key directly under a block, whose first event is current. Any problem with
+// it fails the file, whatever the provider: the merged keys may be client settings.
+static bool
+as_parse_block_merge(as_yaml* yaml)
+{
+	as_yaml_options* o = yaml->opts;
+	char saved[sizeof(o->deferred)];
+	memcpy(saved, o->deferred, sizeof(saved));
+	o->deferred[0] = '\0';
+
+	bool rv = as_yaml_merge_sources(yaml, &o->sources);
+
+	if (rv && o->deferred[0]) {
+		as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "%s", o->deferred);
+		rv = false;
+	}
+	memcpy(o->deferred, saved, sizeof(saved));
+	return rv;
+}
+
+// Apply the block's merge keys after its own keys, which win, as do earlier sources. Java applies
+// a merged provider, setting or section to the client; the client does not, so it fails the file.
+static bool
+as_apply_block_merges(as_yaml* yaml, const char* path, bool discovery)
+{
+	as_yaml_options* o = yaml->opts;
+
+	for (uint32_t i = 0; i < o->sources.size; i++) {
+		as_orderedmap* src = *(as_orderedmap**)as_vector_get(&o->sources, i);
+		as_orderedmap_iterator it;
+		as_orderedmap_iterator_init(&it, src);
+		bool rv = true;
+
+		while (rv && as_orderedmap_iterator_has_next(&it)) {
+			as_pair* p = (as_pair*)as_orderedmap_iterator_next(&it);
+			as_val* key = as_pair_1(p);
+
+			if (as_val_type(key) != AS_STRING) {
+				char* s = as_val_tostring(key);
+				as_options_defer(o, "Invalid key '%s' in %s: expected a string", s, path);
+				cf_free(s);
+				continue;
+			}
+
+			const char* name = as_string_get((as_string*)key);
+
+			if (as_yaml_names_has(&o->names, name) || as_orderedmap_get(o->map, key)) {
+				continue;
+			}
+
+			if (as_yaml_block_key(name, discovery)) {
+				as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM,
+					"Invalid %s.%s: client settings from YAML merge keys (<<) are not supported",
+					path, name);
+				rv = false;
+				continue;
+			}
+
+			as_options_set(o, name, as_val_reserve(as_pair_2(p)));
+			char* unknown = cf_strdup(name);
+			as_vector_append(&o->unknown, &unknown);
+		}
+		as_orderedmap_iterator_destroy(&it);
+
+		if (!rv) {
+			return false;
+		}
+	}
+	return true;
 }
 
 static bool
@@ -3922,13 +4352,7 @@ as_parse_plugin_pairs(as_yaml* yaml, const char* path, bool discovery)
 	while (as_parse_next(yaml)) {
 		if (yaml->event.type == YAML_MAPPING_END_EVENT) {
 			yaml_event_delete(&yaml->event);
-			return true;
-		}
-
-		if (yaml->event.type == YAML_ALIAS_EVENT) {
-			as_alias_error(yaml, path);
-			yaml_event_delete(&yaml->event);
-			return false;
+			return as_apply_block_merges(yaml, path, discovery);
 		}
 
 		if (yaml->event.type != YAML_SCALAR_EVENT) {
@@ -3938,17 +4362,22 @@ as_parse_plugin_pairs(as_yaml* yaml, const char* path, bool discovery)
 			return false;
 		}
 
+		if (as_yaml_is_merge(&yaml->event)) {
+			yaml_event_delete(&yaml->event);
+
+			if (!as_parse_next(yaml) || !as_parse_block_merge(yaml)) {
+				return false;
+			}
+			continue;
+		}
+
 		// Full key: a factory receives it whole.
 		char* name = cf_strdup(as_yaml_scalar(yaml));
 		char reason[AS_YAML_REASON_SIZE];
-		bool merge = as_yaml_is_merge(&yaml->event);
-		as_val* k = merge ? NULL : as_yaml_option_scalar(&yaml->event, reason, sizeof(reason));
+		as_val* k = as_yaml_option_scalar(&yaml->event, reason, sizeof(reason));
 		bool string_key = as_val_type(k) == AS_STRING;
 
-		if (merge) {
-			as_options_defer(o, "Invalid %s: YAML merge keys (<<) are not supported", path);
-		}
-		else if (!k) {
+		if (!k) {
 			as_options_defer(o, "Invalid %s: %s", path, reason);
 		}
 		else if (!string_key) {
@@ -3966,14 +4395,12 @@ as_parse_plugin_pairs(as_yaml* yaml, const char* path, bool discovery)
 
 		if (string_key) {
 			rv = as_parse_plugin_field(yaml, path, name, discovery);
-			cf_free(name);
+			as_vector_append(&o->names, &name);
 		}
 		else {
 			// An unexpected key for a built-in provider.
-			char key[AS_YAML_PATH_SIZE];
-			as_yaml_path(key, path, name);
 			as_vector_append(&o->unknown, &name);
-			rv = as_skip_path(yaml, key);
+			rv = as_skip_value(yaml);
 		}
 
 		if (!rv) {
@@ -3991,6 +4418,8 @@ as_parse_plugin_block(as_yaml* yaml, const char* path, bool discovery)
 	as_yaml_options o;
 	o.map = as_orderedmap_new(8);
 	as_vector_init(&o.unknown, sizeof(char*), 4);
+	as_vector_init(&o.names, sizeof(char*), 8);
+	as_vector_init(&o.sources, sizeof(as_orderedmap*), 2);
 	o.deferred[0] = '\0';
 	o.len = 0;
 	o.cur[0] = '\0';
@@ -4026,6 +4455,12 @@ as_parse_plugin_block(as_yaml* yaml, const char* path, bool discovery)
 		cf_free(name);
 	}
 	as_vector_destroy(&o.unknown);
+
+	for (uint32_t i = 0; i < o.names.size; i++) {
+		cf_free(*(char**)as_vector_get(&o.names, i));
+	}
+	as_vector_destroy(&o.names);
+	as_yaml_sources_destroy(&o.sources);
 
 	if (o.map) {
 		as_orderedmap_destroy(o.map);
@@ -4457,8 +4892,12 @@ as_config_file_read(
 	yaml.name = NULL;
 	yaml.disc = disc;
 	yaml.opts = NULL;
-	yaml.alias_path = NULL;
+	yaml.alias = NULL;
+	yaml.anchor_id = 0;
+	yaml.ids = 0;
+	yaml.aliases = 0;
 	yaml.depth = 0;
+	yaml.section = false;
 	yaml.failed = false;
 	yaml.init = init;
 	as_error_init(&yaml.err);
@@ -4469,6 +4908,7 @@ as_config_file_read(
 	}
 
 	yaml_parser_set_input_file(&yaml.parser, fp);
+	as_vector_init(&yaml.anchors, sizeof(as_yaml_anchor), 8);
 
 	bool rv = as_parse_yaml(&yaml);
 	//bool rv = parse_debug(&yaml.parser);
@@ -4484,6 +4924,7 @@ as_config_file_read(
 	}
 
 	yaml_parser_delete(&yaml.parser);
+	as_yaml_anchors_destroy(&yaml);
 	fclose(fp);
 
 	if (!rv) {

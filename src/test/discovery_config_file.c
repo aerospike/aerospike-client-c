@@ -30,6 +30,7 @@
 #include <aerospike/as_double.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_host.h>
+#include <aerospike/as_list.h>
 #include <aerospike/as_log.h>
 #include <aerospike/as_map.h>
 #include <aerospike/as_sleep.h>
@@ -1120,23 +1121,75 @@ static const cf_invalid cf_invalid_rows[] = {
 	 "Invalid static.client.discovery.x.a[0]: map keys must be strings or integers"},
 	{"    discovery:\n      provider: consul\n      x: {[a]: 1, b: !!int z}\n",
 	 "Invalid static.client.discovery.x: map keys must be strings or integers"},
-	{"    discovery:\n      provider: consul\n      x: &a 1\n      y: *a\n",
-	 "Invalid static.client.discovery.y: YAML aliases are not supported"},
-	{"    discovery:\n      provider: consul\n      x: &a 1\n      y: [2, *a]\n",
-	 "Invalid static.client.discovery.y[1]: YAML aliases are not supported"},
-	{"    discovery:\n      provider: dns\n      x: &a 1\n      y:\n        z: *a\n",
-	 "Invalid static.client.discovery.y.z: YAML aliases are not supported"},
+
+	// Aliases. A scalar alias is its scalar anywhere; an alias to a collection is reused only as
+	// a factory option.
 	{"    discovery:\n      provider: consul\n      x: &a 1\n      *a : 2\n",
-	 "Invalid static.client.discovery: YAML aliases are not supported"},
+	 "Invalid key '1' in static.client.discovery: expected a string"},
+	{"    discovery:\n      provider: consul\n      x: *zz\n",
+	 "Undefined YAML alias *zz: line 7, column 10"},
+	{"*zz : 1\n", "Undefined YAML alias *zz: line 5, column 1"},
+	{"    discovery:\n      provider: static\n      x: [&a 1, *b]\n",
+	 "Undefined YAML alias *b: line 7, column 17"},
+	{"    extra: &m {a: 1}\n    discovery:\n      provider: consul\n      x: *m\n",
+	 "Invalid static.client.discovery.x: alias *m is to a collection outside the discovery and "
+	 "translation blocks"},
 	{"    discovery:\n      provider: dns\n      dns:\n        names: [seeds.example.com]\n"
-	 "        search: [&a x, *a, y]\n",
-	 "Invalid static.client.discovery.dns.search: YAML aliases are not supported"},
-	{"    discovery:\n      provider: consul\n      <<: {a: 1}\n",
-	 "Invalid static.client.discovery: YAML merge keys (<<) are not supported"},
-	{"    discovery:\n      provider: consul\n      x:\n        <<: {a: 1}\n",
-	 "Invalid static.client.discovery.x: YAML merge keys (<<) are not supported"},
-	{"    discovery:\n      provider: consul\n      ? !!merge m\n      : {a: 1}\n",
-	 "Invalid static.client.discovery: YAML merge keys (<<) are not supported"},
+	 "        extra: &m {a: 1}\n    translation:\n      provider: nat-table\n      x: *m\n",
+	 "Invalid static.client.translation.x: alias *m is to a collection in a built-in section"},
+	{"    discovery:\n      provider: consul\n      x: &r [1, *r]\n",
+	 "Invalid static.client.discovery.x[1]: alias *r is recursive"},
+	{"    discovery:\n      provider: consul\n      m: &m [a]\n      merge_policy: *m\n",
+	 "Invalid static.client.discovery.merge_policy: YAML aliases to collections are not supported "
+	 "for client settings"},
+	{"    discovery:\n      provider: consul\n      m: &m [a]\n      *m : 1\n",
+	 "Invalid static.client.discovery: expected scalar keys, not an alias"},
+	{"    discovery:\n      provider: dns\n      m: &m [seeds.example.com]\n      dns:\n"
+	 "        names: *m\n",
+	 "Invalid static.client.discovery.dns.names: YAML aliases to collections are not supported "
+	 "for client settings"},
+	{"    discovery:\n      provider: dns\n      m: &m [x]\n      dns:\n"
+	 "        names: [seeds.example.com]\n        servers: [*m]\n",
+	 "Invalid static.client.discovery.dns.servers[0]: YAML aliases to collections are not "
+	 "supported for client settings"},
+	{"    extra: &m {10.0.0.1: 192.168.0.1}\n    ip_map: *m\n",
+	 "Invalid static.client.ip_map: YAML aliases to collections are not supported for client "
+	 "settings"},
+	{"    extra: &m {a: 1}\n    min_connections_per_node: *m\n",
+	 "Invalid static.client.min_connections_per_node: YAML aliases to collections are not "
+	 "supported for client settings"},
+
+	// Merge keys.
+	{"    discovery:\n      provider: consul\n      x: {<<: 5}\n",
+	 "Invalid static.client.discovery.x: expected a mapping or list of mappings for merging, but "
+	 "found scalar"},
+	{"    discovery:\n      provider: consul\n      x: {<<: [{a: 1}, [b]]}\n",
+	 "Invalid static.client.discovery.x: expected a mapping for merging, but found sequence"},
+	{"    discovery:\n      provider: consul\n      x: {<<: {a: !!int z}}\n",
+	 "Invalid static.client.discovery.x.a: 'z' is not a valid !!int"},
+	{"    discovery:\n      provider: static\n      <<: 5\n",
+	 "Invalid static.client.discovery: expected a mapping or list of mappings for merging, but "
+	 "found scalar"},
+	{"    extra: &m {a: 1}\n    discovery:\n      provider: static\n      <<: *m\n",
+	 "Invalid static.client.discovery: alias *m is to a collection outside the discovery and "
+	 "translation blocks"},
+	{"    discovery:\n      provider: static\n      <<: {merge_policy: replace}\n",
+	 "Invalid static.client.discovery.merge_policy: client settings from YAML merge keys (<<) "
+	 "are not supported"},
+	{"    discovery:\n      provider: consul\n      <<: {merge_policy: replace}\n",
+	 "Invalid static.client.discovery.merge_policy: client settings from YAML merge keys (<<) "
+	 "are not supported"},
+	{"    discovery:\n      <<: {provider: consul}\n",
+	 "Invalid static.client.discovery.provider: client settings from YAML merge keys (<<) are "
+	 "not supported"},
+	{"    discovery:\n      provider: dns\n      <<: [{a: 1}, {dns: {names: [x]}}]\n",
+	 "Invalid static.client.discovery.dns: client settings from YAML merge keys (<<) are not "
+	 "supported"},
+	{"    translation:\n      provider: nat-table\n      <<: {on_miss: strict}\n",
+	 "Invalid static.client.translation.on_miss: client settings from YAML merge keys (<<) are "
+	 "not supported"},
+	{"    discovery:\n      provider: consul\n      <<: {1: a}\n",
+	 "Invalid key '1' in static.client.discovery: expected a string"},
 
 	// Keys that are not scalars end the file at any level.
 	{"[a]: b\n", "Invalid top-level key: expected a scalar, not a sequence"},
@@ -1170,6 +1223,22 @@ cf_nested(char* buf, size_t size, uint32_t depth, const char* inner)
 	buf[len] = '\0';
 }
 
+// A consul block whose option x lists count aliases to the map m.
+static void
+cf_aliases(char* buf, size_t size, uint32_t count)
+{
+	size_t len = (size_t)snprintf(buf, size,
+		"    discovery:\n      provider: consul\n      m: &m {a: 1}\n      x: [");
+
+	for (uint32_t i = 0; i < count && len < size; i++) {
+		len += (size_t)snprintf(buf + len, size - len, i == 0 ? "*m" : ", *m");
+	}
+
+	if (len < size) {
+		snprintf(buf + len, size - len, "]\n");
+	}
+}
+
 TEST(cf_invalid_keeps_code, "an invalid file is rejected as a whole: code plugins kept, no key applied, one error naming the key")
 {
 	uint32_t rows = sizeof(cf_invalid_rows) / sizeof(cf_invalid_rows[0]);
@@ -1187,10 +1256,15 @@ TEST(cf_invalid_keeps_code, "an invalid file is rejected as a whole: code plugin
 	snprintf(deep_body[1], sizeof(deep_body[1]),
 		"    discovery:\n      provider: dns\n      dns:\n        extra: %s\n", deep[1]);
 	snprintf(deep_body[2], sizeof(deep_body[2]), "zz: %s\n", deep[2]);
+
+	// SnakeYAML's limit of 50 aliases to collections; the 51st starts at column 211.
+	char aliases[512];
+	cf_aliases(aliases, sizeof(aliases), 51);
 	const cf_invalid deep_rows[] = {
 		{deep_body[0], "YAML nesting deeper than 50 levels: line 7, column 57"},
 		{deep_body[1], "YAML nesting deeper than 50 levels: line 8, column 62"},
-		{deep_body[2], "YAML nesting deeper than 50 levels: line 5, column 55"}
+		{deep_body[2], "YAML nesting deeper than 50 levels: line 5, column 55"},
+		{aliases, "More than 50 YAML aliases to collections: line 8, column 211"}
 	};
 	uint32_t total = rows + sizeof(deep_rows) / sizeof(deep_rows[0]);
 
@@ -1790,7 +1864,32 @@ static const cf_typed cf_typed_rows[] = {
 	{"{b: [x, {c: ~}], 1: a}", AS_MAP, "{1:\"a\", \"b\":[\"x\", {\"c\":NIL}]}"},
 	{"{a: 1, a: 2}", AS_MAP, "{\"a\":2}"},
 	{"[]", AS_LIST, "[]"},
-	{"{\"<<\": 1}", AS_MAP, "{\"<<\":1}"}
+	{"{\"<<\": 1}", AS_MAP, "{\"<<\":1}"},
+
+	// Aliases: a scalar keeps its tag and style, an anchor redefined replaces the earlier one,
+	// and a collection is the same value again.
+	{"[&x '5', *x, &y !!float 1, *y]", AS_LIST, "[\"5\", \"5\", 1, 1]"},
+	{"[&r a, &r b, *r]", AS_LIST, "[\"a\", \"b\", \"b\"]"},
+	{"[&k a, {*k : 1}]", AS_LIST, "[\"a\", {\"a\":1}]"},
+	{"[{&k <<: {a: 1}}, {*k : {b: 2}}]", AS_LIST, "[{\"a\":1}, {\"b\":2}]"},
+	{"[&m {a: [1]}, *m, {b: *m}]", AS_LIST, "[{\"a\":[1]}, {\"a\":[1]}, {\"b\":{\"a\":[1]}}]"},
+
+	// Merge keys: explicit keys win, the last duplicate explicit key wins, the earlier source
+	// wins, and an anchored source keeps its own merges.
+	{"{<<: {a: 1, b: 2}, b: 3}", AS_MAP, "{\"a\":1, \"b\":3}"},
+	{"{<<: {a: 1}, a: 2, a: 3}", AS_MAP, "{\"a\":3}"},
+	{"{<<: [{a: 1}, {a: 2, b: 2}]}", AS_MAP, "{\"a\":1, \"b\":2}"},
+	{"{<<: {a: 1}, <<: {a: 2, b: 2}}", AS_MAP, "{\"a\":1, \"b\":2}"},
+	{"{!!merge m: {a: 1}}", AS_MAP, "{\"a\":1}"},
+	{"{<<: [], b: 1}", AS_MAP, "{\"b\":1}"},
+	{"{<<: {}}", AS_MAP, "{}"},
+	{"[&m {<<: {a: 1}, a: 2}, {<<: *m}]", AS_LIST, "[{\"a\":2}, {\"a\":2}]"},
+	{"[&m {a: 1}, &n {b: 2}, {<<: [*m, *n], b: 3}]", AS_LIST,
+	 "[{\"a\":1}, {\"b\":2}, {\"a\":1, \"b\":3}]"},
+
+	// Where SnakeYAML keeps the first: an inline source's duplicate key and nested merge.
+	{"{<<: {a: 1, a: 2}}", AS_MAP, "{\"a\":2}"},
+	{"{<<: {<<: {a: 1}, a: 2}}", AS_MAP, "{\"a\":2}"}
 };
 
 TEST(cf_registered_typing, "option values follow SnakeYAML's resolver and tag constructors, and collections keep their types")
@@ -1877,7 +1976,7 @@ TEST(cf_registered_keys, "option keys: a long key arrives whole, a quoted << is 
 	errors = cf_log_find(AS_LOG_LEVEL_ERROR, "");
 	static const char* const lines[] = {
 		"Unexpected field: static.client.discovery.1",
-		"Unexpected field: static.client.discovery.<<",
+		"Unexpected field: static.client.discovery.a",
 		"Unexpected field: static.client.discovery.x",
 		"Unexpected field: static.client.discovery.y"
 	};
@@ -1889,6 +1988,95 @@ TEST(cf_registered_keys, "option keys: a long key arrives whole, a quoted << is 
 	cf_close(client);
 	assert_int_eq(errors, 0);
 	assert_int_eq(found, 4);
+}
+
+TEST(cf_registered_aliases, "aliases and merge keys: scalar aliases anywhere, collection aliases across blocks and in skipped content, block merges under explicit keys")
+{
+	// Scalar anchors at the top of the file reach client settings and options; collections are
+	// shared between the blocks, and skipped content may alias anything.
+	as_config config;
+	as_config_init(&config);
+	assert_true(cf_register(&config));
+	aerospike* client = cf_init(&config,
+		"version: 1.2.0\n"
+		"anchors:\n"
+		"  policy: &p replace\n"
+		"  service: &s aerospike\n"
+		"  skipped: &k {x: 1}\n"
+		"static:\n"
+		"  client:\n"
+		"    extra: [*k, *p]\n"
+		"    max_connections_per_node: &c 77\n"
+		"    discovery:\n"
+		"      provider: consul\n"
+		"      merge_policy: *p\n"
+		"      service: *s\n"
+		"      conns: *c\n"
+		"      shared: &t {a: [1]}\n"
+		"      <<: [{port: 1, tags: [x]}, {port: 2, zone: z}]\n"
+		"      port: 3\n"
+		"    translation:\n"
+		"      provider: nat-table\n"
+		"      table: *t\n"
+		"      on_miss: strict\n"
+		"other:\n"
+		"  unknown: {y: *k}\n");
+	assert_not_null(client);
+
+	as_config* c = &client->config;
+	bool applied = c->discovery.merge_policy == AS_SEED_REPLACE && c->max_conns_per_node == 77 &&
+		c->translation.on_miss == AS_TRANSLATION_STRICT;
+	uint32_t errors = cf_log_find(AS_LOG_LEVEL_ERROR, "");
+	cf_close(client);
+
+	bool options = cf_val_str_eq(cf_providers[0].options, "{\"conns\":77, "
+		"\"merge_policy\":\"replace\", \"port\":3, \"service\":\"aerospike\", "
+		"\"shared\":{\"a\":[1]}, \"tags\":[\"x\"], \"zone\":\"z\"}") &&
+		cf_val_str_eq(cf_translators[0].options, "{\"on_miss\":\"strict\", "
+		"\"table\":{\"a\":[1]}}");
+	cf_plugins_done();
+	assert_int_eq(errors, 0);
+	assert_true(applied);
+	assert_true(options);
+
+	// An explicit client setting wins over a merged one; with a built-in provider merged keys
+	// are unexpected fields, and a scalar alias reaches a built-in section.
+	client = cf_init_default(CF_HEAD
+		"    discovery:\n"
+		"      provider: dns\n"
+		"      merge_policy: merge\n"
+		"      <<: {merge_policy: replace, foo: 1}\n"
+		"      name: &n seeds.example.com\n"
+		"      dns:\n"
+		"        names: [*n]\n");
+	assert_not_null(client);
+	bool merged = client->config.discovery.merge_policy == AS_SEED_MERGE;
+	errors = cf_log_find(AS_LOG_LEVEL_ERROR, "");
+	uint32_t foo = cf_log_find(AS_LOG_LEVEL_INFO, "Unexpected field: static.client.discovery.foo");
+	uint32_t names = cf_log_find(AS_LOG_LEVEL_INFO,
+		"Set static.client.discovery.dns.names = [seeds.example.com]");
+	cf_close(client);
+	assert_int_eq(errors, 0);
+	assert_true(merged);
+	assert_int_eq(foo, 1);
+	assert_int_eq(names, 1);
+
+	// SnakeYAML's limit allows 50 aliases to collections.
+	char body[CF_BODY_MAX];
+	char aliases[512];
+	cf_aliases(aliases, sizeof(aliases), 50);
+	snprintf(body, sizeof(body), CF_HEAD "%s", aliases);
+	as_config_init(&config);
+	assert_true(cf_register(&config));
+	client = cf_init(&config, body);
+	assert_not_null(client);
+	errors = cf_log_find(AS_LOG_LEVEL_ERROR, "");
+	cf_close(client);
+	as_val* x = cf_option(&cf_providers[0], "x");
+	uint32_t size = as_val_type(x) == AS_LIST ? as_list_size((as_list*)x) : 0;
+	cf_plugins_done();
+	assert_int_eq(errors, 0);
+	assert_int_eq(size, 50);
 }
 
 #if !defined(_MSC_VER)
@@ -2669,6 +2857,7 @@ SUITE(discovery_config_file, "YAML discovery and translation keys")
 	suite_add(cf_registrations_carry);
 	suite_add(cf_registered_typing);
 	suite_add(cf_registered_keys);
+	suite_add(cf_registered_aliases);
 	suite_add(cf_registered_locale);
 #if defined(DISCOVERY_FAKE_SERVERS)
 	suite_add(cf_dns_provider);

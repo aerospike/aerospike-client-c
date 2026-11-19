@@ -978,14 +978,16 @@ as_lookup_node_connected(
 	}
 
 	if (sock->tls) {
-		uint64_t now = cf_getns();
-		uint64_t ms = (deadline > now) ? (deadline - now + 999999) / 1000000 : 0;
+		// Round up so the handshake does not time out before deadline, which would let the
+		// caller start another address with no time left.
+		uint64_t deadline_ms = (deadline + 999999) / 1000000;
+		uint64_t min_ms = cf_getms() + 1;
 
-		if (ms == 0) {
-			ms = 1;
+		if (deadline_ms < min_ms) {
+			deadline_ms = min_ms;
 		}
 
-		if (as_tls_connect(sock, cf_getms() + ms)) {
+		if (as_tls_connect(sock, deadline_ms)) {
 			sock->tls_handshake_failed = true;
 			as_lookup_record_connect_failure(cluster, sock);
 			as_socket_close(sock);

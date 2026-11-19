@@ -23,10 +23,13 @@
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_node.h>
 #include <aerospike/as_sleep.h>
+#include <citrusleaf/cf_b64.h>
 #include <citrusleaf/cf_clock.h>
 
 #include <arpa/inet.h>
 #include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <stdio.h>
@@ -89,12 +92,33 @@ is_client_socket(int fd, as_nodes* nodes)
 	return false;
 }
 
+// One replica of all 4096 partitions of namespace test.
+static void
+fnode_replicas(char* out, size_t size)
+{
+	uint8_t bitmap[4096 / 8];
+	memset(bitmap, 0xff, sizeof(bitmap));
+
+	int len = snprintf(out, size, "test:0,1,");
+	uint32_t b64_len = cf_b64_encoded_len(sizeof(bitmap));
+
+	if (len < 0 || (size_t)len + b64_len + 2 > size) {
+		out[0] = 0;
+		return;
+	}
+	cf_b64_encode(bitmap, sizeof(bitmap), out + len);
+	out[len + b64_len] = ';';
+	out[len + b64_len + 1] = 0;
+}
+
 static size_t
 fnode_reply(fnode* n, char* body, char* out, size_t cap)
 {
 	size_t len = 0;
 	char* save = NULL;
-	char service[32];
+	char service[64];
+	char peers_gen[16];
+	char replicas[800];
 
 	for (char* line = strtok_r(body, "\n", &save); line; line = strtok_r(NULL, "\n", &save)) {
 		const char* value = "";
@@ -109,15 +133,20 @@ fnode_reply(fnode* n, char* body, char* out, size_t cap)
 			value = "8.1.0.0";
 		}
 		else if (strcmp(line, "peers-generation") == 0) {
-			value = "1";
+			snprintf(peers_gen, sizeof(peers_gen), "%u", n->peers_gen);
+			value = peers_gen;
 			n->tends++;
 		}
 		else if (strcmp(line, "peers-clear-std") == 0 || strcmp(line, "peers-clear-alt") == 0) {
 			value = n->peers[0] ? n->peers : "1,3000,[]";
 		}
-		else if (strcmp(line, "service-clear-alt") == 0) {
-			snprintf(service, sizeof(service), "127.0.0.1:%u", n->port);
+		else if (strcmp(line, "service-clear-alt") == 0 && !n->empty_alt) {
+			snprintf(service, sizeof(service), "%s:%u", n->host, n->port);
 			value = service;
+		}
+		else if (strcmp(line, "replicas") == 0 && n->partitions) {
+			fnode_replicas(replicas, sizeof(replicas));
+			value = replicas;
 		}
 		else if (strcmp(line, "rebalance-generation") == 0) {
 			value = "0";
@@ -141,8 +170,9 @@ fnode_serve(fnode* n, int fd)
 {
 	uint8_t header[8];
 
+	// Proto type 1 is info, 2 admin.
 	if (recv(fd, header, sizeof(header), MSG_WAITALL) != (ssize_t)sizeof(header) ||
-		header[0] != 2 || header[1] != 1) {
+		header[0] != 2 || (header[1] != 1 && header[1] != 2)) {
 		return false;
 	}
 
@@ -158,6 +188,21 @@ fnode_serve(fnode* n, int fd)
 		return false;
 	}
 	body[len] = 0;
+
+	if (header[1] == 2) {
+		// Answer a login with the 16 byte admin header, whose result code is byte 1.
+		pthread_mutex_lock(&n->lock);
+		n->logins++;
+		pthread_mutex_unlock(&n->lock);
+
+		uint8_t admin[24];
+		memset(admin, 0, sizeof(admin));
+		admin[0] = 2;
+		admin[1] = 2;
+		admin[7] = 16;
+		admin[9] = AEROSPIKE_SECURITY_NOT_ENABLED;
+		return send(fd, admin, sizeof(admin), MSG_NOSIGNAL) == (ssize_t)sizeof(admin);
+	}
 
 	pthread_mutex_lock(&n->lock);
 	bool first = !n->seen;
@@ -193,6 +238,8 @@ fnode_run(void* arg)
 	while (!as_load_uint8(&n->stop)) {
 		pthread_mutex_lock(&n->lock);
 		bool rejecting = n->reject;
+		bool silent = n->silent;
+		bool mute = n->mute;
 		pthread_mutex_unlock(&n->lock);
 
 		// A rejecting node also drops established connections, including the tend connection.
@@ -204,12 +251,12 @@ fnode_run(void* arg)
 		}
 
 		struct pollfd pfds[FNODE_MAX_CLIENTS + 1];
-		pfds[0].fd = n->listen_fd;
+		pfds[0].fd = silent ? -1 : n->listen_fd;
 		pfds[0].events = POLLIN;
 		pfds[0].revents = 0;
 
 		for (int i = 0; i < n_clients; i++) {
-			pfds[i + 1].fd = clients[i];
+			pfds[i + 1].fd = mute ? -1 : clients[i];
 			pfds[i + 1].events = POLLIN;
 			pfds[i + 1].revents = 0;
 		}
@@ -234,6 +281,10 @@ fnode_run(void* arg)
 
 			pthread_mutex_lock(&n->lock);
 			bool reject = n->reject;
+
+			if (n->accepts++ == 0) {
+				n->first_accept_us = cf_getus();
+			}
 
 			if (reject) {
 				n->rejects++;
@@ -266,6 +317,7 @@ fnode_init(fnode* n, const char* name)
 {
 	memset(n, 0, sizeof(fnode));
 	n->listen_fd = -1;
+	n->peers_gen = 1;
 	pthread_mutex_init(&n->lock, NULL);
 	n->started = true;
 	snprintf(n->name, sizeof(n->name), "%s", name);
@@ -274,6 +326,13 @@ fnode_init(fnode* n, const char* name)
 bool
 fnode_listen(fnode* n, uint16_t port)
 {
+	return fnode_listen_on(n, "127.0.0.1", port);
+}
+
+bool
+fnode_listen_on(fnode* n, const char* host, uint16_t port)
+{
+	snprintf(n->host, sizeof(n->host), "%s", host);
 	n->listen_fd = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (n->listen_fd < 0) {
@@ -287,7 +346,7 @@ fnode_listen(fnode* n, uint16_t port)
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(port);
-	addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	addr.sin_addr.s_addr = inet_addr(host);
 	socklen_t addr_len = sizeof(addr);
 
 	if (bind(n->listen_fd, (struct sockaddr*)&addr, sizeof(addr)) != 0 ||
@@ -324,6 +383,12 @@ fnode_halt(fnode* n)
 		close(n->listen_fd);
 		n->listen_fd = -1;
 	}
+
+	for (int i = 0; i < n->n_fillers; i++) {
+		close(n->fillers[i]);
+	}
+	n->n_fillers = 0;
+	n->silent = false;
 }
 
 void
@@ -362,6 +427,108 @@ fnode_set_peers(fnode* n, const char* peers)
 	pthread_mutex_unlock(&n->lock);
 }
 
+void
+fnode_set_partitions(fnode* n, bool partitions)
+{
+	pthread_mutex_lock(&n->lock);
+	n->partitions = partitions;
+	pthread_mutex_unlock(&n->lock);
+}
+
+bool
+fnode_set_silent(fnode* n, bool silent)
+{
+	pthread_mutex_lock(&n->lock);
+	n->silent = silent;
+	pthread_mutex_unlock(&n->lock);
+
+	if (!silent) {
+		for (int i = 0; i < n->n_fillers; i++) {
+			close(n->fillers[i]);
+		}
+		n->n_fillers = 0;
+		return listen(n->listen_fd, 16) == 0;
+	}
+
+	// Let the server thread finish a poll that still watches the listening socket.
+	as_sleep(50);
+
+	if (listen(n->listen_fd, 0) != 0) {
+		return false;
+	}
+
+	struct sockaddr_in addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(n->port);
+	addr.sin_addr.s_addr = inet_addr(n->host);
+
+	// Connect fillers until one hangs: the backlog is then full.
+	while (n->n_fillers < FNODE_MAX_FILLERS) {
+		int fd = socket(AF_INET, SOCK_STREAM, 0);
+
+		if (fd < 0) {
+			return false;
+		}
+		fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
+
+		if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) != 0 && errno != EINPROGRESS) {
+			close(fd);
+			return false;
+		}
+
+		struct pollfd pfd = {fd, POLLOUT, 0};
+
+		if (poll(&pfd, 1, 200) == 0) {
+			close(fd);
+			return true;
+		}
+
+		int so_error = 0;
+		socklen_t len = sizeof(so_error);
+
+		if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &so_error, &len) != 0 || so_error != 0) {
+			close(fd);
+			return false;
+		}
+		n->fillers[n->n_fillers++] = fd;
+	}
+	return false;
+}
+
+void
+fnode_set_mute(fnode* n, bool mute)
+{
+	pthread_mutex_lock(&n->lock);
+	n->mute = mute;
+	pthread_mutex_unlock(&n->lock);
+}
+
+void
+fnode_set_empty_alt(fnode* n, bool empty_alt)
+{
+	pthread_mutex_lock(&n->lock);
+	n->empty_alt = empty_alt;
+	pthread_mutex_unlock(&n->lock);
+}
+
+void
+fnode_bump_peers_generation(fnode* n)
+{
+	pthread_mutex_lock(&n->lock);
+	n->peers_gen++;
+	pthread_mutex_unlock(&n->lock);
+}
+
+uint64_t
+fnode_first_accept_us(fnode* n)
+{
+	pthread_mutex_lock(&n->lock);
+	uint64_t value = n->first_accept_us;
+	pthread_mutex_unlock(&n->lock);
+	return value;
+}
+
 bool
 fnode_wait(fnode* n, const uint32_t* field, uint32_t target, uint32_t timeout_ms)
 {
@@ -379,8 +546,29 @@ fnode_wait(fnode* n, const uint32_t* field, uint32_t target, uint32_t timeout_ms
 const char*
 fnode_addr(const fnode* n, char* buf, size_t size)
 {
-	snprintf(buf, size, "127.0.0.1:%u", n->port);
+	snprintf(buf, size, "%s:%u", n->host, n->port);
 	return buf;
+}
+
+bool
+discovery_one_node_per_name(as_cluster* cluster, char* dup, size_t size)
+{
+	as_nodes* nodes = as_nodes_reserve(cluster);
+	bool unique = true;
+
+	for (uint32_t i = 0; i < nodes->size && unique; i++) {
+		for (uint32_t j = i + 1; j < nodes->size; j++) {
+			if (strcmp(nodes->array[i]->name, nodes->array[j]->name) == 0) {
+				if (dup) {
+					snprintf(dup, size, "%s", nodes->array[i]->name);
+				}
+				unique = false;
+				break;
+			}
+		}
+	}
+	as_nodes_release(nodes);
+	return unique;
 }
 
 int

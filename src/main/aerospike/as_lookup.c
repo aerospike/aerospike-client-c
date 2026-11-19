@@ -15,12 +15,67 @@
  * the License.
  */
 #include <aerospike/as_lookup.h>
+#include <aerospike/as_lookup_internal.h>
 #include <aerospike/as_admin.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_string_builder.h>
+#include <aerospike/as_tls.h>
 #include <aerospike/as_version.h>
+#include <citrusleaf/cf_clock.h>
+
+#if !defined(_MSC_VER)
+#include <errno.h>
+#include <poll.h>
+#endif
+
+//---------------------------------
+// Macros
+//---------------------------------
+
+// Most milliseconds between the connect starts to the addresses of one host.
+#define AS_LOOKUP_STAGGER_DELAY 100
+
+//---------------------------------
+// Types
+//---------------------------------
+
+// Connect attempt to one address of a host.
+typedef struct as_lookup_probe_s {
+	struct sockaddr_storage addr;
+	as_socket_fd fd;
+	bool open;
+	bool ready;
+} as_lookup_probe;
+
+// First connect or TLS failure of the addresses of one host.
+typedef struct as_lookup_failure_s {
+	struct sockaddr_storage addr;
+	char message[64];
+	bool set;
+} as_lookup_failure;
+
+//---------------------------------
+// Resolver
+//---------------------------------
+
+static int
+as_lookup_default_getaddrinfo(
+	const char* node, const char* service, const struct addrinfo* hints, struct addrinfo** res
+	)
+{
+	return getaddrinfo(node, service, hints, res);
+}
+
+static void
+as_lookup_default_freeaddrinfo(struct addrinfo* res)
+{
+	freeaddrinfo(res);
+}
+
+static as_lookup_getaddrinfo_fn as_lookup_getaddrinfo = as_lookup_default_getaddrinfo;
+static as_lookup_freeaddrinfo_fn as_lookup_freeaddrinfo = as_lookup_default_freeaddrinfo;
 
 //---------------------------------
 // Static Functions
@@ -339,6 +394,258 @@ as_set_node_address(as_cluster* cluster, as_error* err, char* response, char* tl
 	return AEROSPIKE_OK;
 }
 
+static struct sockaddr_storage*
+as_lookup_find_valid_address(as_cluster* cluster, as_host* host)
+{
+	as_vector* list = cluster->valid_addresses;
+
+	if (! list) {
+		return NULL;
+	}
+
+	for (uint32_t i = 0; i < list->size; i++) {
+		as_lookup_valid_address* va = as_vector_get(list, i);
+
+		if (va->port == host->port && strcmp(va->name, host->name) == 0) {
+			return &va->addr;
+		}
+	}
+	return NULL;
+}
+
+static void
+as_lookup_set_valid_address(
+	as_cluster* cluster, as_host* host, struct sockaddr* addr, const char* node_name
+	)
+{
+	as_vector* list = cluster->valid_addresses;
+
+	if (list) {
+		for (uint32_t i = 0; i < list->size; i++) {
+			as_lookup_valid_address* va = as_vector_get(list, i);
+
+			if (va->port == host->port && strcmp(va->name, host->name) == 0) {
+				as_strncpy(va->node_name, node_name, sizeof(va->node_name));
+				as_address_copy_storage(addr, &va->addr);
+				return;
+			}
+		}
+	}
+	else {
+		list = cluster->valid_addresses = as_vector_create(sizeof(as_lookup_valid_address), 4);
+	}
+
+	as_lookup_valid_address va;
+	as_strncpy(va.name, host->name, sizeof(va.name));
+	as_strncpy(va.node_name, node_name, sizeof(va.node_name));
+	va.port = host->port;
+	as_address_copy_storage(addr, &va.addr);
+	as_vector_append(list, &va);
+}
+
+static void
+as_lookup_set_failure(as_lookup_failure* failure, struct sockaddr* addr, const char* message)
+{
+	if (! failure->set) {
+		as_address_copy_storage(addr, &failure->addr);
+		as_strncpy(failure->message, message, sizeof(failure->message));
+		failure->set = true;
+	}
+}
+
+static void
+as_lookup_log_failure(as_host* host, struct sockaddr* addr, const char* message)
+{
+	if (as_log_debug_enabled()) {
+		char addr_name[AS_IP_ADDRESS_SIZE];
+		as_address_short_name(addr, addr_name, sizeof(addr_name));
+		as_log_debug("Address %s %d failed: %s", addr_name, host->port, message);
+	}
+}
+
+// Wait up to timeout_ms for the open connects of probes and set ready on each that ended,
+// connected or failed. Return the number that ended, zero on timeout or -1 on error.
+static int
+as_lookup_poll(as_lookup_probe* probes, uint32_t count, uint32_t timeout_ms)
+{
+#if !defined(_MSC_VER)
+	struct pollfd* pfds = cf_malloc(count * sizeof(struct pollfd));
+
+	for (uint32_t i = 0; i < count; i++) {
+		pfds[i].fd = probes[i].open ? probes[i].fd : -1;
+		pfds[i].events = POLLOUT;
+		pfds[i].revents = 0;
+	}
+
+	int rv = poll(pfds, (nfds_t)count, (int)timeout_ms);
+
+	for (uint32_t i = 0; i < count; i++) {
+		probes[i].ready = rv > 0 && probes[i].open && pfds[i].revents != 0;
+	}
+	cf_free(pfds);
+	return rv;
+#else
+	// A failed connect is reported in the error set, not the write set.
+	fd_set writes;
+	fd_set errors;
+	FD_ZERO(&writes);
+	FD_ZERO(&errors);
+
+	for (uint32_t i = 0; i < count; i++) {
+		if (probes[i].open) {
+			FD_SET(probes[i].fd, &writes);
+			FD_SET(probes[i].fd, &errors);
+		}
+	}
+
+	struct timeval tv;
+	tv.tv_sec = timeout_ms / 1000;
+	tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+	int rv = select(0, NULL, &writes, &errors, &tv);
+
+	for (uint32_t i = 0; i < count; i++) {
+		probes[i].ready = rv > 0 && probes[i].open &&
+			(FD_ISSET(probes[i].fd, &writes) || FD_ISSET(probes[i].fd, &errors));
+	}
+	return rv;
+#endif
+}
+
+static void
+as_lookup_remove_probe(as_lookup_probe* probes, uint32_t* count, uint32_t index)
+{
+	(*count)--;
+	memmove(&probes[index], &probes[index + 1], (*count - index) * sizeof(as_lookup_probe));
+}
+
+// Start connects to the addresses of probes one at a time, the next one when delay nanoseconds
+// pass or as soon as a connect fails. Return true and move the first address whose connect
+// completes from probes to winner, with its socket open, or return false when none completes by
+// deadline. Addresses whose connect failed are removed, and the first failure is kept in failure.
+// Every other probe socket is closed on return.
+static bool
+as_lookup_connect_first(
+	as_cluster* cluster, as_host* host, as_lookup_probe* probes, uint32_t* count, uint64_t delay,
+	uint64_t deadline, as_lookup_probe* winner, as_lookup_failure* failure
+	)
+{
+	int connected = -1;
+	uint32_t next = 0;
+	uint32_t pending = 0;
+	uint64_t start = cf_getns();
+	char message[64];
+
+	while (connected < 0) {
+		uint64_t now = cf_getns();
+
+		if (now >= deadline) {
+			break;
+		}
+
+		if (next < *count && now >= start) {
+			as_lookup_probe* probe = &probes[next];
+			struct sockaddr* addr = (struct sockaddr*)&probe->addr;
+
+			if (as_socket_create_fd(addr->sa_family, &probe->fd) == 0) {
+				if (as_socket_connect_fd(probe->fd, addr, as_address_size(addr))) {
+					probe->open = true;
+					pending++;
+					next++;
+					start = now + delay;
+					continue;
+				}
+				snprintf(message, sizeof(message), "connect error %d", as_last_error());
+				as_close(probe->fd);
+			}
+			else {
+				snprintf(message, sizeof(message), "socket error %d", as_last_error());
+			}
+			// Counted as as_socket_create_and_connect() failures are.
+			as_cluster_add_validation_open_failure(cluster);
+			as_lookup_log_failure(host, addr, message);
+			as_lookup_set_failure(failure, addr, message);
+			as_lookup_remove_probe(probes, count, next);
+			continue;
+		}
+
+		if (pending == 0) {
+			break;
+		}
+
+		uint64_t until = (next < *count && start < deadline) ? start : deadline;
+		uint64_t ms = (until - now + 999999) / 1000000;
+		int rv = as_lookup_poll(probes, next, (uint32_t)ms);
+
+		if (rv < 0) {
+#if !defined(_MSC_VER)
+			if (errno == EINTR) {
+				continue;
+			}
+#endif
+			break;
+		}
+
+		// Failed addresses are removed in place, so an earlier winner keeps its index.
+		uint32_t i = 0;
+
+		while (i < next) {
+			as_lookup_probe* probe = &probes[i];
+
+			if (! probe->ready) {
+				i++;
+				continue;
+			}
+
+			int so_error = 0;
+			socklen_t so_len = sizeof(so_error);
+
+			if (getsockopt(probe->fd, SOL_SOCKET, SO_ERROR, (char*)&so_error, &so_len) != 0) {
+				so_error = -1;
+			}
+			probe->open = false;
+			probe->ready = false;
+			pending--;
+
+			if (so_error == 0) {
+				if (connected < 0) {
+					// The winner keeps its socket.
+					connected = (int)i;
+				}
+				else {
+					as_close(probe->fd);
+				}
+				i++;
+				continue;
+			}
+
+			// A refused non-blocking connect is not an open failure, as with a single address,
+			// where it surfaces in the first request.
+			as_close(probe->fd);
+			snprintf(message, sizeof(message), "connect error %d", so_error);
+			as_lookup_log_failure(host, (struct sockaddr*)&probe->addr, message);
+			as_lookup_set_failure(failure, (struct sockaddr*)&probe->addr, message);
+			as_lookup_remove_probe(probes, count, i);
+			next--;
+			start = cf_getns();
+		}
+	}
+
+	for (uint32_t i = 0; i < next; i++) {
+		if (probes[i].open) {
+			as_close(probes[i].fd);
+			probes[i].open = false;
+		}
+	}
+
+	if (connected < 0) {
+		return false;
+	}
+	*winner = probes[connected];
+	as_lookup_remove_probe(probes, count, (uint32_t)connected);
+	return true;
+}
+
 //---------------------------------
 // Functions
 //---------------------------------
@@ -372,7 +679,7 @@ as_lookup_host(as_address_iterator* iter, as_error* err, const char* hostname, u
 		}
 	}
 	
-	int ret = getaddrinfo(hostname, NULL, &hints, &iter->addresses);
+	int ret = as_lookup_getaddrinfo(hostname, NULL, &hints, &iter->addresses);
 	
 	if (ret) {
 		return as_error_update(err, AEROSPIKE_ERR_INVALID_HOST, "Invalid hostname %s: %s",
@@ -384,26 +691,45 @@ as_lookup_host(as_address_iterator* iter, as_error* err, const char* hostname, u
 	return AEROSPIKE_OK;
 }
 
+void
+as_lookup_end(as_address_iterator* iter)
+{
+	as_lookup_freeaddrinfo(iter->addresses);
+}
+
+void
+as_lookup_set_resolver(
+	as_lookup_getaddrinfo_fn getaddrinfo_fn, as_lookup_freeaddrinfo_fn freeaddrinfo_fn
+	)
+{
+	as_lookup_getaddrinfo = getaddrinfo_fn ? getaddrinfo_fn : as_lookup_default_getaddrinfo;
+	as_lookup_freeaddrinfo = freeaddrinfo_fn ? freeaddrinfo_fn : as_lookup_default_freeaddrinfo;
+}
+
 as_status
 as_lookup_node(
 	as_cluster* cluster, as_error* err, as_host* host, struct sockaddr* addr,
 	bool detect_load_balancer, as_node_info* node_info, bool* alternate_missing
 	)
 {
+	return as_lookup_node_until(cluster, err, host, addr, detect_load_balancer, node_info,
+		alternate_missing, as_socket_deadline(cluster->conn_timeout_ms));
+}
+
+// Validate the node on the connected node_info->socket. Every failure closes the socket.
+static as_status
+as_lookup_node_validate(
+	as_cluster* cluster, as_error* err, as_host* host, struct sockaddr* addr,
+	bool detect_load_balancer, as_node_info* node_info, bool* alternate_missing,
+	uint64_t deadline
+	)
+{
 	if (alternate_missing) {
 		*alternate_missing = false;
 	}
 
-	uint64_t deadline = as_socket_deadline(cluster->conn_timeout_ms);
-	
 	bool alt_validated = false;
-	as_status status = as_socket_create_and_connect(&node_info->socket, err, addr, cluster->tls_ctx,
-													host->tls_name, deadline);
-
-	if (status) {
-		as_lookup_record_connect_failure(cluster, &node_info->socket);
-		return status;
-	}
+	as_status status;
 
 	node_info->host = *host;
 	as_address_copy_storage(addr, &node_info->addr);
@@ -625,5 +951,292 @@ Error: {
 	cf_free(response);
 	as_node_info_destroy(node_info);
 	return AEROSPIKE_ERR_CLIENT;
+	}
+}
+
+// Validate the node on fd, whose TCP connect to addr completed. The TLS handshake ends at
+// deadline in nanoseconds, at least one millisecond from now. When the socket or the handshake
+// fails, failure names it and fd is closed.
+static as_status
+as_lookup_node_connected(
+	as_cluster* cluster, as_error* err, as_host* host, struct sockaddr* addr, as_socket_fd fd,
+	uint64_t deadline, as_node_info* node_info, bool* alternate_missing, const char** failure
+	)
+{
+	as_socket* sock = &node_info->socket;
+	char name[AS_IP_ADDRESS_SIZE];
+
+	*failure = NULL;
+
+	// as_socket_wrap() closes fd when it fails.
+	if (! as_socket_wrap(sock, addr->sa_family, fd, cluster->tls_ctx, host->tls_name)) {
+		as_cluster_add_validation_open_failure(cluster);
+		*failure = "TLS wrap failed";
+		as_address_name(addr, name, sizeof(name));
+		return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket create failed: %d, %s", -5,
+			name);
+	}
+
+	if (sock->tls) {
+		uint64_t now = cf_getns();
+		uint64_t ms = (deadline > now) ? (deadline - now + 999999) / 1000000 : 0;
+
+		if (ms == 0) {
+			ms = 1;
+		}
+
+		if (as_tls_connect(sock, cf_getms() + ms)) {
+			sock->tls_handshake_failed = true;
+			as_lookup_record_connect_failure(cluster, sock);
+			as_socket_close(sock);
+			*failure = "TLS handshake failed";
+			as_address_name(addr, name, sizeof(name));
+			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "TLS handshake failed: %s", name);
+		}
+	}
+
+	return as_lookup_node_validate(cluster, err, host, addr, false, node_info, alternate_missing,
+		as_socket_deadline(cluster->conn_timeout_ms));
+}
+
+// Run the caller's check on a validated node. A node that is not accepted is destroyed.
+static as_lookup_verdict
+as_lookup_check(as_lookup_accept_fn accept, void* udata, as_node_info* node_info)
+{
+	if (! accept) {
+		return AS_LOOKUP_ACCEPT;
+	}
+
+	as_lookup_verdict verdict = accept(node_info, udata);
+
+	if (verdict != AS_LOOKUP_ACCEPT) {
+		as_node_info_destroy(node_info);
+	}
+	return verdict;
+}
+
+static as_status
+as_lookup_stopped(as_error* err, as_host* host, struct sockaddr* addr)
+{
+	char addr_name[AS_IP_ADDRESS_SIZE];
+	as_address_short_name(addr, addr_name, sizeof(addr_name));
+	return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
+		"Node of %s %d at %s was rejected", host->name, host->port, addr_name);
+}
+
+static as_status
+as_lookup_not_accepted(as_error* err, as_host* host)
+{
+	return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
+		"No address of %s %d was accepted", host->name, host->port);
+}
+
+as_status
+as_lookup_node_until(
+	as_cluster* cluster, as_error* err, as_host* host, struct sockaddr* addr,
+	bool detect_load_balancer, as_node_info* node_info, bool* alternate_missing,
+	uint64_t deadline
+	)
+{
+	if (alternate_missing) {
+		*alternate_missing = false;
+	}
+
+	as_status status = as_socket_create_and_connect(&node_info->socket, err, addr, cluster->tls_ctx,
+													host->tls_name, deadline);
+
+	if (status) {
+		as_lookup_record_connect_failure(cluster, &node_info->socket);
+		return status;
+	}
+
+	return as_lookup_node_validate(cluster, err, host, addr, detect_load_balancer, node_info,
+		alternate_missing, deadline);
+}
+
+as_status
+as_lookup_validate_any(
+	as_cluster* cluster, as_error* err, as_host* host, as_address_iterator* iter,
+	as_lookup_accept_fn accept, void* udata, as_node_info* node_info, bool* alternate_missing
+	)
+{
+	if (alternate_missing) {
+		*alternate_missing = false;
+	}
+
+	uint32_t n = 0;
+
+	for (struct addrinfo* ai = iter->current; ai; ai = ai->ai_next) {
+		n++;
+	}
+
+	struct sockaddr* addr;
+
+	if (n <= 1) {
+		if (! as_lookup_next(iter, &addr)) {
+			return as_error_update(err, AEROSPIKE_ERR_INVALID_HOST,
+				"Failed to find addresses for %s %d", host->name, host->port);
+		}
+
+		as_status status = as_lookup_node(cluster, err, host, addr, false, node_info,
+			alternate_missing);
+
+		if (status != AEROSPIKE_OK) {
+			return status;
+		}
+
+		switch (as_lookup_check(accept, udata, node_info)) {
+			case AS_LOOKUP_ACCEPT:
+				return AEROSPIKE_OK;
+			case AS_LOOKUP_STOP:
+				return as_lookup_stopped(err, host, addr);
+			default:
+				return as_lookup_not_accepted(err, host);
+		}
+	}
+
+	as_lookup_probe* probes = cf_malloc(n * sizeof(as_lookup_probe));
+	uint32_t count = 0;
+
+	while (count < n && as_lookup_next(iter, &addr)) {
+		as_lookup_probe* probe = &probes[count++];
+		as_address_copy_storage(addr, &probe->addr);
+		probe->open = false;
+		probe->ready = false;
+	}
+
+	// The address last validated for the host first, then resolver order.
+	struct sockaddr_storage* preferred = as_lookup_find_valid_address(cluster, host);
+
+	if (preferred) {
+		for (uint32_t i = 1; i < count; i++) {
+			if (as_address_equals((struct sockaddr*)&probes[i].addr, (struct sockaddr*)preferred)) {
+				as_lookup_probe probe = probes[i];
+				memmove(&probes[1], &probes[0], i * sizeof(as_lookup_probe));
+				probes[0] = probe;
+				break;
+			}
+		}
+	}
+
+	uint32_t bound = (cluster->conn_timeout_ms > 0 && cluster->conn_timeout_ms < cluster->tend_interval) ?
+		cluster->conn_timeout_ms : cluster->tend_interval;
+	uint32_t delay_ms = bound / n;
+
+	if (delay_ms > AS_LOOKUP_STAGGER_DELAY) {
+		delay_ms = AS_LOOKUP_STAGGER_DELAY;
+	}
+
+	uint64_t delay = (uint64_t)delay_ms * 1000 * 1000;
+	uint64_t deadline = cf_getns() + (uint64_t)bound * 1000 * 1000;
+	as_lookup_probe winner;
+	as_lookup_failure failure;
+	failure.set = false;
+	bool has_error = false;
+	uint32_t rejected = 0;
+
+	while (as_lookup_connect_first(cluster, host, probes, &count, delay, deadline, &winner,
+		&failure)) {
+		struct sockaddr* winner_addr = (struct sockaddr*)&winner.addr;
+		as_error error_local;
+		as_error_init(&error_local);
+		bool alt = false;
+		const char* connect_failure;
+		as_status status = as_lookup_node_connected(cluster, &error_local, host, winner_addr,
+			winner.fd, deadline, node_info, &alt, &connect_failure);
+
+		if (status == AEROSPIKE_OK) {
+			as_lookup_verdict verdict = as_lookup_check(accept, udata, node_info);
+
+			if (verdict == AS_LOOKUP_ACCEPT) {
+				as_lookup_set_valid_address(cluster, host, winner_addr, node_info->name);
+				cf_free(probes);
+				return AEROSPIKE_OK;
+			}
+
+			if (verdict == AS_LOOKUP_STOP) {
+				cf_free(probes);
+				return has_error ? err->code : as_lookup_stopped(err, host, winner_addr);
+			}
+			rejected++;
+			continue;
+		}
+
+		as_lookup_log_failure(host, winner_addr, error_local.message);
+
+		if (connect_failure) {
+			as_lookup_set_failure(&failure, winner_addr, connect_failure);
+			continue;
+		}
+
+		if (! has_error) {
+			as_error_copy(err, &error_local);
+
+			if (alternate_missing) {
+				*alternate_missing = alt;
+			}
+			has_error = true;
+		}
+	}
+	cf_free(probes);
+
+	if (has_error) {
+		return err->code;
+	}
+
+	if (rejected > 0) {
+		return as_lookup_not_accepted(err, host);
+	}
+
+	char detail[AS_IP_ADDRESS_SIZE + sizeof(failure.message) + 32];
+	detail[0] = 0;
+
+	if (failure.set) {
+		char addr_name[AS_IP_ADDRESS_SIZE];
+		as_address_short_name((struct sockaddr*)&failure.addr, addr_name, sizeof(addr_name));
+		snprintf(detail, sizeof(detail), "; first failure: %s %d %s", addr_name, host->port,
+			failure.message);
+	}
+
+	return as_error_update(err, AEROSPIKE_ERR_CONNECTION,
+		"No connection to %s %d completed for %u addresses within %ums%s",
+		host->name, host->port, n, bound, detail);
+}
+
+void
+as_lookup_prune_valid_addresses(as_cluster* cluster, as_nodes* nodes)
+{
+	as_vector* list = cluster->valid_addresses;
+
+	if (! list) {
+		return;
+	}
+
+	uint32_t keep = 0;
+
+	for (uint32_t i = 0; i < list->size; i++) {
+		as_lookup_valid_address* va = as_vector_get(list, i);
+		bool live = false;
+
+		for (uint32_t j = 0; j < nodes->size && ! live; j++) {
+			live = strcmp(nodes->array[j]->name, va->node_name) == 0;
+		}
+
+		if (live) {
+			if (keep != i) {
+				as_vector_set(list, keep, va);
+			}
+			keep++;
+		}
+	}
+	list->size = keep;
+}
+
+void
+as_lookup_destroy_valid_addresses(as_cluster* cluster)
+{
+	if (cluster->valid_addresses) {
+		as_vector_destroy(cluster->valid_addresses);
+		cluster->valid_addresses = NULL;
 	}
 }

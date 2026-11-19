@@ -86,11 +86,8 @@ as_lookup_next(as_address_iterator* iter, struct sockaddr** addr)
  * @private
  * Release memory associated with address iterator.
  */
-static inline void
-as_lookup_end(as_address_iterator* iter)
-{
-	freeaddrinfo(iter->addresses);
-}
+void
+as_lookup_end(as_address_iterator* iter);
 
 /**
  * @private

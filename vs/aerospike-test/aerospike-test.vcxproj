@@ -255,6 +255,7 @@
     <ClCompile Include="..\..\src\test\discovery_contract.c" />
     <ClCompile Include="..\..\src\test\discovery_dns.c" />
     <ClCompile Include="..\..\src\test\discovery_fake_node.c" />
+    <ClCompile Include="..\..\src\test\discovery_nodes.c" />
     <ClCompile Include="..\..\src\test\discovery_translation.c" />
     <ClCompile Include="..\..\src\test\discovery_seed_manager.c" />
     <ClCompile Include="..\..\src\test\metrics_basics.c" />

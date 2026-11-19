@@ -112,7 +112,7 @@ fnode_replicas(char* out, size_t size)
 }
 
 static size_t
-fnode_reply(fnode* n, char* body, char* out, size_t cap)
+fnode_reply(fnode* n, const char* name, char* body, char* out, size_t cap)
 {
 	size_t len = 0;
 	char* save = NULL;
@@ -124,7 +124,7 @@ fnode_reply(fnode* n, char* body, char* out, size_t cap)
 		const char* value = "";
 
 		if (strcmp(line, "node") == 0) {
-			value = n->name;
+			value = name;
 		}
 		else if (strcmp(line, "partition-generation") == 0) {
 			value = "1";
@@ -143,6 +143,9 @@ fnode_reply(fnode* n, char* body, char* out, size_t cap)
 		else if (strcmp(line, "service-clear-alt") == 0 && !n->empty_alt) {
 			snprintf(service, sizeof(service), "%s:%u", n->host, n->port);
 			value = service;
+		}
+		else if (strcmp(line, "service-clear-std") == 0) {
+			value = n->service_std;
 		}
 		else if (strcmp(line, "replicas") == 0 && n->partitions) {
 			fnode_replicas(replicas, sizeof(replicas));
@@ -165,8 +168,9 @@ fnode_reply(fnode* n, char* body, char* out, size_t cap)
 	return len;
 }
 
+// renamed is true when the connection answers the new name.
 static bool
-fnode_serve(fnode* n, int fd)
+fnode_serve(fnode* n, int fd, bool renamed)
 {
 	uint8_t header[8];
 
@@ -216,7 +220,8 @@ fnode_serve(fnode* n, int fd)
 	uint8_t reply[8192];
 	pthread_mutex_lock(&n->lock);
 	n->requests++;
-	size_t reply_len = fnode_reply(n, body, (char*)reply + 8, sizeof(reply) - 8);
+	size_t reply_len = fnode_reply(n, renamed ? n->new_name : n->name, body, (char*)reply + 8,
+		sizeof(reply) - 8);
 	pthread_mutex_unlock(&n->lock);
 
 	reply[0] = 2;
@@ -233,6 +238,7 @@ fnode_run(void* arg)
 {
 	fnode* n = arg;
 	int clients[FNODE_MAX_CLIENTS];
+	bool renamed[FNODE_MAX_CLIENTS];
 	int n_clients = 0;
 
 	while (!as_load_uint8(&n->stop)) {
@@ -266,9 +272,11 @@ fnode_run(void* arg)
 		}
 
 		for (int i = n_clients - 1; i >= 0; i--) {
-			if (pfds[i + 1].revents && !fnode_serve(n, clients[i])) {
+			if (pfds[i + 1].revents && !fnode_serve(n, clients[i], renamed[i])) {
 				close(clients[i]);
-				clients[i] = clients[--n_clients];
+				n_clients--;
+				clients[i] = clients[n_clients];
+				renamed[i] = renamed[n_clients];
 			}
 		}
 
@@ -281,6 +289,7 @@ fnode_run(void* arg)
 
 			pthread_mutex_lock(&n->lock);
 			bool reject = n->reject;
+			renamed[n_clients] = n->renamed;
 
 			if (n->accepts++ == 0) {
 				n->first_accept_us = cf_getus();
@@ -435,6 +444,15 @@ fnode_set_partitions(fnode* n, bool partitions)
 	pthread_mutex_unlock(&n->lock);
 }
 
+void
+fnode_set_new_name(fnode* n, const char* name)
+{
+	pthread_mutex_lock(&n->lock);
+	snprintf(n->new_name, sizeof(n->new_name), "%s", name);
+	n->renamed = true;
+	pthread_mutex_unlock(&n->lock);
+}
+
 bool
 fnode_set_silent(fnode* n, bool silent)
 {
@@ -509,6 +527,14 @@ fnode_set_empty_alt(fnode* n, bool empty_alt)
 {
 	pthread_mutex_lock(&n->lock);
 	n->empty_alt = empty_alt;
+	pthread_mutex_unlock(&n->lock);
+}
+
+void
+fnode_set_service_std(fnode* n, const char* service)
+{
+	pthread_mutex_lock(&n->lock);
+	snprintf(n->service_std, sizeof(n->service_std), "%s", service);
 	pthread_mutex_unlock(&n->lock);
 }
 

@@ -574,6 +574,18 @@ as_cluster_refresh_peers(as_cluster* cluster, as_peers* peers)
 	as_vector_destroy(&nodes);
 }
 
+// Return true if addr is one of the addresses of iter.
+static bool
+as_cluster_is_resolved(as_address_iterator* iter, struct sockaddr* addr)
+{
+	for (struct addrinfo* ai = iter->addresses; ai; ai = ai->ai_next) {
+		if (as_address_equals(ai->ai_addr, addr)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static as_status
 as_cluster_seed_node(
 	as_cluster* cluster, as_error* err, as_peers* peers, as_seed_snapshot* seeds,
@@ -635,6 +647,10 @@ as_cluster_seed_node(
 
 				if (iter.hostname_is_alias) {
 					as_node_set_hostname(node, host.name);
+
+					// Load balancer detection may have replaced the address.
+					node->hostname_resolved = as_cluster_is_resolved(&iter,
+						(struct sockaddr*)&node_info.addr);
 				}
 
 				peers->refresh_count = 0;
@@ -1159,9 +1175,16 @@ as_cluster_tend_nodes(as_cluster* cluster, as_error* err, bool is_init)
 					as_log_info("Node %s refresh failed: %s %s",
 						node->name, as_error_string(status), error_local.message);
 					peers.gen_changed = true;
+					node->failed_tends++;
 					as_cluster_node_failure(node);
 				}
 			}
+		}
+
+		// Move nodes that failed their last tends to another address of their hostname. The
+		// swap below adds each moved node and removes the node it replaces.
+		for (uint32_t i = 0; i < nodes->size; i++) {
+			as_peers_move_node(&peers, cluster, nodes->array[i]);
 		}
 
 		// Refresh peers when necessary.

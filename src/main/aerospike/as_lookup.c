@@ -413,7 +413,7 @@ as_lookup_find_valid_address(as_cluster* cluster, as_host* host)
 	return NULL;
 }
 
-static void
+void
 as_lookup_set_valid_address(
 	as_cluster* cluster, as_host* host, struct sockaddr* addr, const char* node_name
 	)
@@ -713,15 +713,17 @@ as_lookup_node(
 	)
 {
 	return as_lookup_node_until(cluster, err, host, addr, detect_load_balancer, node_info,
-		alternate_missing, as_socket_deadline(cluster->conn_timeout_ms));
+		alternate_missing, as_socket_deadline(cluster->conn_timeout_ms), false);
 }
 
-// Validate the node on the connected node_info->socket. Every failure closes the socket.
+// Validate the node on the connected node_info->socket. Every failure closes the socket. Unless
+// login_until_deadline, a login replaces deadline with login_timeout_ms for the login and the
+// info requests after it.
 static as_status
 as_lookup_node_validate(
 	as_cluster* cluster, as_error* err, as_host* host, struct sockaddr* addr,
 	bool detect_load_balancer, as_node_info* node_info, bool* alternate_missing,
-	uint64_t deadline
+	uint64_t deadline, bool login_until_deadline
 	)
 {
 	if (alternate_missing) {
@@ -736,7 +738,9 @@ as_lookup_node_validate(
 	node_info->session = NULL;
 
 	if (cluster->auth_enabled) {
-		deadline = as_socket_deadline(cluster->login_timeout_ms);
+		if (! login_until_deadline) {
+			deadline = as_socket_deadline(cluster->login_timeout_ms);
+		}
 		status = as_cluster_login(cluster, err, &node_info->socket, deadline, node_info);
 
 		if (status) {
@@ -998,7 +1002,7 @@ as_lookup_node_connected(
 	}
 
 	return as_lookup_node_validate(cluster, err, host, addr, false, node_info, alternate_missing,
-		as_socket_deadline(cluster->conn_timeout_ms));
+		as_socket_deadline(cluster->conn_timeout_ms), false);
 }
 
 // Run the caller's check on a validated node. A node that is not accepted is destroyed.
@@ -1037,7 +1041,7 @@ as_status
 as_lookup_node_until(
 	as_cluster* cluster, as_error* err, as_host* host, struct sockaddr* addr,
 	bool detect_load_balancer, as_node_info* node_info, bool* alternate_missing,
-	uint64_t deadline
+	uint64_t deadline, bool login_until_deadline
 	)
 {
 	if (alternate_missing) {
@@ -1053,7 +1057,7 @@ as_lookup_node_until(
 	}
 
 	return as_lookup_node_validate(cluster, err, host, addr, detect_load_balancer, node_info,
-		alternate_missing, deadline);
+		alternate_missing, deadline, login_until_deadline);
 }
 
 as_status

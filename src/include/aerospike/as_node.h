@@ -64,6 +64,12 @@ extern "C" {
 #define AS_ADDRESS4_MAX 4
 #define AS_ADDRESS6_MAX 8
 
+/**
+ * @private
+ * Consecutive failed tends after which a node moves to another address of its hostname.
+ */
+#define AS_NODE_MOVE_FAILED_TENDS 3
+
 //---------------------------------
 // Types
 //---------------------------------
@@ -538,6 +544,32 @@ typedef struct as_node_s {
 	 * See as_metrics_node_snapshot.conn_latency.
 	 */
 	as_latency* conn_latency;
+
+	/**
+	 * @private
+	 * Number of consecutive tends whose refresh of this node failed. Tend thread only.
+	 */
+	uint32_t failed_tends;
+
+	/**
+	 * @private
+	 * Address of the hostname last tried to move this node to. Valid when has_move_address is
+	 * true. Tend thread only.
+	 */
+	struct sockaddr_storage move_address;
+
+	/**
+	 * @private
+	 * Is move_address valid.
+	 */
+	bool has_move_address;
+
+	/**
+	 * @private
+	 * Is the node's address one of the addresses its hostname resolved to. Only such a node moves
+	 * to another address of its hostname. Tend thread only.
+	 */
+	bool hostname_resolved;
 
 } as_node;
 

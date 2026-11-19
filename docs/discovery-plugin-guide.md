@@ -379,6 +379,31 @@ differs in these points:
 | `ip_map` | Also rewrites configured seeds, and is ignored with a warning while another translator is registered; see [Built-ins](#built-ins). | Applies to the addresses servers advertise; no warning. |
 | Static `use_services_alternate` on reload | Not re-applied; only `dynamic.client.use_service_alternative` changes a running client. | Re-applied. |
 | aws-tags timeouts | One `timeout_ms`, default 5000; `init_timeout_ms` is accepted and ignored. | `timeout_ms` 2000, and `init_timeout_ms` 10000 for the first refresh. |
+| Hostname address move | Only a node whose address is one of its hostname's addresses moves; the new address becomes the hostname's preferred address, and a collision has its own warning; see [Nodes behind a hostname with several addresses](#nodes-behind-a-hostname-with-several-addresses). | Also moves a node matched to a hostname only through a loopback address, records no preferred address, and logs a collision as a translation collision. |
+
+## Nodes behind a hostname with several addresses
+
+A node reached through a hostname, such as a load balancer name with one address per zone, moves
+to another address of that hostname when its own address stops answering. This needs no
+discovery or translation setting.
+
+- The node moves only when its refresh failed in 3 tends in a row, and only when its address is
+  one of the addresses its hostname resolved to: a seed whose address load balancer detection
+  replaced, or a node matched to a hostname only through a loopback address, never moves. A
+  hostname with a single address never moves its node either.
+- Each tend tries one address, the one after the address tried last, skipping the node's own.
+  Connect, login and info requests end together within half the tend interval, or
+  `conn_timeout_ms` when that is set and smaller.
+- The candidate must answer with the node's name. A candidate that is another node is skipped. A
+  candidate that is also a healthy node, or a node moved in the same tend, is skipped with the
+  warning `Address <host:port> of <hostname> is also node <other>, so node <name> does not move to it`.
+- The moved node replaces the old one in one swap, so the name is never missing or held twice,
+  and it takes over the partitions in the same tend. The move is logged at info level as
+  `Move node <name> <hostname> from <host:port> to <host:port>`, and the new address becomes the
+  preferred address of the hostname and port for later connects.
+
+The hostname lookup has no time bound and runs on the tend thread, one failing node after
+another, so each failing node can delay the tend by one bound plus its lookup.
 
 ## Connection idle behind load balancers
 

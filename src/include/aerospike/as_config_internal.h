@@ -83,7 +83,7 @@ extern const char* const as_config_builtin_translators[AS_CONFIG_BUILTIN_TRANSLA
  * (aerospike_close() of an unconnected async client, whose aerospike_destroy() never reaches
  * as_config_destroy()) the recipes and the registries are released too.
  */
-void
+AS_EXTERN void
 as_config_release_plugins(as_config* config, bool keep_recipes);
 
 /**
@@ -91,7 +91,7 @@ as_config_release_plugins(as_config* config, bool keep_recipes);
  * Build the provider and the translator from their recipes when they were released. Called by
  * aerospike_connect() before the cluster is created.
  */
-as_status
+AS_EXTERN as_status
 as_config_rebuild_plugins(as_config* config, as_error* err);
 
 /**

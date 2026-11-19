@@ -194,6 +194,9 @@
     <ClCompile Include="..\..\src\test\discovery_fake_node.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\test\discovery_nodes.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\test\discovery_translation.c">
       <Filter>Source Files</Filter>
     </ClCompile>

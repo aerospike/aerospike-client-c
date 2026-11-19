@@ -1715,6 +1715,9 @@ run_collision(collision_kind kind, bool reversed, bool healthy_peer, as_status e
 	else if (b_first == 0 || c_first == 0) {
 		result = "the collision is not reported once for each colliding peer";
 	}
+	else if (!discovery_one_node_per_name(c.as->cluster, NULL, 0)) {
+		result = "two nodes have one name";
+	}
 
 	fake_client_close(&c);
 	fake_node_stop(&d);
@@ -1804,6 +1807,7 @@ TEST(translation_collision_live_node, "U-15 a newcomer colliding with a live nod
 	assert_true(has_node(c.as, "S"));
 	assert_true(has_node(c.as, "D"));
 	assert_false(has_node(c.as, "E"));
+	assert_true(discovery_one_node_per_name(c.as->cluster, NULL, 0));
 	fake_client_close(&c);
 
 	fake_node_stop(&d);
@@ -1840,6 +1844,7 @@ TEST(translation_collision_seed, "U-15 a peer advertised at the seed address is 
 	assert_true(wait_for_peers_requests(&s, 3, 5000));
 	assert_int_eq(node_count(c.as), 1);
 	assert_false(has_node(c.as, "B"));
+	assert_true(discovery_one_node_per_name(c.as->cluster, NULL, 0));
 	fake_client_close(&c);
 
 	fake_node_stop(&s);
@@ -1884,6 +1889,7 @@ TEST(translation_shared_address_skipped, "U-15 an address shared by peers is nev
 	as_sleep(1200);
 	assert_int_eq(fake_node_requests(&s, &s.peers_std_requests), before);
 	assert_int_eq(node_count(c.as), 3);
+	assert_true(discovery_one_node_per_name(c.as->cluster, NULL, 0));
 	fake_client_close(&c);
 
 	// D has no address of its own left, so it collides and is not created. B still joins.
@@ -1900,6 +1906,7 @@ TEST(translation_shared_address_skipped, "U-15 an address shared by peers is nev
 	assert_true(wait_for_peers_requests(&s, 3, 5000));
 	assert_int_eq(node_count(c.as), 2);
 	assert_false(has_node(c.as, "D"));
+	assert_true(discovery_one_node_per_name(c.as->cluster, NULL, 0));
 	fake_client_close(&c);
 
 	fake_node_stop(&d);
@@ -1949,6 +1956,7 @@ TEST(translation_shared_address_registered, "U-15 with a registered translator a
 	assert_int_eq(node_count(c.as), 1);
 	assert_false(has_node(c.as, "B"));
 	assert_false(has_node(c.as, "D"));
+	assert_true(discovery_one_node_per_name(c.as->cluster, NULL, 0));
 	fake_client_close(&c);
 
 	fake_node_stop(&d);
@@ -2026,6 +2034,9 @@ run_collision_alias(bool reversed, bool pass_through)
 		if (accepts > 2 * requests) {
 			result = "a dropped newcomer had min connections";
 		}
+		else if (!discovery_one_node_per_name(c.as->cluster, NULL, 0)) {
+			result = "two nodes have one name";
+		}
 	}
 
 	fake_client_close(&c);
@@ -2068,6 +2079,7 @@ TEST(translation_distinct_ports_one_host, "U-15 peers on one host with distinct 
 
 	assert_int_eq(fake_client_connect(&c, &config), AEROSPIKE_OK);
 	assert_int_eq(node_count(c.as), 3);
+	assert_true(discovery_one_node_per_name(c.as->cluster, NULL, 0));
 	fake_client_close(&c);
 
 	fake_node_stop(&d);

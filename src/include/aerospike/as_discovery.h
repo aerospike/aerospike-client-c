@@ -647,7 +647,9 @@ typedef struct as_seed_provider_s {
 	/**
 	 * Fill candidates with copied hosts using as_seed_candidates_append().
 	 * Return AEROSPIKE_OK (an empty result is a valid answer) or an error set
-	 * on err; on error the previous seeds are kept. An error at
+	 * on err; on error the previous seeds are kept. A result with an empty
+	 * host name, a host name over 255 bytes or port 0 is an error too, except
+	 * for a configured seed returned as given. An error at
 	 * initialization falls back to the configured seeds;
 	 * aerospike_connect() fails with AEROSPIKE_ERR_SEED_DISCOVERY_FAILED only
 	 * when none are configured. Later errors are logged and never stop tend.

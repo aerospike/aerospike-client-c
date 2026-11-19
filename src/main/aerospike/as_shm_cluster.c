@@ -64,10 +64,9 @@ as_status
 as_node_refresh_racks(as_cluster* cluster, as_error* err, as_node* node);
 
 void
-as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add);
-
-void
-as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove);
+as_cluster_replace_nodes_copy(
+	as_cluster* cluster, as_vector* /* <as_node*> */ add, as_vector* /* <as_node*> */ remove
+	);
 
 void
 as_cluster_manage(as_cluster* cluster);
@@ -233,6 +232,12 @@ as_shm_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_re
 	
 	for (uint32_t i = 0; i < nodes_to_remove->size; i++) {
 		as_node* node_to_remove = as_vector_get_ptr(nodes_to_remove, i);
+
+		// Nodes with one name share a slot, so only the node the slot points to clears it.
+		if (shm_info->local_nodes[node_to_remove->index] != node_to_remove) {
+			continue;
+		}
+
 		as_node_shm* node_shm = &cluster_shm->nodes[node_to_remove->index];
 		
 		// Update shared memory node in write lock.
@@ -284,6 +289,18 @@ as_shm_ensure_login(as_cluster* cluster, as_error* err)
 	}
 }
 
+// The master replaces a node of a slot only with a node at another address. The slot has no
+// generation, because processes of different client versions share the segment.
+static bool
+as_shm_node_moved(as_node* node, as_node_shm* node_shm)
+{
+	struct sockaddr* addr = (struct sockaddr*)&as_node_get_address(node)->addr;
+	struct sockaddr* shm_addr = (struct sockaddr*)&node_shm->addr;
+
+	return ! as_address_equals(addr, shm_addr) ||
+		as_address_port(addr) != as_address_port(shm_addr);
+}
+
 static void
 as_shm_reset_nodes(as_cluster* cluster)
 {
@@ -311,6 +328,12 @@ as_shm_reset_nodes(as_cluster* cluster)
 		as_swlock_read_unlock(&node_shm->lock);
 		
 		if (node_tmp.active) {
+			if (node && as_shm_node_moved(node, &node_tmp)) {
+				// The master replaced the node under the same name.
+				as_vector_append(&nodes_to_remove, &node);
+				node = NULL;
+			}
+
 			if (! node) {
 				as_node_info node_info;
 				strcpy(node_info.name, node_tmp.name);
@@ -339,21 +362,19 @@ as_shm_reset_nodes(as_cluster* cluster)
 		}
 		else {
 			if (node) {
-				as_node_deactivate(node);
 				as_vector_append(&nodes_to_remove, &node);
 				as_node_store(&shm_info->local_nodes[i], 0);
 			}
 		}
 	}
 
-	// Remove nodes in a batch.
-	if (nodes_to_remove.size > 0) {
-		as_cluster_remove_nodes_copy(cluster, &nodes_to_remove);
+	// Remove and add nodes in one swap, so a replaced node's name is never missing.
+	if (nodes_to_add.size > 0 || nodes_to_remove.size > 0) {
+		as_cluster_replace_nodes_copy(cluster, &nodes_to_add, &nodes_to_remove);
 	}
-	
-	// Add nodes in a batch.
-	if (nodes_to_add.size > 0) {
-		as_cluster_add_nodes_copy(cluster, &nodes_to_add);
+
+	for (uint32_t i = 0; i < nodes_to_remove.size; i++) {
+		as_node_deactivate(as_vector_get_ptr(&nodes_to_remove, i));
 	}
 	
 	as_vector_destroy(&nodes_to_add);

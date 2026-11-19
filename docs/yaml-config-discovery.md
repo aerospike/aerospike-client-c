@@ -93,7 +93,13 @@ static value, not to the code value.
 | `aws-tags` | The built-in AWS EC2 provider built from the `aws` block, as `as_config_set_aws_seed_provider()` would. |
 
 A provider from the file replaces, and destroys, a provider registered in code before
-`aerospike_init()` or `aerospike_new()`. With `provider` absent, the code registration is kept.
+`aerospike_init()` or `aerospike_new()`, and logs at warning level:
+
+```
+Seed provider my-provider registered in code is replaced by static.client.discovery.provider static in /etc/aerospike/client.yaml
+```
+
+With `provider` absent, the code registration is kept.
 For what each merge policy and execution mode does, see
 [Merge policies](discovery-plugin-guide.md#merge-policies) and
 [Execution modes](discovery-plugin-guide.md#execution-modes) in the plugin guide.
@@ -194,9 +200,10 @@ environment variables, which are read once, when the provider is built at `aeros
 | `port-map` | The built-in port-map translator over `port_map`, which is required, as `as_config_set_port_map_translator()` would. |
 | `pass-through` | The built-in pass-through translator, as `as_config_set_pass_through_translator()` would. Use it with `use_services_alternate: true` when each node advertises a client-reachable alternate address and port. |
 
-A translator from the file replaces, and destroys, a translator registered in code. With
-`provider` absent, the code registration is kept, unless `static_map` is set, which implies
-`static-map`. `static_map` is valid only with `static-map` and `port_map` only with `port-map`.
+A translator from the file replaces, and destroys, a translator registered in code, and logs
+`Address translator <name> registered in code is replaced by static.client.translation.provider
+<value> in <path>` at warning level. With `provider` absent, the code registration is kept,
+unless `static_map` is set, which implies `static-map`. `static_map` is valid only with `static-map` and `port_map` only with `port-map`.
 `static_map` replaces the code `ip_map` like `static.client.ip_map`, and an empty map clears it.
 On AWS, the one-port-per-node layouts of `port-map` and `pass-through` have a node limit per load
 balancer; see [Deployment limits](discovery-plugin-guide.md#deployment-limits-aws).

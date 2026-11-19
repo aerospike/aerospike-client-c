@@ -1176,6 +1176,28 @@ empty_name_step(fake_provider* fp, uint32_t call, as_error* err, as_seed_candida
 	return AEROSPIKE_OK;
 }
 
+static as_status
+port_zero_step(fake_provider* fp, uint32_t call, as_error* err, as_seed_candidates* out)
+{
+	(void)fp;
+	(void)call;
+	return fp_append(err, out, "ok:1,bad:0");
+}
+
+static as_status
+long_name_step(fake_provider* fp, uint32_t call, as_error* err, as_seed_candidates* out)
+{
+	(void)fp;
+	(void)call;
+	(void)err;
+	char name[257];
+	memset(name, 'h', sizeof(name) - 1);
+	name[sizeof(name) - 1] = 0;
+	as_seed_candidates_append(out, "ok", NULL, 1);
+	as_seed_candidates_append(out, name, NULL, 3000);
+	return AEROSPIKE_OK;
+}
+
 TEST(seed_init_failure, "U-1 an init failure falls back to configured seeds, or returns -27 naming provider and message")
 {
 	as_config config;
@@ -1184,7 +1206,8 @@ TEST(seed_init_failure, "U-1 an init failure falls back to configured seeds, or 
 	fake_provider fp;
 	char buf[256];
 
-	fake_step steps[] = {fail_step, silent_fail_step, replace_container_step, empty_name_step};
+	fake_step steps[] = {fail_step, silent_fail_step, replace_container_step, empty_name_step,
+		port_zero_step, long_name_step};
 
 	for (uint32_t i = 0; i < sizeof(steps) / sizeof(steps[0]); i++) {
 		for (int mode = 0; mode < 2; mode++) {
@@ -1221,6 +1244,26 @@ TEST(seed_init_failure, "U-1 an init failure falls back to configured seeds, or 
 	mgr_config(&config, AS_DISCOVERY_EXECUTION_THREAD, 1000);
 	assert_int_eq(mgr_open(&config, &fp, &m, &err), AEROSPIKE_OK);
 	assert_string_eq(snap_str(m, buf, sizeof(buf)), "");
+	mgr_close(m, &config);
+	fp_settle(&fp);
+	fp_free(&fp);
+}
+
+TEST(seed_configured_port_zero, "U-1 a configured seed returned as given is not range checked")
+{
+	as_config config;
+	as_error err;
+	as_seed_manager* m;
+	fake_provider fp;
+	char buf[256];
+
+	fp_init(&fp, false, false, "s:0,d:3000");
+	mgr_config(&config, AS_DISCOVERY_EXECUTION_THREAD, 1000);
+	as_config_add_host(&config, "s", 0);
+	assert_int_eq(mgr_open(&config, &fp, &m, &err), AEROSPIKE_OK);
+	snap_str(m, buf, sizeof(buf));
+	assert_not_null(strstr(buf, "s:0"));
+	assert_not_null(strstr(buf, "d:3000"));
 	mgr_close(m, &config);
 	fp_settle(&fp);
 	fp_free(&fp);
@@ -3497,6 +3540,7 @@ SUITE(discovery_seed_manager, "pluggable discovery seed manager and execution mo
 	suite_add(seed_merge_publication);
 	suite_add(seed_tls_defaults);
 	suite_add(seed_init_failure);
+	suite_add(seed_configured_port_zero);
 	suite_add(seed_validation);
 	suite_add(seed_tend_cadence);
 	suite_add(seed_tend_errors);

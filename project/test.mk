@@ -10,6 +10,7 @@ TEST_AEROSPIKE += discovery_config_file.c
 TEST_AEROSPIKE += discovery_contract.c
 TEST_AEROSPIKE += discovery_dns.c
 TEST_AEROSPIKE += discovery_fake_node.c
+TEST_AEROSPIKE += discovery_nodes.c
 TEST_AEROSPIKE += discovery_translation.c
 TEST_AEROSPIKE += discovery_seed_manager.c
 TEST_AEROSPIKE += metrics_basics.c

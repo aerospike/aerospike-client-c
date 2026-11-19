@@ -6,8 +6,9 @@ name: Discovery integration
 # from code and from the YAML file), env-collision (N-18 against a live node) and env-yaml
 # (pass-through and port-map from the YAML file) run src/test/discovery_env in conformance envs/
 # through test-envs.yaml. l2-ce builds the PR head SHA; the env jobs build what test-envs.yaml
-# checks out, the PR merge commit. The harness is pinned in each job below to the conformance main
-# commit L1 also uses; move them to the v1.1.0 commit once it is tagged. The Enterprise jobs
+# checks out, the PR merge commit. The harness is not versioned: it is pinned in each job below to
+# the conformance main commit L1 also uses. l2-proxy.yaml asks for id-token: write, for a server
+# image from a private registry, so l2-ce grants it. The Enterprise jobs
 # (l2-proxy on EE, the TLS rows N-6 and N-17, the certificate name matching cases) and the nightly
 # schedule are in discovery-integration-ee.yml.
 
@@ -31,7 +32,10 @@ jobs:
     name: L2 proxy (CE)
     # About an hour per run; drafts wait until they are ready for review.
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c # main
+    permissions:
+      contents: read
+      id-token: write
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@a30c0787dede434f15be3622e7007dc57b55209d # main
     with:
       client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -39,37 +43,37 @@ jobs:
       profile: all
       edition: ce
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: f0dfda5d49e0fcac2613df3fa29e4386201df11c
+      conformance-ref: a30c0787dede434f15be3622e7007dc57b55209d
 
   env-dns:
     name: N-4 DNS environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c # main
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@a30c0787dede434f15be3622e7007dc57b55209d # main
     with:
       environment: dns
       command: bash src/test/discovery_env/run.sh dns
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: f0dfda5d49e0fcac2613df3fa29e4386201df11c
+      conformance-ref: a30c0787dede434f15be3622e7007dc57b55209d
 
   env-collision:
     name: N-18 collision environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c # main
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@a30c0787dede434f15be3622e7007dc57b55209d # main
     with:
       environment: collision
       command: bash src/test/discovery_env/run.sh collision
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: f0dfda5d49e0fcac2613df3fa29e4386201df11c
+      conformance-ref: a30c0787dede434f15be3622e7007dc57b55209d
 
   env-yaml:
     name: YAML translation environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@f0dfda5d49e0fcac2613df3fa29e4386201df11c # main
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@a30c0787dede434f15be3622e7007dc57b55209d # main
     with:
       environment: yaml
       command: bash src/test/discovery_env/run.sh yaml
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: f0dfda5d49e0fcac2613df3fa29e4386201df11c
+      conformance-ref: a30c0787dede434f15be3622e7007dc57b55209d
 
   l2-summary:
     name: L2 rows
@@ -83,7 +87,7 @@ jobs:
       - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
         continue-on-error: true
         with:
-          name: l2-proxy-results-all-${{ github.run_id }}-${{ github.run_attempt }}
+          name: l2-proxy-results-ce-all-${{ github.run_id }}-${{ github.run_attempt }}
           path: l2-proxy-results
       - run: |
           {

@@ -704,6 +704,13 @@ typedef struct as_cluster_s {
 	 */
 	uint32_t config_interval;
 
+	/**
+	 * @private
+	 * Address last accepted for each peer host name and port with several addresses, and the
+	 * node accepted there, or NULL before the first. Tend thread only.
+	 */
+	as_vector* valid_addresses;
+
 } as_cluster;
 
 struct aerospike_s;

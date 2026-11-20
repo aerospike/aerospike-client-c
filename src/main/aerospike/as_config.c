@@ -112,10 +112,12 @@ destroy_translator(as_translation_config* translation)
 	translation->provider_registered = false;
 }
 
+// Only a direct table keeps a registered udata it is given again. A factory instance holds its
+// own reference, even when it shares the pointer, so the instance it replaces is destroyed.
 static void
-replace_provider(as_discovery_config* discovery, const as_seed_provider* copy)
+replace_provider(as_discovery_config* discovery, const as_seed_provider* copy, bool direct)
 {
-	if (discovery->provider_registered && discovery->provider.udata &&
+	if (direct && discovery->provider_registered && discovery->provider.udata &&
 		discovery->provider.udata == copy->udata) {
 		// Same state now owned by the new registration.
 		cf_free((void*)discovery->provider.name);
@@ -130,9 +132,10 @@ replace_provider(as_discovery_config* discovery, const as_seed_provider* copy)
 }
 
 static void
-replace_translator(as_translation_config* translation, const as_address_translator* copy)
+replace_translator(as_translation_config* translation, const as_address_translator* copy,
+	bool direct)
 {
-	if (translation->provider_registered && translation->provider.udata &&
+	if (direct && translation->provider_registered && translation->provider.udata &&
 		translation->provider.udata == copy->udata) {
 		// Same state now owned by the new registration.
 		cf_free((void*)translation->provider.name);
@@ -143,20 +146,6 @@ replace_translator(as_translation_config* translation, const as_address_translat
 	translation->provider = *copy;
 	translation->provider_registered = true;
 	translation->provider_released = false;
-}
-
-static bool
-binding_periodic(void* udata)
-{
-	(void)udata;
-	return true;
-}
-
-static bool
-binding_not_periodic(void* udata)
-{
-	(void)udata;
-	return false;
 }
 
 static void
@@ -352,17 +341,16 @@ own_translator_name(as_address_translator* translator)
 	return true;
 }
 
-// Call the factory at index and validate its result, whose name is not copied.
+// Call a provider factory and validate its result, whose name is not copied.
 static as_status
-call_provider_factory(as_error* err, const struct as_plugin_registry_s* registry, uint32_t index,
+call_provider_factory_core(as_error* err, as_seed_provider_factory factory, void* factory_udata,
 	const as_map* options, as_seed_provider* out)
 {
-	const as_plugin_entry* entry = as_vector_get((as_vector*)&registry->entries, index);
 	memset(out, 0, sizeof(as_seed_provider));
 
 	as_error local;
 	as_error_init(&local);
-	as_status status = entry->factory.provider(&local, options, out, entry->udata);
+	as_status status = factory(&local, options, out, factory_udata);
 
 	if (status != AEROSPIKE_OK) {
 		return factory_failed(err, status, &local);
@@ -378,16 +366,24 @@ call_provider_factory(as_error* err, const struct as_plugin_registry_s* registry
 	return AEROSPIKE_OK;
 }
 
+// Call the factory at index of the registry.
 static as_status
-call_translator_factory(as_error* err, const struct as_plugin_registry_s* registry,
-	uint32_t index, const as_map* options, as_address_translator* out)
+call_provider_factory(as_error* err, const struct as_plugin_registry_s* registry, uint32_t index,
+	const as_map* options, as_seed_provider* out)
 {
 	const as_plugin_entry* entry = as_vector_get((as_vector*)&registry->entries, index);
+	return call_provider_factory_core(err, entry->factory.provider, entry->udata, options, out);
+}
+
+static as_status
+call_translator_factory_core(as_error* err, as_address_translator_factory factory,
+	void* factory_udata, const as_map* options, as_address_translator* out)
+{
 	memset(out, 0, sizeof(as_address_translator));
 
 	as_error local;
 	as_error_init(&local);
-	as_status status = entry->factory.translator(&local, options, out, entry->udata);
+	as_status status = factory(&local, options, out, factory_udata);
 
 	if (status != AEROSPIKE_OK) {
 		return factory_failed(err, status, &local);
@@ -401,6 +397,15 @@ call_translator_factory(as_error* err, const struct as_plugin_registry_s* regist
 			"factory returned an invalid translator");
 	}
 	return AEROSPIKE_OK;
+}
+
+static as_status
+call_translator_factory(as_error* err, const struct as_plugin_registry_s* registry,
+	uint32_t index, const as_map* options, as_address_translator* out)
+{
+	const as_plugin_entry* entry = as_vector_get((as_vector*)&registry->entries, index);
+	return call_translator_factory_core(err, entry->factory.translator, entry->udata, options,
+		out);
 }
 
 static void
@@ -443,6 +448,69 @@ factory_build_translator(as_error* err, const struct as_plugin_registry_s* regis
 {
 	factory_state* s = state;
 	return call_translator_factory(err, registry, s->index, s->options, out);
+}
+
+// The recipe of a factory set without a name owns the factory udata: it ends with the
+// registration. destroy stays NULL until the registration succeeds, so a failure leaves udata
+// to the caller.
+typedef struct unnamed_state_s {
+	union {
+		as_seed_provider_factory provider;
+		as_address_translator_factory translator;
+	} factory;
+	void (*destroy)(void* udata);
+	void* udata;
+	as_map* options;
+} unnamed_state;
+
+static void
+unnamed_state_destroy(void* state)
+{
+	unnamed_state* s = state;
+
+	if (s->destroy) {
+		s->destroy(s->udata);
+	}
+	as_map_destroy(s->options);
+	cf_free(s);
+}
+
+// Allocate the state with an empty options map. NULL on allocation failure.
+static unnamed_state*
+unnamed_state_create(void* udata)
+{
+	unnamed_state* s = cf_malloc(sizeof(unnamed_state));
+
+	if (!s) {
+		return NULL;
+	}
+	memset(s, 0, sizeof(unnamed_state));
+	s->udata = udata;
+	s->options = (as_map*)as_orderedmap_new(1);
+
+	if (!s->options) {
+		cf_free(s);
+		return NULL;
+	}
+	return s;
+}
+
+static as_status
+unnamed_build_provider(as_error* err, const struct as_plugin_registry_s* registry, void* state,
+	void* out)
+{
+	(void)registry;
+	unnamed_state* s = state;
+	return call_provider_factory_core(err, s->factory.provider, s->udata, s->options, out);
+}
+
+static as_status
+unnamed_build_translator(as_error* err, const struct as_plugin_registry_s* registry,
+	void* state, void* out)
+{
+	(void)registry;
+	unnamed_state* s = state;
+	return call_translator_factory_core(err, s->factory.translator, s->udata, s->options, out);
 }
 
 static void
@@ -827,6 +895,7 @@ as_plugin_recipe_create(as_status (*build)(as_error*, const struct as_plugin_reg
 	recipe->build = build;
 	recipe->destroy_state = destroy_state;
 	recipe->state = state;
+	recipe->binding = false;
 	return recipe;
 }
 
@@ -910,13 +979,14 @@ as_config_install_seed_provider(as_config* config, const as_seed_provider* owned
 	as_plugin_recipe* recipe)
 {
 	if (owned) {
-		replace_provider(&config->discovery, owned);
+		replace_provider(&config->discovery, owned, recipe == NULL);
 	}
 	else {
 		destroy_provider(&config->discovery);
 	}
 	clear_recipe(&config->discovery.recipe);
 	config->discovery.recipe = recipe;
+	config->discovery.binding_provider = owned && recipe && recipe->binding;
 }
 
 void
@@ -924,7 +994,7 @@ as_config_install_translator(as_config* config, const as_address_translator* own
 	as_plugin_recipe* recipe)
 {
 	if (owned) {
-		replace_translator(&config->translation, owned);
+		replace_translator(&config->translation, owned, recipe == NULL);
 	}
 	else {
 		destroy_translator(&config->translation);
@@ -955,7 +1025,8 @@ as_config_rebuild_plugins(as_config* config, as_error* err)
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 				"Failed to copy seed provider name");
 		}
-		replace_provider(d, &provider);
+		replace_provider(d, &provider, false);
+		d->binding_provider = d->recipe->binding;
 	}
 
 	if (!t->provider_registered && t->recipe) {
@@ -972,7 +1043,7 @@ as_config_rebuild_plugins(as_config* config, as_error* err)
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 				"Failed to copy address translator name");
 		}
-		replace_translator(t, &translator);
+		replace_translator(t, &translator, false);
 	}
 	return AEROSPIKE_OK;
 }
@@ -1132,13 +1203,109 @@ as_config_set_dns_seed_provider(as_config* config, const as_dns_seed_provider_co
 	return AEROSPIKE_OK;
 }
 
-as_status
-as_config_set_binding_seed_provider(as_config* config, const char* name,
-	as_status (*refresh)(as_error* err, const as_seed_candidate_context* context,
-		as_seed_candidates* candidates, void* udata),
-	bool periodic, void (*destroy)(void* udata), void* udata, as_error* err)
+// Build the first instance from a factory set without a name and register it with the recipe
+// that builds it again. On failure the caller keeps udata and the registration is unchanged.
+static as_status
+set_provider_factory(as_config* config, as_seed_provider_factory factory,
+	void (*destroy)(void* udata), void* udata, bool binding, as_error* err)
 {
-	if (!config) {
+	if (config->discovery.registration_locked) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Seed provider cannot be replaced while the client is connected");
+	}
+
+	unnamed_state* state = unnamed_state_create(udata);
+
+	if (!state) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to allocate seed provider recipe");
+	}
+	state->factory.provider = factory;
+
+	as_seed_provider provider;
+	as_status status = call_provider_factory_core(err, factory, udata, state->options, &provider);
+
+	if (status != AEROSPIKE_OK) {
+		unnamed_state_destroy(state);
+		return status;
+	}
+
+	as_plugin_recipe* recipe = as_plugin_recipe_create(unnamed_build_provider,
+		unnamed_state_destroy, state);
+
+	if (!recipe) {
+		if (provider.destroy) {
+			provider.destroy(provider.udata);
+		}
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to allocate seed provider recipe");
+	}
+	recipe->binding = binding;
+
+	if (!own_provider_name(&provider)) {
+		as_plugin_recipe_destroy(recipe);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to copy seed provider name");
+	}
+	state->destroy = destroy;
+	as_config_install_seed_provider(config, &provider, recipe);
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_config_set_seed_provider_factory(as_config* config, as_seed_provider_factory factory,
+	void (*destroy)(void* udata), void* udata, as_error* err)
+{
+	if (!config || !factory) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid seed provider");
+	}
+	return set_provider_factory(config, factory, destroy, udata, false, err);
+}
+
+as_status
+as_config_set_address_translator_factory(as_config* config,
+	as_address_translator_factory factory, void (*destroy)(void* udata), void* udata,
+	as_error* err)
+{
+	as_status status = translator_unlocked(config, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	if (!factory) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid address translator");
+	}
+
+	unnamed_state* state = unnamed_state_create(udata);
+
+	if (!state) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to allocate address translator recipe");
+	}
+	state->factory.translator = factory;
+
+	as_address_translator translator;
+	status = call_translator_factory_core(err, factory, udata, state->options, &translator);
+
+	if (status != AEROSPIKE_OK) {
+		unnamed_state_destroy(state);
+		return status;
+	}
+
+	status = install_built_translator(config, &translator,
+		as_plugin_recipe_create(unnamed_build_translator, unnamed_state_destroy, state), err);
+
+	if (status == AEROSPIKE_OK) {
+		state->destroy = destroy;
+	}
+	return status;
+}
+
+as_status
+as_config_set_binding_seed_provider(as_config* config, as_seed_provider_factory factory,
+	void (*destroy)(void* udata), void* udata, as_error* err)
+{
+	if (!config || !factory) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid seed provider");
 	}
 
@@ -1146,22 +1313,7 @@ as_config_set_binding_seed_provider(as_config* config, const char* name,
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"Binding seed provider requires thread execution mode");
 	}
-
-	as_seed_provider provider = {
-		.size = sizeof(as_seed_provider),
-		.api_version = AS_DISCOVERY_API_VERSION,
-		.name = name,
-		.refresh = refresh,
-		.needs_periodic_refresh = periodic ? binding_periodic : binding_not_periodic,
-		.destroy = destroy,
-		.udata = udata
-	};
-	as_status status = as_config_set_seed_provider(config, &provider, err);
-
-	if (status == AEROSPIKE_OK) {
-		config->discovery.binding_provider = true;
-	}
-	return status;
+	return set_provider_factory(config, factory, destroy, udata, true, err);
 }
 
 as_status

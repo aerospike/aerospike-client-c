@@ -54,9 +54,10 @@ Register a plugin on the `as_config` before `aerospike_init()` or `aerospike_new
 | --- | --- |
 | `as_config_set_seed_provider()` | a custom `as_seed_provider` table |
 | `as_config_set_address_translator()` | a custom `as_address_translator` table |
+| `as_config_set_seed_provider_factory()`, `as_config_set_address_translator_factory()` | a custom plugin built by a factory, which a sync close and reconnect call again, so the plugin need not be registered again; see [Factories without a name](#factories-without-a-name) |
 | `as_config_set_dns_seed_provider()`, `as_config_set_aws_seed_provider()` | a built-in provider from its configuration |
 | `as_config_set_port_map_translator()`, `as_config_set_pass_through_translator()` | a built-in translator |
-| `as_config_set_binding_seed_provider()` | a provider implemented by a language binding; see [Language bindings](#language-bindings) |
+| `as_config_set_binding_seed_provider()` | a provider implemented by a language binding, built by a factory that is called again after a sync close; see [Language bindings](#language-bindings) |
 | `as_config_register_seed_provider()`, `as_config_register_address_translator()` | a factory under a name, which the config file (`provider: <name>`) or a select call picks; registering builds nothing; see [Registered providers and translators](yaml-config-discovery.md#registered-providers-and-translators) |
 | `as_config_select_seed_provider()`, `as_config_select_address_translator()` | the instance a registered factory builds from the options passed, as the config file would |
 
@@ -65,8 +66,9 @@ Rules:
 - The function table is validated (`size`, `api_version`, a non-empty `name` and the required
   callbacks) and copied, `name` included. On success the config owns `udata` and calls `destroy`
   exactly once; on failure `udata` stays with the caller.
-- A new registration replaces the previous one and destroys it, unless it has the same non-NULL
-  `udata`, which destroys nothing.
+- A new registration replaces the previous one and destroys it, unless it is a table registered
+  directly with the same non-NULL `udata`, which destroys nothing. An instance built by a factory
+  is always destroyed when it is replaced, even if the new one has the same `udata` pointer.
 - Registration fails with `AEROSPIKE_ERR_PARAM` while a client created from the config is
   connected.
 - A YAML provider or translator replaces, and destroys, the code registration, and logs a
@@ -77,19 +79,45 @@ Lifecycle, which differs from the Java client:
 - **Sync client** (no async event loops, or libevent single-thread mode): `aerospike_close()`
   destroys every provider and translator instance. `aerospike_connect()` on the same `aerospike`
   object builds again the ones the client knows how to build: the built-ins set with their
-  setters, and the plugins selected by the config file or by `as_config_select_*()`, whose
-  factory is called again with the same options. A rebuild or factory error fails that connect.
+  setters, the plugins selected by the config file or by `as_config_select_*()`, whose
+  factory is called again with the same options, and the plugins set with
+  `as_config_set_*_factory()` or `as_config_set_binding_seed_provider()`, whose factory is
+  called again. A rebuild or factory error fails that connect, and the next connect tries again.
   A table registered directly (`as_config_set_seed_provider()`,
-  `as_config_set_address_translator()`, `as_config_set_binding_seed_provider()`) cannot be
-  rebuilt: connect fails with `Seed provider was released by aerospike_close(). Register it
-  again` (or the translator equivalent) until it is registered again. Registered factories stay
-  until `aerospike_destroy()`.
+  `as_config_set_address_translator()`) cannot be rebuilt: connect fails with `Seed provider was
+  released by aerospike_close(). Register it again` (or the translator equivalent) until it is
+  registered again. Registered factories stay until `aerospike_destroy()`.
 - **Async client**: `aerospike_close()` releases every registration, factories and selections
   included, whether the client was connected or not. A later `aerospike_connect()` on the same
   object fails with the same message until a plugin is registered again.
 
+`destroy` in a table is C's counterpart of `close()` in the Java client's plugin interface: the
+client never frees plugin memory itself, and the callback releases the plugin's own `udata`. For a
+rebuilt instance it ends only the instance of that connection.
+
 When a refresh is still running as the registration ends, `destroy` runs later on the discovery
 thread, after the refresh returns; see [Thread context](#thread-context).
+
+### Factories without a name
+
+`as_config_set_seed_provider_factory(config, factory, destroy, udata, err)` and
+`as_config_set_address_translator_factory()` take an `as_seed_provider_factory` or
+`as_address_translator_factory` instead of a table. Use them for a custom plugin that should
+survive close and reconnect:
+
+- The factory is called at once, with an empty options map, and again by `aerospike_connect()`
+  after each sync `aerospike_close()`. A factory error at registration returns its status with
+  `factory failed: ...` and keeps the previous registration; at reconnect it fails that connect
+  with `Failed to rebuild the seed provider: factory failed: ...` (or the translator equivalent).
+- On success the registration owns `udata` and calls `destroy(udata)` once, when the registration
+  ends: it is replaced, `aerospike_destroy()` or `as_config_destroy()` runs, or an async client is
+  closed. It runs once per successful registration, also for the same `udata` registered again.
+  On failure the caller keeps `udata`.
+- Each instance holds its own reference to the state it shares with `udata`, because the instance
+  `destroy` ends only that connection's instance and may run after `destroy(udata)`.
+
+This is the same as `as_config_register_*()` followed by `as_config_select_*()`, without a name
+that the config file could also select.
 
 ## Execution modes
 
@@ -302,17 +330,25 @@ The full contract, including HTTPS trust (`ca_file`, `ca_path`) and the hook rul
 
 ## Language bindings
 
-`as_config_set_binding_seed_provider()` registers a provider implemented in a binding's runtime
-(Python, Node.js) as a C callback:
+`as_config_set_binding_seed_provider(config, factory, destroy, udata, err)` registers a provider
+implemented in a binding's runtime (Python, Node.js) through a factory, so that close followed by
+connect works on the same `aerospike` object:
 
+- Factory, ownership, rebuild and error rules are those of
+  `as_config_set_seed_provider_factory()`; see [Factories without a name](#factories-without-a-name).
+- The factory fills the whole table (`name`, `refresh`, `needs_periodic_refresh`, `destroy` and
+  `udata`). It may enter the runtime the way `refresh` does (Python: connect runs with the GIL
+  released). `needs_periodic_refresh` is pure C and must not enter the runtime. Node.js runs with
+  async event loops, where `aerospike_close()` ends the registration, so its factory is only
+  called at registration.
 - It runs in `thread` mode only: registration fails while `execution_mode` is `tend`, and
   `aerospike_connect()` fails if the mode is switched to `tend` afterwards.
 - Every `refresh` call, the initial one included, runs on the discovery thread, periodic or not,
-  never on the connecting or tend thread. `periodic` is passed at registration instead of a
-  `needs_periodic_refresh` callback, so the client never calls into the runtime to decide it.
+  never on the connecting or tend thread.
 - Blocking budget: `aerospike_connect()` waits at most `refresh_timeout_ms` for the initial result,
   and `aerospike_close()` at most `refresh_timeout_ms` for a running refresh. `refresh` may wait for
-  the runtime (for example acquire the Python GIL); `destroy` must not.
+  the runtime (for example acquire the Python GIL), and so may the factory; the instance `destroy`
+  must not.
 - Error contract: return hosts copied with `as_seed_candidates_append()` and `AEROSPIKE_OK`, or a
   non-OK status with `err` set; the client then keeps the previous seeds, and at initialization
   falls back to the configured seeds. A result with an empty host name, a host name over 255
@@ -372,7 +408,7 @@ differs in these points:
 | Topic | C client | Java client |
 | --- | --- | --- |
 | Validation errors | `AEROSPIKE_ERR_PARAM` (-2). | `CLIENT_ERROR` (-1). |
-| Plugins across close | A sync `aerospike_close()` destroys every instance, and reconnect rebuilds the built-in, file-selected and code-selected ones; a table registered directly must be registered again. An async client releases every registration at close; see [Registration and ownership](#registration-and-ownership). | The provider is closed when the client closes; a translator has no close method. |
+| Plugins across close | A sync `aerospike_close()` destroys every instance, and reconnect rebuilds the built-in, file-selected, code-selected, factory-set and binding ones; a table registered directly must be registered again. An async client releases every registration at close; see [Registration and ownership](#registration-and-ownership). | The provider is closed when the client closes; a translator has no close method. |
 | Selecting a registered name from code | `as_config_select_seed_provider()` and `as_config_select_address_translator()` call the factory at once, and again on every reconnect after a sync close. | Only the config file selects a registered name; the factory runs once, when the client is constructed. |
 | YAML factory options | Typed as SnakeYAML types them, with a few differences; see [Option values](yaml-config-discovery.md#option-values). | SnakeYAML 2.6. |
 | YAML aliases and merge keys | An alias to a collection works only in factory options and skipped content. Merge keys work only in factory options and directly under the blocks; anywhere else the client parses, they make the file invalid. See [Anchors, aliases and merge keys](yaml-config-discovery.md#anchors-aliases-and-merge-keys). | Applied everywhere. |

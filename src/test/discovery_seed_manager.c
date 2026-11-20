@@ -488,6 +488,32 @@ fp_register(as_config* config, fake_provider* fp, as_error* err)
 	return as_config_set_seed_provider(config, &provider, err);
 }
 
+// Factory of a binding provider. The factory udata is a heap holder that the registration frees;
+// each instance gets the fake_provider it points to.
+static as_status
+fp_binding_factory(as_error* err, const as_map* options, as_seed_provider* provider, void* udata)
+{
+	(void)err;
+	(void)options;
+	fp_table(*(fake_provider**)udata, provider);
+	provider->supports_deadline = NULL;
+	return AEROSPIKE_OK;
+}
+
+static as_status
+fp_register_binding(as_config* config, fake_provider* fp, as_error* err)
+{
+	fake_provider** holder = malloc(sizeof(fake_provider*));
+	*holder = fp;
+	as_status status = as_config_set_binding_seed_provider(config, fp_binding_factory, free,
+		holder, err);
+
+	if (status != AEROSPIKE_OK) {
+		free(holder);
+	}
+	return status;
+}
+
 static void
 fp_set_hosts(fake_provider* fp, const char* hosts)
 {
@@ -2308,8 +2334,7 @@ TEST(seed_binding_thread, "a non-periodic binding provider runs its single call 
 
 	fp_init(&fp, false, false, "b:1");
 	mgr_config(&config, AS_DISCOVERY_EXECUTION_THREAD, AS_TEND_INTERVAL_MIN);
-	assert_int_eq(as_config_set_binding_seed_provider(&config, "bind", fp_refresh, false,
-		fp_destroy, &fp, &err), AEROSPIKE_OK);
+	assert_int_eq(fp_register_binding(&config, &fp, &err), AEROSPIKE_OK);
 	assert_int_eq(mgr_open(&config, NULL, &m, &err), AEROSPIKE_OK);
 
 	assert_int_eq(fp_get(&fp, &fp.calls), 1);
@@ -2342,8 +2367,7 @@ TEST(seed_binding_thread, "a non-periodic binding provider runs its single call 
 	// Its discovery thread needs a refresh timeout.
 	mgr_config(&config, AS_DISCOVERY_EXECUTION_THREAD, AS_TEND_INTERVAL_MIN);
 	config.discovery.refresh_timeout_ms = 0;
-	assert_int_eq(as_config_set_binding_seed_provider(&config, "bind", fp_refresh, false,
-		fp_destroy, &fp, &err), AEROSPIKE_OK);
+	assert_int_eq(fp_register_binding(&config, &fp, &err), AEROSPIKE_OK);
 	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_PARAM);
 	assert_not_null(strstr(err.message, "refresh_timeout_ms"));
 	assert_int_eq(fp_get(&fp, &fp.calls), 1);

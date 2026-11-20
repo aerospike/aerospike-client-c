@@ -1397,32 +1397,103 @@ TEST(discovery_registration_same_udata, "U-1 re-registering the same udata destr
 	assert_int_eq(t_destroyed, 1);
 }
 
+#define assert_message(__err, __needle) \
+	if (!strstr((__err).message, __needle)) { \
+		fail("message '%s' lacks '%s'", (__err).message, __needle); \
+	}
+
+#define fail(fmt, ...) \
+	return atf_assert_log(__result__, "", __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+
+// State of a binding factory registration: counts the factory calls, the instance destroys
+// and the registration (udata) destroys.
+typedef struct binding_ctx_s {
+	uint32_t factory_calls;
+	uint32_t instance_destroyed;
+	uint32_t udata_destroyed;
+	bool periodic;
+	bool invalid;
+	as_status fail;
+	uint32_t options_size;
+} binding_ctx;
+
+static bool
+binding_periodic(void* udata)
+{
+	(void)udata;
+	return true;
+}
+
+static as_status
+binding_factory(as_error* err, const as_map* options, as_seed_provider* provider, void* udata)
+{
+	binding_ctx* ctx = udata;
+	ctx->factory_calls++;
+
+	if (ctx->fail != AEROSPIKE_OK) {
+		return as_error_set_message(err, ctx->fail, "binding failure");
+	}
+
+	ctx->options_size = as_map_size(options);
+	init_provider(provider, ctx->invalid ? NULL : "binding", &ctx->instance_destroyed);
+
+	if (ctx->periodic) {
+		provider->needs_periodic_refresh = binding_periodic;
+	}
+	return AEROSPIKE_OK;
+}
+
+static void
+binding_udata_destroy(void* udata)
+{
+	((binding_ctx*)udata)->udata_destroyed++;
+}
+
+static as_status
+binding_register(as_config* config, binding_ctx* ctx, as_error* err)
+{
+	return as_config_set_binding_seed_provider(config, binding_factory, binding_udata_destroy,
+		ctx, err);
+}
+
+static void
+live_config(as_config* config)
+{
+	as_config_init(config);
+	as_config_add_hosts(config, g_host, (uint16_t)g_port);
+	as_config_set_user(config, as->config.user, as->config.password);
+	config->use_services_alternate = as->config.use_services_alternate;
+	config->auth_mode = as->config.auth_mode;
+}
+
 TEST(discovery_binding_mode, "U-1 binding seed callbacks are thread mode only")
 {
 	as_config config;
 	as_error err;
-	uint32_t destroyed = 0;
+	binding_ctx ctx = {0};
 
 	as_config_init(&config);
 	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_TEND;
-	assert_int_eq(as_config_set_binding_seed_provider(&config, "binding", refresh,
-		false, destroy, &destroyed, &err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(binding_register(&config, &ctx, &err), AEROSPIKE_ERR_PARAM);
 	assert_false(config.discovery.provider_registered);
-	assert_int_eq(destroyed, 0);
+	assert_int_eq(ctx.factory_calls, 0);
+	assert_int_eq(ctx.udata_destroyed, 0);
 
 	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_THREAD;
-	assert_int_eq(as_config_set_binding_seed_provider(&config, "binding", NULL,
-		false, destroy, &destroyed, &err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_set_binding_seed_provider(&config, NULL, binding_udata_destroy, &ctx,
+		&err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(ctx.udata_destroyed, 0);
 
-	// The periodic flag is stated at registration; the client never calls into the binding for it.
-	uint32_t periodic_destroyed = 0;
-	assert_int_eq(as_config_set_binding_seed_provider(&config, "periodic", refresh,
-		true, destroy, &periodic_destroyed, &err), AEROSPIKE_OK);
+	// The periodic flag is set by the factory; the client never calls into the binding for it.
+	binding_ctx periodic = {.periodic = true};
+	assert_int_eq(binding_register(&config, &periodic, &err), AEROSPIKE_OK);
+	assert_int_eq(periodic.factory_calls, 1);
+	assert_int_eq(periodic.options_size, 0);
 	assert_true(config.discovery.provider.needs_periodic_refresh(NULL));
 
-	assert_int_eq(as_config_set_binding_seed_provider(&config, "binding", refresh,
-		false, destroy, &destroyed, &err), AEROSPIKE_OK);
-	assert_int_eq(periodic_destroyed, 1);
+	assert_int_eq(binding_register(&config, &ctx, &err), AEROSPIKE_OK);
+	assert_int_eq(periodic.instance_destroyed, 1);
+	assert_int_eq(periodic.udata_destroyed, 1);
 	assert_false(config.discovery.provider.needs_periodic_refresh(NULL));
 	assert_true(config.discovery.binding_provider);
 	assert_string_eq(config.discovery.provider.name, "binding");
@@ -1436,14 +1507,15 @@ TEST(discovery_binding_mode, "U-1 binding seed callbacks are thread mode only")
 	aerospike_init(&client, &config);
 	assert_int_eq(aerospike_connect(&client, &err), AEROSPIKE_ERR_PARAM);
 	assert_null(client.cluster);
-	assert_int_eq(destroyed, 0);
+	assert_int_eq(ctx.instance_destroyed, 0);
 
-	// A regular provider replaces the binding provider and clears the flag.
+	// A regular provider replaces the binding provider, ends its registration and clears the flag.
 	uint32_t other = 0;
 	as_seed_provider provider;
 	init_provider(&provider, "regular", &other);
 	assert_int_eq(as_config_set_seed_provider(&client.config, &provider, &err), AEROSPIKE_OK);
-	assert_int_eq(destroyed, 1);
+	assert_int_eq(ctx.instance_destroyed, 1);
+	assert_int_eq(ctx.udata_destroyed, 1);
 	assert_false(client.config.discovery.binding_provider);
 
 	if (as_event_loop_size > 0 && !as_event_single_thread) {
@@ -1456,7 +1528,136 @@ TEST(discovery_binding_mode, "U-1 binding seed callbacks are thread mode only")
 		aerospike_destroy(&client);
 		assert_int_eq(other, 1);
 	}
-	assert_int_eq(destroyed, 1);
+	assert_int_eq(ctx.instance_destroyed, 1);
+	assert_int_eq(ctx.udata_destroyed, 1);
+}
+
+TEST(discovery_binding_factory_errors, "U-1 a binding factory failure or invalid table fails registration and leaves udata to the caller")
+{
+	as_config config;
+	as_error err;
+	binding_ctx first = {0};
+
+	as_config_init(&config);
+	assert_int_eq(binding_register(&config, &first, &err), AEROSPIKE_OK);
+
+	binding_ctx failing = {.fail = AEROSPIKE_ERR_CLIENT};
+	assert_int_eq(binding_register(&config, &failing, &err), AEROSPIKE_ERR_CLIENT);
+	assert_message(err, "factory failed: binding failure");
+	assert_int_eq(failing.factory_calls, 1);
+	assert_int_eq(failing.udata_destroyed, 0);
+
+	// The previous registration is unchanged.
+	assert_int_eq(first.instance_destroyed, 0);
+	assert_int_eq(first.udata_destroyed, 0);
+	assert_true(config.discovery.provider_registered);
+	assert_true(config.discovery.binding_provider);
+
+	// An invalid table destroys that table's udata, not the registration udata.
+	binding_ctx invalid = {.invalid = true};
+	assert_int_eq(binding_register(&config, &invalid, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "factory returned an invalid provider");
+	assert_int_eq(invalid.instance_destroyed, 1);
+	assert_int_eq(invalid.udata_destroyed, 0);
+	assert_int_eq(first.instance_destroyed, 0);
+	assert_int_eq(first.udata_destroyed, 0);
+
+	// Replacing the registration ends it once.
+	binding_ctx second = {0};
+	assert_int_eq(binding_register(&config, &second, &err), AEROSPIKE_OK);
+	assert_int_eq(first.instance_destroyed, 1);
+	assert_int_eq(first.udata_destroyed, 1);
+
+	as_config_destroy(&config);
+	assert_int_eq(second.instance_destroyed, 1);
+	assert_int_eq(second.udata_destroyed, 1);
+	assert_int_eq(first.udata_destroyed, 1);
+}
+
+TEST(discovery_binding_unconnected_release, "U-1 closing or destroying an unconnected client with a binding provider ends the registration once")
+{
+	as_config config;
+	as_error err;
+	binding_ctx ctx = {0};
+
+	as_config_init(&config);
+	as_config_add_host(&config, "127.0.0.1", 3000);
+	assert_int_eq(binding_register(&config, &ctx, &err), AEROSPIKE_OK);
+
+	aerospike client;
+	aerospike_init(&client, &config);
+
+	if (as_event_loop_size > 0 && !as_event_single_thread) {
+		aerospike_close(&client, &err);
+		as_config_destroy(&client.config);
+	}
+	else {
+		aerospike_destroy(&client);
+	}
+	assert_int_eq(ctx.factory_calls, 1);
+	assert_int_eq(ctx.instance_destroyed, 1);
+	assert_int_eq(ctx.udata_destroyed, 1);
+}
+
+TEST(discovery_binding_reconnect, "U-1 sync close destroys the binding instance, and connect builds it again from the factory")
+{
+	if (as->config.tls.enable) {
+		info("skipped: lifecycle test does not copy TLS configuration");
+		return;
+	}
+
+	if (as_event_loop_size > 0 && !as_event_single_thread) {
+		info("skipped: async close does not keep the registration");
+		return;
+	}
+
+	as_config config;
+	as_error err;
+	binding_ctx ctx = {0};
+
+	live_config(&config);
+	assert_int_eq(binding_register(&config, &ctx, &err), AEROSPIKE_OK);
+	assert_int_eq(ctx.factory_calls, 1);
+
+	aerospike* client = aerospike_new(&config);
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_OK);
+	assert_true(client->config.discovery.binding_provider);
+	assert_int_eq(ctx.factory_calls, 1);
+
+	aerospike_close(client, &err);
+	assert_int_eq(ctx.instance_destroyed, 1);
+	assert_int_eq(ctx.udata_destroyed, 0);
+	assert_false(client->config.discovery.provider_released);
+	assert_false(client->config.discovery.binding_provider);
+
+	// A factory failure fails that connect, and the next connect calls the factory again.
+	ctx.fail = AEROSPIKE_ERR_CLIENT;
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_ERR_CLIENT);
+	assert_message(err, "Failed to rebuild the seed provider: factory failed: binding failure");
+	assert_int_eq(ctx.factory_calls, 2);
+	assert_null(client->cluster);
+
+	ctx.fail = AEROSPIKE_OK;
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_OK);
+	assert_int_eq(ctx.factory_calls, 3);
+	assert_true(client->config.discovery.binding_provider);
+	assert_int_eq(ctx.udata_destroyed, 0);
+
+	aerospike_close(client, &err);
+	assert_int_eq(ctx.instance_destroyed, 2);
+	assert_int_eq(ctx.udata_destroyed, 0);
+
+	// Tend mode is still rejected for the rebuilt binding provider.
+	client->config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_TEND;
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Binding seed provider requires thread execution mode");
+	assert_null(client->cluster);
+	assert_int_eq(ctx.factory_calls, 4);
+	assert_int_eq(ctx.instance_destroyed, 2);
+
+	aerospike_destroy(client);
+	assert_int_eq(ctx.instance_destroyed, 3);
+	assert_int_eq(ctx.udata_destroyed, 1);
 }
 
 TEST(discovery_live_lifecycle, "U-1 sync close destroys direct instances once; reconnect needs them registered again")
@@ -1606,14 +1807,6 @@ TEST(discovery_on_miss_range, "U-2 FR-44 an on_miss other than pass-through or s
 //---------------------------------
 // Tests: named factories
 //---------------------------------
-
-#define assert_message(__err, __needle) \
-	if (!strstr((__err).message, __needle)) { \
-		fail("message '%s' lacks '%s'", (__err).message, __needle); \
-	}
-
-#define fail(fmt, ...) \
-	return atf_assert_log(__result__, "", __FILE__, __LINE__, fmt, ##__VA_ARGS__)
 
 TEST(discovery_factory_registration, "registration rejects built-in, duplicate and invalid names, and a failed registration keeps udata")
 {
@@ -2061,6 +2254,264 @@ TEST(discovery_live_factory_reconnect, "a selected factory is destroyed at sync 
 	plugin_done(&t);
 }
 
+//---------------------------------
+// Tests: factories set without a name
+//---------------------------------
+
+TEST(discovery_factory_setter, "a factory setter builds at once from empty options, keeps udata on failure and ends the registration once")
+{
+	as_config config;
+	as_error err;
+	plugin p;
+	plugin q;
+	plugin t;
+	plugin u;
+	plugin_reset(&p, "consul");
+	plugin_reset(&q, "etcd");
+	plugin_reset(&t, "nat-table");
+	plugin_reset(&u, "nat-other");
+
+	as_config_init(&config);
+	assert_int_eq(as_config_set_seed_provider_factory(NULL, provider_factory, plugin_release, &p,
+		&err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_set_seed_provider_factory(&config, NULL, plugin_release, &p, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_set_address_translator_factory(&config, NULL, plugin_release, &t,
+		&err), AEROSPIKE_ERR_PARAM);
+
+	config.discovery.registration_locked = true;
+	assert_int_eq(as_config_set_seed_provider_factory(&config, provider_factory, plugin_release,
+		&p, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "cannot be replaced while the client is connected");
+	assert_int_eq(as_config_set_address_translator_factory(&config, translator_factory,
+		plugin_release, &t, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "cannot be replaced while the client is connected");
+	config.discovery.registration_locked = false;
+	assert_int_eq(p.calls, 0);
+	assert_int_eq(t.calls, 0);
+
+	assert_int_eq(as_config_set_seed_provider_factory(&config, provider_factory, plugin_release,
+		&p, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_set_address_translator_factory(&config, translator_factory,
+		plugin_release, &t, &err), AEROSPIKE_OK);
+	assert_int_eq(p.calls, 1);
+	assert_int_eq(t.calls, 1);
+	assert_true(is_orderedmap(p.options));
+	assert_int_eq(as_map_size((as_map*)p.options), 0);
+	assert_true(is_orderedmap(t.options));
+	assert_true(config.discovery.provider_registered);
+	assert_false(config.discovery.binding_provider);
+	assert_string_eq(config.discovery.provider.name, "consul");
+	assert_string_eq(config.translation.provider.name, "nat-table");
+
+	// A failing factory or an invalid table keeps the previous registration and leaves udata to
+	// the caller.
+	q.fail = AEROSPIKE_ERR_CLIENT;
+	assert_int_eq(as_config_set_seed_provider_factory(&config, provider_factory, plugin_release,
+		&q, &err), AEROSPIKE_ERR_CLIENT);
+	assert_message(err, "factory failed: etcd unavailable");
+	q.fail = AEROSPIKE_OK;
+	q.invalid = true;
+	assert_int_eq(as_config_set_seed_provider_factory(&config, provider_factory, plugin_release,
+		&q, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "factory returned an invalid provider");
+	assert_int_eq(q.destroyed, 1);
+	assert_int_eq(q.released, 0);
+
+	u.invalid = true;
+	assert_int_eq(as_config_set_address_translator_factory(&config, translator_factory,
+		plugin_release, &u, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "factory returned an invalid translator");
+	assert_int_eq(u.destroyed, 1);
+	assert_int_eq(u.released, 0);
+	assert_int_eq(p.destroyed, 0);
+	assert_int_eq(t.destroyed, 0);
+	assert_string_eq(config.discovery.provider.name, "consul");
+	assert_string_eq(config.translation.provider.name, "nat-table");
+
+	// Registering the same udata again is a new registration: the previous one ends.
+	assert_int_eq(as_config_set_seed_provider_factory(&config, provider_factory, plugin_release,
+		&p, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_set_address_translator_factory(&config, translator_factory,
+		plugin_release, &t, &err), AEROSPIKE_OK);
+	assert_int_eq(p.calls, 2);
+	assert_int_eq(p.destroyed, 1);
+	assert_int_eq(p.released, 1);
+	assert_int_eq(t.destroyed, 1);
+	assert_int_eq(t.released, 1);
+
+	// A direct table replaces the factory registration.
+	uint32_t direct = 0;
+	as_seed_provider provider;
+	init_provider(&provider, "direct", &direct);
+	assert_int_eq(as_config_set_seed_provider(&config, &provider, &err), AEROSPIKE_OK);
+	assert_int_eq(p.destroyed, 2);
+	assert_int_eq(p.released, 2);
+	assert_null(config.discovery.recipe);
+
+	as_config_destroy(&config);
+	assert_int_eq(direct, 1);
+	assert_int_eq(p.destroyed, 2);
+	assert_int_eq(p.released, 2);
+	assert_int_eq(t.destroyed, 2);
+	assert_int_eq(t.released, 2);
+	assert_int_eq(q.released, 0);
+	assert_int_eq(u.released, 0);
+	plugin_done(&p);
+	plugin_done(&q);
+	plugin_done(&t);
+	plugin_done(&u);
+}
+
+// Instances that share one reference-counted udata pointer, as a binding that hands out its
+// runtime object would. The factory udata is a holder of that pointer.
+typedef struct shared_ref_s {
+	int32_t refs;
+} shared_ref;
+
+static void
+shared_unref(void* udata)
+{
+	((shared_ref*)udata)->refs--;
+}
+
+static as_status
+shared_provider_factory(as_error* err, const as_map* options, as_seed_provider* provider,
+	void* udata)
+{
+	(void)err;
+	(void)options;
+	shared_ref* s = *(shared_ref**)udata;
+	s->refs++;
+	init_provider(provider, "shared", NULL);
+	provider->destroy = shared_unref;
+	provider->udata = s;
+	return AEROSPIKE_OK;
+}
+
+static as_status
+shared_translator_factory(as_error* err, const as_map* options,
+	as_address_translator* translator, void* udata)
+{
+	(void)err;
+	(void)options;
+	shared_ref* s = *(shared_ref**)udata;
+	s->refs++;
+	init_translator(translator, "shared", NULL);
+	translator->destroy = shared_unref;
+	translator->udata = s;
+	return AEROSPIKE_OK;
+}
+
+TEST(discovery_factory_shared_udata, "replacing a factory instance destroys it even when the new instance has the same udata pointer")
+{
+	as_config config;
+	as_error err;
+	shared_ref s = {0};
+	shared_ref ts = {0};
+	shared_ref* holder = &s;
+	shared_ref* t_holder = &ts;
+
+	as_config_init(&config);
+	assert_int_eq(as_config_set_seed_provider_factory(&config, shared_provider_factory, NULL,
+		&holder, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_set_seed_provider_factory(&config, shared_provider_factory, NULL,
+		&holder, &err), AEROSPIKE_OK);
+	assert_int_eq(s.refs, 1);
+
+	assert_int_eq(as_config_register_seed_provider(&config, "shared", shared_provider_factory,
+		NULL, &holder, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_select_seed_provider(&config, "shared", NULL, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_select_seed_provider(&config, "shared", NULL, &err), AEROSPIKE_OK);
+	assert_int_eq(s.refs, 1);
+
+	assert_int_eq(as_config_set_address_translator_factory(&config, shared_translator_factory,
+		NULL, &t_holder, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_set_address_translator_factory(&config, shared_translator_factory,
+		NULL, &t_holder, &err), AEROSPIKE_OK);
+	assert_int_eq(ts.refs, 1);
+
+	as_config_destroy(&config);
+	assert_int_eq(s.refs, 0);
+	assert_int_eq(ts.refs, 0);
+}
+
+TEST(discovery_live_factory_setter_reconnect, "a factory setter's instances are destroyed at sync close and rebuilt by reconnect; a rebuild failure fails only that connect")
+{
+	if (as->config.tls.enable) {
+		info("skipped: lifecycle test does not copy TLS configuration");
+		return;
+	}
+
+	as_config config;
+	as_error err;
+	plugin p;
+	plugin t;
+	plugin_reset(&p, "consul");
+	plugin_reset(&t, "nat-table");
+
+	live_config(&config);
+	assert_int_eq(as_config_set_seed_provider_factory(&config, provider_factory, plugin_release,
+		&p, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_set_address_translator_factory(&config, translator_factory,
+		plugin_release, &t, &err), AEROSPIKE_OK);
+
+	aerospike* client = aerospike_new(&config);
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_OK);
+	assert_int_eq(p.calls, 1);
+	assert_int_eq(t.calls, 1);
+
+	if (as_event_loop_size > 0 && !as_event_single_thread) {
+		// Async close destroys the client, instances first.
+		aerospike_close(client, &err);
+		assert_int_eq(p.destroyed, 1);
+		assert_int_eq(t.destroyed, 1);
+		assert_int_eq(p.released, 1);
+		assert_int_eq(t.released, 1);
+		assert_true(p.released_seq > p.destroyed_seq);
+		plugin_done(&p);
+		plugin_done(&t);
+		return;
+	}
+
+	aerospike_close(client, &err);
+	assert_int_eq(p.destroyed, 1);
+	assert_int_eq(t.destroyed, 1);
+	assert_int_eq(p.released, 0);
+	assert_int_eq(t.released, 0);
+	assert_false(client->config.discovery.provider_released);
+	assert_false(client->config.translation.provider_released);
+
+	// The provider is rebuilt before the translator fails; the next connect keeps it.
+	t.fail = AEROSPIKE_ERR_CLIENT;
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_ERR_CLIENT);
+	assert_message(err,
+		"Failed to rebuild the address translator: factory failed: nat-table unavailable");
+	assert_null(client->cluster);
+	assert_int_eq(p.calls, 2);
+	assert_int_eq(t.calls, 2);
+
+	t.fail = AEROSPIKE_OK;
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_OK);
+	assert_int_eq(p.calls, 2);
+	assert_int_eq(t.calls, 3);
+	assert_false(client->config.discovery.binding_provider);
+	assert_string_eq(client->config.discovery.provider.name, "consul");
+	assert_string_eq(client->config.translation.provider.name, "nat-table");
+	aerospike_close(client, &err);
+	assert_int_eq(p.destroyed, 2);
+	assert_int_eq(t.destroyed, 2);
+
+	aerospike_destroy(client);
+	assert_int_eq(p.destroyed, 2);
+	assert_int_eq(t.destroyed, 2);
+	assert_int_eq(p.released, 1);
+	assert_int_eq(t.released, 1);
+	assert_true(p.released_seq > p.destroyed_seq);
+	plugin_done(&p);
+	plugin_done(&t);
+}
+
 #undef fail
 
 // AWS documented TCP idle timeout of Network Load Balancer listeners (default) and PrivateLink
@@ -2297,6 +2748,9 @@ SUITE(discovery_contract, "pluggable discovery contract tests")
 	suite_add(discovery_client_destroy_once);
 	suite_add(discovery_registration_same_udata);
 	suite_add(discovery_binding_mode);
+	suite_add(discovery_binding_factory_errors);
+	suite_add(discovery_binding_unconnected_release);
+	suite_add(discovery_binding_reconnect);
 	suite_add(discovery_live_lifecycle);
 	suite_add(discovery_on_miss_range);
 	suite_add(discovery_factory_registration);
@@ -2305,6 +2759,9 @@ SUITE(discovery_contract, "pluggable discovery contract tests")
 	suite_add(discovery_factory_recipe);
 	suite_add(discovery_recipe_unconnected_close);
 	suite_add(discovery_live_factory_reconnect);
+	suite_add(discovery_factory_setter);
+	suite_add(discovery_factory_shared_udata);
+	suite_add(discovery_live_factory_setter_reconnect);
 	suite_add(discovery_idle_reap_under_lb_timeout);
 	suite_add(discovery_idle_reap_live);
 }

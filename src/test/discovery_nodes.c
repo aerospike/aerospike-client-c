@@ -896,6 +896,11 @@ typedef struct {
 	char addrs[RESOLVER_MAX_ADDRS][16];
 	uint32_t count;
 	uint32_t lookups;
+
+	// Each lookup sleeps delay_ms, and the thread of the last delayed lookup is recorded.
+	uint32_t delay_ms;
+	pthread_t delay_thread;
+	bool delayed;
 } resolver_entry;
 
 static pthread_mutex_t g_resolver_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -935,6 +940,13 @@ resolver_getaddrinfo(
 	}
 	e->lookups++;
 
+	uint32_t delay_ms = e->delay_ms;
+
+	if (delay_ms > 0) {
+		e->delay_thread = pthread_self();
+		e->delayed = true;
+	}
+
 	struct addrinfo* head = NULL;
 	struct addrinfo** tail = &head;
 
@@ -953,6 +965,10 @@ resolver_getaddrinfo(
 		tail = &ai->ai_next;
 	}
 	pthread_mutex_unlock(&g_resolver_lock);
+
+	if (delay_ms > 0) {
+		as_sleep(delay_ms);
+	}
 	*res = head;
 	return head ? 0 : EAI_NONAME;
 }
@@ -1027,6 +1043,8 @@ resolver_register(const char* name, ...)
 	if (e) {
 		e->count = 0;
 		e->lookups = 0;
+		e->delay_ms = 0;
+		e->delayed = false;
 
 		va_list ap;
 		va_start(ap, name);
@@ -1048,6 +1066,34 @@ resolver_lookups(const char* name)
 	uint32_t lookups = e ? e->lookups : 0;
 	pthread_mutex_unlock(&g_resolver_lock);
 	return lookups;
+}
+
+// Make each later lookup of the registered name sleep delay_ms.
+static void
+resolver_set_delay(const char* name, uint32_t delay_ms)
+{
+	pthread_mutex_lock(&g_resolver_lock);
+	resolver_entry* e = resolver_find(name);
+
+	if (e) {
+		e->delay_ms = delay_ms;
+	}
+	pthread_mutex_unlock(&g_resolver_lock);
+}
+
+// Copy the thread of the last delayed lookup of name to thread, or return false.
+static bool
+resolver_delay_thread(const char* name, pthread_t* thread)
+{
+	pthread_mutex_lock(&g_resolver_lock);
+	resolver_entry* e = resolver_find(name);
+	bool delayed = e && e->delayed;
+
+	if (delayed) {
+		*thread = e->delay_thread;
+	}
+	pthread_mutex_unlock(&g_resolver_lock);
+	return delayed;
 }
 
 static uint32_t
@@ -2066,6 +2112,1005 @@ TEST(nodes_valid_addresses_pruned,
 	assert_int_eq(after_replace, 1);
 }
 
+//---------------------------------
+// Static Functions: hostname address move
+//---------------------------------
+
+// name_watch counts the nodes named X.
+#define MOVE_NODE "X"
+#define MOVE_OTHER "B"
+
+typedef struct {
+	aerospike* client;
+} move_env;
+
+static void
+move_close(move_env* env)
+{
+	if (env->client) {
+		nodes_close(env->client);
+		env->client = NULL;
+	}
+	resolver_remove();
+}
+
+// Connect to host and port, logging in as user when not NULL. Every tend after the first is run
+// by the test, and the tend interval is never reached, so a move is bounded by timeout_ms.
+static bool
+move_connect_user(move_env* env, const char* host, uint16_t port, uint32_t timeout_ms,
+	const char* user, uint32_t login_timeout_ms)
+{
+	as_config config;
+	as_config_init(&config);
+	as_config_add_host(&config, host, port);
+	config.tender_interval = NODES_TEND_INTERVAL;
+	config.conn_timeout_ms = timeout_ms;
+	config.fail_if_not_connected = true;
+
+	if (user) {
+		as_config_set_user(&config, user, "password");
+		config.login_timeout_ms = login_timeout_ms;
+	}
+	return nodes_connect(&env->client, &config) == AEROSPIKE_OK;
+}
+
+static bool
+move_connect(move_env* env, const char* host, uint16_t port, uint32_t timeout_ms)
+{
+	return move_connect_user(env, host, port, timeout_ms, NULL, 0);
+}
+
+#define move_setup_env(env) \
+	DISCOVERY_SCOPED(move_env, env, move_close); \
+	resolver_install()
+
+#define move_setup(env, port) \
+	move_setup_env(env); \
+	uint16_t port = free_port(); \
+	assert_int_ne(port, 0)
+
+// Servers named first_name on FIRST and second_name on SECOND, both on port.
+static bool
+move_pair(fnode* a, fnode* b, const char* first_name, const char* second_name, uint16_t port)
+{
+	return start_named(a, first_name, FIRST, port) && start_named(b, second_name, SECOND, port);
+}
+
+// Servers named name on ip1 and ip2, on one port that is free on both.
+static bool
+move_pair_on(fnode* a, fnode* b, const char* name, const char* ip1, const char* ip2)
+{
+	for (int i = 0; i < 20; i++) {
+		if (start_on(a, name, ip1) && start_named(b, name, ip2, a->port)) {
+			return true;
+		}
+		fnode_stop(a);
+		fnode_stop(b);
+	}
+	return false;
+}
+
+static void
+fnode_stop_three(fnode (*list)[3])
+{
+	for (int i = 0; i < 3; i++) {
+		fnode_stop(&(*list)[i]);
+	}
+}
+
+// Is node the node of its name in the cluster.
+static bool
+holds_name(as_cluster* cluster, as_node* node)
+{
+	as_node* current = get_node(cluster, node->name);
+
+	if (current) {
+		as_node_release(current);
+	}
+	return current == node;
+}
+
+// Is node the master of every partition of namespace test.
+static bool
+owns_partitions(as_cluster* cluster, as_node* node)
+{
+	pthread_mutex_lock(&cluster->tend_lock);
+	as_partition_table* table = as_partition_tables_get(&cluster->partition_tables, "test");
+	bool owns = table && table->size > 0;
+
+	for (uint32_t i = 0; owns && i < table->size; i++) {
+		owns = as_node_load(&table->partitions[i].nodes[0]) == node;
+	}
+	pthread_mutex_unlock(&cluster->tend_lock);
+	return owns;
+}
+
+// Copy the IPv4 address last accepted for host name and port to ip, or return false.
+static bool
+valid_ip(as_cluster* cluster, const char* name, uint16_t port, char* ip, size_t size)
+{
+	bool found = false;
+	pthread_mutex_lock(&cluster->tend_lock);
+	as_vector* list = cluster->valid_addresses;
+
+	for (uint32_t i = 0; list && i < list->size && !found; i++) {
+		as_lookup_valid_address* va = as_vector_get(list, i);
+
+		if (va->port == port && strcmp(va->name, name) == 0) {
+			struct sockaddr_in* sin = (struct sockaddr_in*)&va->addr;
+			found = inet_ntop(AF_INET, &sin->sin_addr, ip, (socklen_t)size) != NULL;
+		}
+	}
+	pthread_mutex_unlock(&cluster->tend_lock);
+	return found;
+}
+
+static uint64_t
+timed_tend(as_cluster* cluster, as_status* status)
+{
+	uint64_t begin = cf_getms();
+	*status = tend(cluster);
+	return cf_getms() - begin;
+}
+
+// Run count tends. Return false when a tend fails or replaces node.
+static bool
+tends_keep(as_cluster* cluster, as_node* node, int count)
+{
+	bool kept = true;
+
+	for (int i = 0; i < count; i++) {
+		kept = tend(cluster) == AEROSPIKE_OK && holds_name(cluster, node) && kept;
+	}
+	return kept;
+}
+
+// The log message of a move of node MOVE_NODE of hostname from server from to server to.
+static void
+move_message(char* buf, size_t size, const char* hostname, const fnode* from, const fnode* to)
+{
+	char a[64];
+	char b[64];
+	snprintf(buf, size, "Move node %s %s from %s to %s", MOVE_NODE, hostname,
+		fnode_addr(from, a, sizeof(a)), fnode_addr(to, b, sizeof(b)));
+}
+
+//---------------------------------
+// Tests: hostname address move (U-16)
+//---------------------------------
+
+TEST(nodes_move_not_before_third_failed_tend,
+	"U-16 noMoveBeforeThirdFailedTend: a failing node keeps its address, with no lookup, until its third failed tend")
+{
+	move_setup(env, port);
+	DISCOVERY_SCOPED(fnode, a1, fnode_stop);
+	DISCOVERY_SCOPED(fnode, a2, fnode_stop);
+	assert_true(move_pair(&a1, &a2, MOVE_NODE, MOVE_NODE, port));
+	char hostname[64];
+	stagger_hostname(hostname, "third", FIRST, SECOND);
+	assert_true(move_connect(&env, hostname, port, 1000));
+
+	as_cluster* cluster = env.client->cluster;
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &a1));
+	uint32_t lookups = resolver_lookups(hostname);
+
+	fail_node(&a1);
+	log_count_start("Move node");
+	bool kept = tends_keep(cluster, node, AS_NODE_MOVE_FAILED_TENDS - 1);
+	uint32_t moves_before = log_count_stop();
+	uint32_t lookups_before = resolver_lookups(hostname);
+
+	log_count_start("Move node");
+	as_status status = tend(cluster);
+	uint32_t moves = log_count_stop();
+
+	as_node* moved = get_node(cluster, MOVE_NODE);
+	bool at_a2 = node_at(moved, &a2);
+	bool old_active = as_node_is_active(node);
+
+	if (moved) {
+		as_node_release(moved);
+	}
+	as_node_release(node);
+
+	assert_true(kept);
+	assert_int_eq(moves_before, 0);
+	assert_int_eq(lookups_before, lookups);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(at_a2);
+	assert_false(old_active);
+	assert_int_eq(moves, 1);
+}
+
+TEST(nodes_move_failing_node_moves,
+	"U-16 failingNodeMovesToOtherAddress: a failing node moves to the other address of its hostname in one swap")
+{
+	move_setup(env, port);
+	DISCOVERY_SCOPED(fnode, a1, fnode_stop);
+	DISCOVERY_SCOPED(fnode, a2, fnode_stop);
+	assert_true(move_pair(&a1, &a2, MOVE_NODE, MOVE_NODE, port));
+	fnode_set_partitions(&a1, true);
+	fnode_set_partitions(&a2, true);
+	char hostname[64];
+	stagger_hostname(hostname, "move", FIRST, SECOND);
+	assert_true(move_connect(&env, hostname, port, 1000));
+
+	as_cluster* cluster = env.client->cluster;
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &a1));
+	assert_true(owns_partitions(cluster, node));
+
+	fail_node(&a1);
+	assert_true(tends_keep(cluster, node, AS_NODE_MOVE_FAILED_TENDS - 1));
+
+	// The node array never misses the name or holds it twice while the node moves.
+	name_watch w = {.cluster = cluster};
+	assert_int_eq(pthread_create(&w.thread, NULL, name_watch_run, &w), 0);
+
+	char expected[256];
+	move_message(expected, sizeof(expected), hostname, &a1, &a2);
+	log_count_start(expected);
+	as_status status = tend(cluster);
+	uint32_t moves = log_count_stop();
+
+	as_store_uint8(&w.stop, 1);
+	pthread_join(w.thread, NULL);
+
+	as_node* moved = get_node(cluster, MOVE_NODE);
+	bool at_a2 = node_at(moved, &a2);
+	bool same_hostname = moved && moved->hostname && strcmp(moved->hostname, hostname) == 0;
+	bool old_active = as_node_is_active(node);
+	uint32_t size = node_count(cluster);
+	char ip[INET_ADDRSTRLEN] = {0};
+	bool preferred = valid_ip(cluster, hostname, port, ip, sizeof(ip));
+	bool owns_now = moved && owns_partitions(cluster, moved);
+	as_status next_status = tend(cluster);
+	bool owns = moved && owns_partitions(cluster, moved);
+
+	if (moved) {
+		as_node_release(moved);
+	}
+	as_node_release(node);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(moves, 1);
+	assert_true(at_a2);
+	assert_true(same_hostname);
+	assert_false(old_active);
+	assert_int_eq(size, 1);
+	assert_one_node_per_name(cluster);
+	assert_that(w.missing == 0, "X was missing in %u of %u samples", w.missing, w.samples);
+	assert_that(w.duplicates == 0, "X was duplicated in %u of %u samples", w.duplicates,
+		w.samples);
+	assert_true(preferred);
+	assert_string_eq(ip, SECOND);
+	assert_that(owns_now, "the moved node did not own the partitions in the tend that moved it");
+	assert_int_eq(next_status, AEROSPIKE_OK);
+	assert_true(owns);
+}
+
+TEST(nodes_move_recovered_node_counts_again,
+	"U-16 nodeRecoveringOnSecondTendDoesNotMove: a node that recovers starts counting its failed tends again")
+{
+	move_setup(env, port);
+	DISCOVERY_SCOPED(fnode, a1, fnode_stop);
+	DISCOVERY_SCOPED(fnode, a2, fnode_stop);
+	assert_true(move_pair(&a1, &a2, MOVE_NODE, MOVE_NODE, port));
+	char hostname[64];
+	stagger_hostname(hostname, "recover", FIRST, SECOND);
+	assert_true(move_connect(&env, hostname, port, 1000));
+
+	as_cluster* cluster = env.client->cluster;
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &a1));
+
+	log_count_start("Move node");
+	fail_node(&a1);
+	bool failed_kept = tends_keep(cluster, node, 1);
+	fnode_set_reject(&a1, false);
+	bool recovered_kept = tends_keep(cluster, node, 1);
+	uint32_t failures = node->failures;
+	fail_node(&a1);
+	bool kept = tends_keep(cluster, node, AS_NODE_MOVE_FAILED_TENDS - 1);
+	uint32_t moves_before = log_count_stop();
+
+	log_count_start("Move node");
+	as_status status = tend(cluster);
+	uint32_t moves = log_count_stop();
+
+	as_node* moved = get_node(cluster, MOVE_NODE);
+	bool at_a2 = node_at(moved, &a2);
+
+	if (moved) {
+		as_node_release(moved);
+	}
+	as_node_release(node);
+
+	assert_true(failed_kept);
+	assert_true(recovered_kept);
+	assert_int_eq(failures, 0);
+	assert_true(kept);
+	assert_int_eq(moves_before, 0);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(at_a2);
+	assert_int_eq(moves, 1);
+}
+
+TEST(nodes_move_every_node_on_dead_address,
+	"U-16 everyNodeOnDeadAddressMoves: every node of a hostname whose first address dies moves")
+{
+	move_setup_env(env);
+	const char* names[3] = {MOVE_NODE, MOVE_OTHER, "C"};
+	fnode dead[3] __attribute__((cleanup(fnode_stop_three))) = {{0}};
+	fnode live[3] __attribute__((cleanup(fnode_stop_three))) = {{0}};
+	uint16_t ports[3];
+	char hostname[64];
+	stagger_hostname(hostname, "zone", FIRST, SECOND);
+
+	for (int i = 0; i < 3; i++) {
+		ports[i] = free_port();
+		assert_int_ne(ports[i], 0);
+		assert_true(move_pair(&dead[i], &live[i], names[i], names[i], ports[i]));
+	}
+
+	// Every node lists the others at the hostname, each on its own port.
+	for (int i = 0; i < 3; i++) {
+		int j = (i + 1) % 3;
+		int k = (i + 2) % 3;
+		char peers[240];
+		snprintf(peers, sizeof(peers), "1,3000,[[%s,,[%s:%u]],[%s,,[%s:%u]]]", names[j],
+			hostname, ports[j], names[k], hostname, ports[k]);
+		fnode_set_peers(&dead[i], peers);
+		fnode_set_peers(&live[i], peers);
+	}
+	assert_true(move_connect(&env, hostname, ports[0], 1000));
+
+	as_cluster* cluster = env.client->cluster;
+	assert_int_eq(node_count(cluster), 3);
+
+	for (int i = 0; i < 3; i++) {
+		as_node* node = get_node(cluster, names[i]);
+		bool at_first = node_at(node, &dead[i]);
+
+		if (node) {
+			as_node_release(node);
+		}
+		assert_that(at_first, "node %s is not on its first address", names[i]);
+	}
+
+	for (int i = 0; i < 3; i++) {
+		fnode_set_reject(&dead[i], true);
+	}
+	as_sleep(100);
+
+	for (int i = 0; i < AS_NODE_MOVE_FAILED_TENDS - 1; i++) {
+		assert_int_eq(tend(cluster), AEROSPIKE_OK);
+	}
+
+	log_count_start("Move node");
+	as_status status = tend(cluster);
+	uint32_t moves = log_count_stop();
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(moves, 3);
+	assert_int_eq(node_count(cluster), 3);
+	assert_one_node_per_name(cluster);
+
+	for (int i = 0; i < 3; i++) {
+		as_node* node = get_node(cluster, names[i]);
+		bool at_second = node_at(node, &live[i]);
+
+		if (node) {
+			as_node_release(node);
+		}
+		assert_that(at_second, "node %s did not move to its second address", names[i]);
+	}
+}
+
+TEST(nodes_move_one_candidate_per_tend,
+	"U-16 oneCandidatePerTend: a hung candidate costs one tend within the bound, and the next tend moves")
+{
+	move_setup(env, port);
+	DISCOVERY_SCOPED(fnode, dead, fnode_stop);
+	DISCOVERY_SCOPED(fnode, live, fnode_stop);
+	DISCOVERY_SCOPED(fnode, silent, fnode_stop);
+	assert_true(move_pair(&dead, &live, MOVE_NODE, MOVE_NODE, port));
+	fnode_set_partitions(&dead, true);
+	fnode_set_partitions(&live, true);
+	assert_hung(&silent, THIRD, port);
+	char hostname[64];
+	stagger_hostname(hostname, "one", FIRST, THIRD, SECOND);
+	assert_true(move_connect(&env, hostname, port, 250));
+
+	as_cluster* cluster = env.client->cluster;
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &dead));
+	assert_true(owns_partitions(cluster, node));
+
+	fail_node(&dead);
+	assert_true(tends_keep(cluster, node, AS_NODE_MOVE_FAILED_TENDS - 1));
+
+	char expected[256];
+	move_message(expected, sizeof(expected), hostname, &dead, &live);
+	log_count_start(expected);
+	uint32_t connections = fnode_get(&live, &live.accepts);
+	as_status hung_status;
+	uint64_t elapsed = timed_tend(cluster, &hung_status);
+	bool kept = holds_name(cluster, node);
+	uint32_t live_after = fnode_get(&live, &live.accepts);
+
+	as_status status = tend(cluster);
+	uint32_t moves = log_count_stop();
+
+	as_node* moved = get_node(cluster, MOVE_NODE);
+	bool at_live = node_at(moved, &live);
+	bool old_active = as_node_is_active(node);
+	bool owns_now = moved && owns_partitions(cluster, moved);
+	as_status next_status = tend(cluster);
+	bool owns = moved && owns_partitions(cluster, moved);
+
+	if (moved) {
+		as_node_release(moved);
+	}
+	as_node_release(node);
+
+	assert_int_eq(hung_status, AEROSPIKE_OK);
+	assert_true(kept);
+	assert_that(live_after == connections,
+		"the live address was tried in the tend that tried the hung address");
+	assert_that(elapsed >= 250 - 10 && elapsed < 250 + STAGGER_MARGIN, "the tend took %llu ms",
+		(unsigned long long)elapsed);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(at_live);
+	assert_false(old_active);
+	assert_that(owns_now, "the moved node did not own the partitions in the tend that moved it");
+	assert_int_eq(next_status, AEROSPIKE_OK);
+	assert_true(owns);
+	assert_int_eq(moves, 1);
+}
+
+// The harness never reaches the tend interval, so only the conn_timeout_ms side of the bound,
+// min(conn_timeout_ms, tend_interval / 2), is tested.
+TEST(nodes_move_silent_candidate_within_bound,
+	"U-16 silentCandidateEndsWithinBound: a candidate that accepts and never answers ends within the bound")
+{
+	move_setup(env, port);
+	DISCOVERY_SCOPED(fnode, dead, fnode_stop);
+	DISCOVERY_SCOPED(fnode, silent, fnode_stop);
+	assert_true(start_named(&dead, MOVE_NODE, FIRST, port));
+	assert_true(serve(&silent, SECOND, port));
+	fnode_set_mute(&silent, true);
+	char hostname[64];
+	stagger_hostname(hostname, "silent", FIRST, SECOND);
+	assert_true(move_connect(&env, hostname, port, 200));
+
+	as_cluster* cluster = env.client->cluster;
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &dead));
+
+	fail_node(&dead);
+	assert_true(tends_keep(cluster, node, AS_NODE_MOVE_FAILED_TENDS - 1));
+
+	log_count_start("Move node");
+	as_status status;
+	uint64_t elapsed = timed_tend(cluster, &status);
+	uint32_t moves = log_count_stop();
+	bool kept = holds_name(cluster, node);
+	as_node_release(node);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_that(elapsed >= 200 - 10 && elapsed < 200 + STAGGER_MARGIN, "the tend took %llu ms",
+		(unsigned long long)elapsed);
+	assert_true(kept);
+	assert_int_eq(moves, 0);
+}
+
+TEST(nodes_move_other_name_skipped,
+	"U-16 candidateWithOtherNameIsSkipped: a candidate that is another node is skipped and never joins")
+{
+	move_setup(env, port);
+	DISCOVERY_SCOPED(fnode, dead, fnode_stop);
+	DISCOVERY_SCOPED(fnode, other, fnode_stop);
+	assert_true(move_pair(&dead, &other, MOVE_NODE, MOVE_OTHER, port));
+	char hostname[64];
+	stagger_hostname(hostname, "other", FIRST, SECOND);
+	assert_true(move_connect(&env, hostname, port, 1000));
+
+	as_cluster* cluster = env.client->cluster;
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &dead));
+
+	fail_node(&dead);
+	log_count_start("Move node");
+	bool kept[4];
+	bool tried[4];
+
+	for (int i = 0; i < 4; i++) {
+		uint32_t connections = fnode_get(&other, &other.accepts);
+		kept[i] = tends_keep(cluster, node, 1);
+		tried[i] = fnode_get(&other, &other.accepts) > connections;
+	}
+	uint32_t moves = log_count_stop();
+	as_node* b = get_node(cluster, MOVE_OTHER);
+
+	if (b) {
+		as_node_release(b);
+	}
+	as_node_release(node);
+
+	for (int i = 0; i < 4; i++) {
+		assert_that(kept[i], "tend %d replaced the node", i + 1);
+		assert_that(tried[i] == (i + 1 >= AS_NODE_MOVE_FAILED_TENDS),
+			"tend %d %s the other address", i + 1, tried[i] ? "tried" : "did not try");
+	}
+	assert_null(b);
+	assert_int_eq(moves, 0);
+}
+
+// C refreshes every node before the move, so the holder of the candidate address must stay
+// healthy on its tend socket while a new connection to that address answers the moving node's
+// name. Java's test injects a holder that is never refreshed instead.
+TEST(nodes_move_collision_skipped,
+	"U-16 candidateRejectedByCollisionCheckIsSkipped: a candidate held by another node is skipped with a warning")
+{
+	move_setup(env, port);
+	DISCOVERY_SCOPED(fnode, dead, fnode_stop);
+	DISCOVERY_SCOPED(fnode, holder, fnode_stop);
+	assert_true(move_pair(&dead, &holder, MOVE_NODE, MOVE_OTHER, port));
+	char hostname[64];
+	stagger_hostname(hostname, "collide", FIRST, SECOND);
+
+	// B joins from X's peers as an IP literal. B owns every partition, so it is kept while the
+	// failing X does not list it.
+	set_peers(&dead, "[[%s,,[%s:%u]]]", MOVE_OTHER, SECOND, port);
+	set_peers(&holder, "[[%s,,[%s:%u]]]", MOVE_NODE, hostname, port);
+	fnode_set_partitions(&holder, true);
+	assert_true(move_connect(&env, hostname, port, 1000));
+
+	as_cluster* cluster = env.client->cluster;
+	as_node* node = get_node(cluster, MOVE_NODE);
+	as_node* b = get_node(cluster, MOVE_OTHER);
+	assert_true(node_at(node, &dead));
+	assert_true(node_at(b, &holder));
+
+	fnode_set_new_name(&holder, MOVE_NODE);
+	fail_node(&dead);
+
+	char warning[256];
+	snprintf(warning, sizeof(warning),
+		"Address %s:%u of %s is also node %s, so node %s does not move to it", SECOND, port,
+		hostname, MOVE_OTHER, MOVE_NODE);
+	log_count_start_many("Move node", warning, "translated nodes", NULL);
+	bool kept[4];
+	bool b_kept[4];
+
+	for (int i = 0; i < 4; i++) {
+		kept[i] = tends_keep(cluster, node, 1);
+		b_kept[i] = holds_name(cluster, b) && as_node_is_active(b);
+	}
+	uint32_t counts[LOG_COUNT_MAX];
+	log_count_stop_many(counts);
+	as_node_release(b);
+	as_node_release(node);
+
+	for (int i = 0; i < 4; i++) {
+		assert_that(kept[i], "tend %d replaced node X", i + 1);
+		assert_that(b_kept[i], "tend %d replaced node B", i + 1);
+	}
+	assert_int_eq(counts[0], 0);
+	assert_that(counts[1] >= 1, "no collision warning names X, B and %s:%u", SECOND, port);
+	assert_that(counts[2] == 0, "a move collision was reported as a translation collision");
+}
+
+TEST(nodes_move_ip_literal_no_move,
+	"U-16 ipLiteralNodeDoesNotMove: a node seeded by an IP literal never moves and is never looked up")
+{
+	move_setup(env, port);
+	DISCOVERY_SCOPED(fnode, dead, fnode_stop);
+	DISCOVERY_SCOPED(fnode, other, fnode_stop);
+	assert_true(move_pair(&dead, &other, MOVE_NODE, MOVE_NODE, port));
+	assert_true(move_connect(&env, FIRST, port, 1000));
+
+	as_cluster* cluster = env.client->cluster;
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &dead));
+	uint32_t lookups = resolver_dns_lookups();
+
+	fail_node(&dead);
+	log_count_start("Move node");
+	bool kept = tends_keep(cluster, node, 4);
+	uint32_t moves = log_count_stop();
+	as_node_release(node);
+
+	assert_true(kept);
+	assert_int_eq(resolver_dns_lookups(), lookups);
+	assert_int_eq(fnode_get(&other, &other.accepts), 0);
+	assert_int_eq(moves, 0);
+}
+
+TEST(nodes_move_single_address_no_move,
+	"U-16 singleAddressNodeDoesNotMove: a node of a hostname with one address never moves")
+{
+	move_setup(env, port);
+	DISCOVERY_SCOPED(fnode, dead, fnode_stop);
+	DISCOVERY_SCOPED(fnode, other, fnode_stop);
+	assert_true(move_pair(&dead, &other, MOVE_NODE, MOVE_NODE, port));
+	char hostname[64];
+	stagger_hostname(hostname, "single", FIRST);
+	assert_true(move_connect(&env, hostname, port, 1000));
+
+	as_cluster* cluster = env.client->cluster;
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &dead));
+
+	fail_node(&dead);
+	log_count_start("Move node");
+	bool kept = tends_keep(cluster, node, 4);
+	uint32_t moves = log_count_stop();
+	as_node_release(node);
+
+	assert_true(kept);
+	assert_int_eq(fnode_get(&other, &other.accepts), 0);
+	assert_int_eq(moves, 0);
+}
+
+TEST(nodes_move_no_lookup_without_failures,
+	"U-16 noLookupForNodeWithoutFailures: a healthy node of a hostname is not looked up while another node moves")
+{
+	move_setup(env, port_x);
+	DISCOVERY_SCOPED(fnode, x1, fnode_stop);
+	DISCOVERY_SCOPED(fnode, x2, fnode_stop);
+	DISCOVERY_SCOPED(fnode, b1, fnode_stop);
+	assert_true(move_pair(&x1, &x2, MOVE_NODE, MOVE_NODE, port_x));
+	uint16_t port_b = free_port();
+	assert_int_ne(port_b, 0);
+	assert_true(start_named(&b1, MOVE_OTHER, FIRST, port_b));
+	char hx[64];
+	char hb[64];
+	stagger_hostname(hx, "x", FIRST, SECOND);
+	stagger_hostname(hb, "b", FIRST, SECOND);
+
+	// B owns every partition, so it is kept while the failing X does not list it.
+	set_peers(&x1, "[[%s,,[%s:%u]]]", MOVE_OTHER, hb, port_b);
+	set_peers(&x2, "[[%s,,[%s:%u]]]", MOVE_OTHER, hb, port_b);
+	set_peers(&b1, "[[%s,,[%s:%u]]]", MOVE_NODE, hx, port_x);
+	fnode_set_partitions(&b1, true);
+	assert_true(move_connect(&env, hx, port_x, 1000));
+
+	as_cluster* cluster = env.client->cluster;
+	assert_int_eq(node_count(cluster), 2);
+	as_node* b = get_node(cluster, MOVE_OTHER);
+	assert_true(node_at(b, &b1));
+	uint32_t lookups = resolver_lookups(hb);
+
+	fail_node(&x1);
+	log_count_start("Move node");
+	bool ok = true;
+
+	for (int i = 0; i < AS_NODE_MOVE_FAILED_TENDS + 2; i++) {
+		ok = tend(cluster) == AEROSPIKE_OK && ok;
+	}
+	uint32_t moves = log_count_stop();
+
+	as_node* x = get_node(cluster, MOVE_NODE);
+	bool at_x2 = node_at(x, &x2);
+	bool b_kept = holds_name(cluster, b) && as_node_is_active(b);
+
+	if (x) {
+		as_node_release(x);
+	}
+	as_node_release(b);
+
+	assert_true(ok);
+	assert_true(at_x2);
+	assert_true(b_kept);
+	assert_int_eq(resolver_lookups(hb), lookups);
+	assert_int_eq(moves, 1);
+}
+
+// On loopback the cluster never replaces a node through peers, so this test would pass without
+// the hostname rule. The node is on a non-loopback address instead.
+TEST(nodes_move_peer_path_not_sooner,
+	"U-16 peerPathDoesNotMoveSooner: a peer that lists a failing node by its hostname neither moves nor replaces it")
+{
+	char local[32];
+
+	if (!local_address(local, sizeof(local))) {
+		info("skipped: no non-loopback IPv4 address");
+		return;
+	}
+
+	move_setup_env(env);
+	DISCOVERY_SCOPED(fnode, a1, fnode_stop);
+	DISCOVERY_SCOPED(fnode, a2, fnode_stop);
+	DISCOVERY_SCOPED(fnode, b, fnode_stop);
+	assert_true(move_pair_on(&a1, &a2, MOVE_NODE, local, SECOND));
+	assert_true(start_on(&b, MOVE_OTHER, FIRST));
+	char hostname[64];
+	stagger_hostname(hostname, "peer", local, SECOND);
+
+	// B owns every partition, so it is kept while the failing X does not list it.
+	set_peers(&a1, "[[%s,,[%s:%u]]]", MOVE_OTHER, FIRST, b.port);
+	set_peers(&a2, "[[%s,,[%s:%u]]]", MOVE_OTHER, FIRST, b.port);
+	set_peers(&b, "[[%s,,[%s:%u]]]", MOVE_NODE, hostname, a1.port);
+	fnode_set_partitions(&b, true);
+	assert_true(move_connect(&env, hostname, a1.port, 1000));
+
+	as_cluster* cluster = env.client->cluster;
+	assert_int_eq(node_count(cluster), 2);
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &a1));
+
+	fail_node(&a1);
+	log_count_start_many("Move node", "Replace node", NULL);
+	bool kept[AS_NODE_MOVE_FAILED_TENDS - 1];
+	bool untried[AS_NODE_MOVE_FAILED_TENDS - 1];
+
+	for (int i = 0; i < AS_NODE_MOVE_FAILED_TENDS - 1; i++) {
+		fnode_bump_peers_generation(&b);
+		uint32_t connections = fnode_get(&a2, &a2.accepts);
+		kept[i] = tends_keep(cluster, node, 1);
+		untried[i] = fnode_get(&a2, &a2.accepts) == connections;
+	}
+
+	fnode_bump_peers_generation(&b);
+	as_status status = tend(cluster);
+	uint32_t counts[LOG_COUNT_MAX];
+	log_count_stop_many(counts);
+
+	as_node* moved = get_node(cluster, MOVE_NODE);
+	bool at_a2 = node_at(moved, &a2);
+
+	if (moved) {
+		as_node_release(moved);
+	}
+	as_node_release(node);
+
+	for (int i = 0; i < AS_NODE_MOVE_FAILED_TENDS - 1; i++) {
+		assert_that(kept[i], "tend %d replaced the node", i + 1);
+		assert_that(untried[i], "tend %d connected to the other address", i + 1);
+	}
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(at_a2);
+	assert_int_eq(counts[0], 1);
+	assert_int_eq(counts[1], 0);
+}
+
+TEST(nodes_move_slow_lookup_on_tend_thread,
+	"U-16 slowLookupDelaysMoveOnTendThread: the hostname lookup of a move runs on the tend thread and delays the tend")
+{
+	move_setup(env, port);
+	DISCOVERY_SCOPED(fnode, a1, fnode_stop);
+	DISCOVERY_SCOPED(fnode, a2, fnode_stop);
+	assert_true(move_pair(&a1, &a2, MOVE_NODE, MOVE_NODE, port));
+	char hostname[64];
+	stagger_hostname(hostname, "slow", FIRST, SECOND);
+	assert_true(move_connect(&env, hostname, port, 250));
+
+	as_cluster* cluster = env.client->cluster;
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &a1));
+
+	fail_node(&a1);
+	assert_true(tends_keep(cluster, node, AS_NODE_MOVE_FAILED_TENDS - 1));
+
+	// Twice the move bound.
+	uint32_t delay = 2 * 250;
+	resolver_set_delay(hostname, delay);
+	as_status status;
+	uint64_t elapsed = timed_tend(cluster, &status);
+	resolver_set_delay(hostname, 0);
+
+	as_node* moved = get_node(cluster, MOVE_NODE);
+	bool at_a2 = node_at(moved, &a2);
+	bool old_active = as_node_is_active(node);
+	pthread_t thread;
+	bool delayed = resolver_delay_thread(hostname, &thread);
+
+	if (moved) {
+		as_node_release(moved);
+	}
+	as_node_release(node);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_that(elapsed >= delay, "the tend took %llu ms", (unsigned long long)elapsed);
+	assert_true(at_a2);
+	assert_false(old_active);
+	assert_true(delayed);
+	assert_true(pthread_equal(thread, pthread_self()));
+}
+
+TEST(nodes_move_silent_login_within_bound,
+	"U-16 silentLoginEndsWithinBound: with a user, a candidate that never answers its login ends within the bound, not login_timeout_ms")
+{
+	move_setup(env, port);
+	DISCOVERY_SCOPED(fnode, dead, fnode_stop);
+	DISCOVERY_SCOPED(fnode, silent, fnode_stop);
+	assert_true(start_named(&dead, MOVE_NODE, FIRST, port));
+	assert_true(serve(&silent, SECOND, port));
+	fnode_set_mute(&silent, true);
+	char hostname[64];
+	stagger_hostname(hostname, "silent-login", FIRST, SECOND);
+	assert_true(move_connect_user(&env, hostname, port, 200, "user", 3000));
+
+	as_cluster* cluster = env.client->cluster;
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &dead));
+	assert_that(fnode_get(&dead, &dead.logins) >= 1, "no login reached the node");
+
+	fail_node(&dead);
+	assert_true(tends_keep(cluster, node, AS_NODE_MOVE_FAILED_TENDS - 1));
+
+	log_count_start("Move node");
+	uint32_t accepts = fnode_get(&silent, &silent.accepts);
+	as_status status;
+	uint64_t elapsed = timed_tend(cluster, &status);
+	uint32_t moves = log_count_stop();
+	bool tried = fnode_get(&silent, &silent.accepts) > accepts;
+	bool kept = holds_name(cluster, node);
+	as_node_release(node);
+
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_that(tried, "the move did not connect to the silent candidate");
+	assert_that(elapsed >= 200 - 10 && elapsed < 200 + STAGGER_MARGIN, "the tend took %llu ms",
+		(unsigned long long)elapsed);
+	assert_true(kept);
+	assert_int_eq(moves, 0);
+}
+
+// The peer path matches only a failing node off loopback, so the node is on a non-loopback
+// address and the hostname's addresses are loopback ones.
+static bool
+move_peer_listed(move_env* env, fnode* a1, fnode* a2, fnode* b, const char* local,
+	const char* hostname)
+{
+	if (!start_on(b, MOVE_OTHER, FIRST)) {
+		return false;
+	}
+
+	// X joins by its IP literal, and B lists it by hostname. B owns every partition, so it is
+	// kept while the failing X does not list it.
+	set_peers(a1, "[[%s,,[%s:%u]]]", MOVE_OTHER, FIRST, b->port);
+	set_peers(a2, "[[%s,,[%s:%u]]]", MOVE_OTHER, FIRST, b->port);
+	set_peers(b, "[[%s,,[%s:%u]]]", MOVE_NODE, hostname, a1->port);
+	fnode_set_partitions(b, true);
+	return move_connect(env, local, a1->port, 1000);
+}
+
+TEST(nodes_move_loopback_peer_match_no_move,
+	"U-16 loopbackPeerMatchDoesNotMove: a node matched to a hostname only through loopback addresses never moves")
+{
+	char local[32];
+
+	if (!local_address(local, sizeof(local))) {
+		info("skipped: no non-loopback IPv4 address");
+		return;
+	}
+
+	move_setup_env(env);
+	DISCOVERY_SCOPED(fnode, a1, fnode_stop);
+	DISCOVERY_SCOPED(fnode, a2, fnode_stop);
+	DISCOVERY_SCOPED(fnode, b, fnode_stop);
+	assert_true(move_pair_on(&a1, &a2, MOVE_NODE, local, SECOND));
+	char hostname[64];
+	stagger_hostname(hostname, "loopback", SECOND, THIRD);
+	assert_true(move_peer_listed(&env, &a1, &a2, &b, local, hostname));
+
+	as_cluster* cluster = env.client->cluster;
+	assert_int_eq(node_count(cluster), 2);
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &a1));
+	assert_null(node->hostname);
+
+	fail_node(&a1);
+	log_count_start("Move node");
+	bool kept = true;
+
+	for (int i = 0; i < AS_NODE_MOVE_FAILED_TENDS + 1; i++) {
+		fnode_bump_peers_generation(&b);
+		kept = tends_keep(cluster, node, 1) && kept;
+	}
+	uint32_t moves = log_count_stop();
+	bool named = node->hostname && strcmp(node->hostname, hostname) == 0;
+	bool resolved = node->hostname_resolved;
+	as_node_release(node);
+
+	assert_true(kept);
+	assert_that(named, "the peer path did not set the hostname");
+	assert_false(resolved);
+	assert_int_eq(fnode_get(&a2, &a2.accepts), 0);
+	assert_int_eq(moves, 0);
+}
+
+TEST(nodes_move_loopback_before_address_moves,
+	"U-16 loopbackBeforeAddressMoves: a hostname that resolves to a loopback address before the node's address still moves the node")
+{
+	char local[32];
+
+	if (!local_address(local, sizeof(local))) {
+		info("skipped: no non-loopback IPv4 address");
+		return;
+	}
+
+	move_setup_env(env);
+	DISCOVERY_SCOPED(fnode, a1, fnode_stop);
+	DISCOVERY_SCOPED(fnode, a2, fnode_stop);
+	DISCOVERY_SCOPED(fnode, b, fnode_stop);
+	assert_true(move_pair_on(&a1, &a2, MOVE_NODE, local, SECOND));
+	char hostname[64];
+	stagger_hostname(hostname, "loopback-first", SECOND, local);
+	assert_true(move_peer_listed(&env, &a1, &a2, &b, local, hostname));
+
+	as_cluster* cluster = env.client->cluster;
+	assert_int_eq(node_count(cluster), 2);
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &a1));
+
+	fail_node(&a1);
+	char expected[256];
+	move_message(expected, sizeof(expected), hostname, &a1, &a2);
+	log_count_start(expected);
+	bool ok = true;
+
+	for (int i = 0; i < AS_NODE_MOVE_FAILED_TENDS; i++) {
+		fnode_bump_peers_generation(&b);
+		ok = tend(cluster) == AEROSPIKE_OK && ok;
+	}
+	uint32_t moves = log_count_stop();
+
+	as_node* moved = get_node(cluster, MOVE_NODE);
+	bool at_a2 = node_at(moved, &a2);
+
+	if (moved) {
+		as_node_release(moved);
+	}
+	as_node_release(node);
+
+	assert_true(ok);
+	assert_true(at_a2);
+	assert_int_eq(moves, 1);
+}
+
+// Load balancer detection skips a seed on loopback, so the seed is on a non-loopback address.
+TEST(nodes_move_load_balancer_seed_no_move,
+	"U-16 loadBalancerSeedDoesNotMove: a seed node whose address load balancer detection replaced never moves")
+{
+	char local[32];
+
+	if (!local_address(local, sizeof(local))) {
+		info("skipped: no non-loopback IPv4 address");
+		return;
+	}
+
+	move_setup_env(env);
+	DISCOVERY_SCOPED(fnode, lb, fnode_stop);
+	DISCOVERY_SCOPED(fnode, real, fnode_stop);
+	assert_true(move_pair_on(&lb, &real, MOVE_NODE, local, THIRD));
+	char service[64];
+	fnode_set_service_std(&lb, fnode_addr(&real, service, sizeof(service)));
+	char hostname[64];
+	stagger_hostname(hostname, "lb", local, SECOND);
+	assert_true(move_connect(&env, hostname, lb.port, 1000));
+
+	as_cluster* cluster = env.client->cluster;
+	as_node* node = get_node(cluster, MOVE_NODE);
+	assert_true(node_at(node, &real));
+	assert_true(node->hostname && strcmp(node->hostname, hostname) == 0);
+	assert_false(node->hostname_resolved);
+
+	uint32_t lb_accepts = fnode_get(&lb, &lb.accepts);
+	fail_node(&real);
+	log_count_start("Move node");
+	bool kept = tends_keep(cluster, node, AS_NODE_MOVE_FAILED_TENDS + 1);
+	uint32_t moves = log_count_stop();
+	as_node_release(node);
+
+	assert_true(kept);
+	assert_int_eq(fnode_get(&lb, &lb.accepts), lb_accepts);
+	assert_int_eq(moves, 0);
+}
+
 #endif // __linux__
 
 #else
@@ -2114,6 +3159,23 @@ SUITE(discovery_nodes, "pluggable discovery node lifecycle tests")
 	suite_add(nodes_peer_collision_stops);
 	suite_add(nodes_peer_hung_address_joins_in_one_tend);
 	suite_add(nodes_valid_addresses_pruned);
+	suite_add(nodes_move_not_before_third_failed_tend);
+	suite_add(nodes_move_failing_node_moves);
+	suite_add(nodes_move_recovered_node_counts_again);
+	suite_add(nodes_move_every_node_on_dead_address);
+	suite_add(nodes_move_one_candidate_per_tend);
+	suite_add(nodes_move_silent_candidate_within_bound);
+	suite_add(nodes_move_other_name_skipped);
+	suite_add(nodes_move_collision_skipped);
+	suite_add(nodes_move_ip_literal_no_move);
+	suite_add(nodes_move_single_address_no_move);
+	suite_add(nodes_move_no_lookup_without_failures);
+	suite_add(nodes_move_peer_path_not_sooner);
+	suite_add(nodes_move_slow_lookup_on_tend_thread);
+	suite_add(nodes_move_silent_login_within_bound);
+	suite_add(nodes_move_loopback_peer_match_no_move);
+	suite_add(nodes_move_loopback_before_address_moves);
+	suite_add(nodes_move_load_balancer_seed_no_move);
 #endif
 #else
 	suite_add(nodes_fake_servers_skipped);

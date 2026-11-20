@@ -26,6 +26,7 @@
 #include <aerospike/as_aws_internal.h>
 #include <aerospike/as_cluster.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_config_internal.h>
 #include <aerospike/as_discovery.h>
 #include <aerospike/as_event.h>
 #include <aerospike/as_log.h>
@@ -1495,7 +1496,7 @@ TEST(aws_xml_error_text, "API errors carry code, message and request id from EC2
 	char* body = aws_xml_error(AWS_403_CODE, AWS_403_MESSAGE, AWS_403_ID);
 	as_aws_xml_error(&err, "DescribeInstances", 403, (const uint8_t*)body, strlen(body), "hdr-1",
 		NULL, 0);
-	assert_int_eq(err.code, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(err.code, AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(err.message, AWS_403_TEXT);
 	free(body);
 
@@ -2253,7 +2254,7 @@ TEST(aws_pagination, "NextToken pages are followed and encoded, collected across
 	aws_stub_describe(&s, "page-2", p1, 1);
 	stub_403(&s);
 	as_seed_candidates out;
-	assert_int_eq(run_refresh(&provider, &err, &out), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(run_refresh(&provider, &err, &out), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(err.message, AWS_403_TEXT);
 	assert_int_eq(out.hosts->size, 0);
 	as_seed_candidates_destroy(&out);
@@ -2263,7 +2264,7 @@ TEST(aws_pagination, "NextToken pages are followed and encoded, collected across
 	aws_stub_describe(&s, "same", p1, 1);
 	aws_stub_describe(&s, "same", p2, 1);
 	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(err.message, "AWS EC2 seed provider: invalid DescribeInstances response: "
 		"pagination did not advance");
 	assert_int_eq(aws_stub_requests(&s), 2);
@@ -2304,7 +2305,7 @@ TEST(aws_empty_and_errors, "an empty result is success; API errors carry code, m
 	aws_stub_reset(&s);
 	stub_403(&s);
 	assert_int_eq(stub_refresh(&s, false, "127.0.0.1", NULL, 2000, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, AWS_403_TEXT);
 
 	// EOF-framed error body.
@@ -2313,7 +2314,7 @@ TEST(aws_empty_and_errors, "an empty result is success; API errors carry code, m
 	char* raw = aws_strf("HTTP/1.1 403 Forbidden\r\nconnection: close\r\n\r\n%s", body);
 	stub_raw(&s, raw, strlen(raw));
 	assert_int_eq(stub_refresh(&s, false, "127.0.0.1", NULL, 2000, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, AWS_403_TEXT);
 	free(raw);
 	free(body);
@@ -2321,13 +2322,13 @@ TEST(aws_empty_and_errors, "an empty result is success; API errors carry code, m
 	aws_stub_reset(&s);
 	aws_stub_http(&s, 500, "x-amzn-RequestId: hdr-123\r\n", "");
 	assert_int_eq(stub_refresh(&s, false, "127.0.0.1", NULL, 2000, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, AWS_FAILED "HTTP 500 (request id hdr-123)");
 
 	aws_stub_reset(&s);
 	aws_stub_http(&s, 503, NULL, "Service Unavailable");
 	assert_int_eq(stub_refresh(&s, false, "127.0.0.1", NULL, 2000, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, AWS_FAILED "HTTP 503");
 
 	// Secrets echoed by the server are redacted.
@@ -2342,7 +2343,7 @@ TEST(aws_empty_and_errors, "an empty result is success; API errors carry code, m
 	cfg.session_token = AWS_TOKEN;
 	assert_int_eq(provider_for(&s, false, "127.0.0.1", &cfg, &provider, &err), AEROSPIKE_OK);
 	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(err.message, AWS_FAILED "HTTP 401 AuthFailure: secret <redacted> token "
 		"<redacted> (request id r-9)");
 	provider.destroy(provider.udata);
@@ -2351,14 +2352,14 @@ TEST(aws_empty_and_errors, "an empty result is success; API errors carry code, m
 	aws_stub_http(&s, 200, NULL,
 		"<!DOCTYPE r [<!ENTITY x SYSTEM \"file:///etc/passwd\">]><r>&x;</r>");
 	assert_int_eq(stub_refresh(&s, false, "127.0.0.1", NULL, 2000, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: invalid DescribeInstances response: DOCTYPE "
 		"is not allowed at offset 0");
 
 	aws_stub_reset(&s);
 	aws_stub_http(&s, 200, NULL, "");
 	assert_int_eq(stub_refresh(&s, false, "127.0.0.1", NULL, 2000, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: invalid DescribeInstances response: no root "
 		"element at offset 0");
 
@@ -2373,7 +2374,7 @@ TEST(aws_empty_and_errors, "an empty result is success; API errors carry code, m
 		aws_stub_reset(&s);
 		aws_stub_http(&s, 200, NULL, roots[i]);
 		assert_int_eq(stub_refresh(&s, false, "127.0.0.1", NULL, 2000, buf, sizeof(buf)),
-			AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+			AEROSPIKE_ERR_CLIENT);
 		assert_string_eq(buf, "AWS EC2 seed provider: invalid DescribeInstances response: the "
 			"root element is not DescribeInstancesResponse");
 	}
@@ -2486,7 +2487,7 @@ TEST(aws_http_framing, "Content-Length, chunked and EOF framing are read as Java
 	aws_cfg(&cfg, url);
 	assert_int_eq(as_discovery_aws_seed_provider(&err, &cfg, &provider), AEROSPIKE_OK);
 	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	char prefix[128];
 	snprintf(prefix, sizeof(prefix), AWS_FAILED "connect to 127.0.0.1:%u failed: ", port);
 	assert_int_eq(strncmp(err.message, prefix, strlen(prefix)), 0);
@@ -2496,7 +2497,7 @@ TEST(aws_http_framing, "Content-Length, chunked and EOF framing are read as Java
 	aws_cfg(&cfg, "http://as-aws-test.invalid:1");
 	assert_int_eq(as_discovery_aws_seed_provider(&err, &cfg, &provider), AEROSPIKE_OK);
 	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_int_eq(strncmp(err.message, AWS_FAILED "Invalid hostname as-aws-test.invalid: ",
 		strlen(AWS_FAILED "Invalid hostname as-aws-test.invalid: ")), 0);
 	provider.destroy(provider.udata);
@@ -2634,7 +2635,7 @@ TEST(aws_tls, "HTTPS verifies trust through ca_file or ca_path, the host name or
 
 	// The default verify paths do not trust the generated CA.
 	assert_int_eq(stub_refresh(&s, true, "localhost", NULL, 2000, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_int_eq(strncmp(buf, AWS_FAILED "certificate verification failed: ",
 		strlen(AWS_FAILED "certificate verification failed: ")), 0);
 	const char* hint = "the OpenSSL default verify paths; set ca_file or ca_path)";
@@ -2642,19 +2643,19 @@ TEST(aws_tls, "HTTPS verifies trust through ca_file or ca_path, the host name or
 
 	aws_stub_set_tls(&s, certs.untrusted);
 	assert_int_eq(stub_refresh(&s, true, "localhost", certs.ca_file, 2000, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, AWS_FAILED "certificate verification failed: unable to get local "
 		"issuer certificate");
 
 	aws_stub_set_tls(&s, certs.wrong_dns);
 	assert_int_eq(stub_refresh(&s, true, "localhost", certs.ca_file, 2000, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, AWS_FAILED "certificate verification failed: certificate does not "
 		"match host localhost");
 
 	aws_stub_set_tls(&s, certs.no_ip);
 	assert_int_eq(stub_refresh(&s, true, "127.0.0.1", certs.ca_file, 2000, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, AWS_FAILED "certificate verification failed: certificate does not "
 		"match host 127.0.0.1");
 	assert_int_eq(stub_refresh(&s, true, "localhost", certs.ca_file, 2000, buf, sizeof(buf)),
@@ -2673,7 +2674,7 @@ TEST(aws_tls, "HTTPS verifies trust through ca_file or ca_path, the host name or
 		.no_close_notify = true};
 	aws_stub_reply(&s, &reply);
 	assert_int_eq(stub_refresh(&s, true, "localhost", certs.ca_file, 2000, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, AWS_FAILED "truncated response");
 
 	aws_stub_reset(&s);
@@ -2696,7 +2697,7 @@ TEST(aws_tls, "HTTPS verifies trust through ca_file or ca_path, the host name or
 	reply = (aws_reply){.mode = AWS_REPLY_CLOSE};
 	aws_stub_reply(&s, &reply);
 	assert_int_eq(stub_refresh(&s, true, "localhost", certs.ca_file, 2000, buf, sizeof(buf)),
-		AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, AWS_FAILED "connection closed without a response");
 
 	free(length);
@@ -2815,26 +2816,26 @@ TEST(aws_cred_environment, "D-14 environment keys are snapshotted at constructio
 	// A key without a secret is not a source.
 	fake_init(&f, 0, 0, 0);
 	fake_set(&f, "AWS_ACCESS_KEY_ID", "AKIDENVIRONMENT");
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, CRED_DISABLED);
 	fake_set(&f, "AWS_SECRET_ACCESS_KEY", "");
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, CRED_DISABLED);
 
 	fake_set(&f, "AWS_ACCESS_KEY_ID", "AKID-1");
 	fake_set(&f, "AWS_SECRET_ACCESS_KEY", "s");
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: environment returned an invalid access key id");
 
 	fake_set(&f, "AWS_ACCESS_KEY_ID", "AKIDENVIRONMENT");
 	fake_set(&f, "AWS_SECRET_ACCESS_KEY", "env secret");
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf,
 		"AWS EC2 seed provider: environment returned an invalid secret access key");
 
 	fake_set(&f, "AWS_SECRET_ACCESS_KEY", "s");
 	fake_set(&f, "AWS_SESSION_TOKEN", "tok\r\nhost: evil");
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: environment returned an invalid session token");
 	assert_int_eq(aws_stub_requests(&ec2), 1);
 	aws_stub_stop(&ec2);
@@ -2868,7 +2869,7 @@ TEST(aws_cred_profile, "D-14 the shared credentials file: default and AWS_PROFIL
 
 	// A profile without static keys is not a source.
 	fake_set(&f, "AWS_PROFILE", "sso-only");
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, CRED_DISABLED);
 	fake_set(&f, "AWS_PROFILE", NULL);
 
@@ -2891,7 +2892,7 @@ TEST(aws_cred_profile, "D-14 the shared credentials file: default and AWS_PROFIL
 		status = cred_once(&ec2, &f, buf, sizeof(buf));
 		uint64_t elapsed = cf_getms() - start;
 
-		if (status != AEROSPIKE_ERR_SEED_DISCOVERY_FAILED || strcmp(buf, CRED_DISABLED) != 0 ||
+		if (status != AEROSPIKE_ERR_CLIENT || strcmp(buf, CRED_DISABLED) != 0 ||
 			elapsed > 1000) {
 			fail("%s: %d \"%s\" after %" PRIu64 " ms", skipped[i], status, buf, elapsed);
 		}
@@ -2900,7 +2901,7 @@ TEST(aws_cred_profile, "D-14 the shared credentials file: default and AWS_PROFIL
 	// A file over 1 MiB fails the resolution.
 	const char* big = tmp_big(&d, "big");
 	fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", big);
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	char expected[300];
 	snprintf(expected, sizeof(expected), "AWS EC2 seed provider: failed to read %s: larger than "
 		"1 MiB", big);
@@ -2909,24 +2910,24 @@ TEST(aws_cred_profile, "D-14 the shared credentials file: default and AWS_PROFIL
 	// Without a home there is no default path and no ~/ expansion.
 	f.env.home = NULL;
 	fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", NULL);
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, CRED_DISABLED);
 	fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", "~/other");
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, CRED_DISABLED);
 
 	// Invalid values. A CR ends the line, as in Java, so it cannot reach the token.
 	const char* bad = tmp_text(&d, "bad", "[default]\naws_access_key_id=AKIABAD\n"
 		"aws_secret_access_key=S\naws_session_token=TO\tKEN\n");
 	fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", bad);
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: shared credentials file returned an invalid "
 		"session token");
 
 	const char* bad_key = tmp_text(&d, "bad-key", "[default]\naws_access_key_id=AKIA/BAD\n"
 		"aws_secret_access_key=S\n");
 	fake_set(&f, "AWS_SHARED_CREDENTIALS_FILE", bad_key);
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: shared credentials file returned an invalid "
 		"access key id");
 
@@ -3003,7 +3004,7 @@ TEST(aws_cred_web_identity, "D-14 web identity: unsigned STS form POST with the 
 		"</ErrorResponse>", WEB_TOKEN);
 	aws_stub_set_http(&sts, 400, NULL, error);
 	free(error);
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: STS AssumeRoleWithWebIdentity failed: HTTP 400 "
 		"InvalidIdentityToken: Token <redacted> is invalid (request id "
 		"c6104cbe-af31-11e0-8154-cbc7ccf896c7)");
@@ -3021,7 +3022,7 @@ TEST(aws_cred_web_identity, "D-14 web identity: unsigned STS form POST with the 
 
 	for (uint32_t i = 0; i < 3; i++) {
 		aws_stub_set_http(&sts, 200, NULL, bad_bodies[i].body);
-		assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+		assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 		assert_string_eq(buf, bad_bodies[i].message);
 	}
 
@@ -3029,13 +3030,13 @@ TEST(aws_cred_web_identity, "D-14 web identity: unsigned STS form POST with the 
 	char* bad = aws_xml_sts(CRED_KEY, CRED_SECRET, "tok&#13;en", CRED_EXPIRATION);
 	aws_stub_set_http(&sts, 200, NULL, bad);
 	free(bad);
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: STS AssumeRoleWithWebIdentity returned an "
 		"invalid session token");
 	bad = aws_xml_sts(CRED_KEY, CRED_SECRET, CRED_TOKEN, "2015-08-30T13:36:00");
 	aws_stub_set_http(&sts, 200, NULL, bad);
 	free(bad);
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: STS AssumeRoleWithWebIdentity returned an "
 		"invalid expiration");
 	assert_int_eq(aws_stub_requests(&ec2), 2);
@@ -3069,7 +3070,7 @@ TEST(aws_cred_web_identity, "D-14 web identity: unsigned STS form POST with the 
 		status = cred_once(&ec2, &f, buf, sizeof(buf));
 		uint64_t elapsed = cf_getms() - start;
 
-		if (status != AEROSPIKE_ERR_SEED_DISCOVERY_FAILED || strcmp(buf, messages[i]) != 0 ||
+		if (status != AEROSPIKE_ERR_CLIENT || strcmp(buf, messages[i]) != 0 ||
 			elapsed > 1000) {
 			fail("token file %u: %d \"%s\" after %" PRIu64 " ms", i, status, buf, elapsed);
 		}
@@ -3160,7 +3161,7 @@ TEST(aws_cred_ecs, "D-14 ECS: relative and full URIs with query and [::1], token
 	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN", NULL);
 
 	aws_stub_set_http(&ecs, 401, NULL, "unauthorized");
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: HTTP 401");
 
 	// Invalid URLs do not fail construction; they fail the ECS load.
@@ -3173,12 +3174,12 @@ TEST(aws_cred_ecs, "D-14 ECS: relative and full URIs with query and [::1], token
 	assert_true(signed_with(&ec2, ec2_requests, "AKIDENVIRONMENT", "environment/secret", NULL));
 	fake_set(&f, "AWS_ACCESS_KEY_ID", NULL);
 	fake_set(&f, "AWS_SECRET_ACCESS_KEY", NULL);
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: invalid URL");
 
 	fake_init(&f, 0, ecs.port, 0);
 	fake_set(&f, "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", ".example.com/creds");
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: invalid URL");
 	assert_int_eq(aws_stub_requests(&ecs), ecs_requests);
 
@@ -3186,26 +3187,26 @@ TEST(aws_cred_ecs, "D-14 ECS: relative and full URIs with query and [::1], token
 	aws_stub_set_http(&ecs, 200, NULL, json);
 	fake_set(&f, "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/creds");
 	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", tmp_text(&d, "cr-token", "abc\rdef\n"));
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: invalid authorization "
 		"token");
 	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", NULL);
 	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN", "abc\r\nx-injected: 1");
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: invalid authorization "
 		"token");
 	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN", "abc\tdef");
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: invalid authorization "
 		"token");
 	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN", "abc\xc3\xa9");
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: invalid authorization "
 		"token");
 	char missing[128];
 	snprintf(missing, sizeof(missing), "%s/missing", d.path);
 	fake_set(&f, "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE", missing);
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: failed to read "
 		"AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE: No such file or directory");
 	assert_int_eq(aws_stub_requests(&ecs), ecs_requests);
@@ -3237,7 +3238,7 @@ TEST(aws_cred_ecs, "D-14 ECS: relative and full URIs with query and [::1], token
 		aws_stub_set_http(&ecs, 200, NULL, bodies[i]);
 		status = cred_once(&ec2, &f, buf, sizeof(buf));
 
-		if (status != AEROSPIKE_ERR_SEED_DISCOVERY_FAILED || strcmp(buf, messages[i]) != 0) {
+		if (status != AEROSPIKE_ERR_CLIENT || strcmp(buf, messages[i]) != 0) {
 			fail("body %u: %d \"%s\"", i, status, buf);
 		}
 	}
@@ -3403,7 +3404,7 @@ TEST(aws_cred_imds, "D-14 IMDSv2: token PUT, cached role, credentials GET; a 404
 		snprintf(expected, sizeof(expected), CRED_NO_SOURCE "%s", message);
 		status = cred_once(&ec2, &f, buf, sizeof(buf));
 
-		if (status != AEROSPIKE_ERR_SEED_DISCOVERY_FAILED || strcmp(buf, expected) != 0 ||
+		if (status != AEROSPIKE_ERR_CLIENT || strcmp(buf, expected) != 0 ||
 			aws_stub_requests(&imds) != cases[i].requests) {
 			fail("case %u: %d \"%s\" after %u requests", i, status, buf,
 				aws_stub_requests(&imds));
@@ -3422,7 +3423,7 @@ TEST(aws_cred_imds, "D-14 IMDSv2: token PUT, cached role, credentials GET; a 404
 	// Disabled, case-insensitively, before any request; any other value leaves it enabled.
 	aws_stub_reset(&imds);
 	fake_set(&f, "AWS_EC2_METADATA_DISABLED", "TRUE");
-	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_once(&ec2, &f, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, CRED_DISABLED);
 	assert_int_eq(aws_stub_requests(&imds), 0);
 	aws_stub_imds(&imds, AWS_STUB_IMDS_ROLE, json);
@@ -3570,7 +3571,7 @@ TEST(aws_cred_cache, "credentials refresh five minutes before expiry, a failed r
 
 	// Once expired, the error propagates.
 	f.now_ms = CRED_EXPIRATION_MS;
-	assert_int_eq(cred_refresh(&provider, buf, sizeof(buf)), AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(cred_refresh(&provider, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, "AWS EC2 seed provider: ECS credentials failed: HTTP 500");
 	provider.destroy(provider.udata);
 
@@ -3693,7 +3694,7 @@ TEST(aws_cred_hook, "D-14 the hook replaces the chain, gets the remaining budget
 	char expected[128];
 	snprintf(expected, sizeof(expected), "AWS EC2 seed provider: credentials hook timed out after "
 		"%ums", h.last_timeout_ms);
-	assert_int_eq(status, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(status, AEROSPIKE_ERR_CLIENT);
 	assert_string_eq(buf, expected);
 	assert_true(h.last_timeout_ms <= timeout && h.last_timeout_ms + 50 >= timeout);
 	assert_true(elapsed <= h.sleep_ms + AWS_MARGIN_MS);
@@ -3713,7 +3714,7 @@ TEST(aws_cred_hook, "D-14 the hook replaces the chain, gets the remaining budget
 	log_start();
 	status = cred_refresh(&provider, buf, sizeof(buf));
 	log_stop();
-	assert_int_eq(status, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED);
+	assert_int_eq(status, AEROSPIKE_ERR_CLIENT);
 	assert_not_null(strstr(buf, "credentials hook timed out after "));
 	assert_int_eq(log_matches("credentials from"), 0);
 	h.sleep_ms = 0;
@@ -4244,7 +4245,7 @@ TEST(aws_snapshot_retention, "an API error after a publication keeps the exact p
 	assert_true(after == before);
 	assert_int_eq(stats_of(m).publications, publications);
 	assert_true(log_find(AS_LOG_LEVEL_WARN, "Seed provider aws-tags refresh failed: "
-		"AEROSPIKE_ERR_SEED_DISCOVERY_FAILED " AWS_403_TEXT ". Keeping the previous seeds") >= 0);
+		"AEROSPIKE_ERR_CLIENT " AWS_403_TEXT ". Keeping the previous seeds") >= 0);
 	as_seed_snapshot_release(after);
 	as_seed_snapshot_release(before);
 
@@ -4316,6 +4317,7 @@ client_sync_close(aerospike* as)
 	as_cluster_destroy(as->cluster);
 	as->cluster = NULL;
 	as->config.discovery.registration_locked = false;
+	as_config_release_plugins(&as->config, true);
 }
 
 static bool
@@ -4509,8 +4511,11 @@ boot_close_reconnect(boot_env* env, hook_state* hook)
 	uint32_t requests = aws_stub_requests(&env->s);
 	client_sync_close(as);
 
-	if (!as->config.discovery.provider_registered) {
-		failure = "sync close released the aws-tags registration";
+	if (as->config.discovery.provider_registered) {
+		failure = "sync close kept the aws-tags provider instance";
+	}
+	else if (!as->config.discovery.recipe || as->config.discovery.provider_released) {
+		failure = "sync close dropped the aws-tags registration";
 	}
 	else if (as_load_uint32_acq(&hook->destroys) != 0) {
 		failure = "sync close ran the hook destroy";
@@ -4524,6 +4529,9 @@ boot_close_reconnect(boot_env* env, hook_state* hook)
 	else if (aws_stub_requests(&env->s) <= requests) {
 		failure = "reconnect did not call DescribeInstances again";
 	}
+	else if (as_load_uint32_acq(&hook->destroys) != 0) {
+		failure = "reconnect ran the hook destroy";
+	}
 	client_close(as);
 
 	if (!failure && before >= 0 && settle(discovery_thread_count, before) != before) {
@@ -4536,7 +4544,7 @@ boot_close_reconnect(boot_env* env, hook_state* hook)
 	return failure;
 }
 
-TEST(aws_close_reconnect, "sync close keeps the aws-tags registration and reconnect calls EC2 again; destroy releases it and runs the hook destroy once")
+TEST(aws_close_reconnect, "sync close destroys the aws-tags instance and keeps its recipe; reconnect rebuilds it and calls EC2 again; the hook destroy runs once, at destroy")
 {
 	int fds = discovery_fd_count();
 	DISCOVERY_SCOPED(boot_env, env, boot_stop);
@@ -4551,8 +4559,8 @@ TEST(aws_close_reconnect, "sync close keeps the aws-tags registration and reconn
 	as_sleep(50);
 	assert_int_eq(as_load_uint32_acq(&hook.destroys), 1);
 
-	// The credentials have no expiry, so the reconnect reused them without calling get.
-	assert_int_eq(as_load_uint32_acq(&hook.gets), 1);
+	// The rebuilt provider starts with an empty credential cache, so it calls get once more.
+	assert_int_eq(as_load_uint32_acq(&hook.gets), 2);
 	assert_int_eq(settle(discovery_fd_count, fds), fds);
 }
 
@@ -4616,6 +4624,65 @@ TEST(aws_hook_deferred_destroy, "a hook blocked in get past refresh_timeout_ms b
 	assert_false(pthread_equal(h.destroy_thread, pthread_self()));
 }
 
+TEST(aws_hook_inflight_replaced, "a hook blocked in get at sync close outlives its replaced registration; its destroy runs once, after get returns")
+{
+	DISCOVERY_SCOPED(boot_env, env, boot_stop);
+	assert_true(boot_start(&env));
+
+	const uint32_t refresh_timeout = 300;
+	as_config config;
+	as_error err;
+	client_config(&config);
+	config.discovery.refresh_timeout_ms = refresh_timeout;
+
+	char url[64];
+	as_aws_seed_provider_config cfg;
+	aws_cfg(&cfg, stub_url(&env.s, false, "127.0.0.1", url, sizeof(url)));
+	cfg.port = env.a.port;
+	cfg.timeout_ms = refresh_timeout;
+	hook_state h;
+	hook_init(&h, &cfg);
+	h.expiration_ms = cf_clock_getabsolute() + 60000;
+	h.sleep_ms = 1500;
+	h.sleep_from = 2;
+	assert_int_eq(as_config_set_aws_seed_provider(&config, &cfg, &err), AEROSPIKE_OK);
+
+	aerospike* as = aerospike_new(&config);
+
+	if (aerospike_connect(as, &err) != AEROSPIKE_OK || !wait_count(&h.gets, 2, 5000)) {
+		client_close(as);
+		boot_stop(&env);
+		fail("connect failed or the second refresh did not call get");
+	}
+	as_sleep(20);
+
+	// The instance destroy is deferred behind the blocked get; the recipe still holds the hook.
+	client_sync_close(as);
+	uint32_t at_close = as_load_uint32_acq(&h.destroys);
+
+	// Replacing the registration drops the recipe's reference; the blocked instance keeps one.
+	as_aws_seed_provider_config plain;
+	aws_cfg(&plain, url);
+	plain.port = env.a.port;
+	as_status status = as_config_set_aws_seed_provider(&as->config, &plain, &err);
+	uint32_t at_replace = as_load_uint32_acq(&h.destroys);
+	bool get_running = !as_load_uint8_acq(&h.get_returned);
+
+	bool destroyed = wait_count(&h.destroys, 1, 5000);
+	client_close(as);
+	as_sleep(50);
+	boot_stop(&env);
+
+	assert_int_eq(at_close, 0);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(at_replace, 0);
+	assert_true(get_running);
+	assert_true(destroyed);
+	assert_int_eq(as_load_uint32_acq(&h.destroys), 1);
+	assert_true(h.destroyed_after_get);
+	assert_true(pthread_equal(h.destroy_thread, h.get_thread));
+}
+
 #else
 
 TEST(aws_fake_servers_skipped, "wire, TLS, deadline and client aws-tags tests need POSIX loopback servers")
@@ -4674,6 +4741,7 @@ SUITE(discovery_aws, "pluggable discovery aws-tags seed provider tests")
 	suite_add(aws_bootstrap);
 	suite_add(aws_close_reconnect);
 	suite_add(aws_hook_deferred_destroy);
+	suite_add(aws_hook_inflight_replaced);
 #else
 	suite_add(aws_fake_servers_skipped);
 #endif

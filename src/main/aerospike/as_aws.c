@@ -14,7 +14,9 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  */
+#include <aerospike/as_atomic.h>
 #include <aerospike/as_config.h>
+#include <aerospike/as_config_internal.h>
 #include <aerospike/as_discovery.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_vector.h>
@@ -327,6 +329,19 @@ aws_query(const as_aws_seed_provider_config* config)
 }
 
 static void
+aws_holder_release(as_aws_hook_holder* holder)
+{
+	if (holder && as_aaf_uint32_rls(&holder->ref_count, -1) == 0) {
+		as_fence_acq();
+
+		if (holder->hook.destroy) {
+			holder->hook.destroy(holder->hook.udata);
+		}
+		cf_free(holder);
+	}
+}
+
+static void
 aws_destroy(void* udata)
 {
 	as_aws_state* st = udata;
@@ -345,7 +360,10 @@ aws_destroy(void* udata)
 	as_aws_free_secret(st->session_token);
 	as_aws_chain_destroy(st);
 
-	if (st->hook.destroy) {
+	if (st->holder) {
+		aws_holder_release(st->holder);
+	}
+	else if (st->hook.destroy) {
 		st->hook.destroy(st->hook.udata);
 	}
 	st->magic = 0;
@@ -496,7 +514,7 @@ aws_describe(as_error* err, const as_aws_state* st, const as_aws_credentials* cr
 
 	if (!as_aws_buf_ok(&body) || !as_aws_amz_date(as_aws_now_ms(st), amz_date)) {
 		as_aws_buf_destroy(&body);
-		return as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 			"AWS EC2 seed provider: failed to build the DescribeInstances request");
 	}
 
@@ -516,7 +534,7 @@ aws_describe(as_error* err, const as_aws_state* st, const as_aws_credentials* cr
 
 	if (!authorization) {
 		as_aws_buf_destroy(&body);
-		return as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 			"AWS EC2 seed provider: failed to sign the DescribeInstances request");
 	}
 	headers[0].value = authorization;
@@ -534,7 +552,7 @@ aws_describe(as_error* err, const as_aws_state* st, const as_aws_credentials* cr
 	as_status status = AEROSPIKE_OK;
 
 	if (rc == AS_AWS_HTTP_TIMEOUT) {
-		status = as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		status = as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"AWS EC2 seed provider: " AWS_ACTION " timed out after %ums", st->timeout_ms);
 	}
 	else if (rc != AS_AWS_HTTP_OK) {
@@ -550,13 +568,13 @@ aws_describe(as_error* err, const as_aws_state* st, const as_aws_credentials* cr
 		*out = as_aws_xml_parse(response.body, response.body_size, reason, sizeof(reason));
 
 		if (!*out) {
-			status = as_aws_errorf(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, secrets, 3,
+			status = as_aws_errorf(err, AEROSPIKE_ERR_CLIENT, secrets, 3,
 				"AWS EC2 seed provider: invalid " AWS_ACTION " response: %s", reason);
 		}
 		else if (strcmp(as_aws_xml_name(as_aws_xml_root(*out)), AWS_ACTION "Response") != 0) {
 			as_aws_xml_destroy(*out);
 			*out = NULL;
-			status = as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+			status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 				"AWS EC2 seed provider: invalid " AWS_ACTION " response: the root element is not "
 				AWS_ACTION "Response");
 		}
@@ -633,7 +651,7 @@ aws_refresh(as_error* err, const as_seed_candidate_context* context,
 				char* copy = cf_strdup(address);
 
 				if (!copy) {
-					status = as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+					status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 						"AWS EC2 seed provider: failed to allocate an address");
 					break;
 				}
@@ -648,13 +666,13 @@ aws_refresh(as_error* err, const as_seed_candidate_context* context,
 		const char* next = as_aws_xml_text(root, "nextToken");
 
 		if (status == AEROSPIKE_OK && as_aws_xml_failed(doc)) {
-			status = as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+			status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 				"AWS EC2 seed provider: failed to allocate " AWS_ACTION " response text");
 		}
 
 		if (status == AEROSPIKE_OK && next && next[0]) {
 			if (token && strcmp(token, next) == 0) {
-				status = as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+				status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 					"AWS EC2 seed provider: invalid " AWS_ACTION
 					" response: pagination did not advance");
 			}
@@ -663,7 +681,7 @@ aws_refresh(as_error* err, const as_seed_candidate_context* context,
 				token = cf_strdup(next);
 
 				if (!token) {
-					status = as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+					status = as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 						"AWS EC2 seed provider: failed to allocate a page token");
 				}
 			}
@@ -697,7 +715,7 @@ aws_refresh(as_error* err, const as_seed_candidate_context* context,
 
 		if (!as_seed_candidates_append(candidates, address, st->tls_name, st->port)) {
 			aws_free_addresses(&addresses);
-			return as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 				"AWS EC2 seed provider: failed to append a seed candidate");
 		}
 		hosts++;
@@ -836,13 +854,185 @@ as_config_set_aws_seed_provider(as_config* config, const as_aws_seed_provider_co
 		return status;
 	}
 
-	status = as_config_set_seed_provider(config, &provider, err);
+	// The recipe and its holder go last: once the holder exists, destroying it runs the hook
+	// destroy, which a failed call must leave to the caller.
+	provider.name = cf_strdup(provider.name);
+	as_plugin_recipe* recipe = provider.name ? as_plugin_recipe_aws(aws) : NULL;
 
-	if (status != AEROSPIKE_OK) {
+	if (!recipe) {
+		cf_free((void*)provider.name);
 		aws_release_hook(provider.udata);
 		provider.destroy(provider.udata);
+		return aws_alloc_failed(err);
+	}
+	as_aws_recipe_adopt(recipe, &provider);
+	as_config_install_seed_provider(config, &provider, recipe);
+	return AEROSPIKE_OK;
+}
+
+//---------------------------------
+// Functions: recipe
+//---------------------------------
+
+// Deep copy of the setter's configuration. Its credentials_hook has no destroy: holder owns
+// the hook, and is NULL when there is none.
+typedef struct aws_recipe_state_s {
+	as_aws_seed_provider_config config;
+	as_aws_filter* filters;
+	as_aws_hook_holder* holder;
+} aws_recipe_state;
+
+static bool
+aws_copy_str(const char* src, const char** out)
+{
+	*out = NULL;
+	return !src || (*out = cf_strdup(src));
+}
+
+static void
+aws_recipe_destroy(void* state)
+{
+	aws_recipe_state* s = state;
+	as_aws_seed_provider_config* c = &s->config;
+
+	if (s->filters) {
+		for (uint32_t i = 0; i < c->filters_size; i++) {
+			as_aws_filter* f = &s->filters[i];
+
+			if (f->values) {
+				for (uint32_t j = 0; j < f->values_size; j++) {
+					cf_free((void*)f->values[j]);
+				}
+				cf_free((void*)f->values);
+			}
+			cf_free((void*)f->name);
+		}
+		cf_free(s->filters);
+	}
+	cf_free((void*)c->region);
+	cf_free((void*)c->tls_name);
+	cf_free((void*)c->endpoint);
+	cf_free((void*)c->ca_file);
+	cf_free((void*)c->ca_path);
+	as_aws_free_secret((char*)c->access_key_id);
+	as_aws_free_secret((char*)c->secret_access_key);
+	as_aws_free_secret((char*)c->session_token);
+	aws_holder_release(s->holder);
+	cf_free(s);
+}
+
+static bool
+aws_copy_filters(aws_recipe_state* s, const as_aws_seed_provider_config* src)
+{
+	s->filters = cf_calloc(src->filters_size, sizeof(as_aws_filter));
+
+	if (!s->filters) {
+		return false;
+	}
+	s->config.filters = s->filters;
+	s->config.filters_size = src->filters_size;
+
+	for (uint32_t i = 0; i < src->filters_size; i++) {
+		const as_aws_filter* from = &src->filters[i];
+		as_aws_filter* to = &s->filters[i];
+
+		if (!aws_copy_str(from->name, &to->name)) {
+			return false;
+		}
+
+		const char** values = cf_calloc(from->values_size, sizeof(char*));
+
+		if (!values) {
+			return false;
+		}
+		to->values = values;
+		to->values_size = from->values_size;
+
+		for (uint32_t j = 0; j < from->values_size; j++) {
+			if (!aws_copy_str(from->values[j], &values[j])) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+static as_status
+aws_recipe_build(as_error* err, const struct as_plugin_registry_s* registry, void* state,
+	void* out)
+{
+	(void)registry;
+	aws_recipe_state* s = state;
+	as_seed_provider* provider = out;
+	as_status status = as_discovery_aws_seed_provider(err, &s->config, provider);
+
+	if (status == AEROSPIKE_OK && s->holder) {
+		as_aws_state* st = provider->udata;
+		as_incr_uint32(&s->holder->ref_count);
+		st->holder = s->holder;
 	}
 	return status;
+}
+
+as_plugin_recipe*
+as_plugin_recipe_aws(const as_aws_seed_provider_config* aws)
+{
+	aws_recipe_state* s = cf_calloc(1, sizeof(aws_recipe_state));
+
+	if (!s) {
+		return NULL;
+	}
+
+	as_aws_seed_provider_config* c = &s->config;
+	c->address_field = aws->address_field;
+	c->port = aws->port;
+	c->timeout_ms = aws->timeout_ms;
+	c->credentials_hook.get = aws->credentials_hook.get;
+	c->credentials_hook.udata = aws->credentials_hook.udata;
+
+	bool ok = aws_copy_str(aws->region, &c->region) &&
+		aws_copy_str(aws->tls_name, &c->tls_name) &&
+		aws_copy_str(aws->endpoint, &c->endpoint) &&
+		aws_copy_str(aws->ca_file, &c->ca_file) &&
+		aws_copy_str(aws->ca_path, &c->ca_path) &&
+		aws_copy_str(aws->access_key_id, &c->access_key_id) &&
+		aws_copy_str(aws->secret_access_key, &c->secret_access_key) &&
+		aws_copy_str(aws->session_token, &c->session_token) &&
+		aws_copy_filters(s, aws);
+
+	if (!ok) {
+		aws_recipe_destroy(s);
+		return NULL;
+	}
+
+	as_plugin_recipe* recipe = as_plugin_recipe_create(aws_recipe_build, aws_recipe_destroy, s);
+
+	if (!recipe || !aws_hook_present(&aws->credentials_hook)) {
+		return recipe;
+	}
+
+	as_aws_hook_holder* holder = cf_malloc(sizeof(as_aws_hook_holder));
+
+	if (!holder) {
+		as_plugin_recipe_destroy(recipe);
+		return NULL;
+	}
+	holder->hook = aws->credentials_hook;
+	holder->ref_count = 1;
+	s->holder = holder;
+	return recipe;
+}
+
+void
+as_aws_recipe_adopt(as_plugin_recipe* recipe, as_seed_provider* provider)
+{
+	aws_recipe_state* s = recipe->state;
+
+	if (s->holder) {
+		as_aws_state* st = provider->udata;
+		as_incr_uint32(&s->holder->ref_count);
+		st->holder = s->holder;
+	}
 }
 
 bool

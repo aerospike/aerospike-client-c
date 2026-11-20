@@ -688,7 +688,7 @@ as_discovery_conformance_translate(as_error* err, const as_conformance_translati
 
 	if (translation->on_miss != AS_TRANSLATION_PASS_THROUGH &&
 		translation->on_miss != AS_TRANSLATION_STRICT) {
-		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Unknown on_miss value %d",
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid translation on_miss: %d",
 			(int)translation->on_miss);
 	}
 

@@ -47,6 +47,10 @@ struct fnode_s {
 	bool running;
 	char name[32];
 
+	// Name that connections accepted after fnode_set_new_name() answer, when renamed is true.
+	char new_name[32];
+	bool renamed;
+
 	// IPv4 address the node listens on.
 	char host[32];
 
@@ -71,6 +75,9 @@ struct fnode_s {
 
 	// Answer service-clear-alt with an empty reply.
 	bool empty_alt;
+
+	// Reply to service-clear-std. Empty, the default, lets the client detect no load balancer.
+	char service_std[64];
 
 	// Reply to peers-generation.
 	uint32_t peers_gen;
@@ -128,6 +135,12 @@ fnode_set_peers(fnode* n, const char* peers);
 void
 fnode_set_partitions(fnode* n, bool partitions);
 
+// Connections accepted from now on answer node with name. Established connections keep the
+// name they were accepted with, like a load balancer address that reaches another node on each
+// new connection.
+void
+fnode_set_new_name(fnode* n, const char* name);
+
 // Stop or resume accepting. A silent node fills its accept backlog, so the kernel drops further
 // SYNs and a connect to it hangs until its deadline (Linux). Return false when silent and no
 // connect hangs.
@@ -139,6 +152,11 @@ fnode_set_mute(fnode* n, bool mute);
 
 void
 fnode_set_empty_alt(fnode* n, bool empty_alt);
+
+// Set the service-clear-std reply, for example "127.0.0.3:3000", so a seed that is not on
+// loopback looks like a load balancer in front of that address.
+void
+fnode_set_service_std(fnode* n, const char* service);
 
 // Increment the peers-generation reply, so a client refreshes the peers of n.
 void

@@ -1425,13 +1425,13 @@ as_aws_http_request(as_error* err, const as_aws_tls* tls, const char* action, co
 		const as_aws_header* h = &headers[i];
 
 		if (!http_valid_name(h->name)) {
-			as_aws_errorf(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, secrets, secrets_size,
+			as_aws_errorf(err, AEROSPIKE_ERR_CLIENT, secrets, secrets_size,
 				"AWS EC2 seed provider: %s failed: invalid header name", action);
 			return AS_AWS_HTTP_ERROR;
 		}
 
 		if (!http_valid_value(h->value)) {
-			as_aws_errorf(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, secrets, secrets_size,
+			as_aws_errorf(err, AEROSPIKE_ERR_CLIENT, secrets, secrets_size,
 				"AWS EC2 seed provider: %s failed: invalid %s header value", action, h->name);
 			return AS_AWS_HTTP_ERROR;
 		}
@@ -1466,7 +1466,7 @@ as_aws_http_request(as_error* err, const as_aws_tls* tls, const char* action, co
 
 	if (!as_aws_buf_ok(&req)) {
 		as_aws_buf_destroy(&req);
-		as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 			"AWS EC2 seed provider: failed to allocate a request");
 		return AS_AWS_HTTP_ERROR;
 	}
@@ -1478,7 +1478,7 @@ as_aws_http_request(as_error* err, const as_aws_tls* tls, const char* action, co
 		cf_free(c);
 		cf_free(line);
 		as_aws_buf_destroy(&req);
-		as_error_set_message(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
 			"AWS EC2 seed provider: failed to allocate a request");
 		return AS_AWS_HTTP_ERROR;
 	}
@@ -1512,12 +1512,12 @@ as_aws_http_request(as_error* err, const as_aws_tls* tls, const char* action, co
 		rc = AS_AWS_HTTP_OK;
 	}
 	else if (io == HTTP_IO_TIMEOUT) {
-		as_aws_errorf(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, secrets, secrets_size,
+		as_aws_errorf(err, AEROSPIKE_ERR_CLIENT, secrets, secrets_size,
 			"AWS EC2 seed provider: %s timed out", action);
 		rc = AS_AWS_HTTP_TIMEOUT;
 	}
 	else {
-		as_aws_errorf(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, secrets, secrets_size,
+		as_aws_errorf(err, AEROSPIKE_ERR_CLIENT, secrets, secrets_size,
 			"AWS EC2 seed provider: %s failed: %s", action, c->reason);
 		rc = AS_AWS_HTTP_ERROR;
 	}

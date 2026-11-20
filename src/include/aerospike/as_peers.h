@@ -86,6 +86,22 @@ as_peers_parse_peers(
 	);
 
 /**
+ * Move a node whose refresh failed in AS_NODE_MOVE_FAILED_TENDS consecutive tends, and whose
+ * address came from its hostname, to another address of that hostname. One address is tried per
+ * tend, the one after the address tried last. Its connect, login and info requests end together
+ * within half the tend interval, or conn_timeout_ms when that is set and smaller. The hostname
+ * lookup has no time bound. The move runs on the tend thread, one node after another, so each
+ * failing node can delay the tend by one bound plus its lookup.
+ *
+ * A candidate that is another node is skipped, and one that collides with another node is
+ * skipped with a warning. Otherwise
+ * the new node is added to peers->nodes, the node is queued in peers->nodes_to_remove and the
+ * new address becomes the preferred address of the hostname and port.
+ */
+void
+as_peers_move_node(as_peers* peers, struct as_cluster_s* cluster, struct as_node_s* node);
+
+/**
  * Return true if the status is a translation or collision error that initialization should
  * report instead of a generic connection failure. A missing alternate address is reported too,
  * but it is recognized by the alternate_missing flag of as_lookup_node(), not by its status.

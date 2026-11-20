@@ -101,13 +101,14 @@ as_lookup_set_resolver(
 /**
  * @private
  * as_lookup_node() whose connect, and info requests without authentication, end at deadline in
- * milliseconds, zero for none. Login keeps login_timeout_ms.
+ * milliseconds, zero for none. With a user, login and the info requests after it end at
+ * login_timeout_ms instead, or at deadline too when login_until_deadline is true.
  */
 as_status
 as_lookup_node_until(
 	struct as_cluster_s* cluster, as_error* err, struct as_host_s* host, struct sockaddr* addr,
 	bool detect_load_balancer, struct as_node_info_s* node_info, bool* alternate_missing,
-	uint64_t deadline
+	uint64_t deadline, bool login_until_deadline
 	);
 
 /**
@@ -140,6 +141,17 @@ as_lookup_validate_any(
 	struct as_cluster_s* cluster, as_error* err, struct as_host_s* host, as_address_iterator* iter,
 	as_lookup_accept_fn accept, void* udata, struct as_node_info_s* node_info,
 	bool* alternate_missing
+	);
+
+/**
+ * @private
+ * Record addr as the address last accepted for host name and port, at the node node_name.
+ * Tend thread only.
+ */
+void
+as_lookup_set_valid_address(
+	struct as_cluster_s* cluster, struct as_host_s* host, struct sockaddr* addr,
+	const char* node_name
 	);
 
 /**

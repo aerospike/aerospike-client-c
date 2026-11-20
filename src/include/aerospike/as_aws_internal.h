@@ -270,7 +270,7 @@ as_aws_redact(const char* text, const char* const* secrets, uint32_t secrets_siz
 
 /**
  * @private
- * Set err to AEROSPIKE_ERR_SEED_DISCOVERY_FAILED with an AWS Query API error message:
+ * Set err to AEROSPIKE_ERR_CLIENT with an AWS Query API error message:
  * "AWS EC2 seed provider: <action> failed: HTTP <status>[ <Code>][: <Message>][ (request id <id>)]".
  * Code, Message and RequestID (else RequestId) are the first descendants of those names in body;
  * the request id falls back to header_request_id. A body that is not XML is ignored. The full

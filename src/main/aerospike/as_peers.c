@@ -121,20 +121,28 @@ as_peers_find_node(
 
 				struct sockaddr* addr;
 				bool found_node = false;
+				bool resolved = false;
 
+				// A loopback match does not stop the search, so a later exact match still
+				// makes the node's address an address of the hostname.
 				while (as_lookup_next(&iter, &addr)) {
-					if (as_address_equals(addr, (struct sockaddr*)&address->addr) ||
-						as_address_is_local(addr)) {
-						// Set node hostname for faster future lookups.
-						as_node_set_hostname(node, host->name);
-						node->friends++;
+					if (as_address_equals(addr, (struct sockaddr*)&address->addr)) {
 						found_node = true;
+						resolved = true;
 						break;
+					}
+
+					if (as_address_is_local(addr)) {
+						found_node = true;
 					}
 				}
 				as_lookup_end(&iter);
 
 				if (found_node) {
+					// Set node hostname for faster future lookups.
+					as_node_set_hostname(node, host->name);
+					node->hostname_resolved = resolved;
+					node->friends++;
 					return true;
 				}
 			}
@@ -180,7 +188,9 @@ as_peers_create_node(
 	as_node* node = as_node_create(cluster, node_info);
 
 	if (is_alias) {
+		// Peers are validated without load balancer detection, so the address is one of the host.
 		as_node_set_hostname(node, host->name);
+		node->hostname_resolved = true;
 	}
 	as_vector_append(&peers->nodes, &node);
 }
@@ -1222,6 +1232,162 @@ as_peers_parse_peers(
 	}
 	as_peer_records_destroy(&records);
 	return AEROSPIKE_OK;
+}
+
+//---------------------------------
+// Address move
+//---------------------------------
+
+// Copy the address of iter after the one tried last to out, skipping the node's address. Return
+// false when no address is left.
+static bool
+as_peers_next_address(as_node* node, as_address_iterator* iter, struct sockaddr_storage* out)
+{
+	as_vector list;
+	as_vector_inita(&list, sizeof(struct sockaddr_storage), 8);
+	struct sockaddr* addr;
+
+	while (as_lookup_next(iter, &addr)) {
+		as_address_copy_storage(addr, as_vector_reserve(&list));
+	}
+
+	bool found = false;
+
+	if (list.size > 1) {
+		uint32_t start = 0;
+
+		if (node->has_move_address) {
+			for (uint32_t i = 0; i < list.size; i++) {
+				if (as_address_equals(as_vector_get(&list, i),
+					(struct sockaddr*)&node->move_address)) {
+					start = i + 1;
+					break;
+				}
+			}
+		}
+
+		struct sockaddr* current = (struct sockaddr*)&as_node_get_address(node)->addr;
+
+		for (uint32_t i = 0; i < list.size; i++) {
+			struct sockaddr_storage* candidate = as_vector_get(&list, (start + i) % list.size);
+
+			if (! as_address_equals((struct sockaddr*)candidate, current)) {
+				memcpy(out, candidate, sizeof(struct sockaddr_storage));
+				found = true;
+				break;
+			}
+		}
+	}
+	as_vector_destroy(&list);
+	return found;
+}
+
+// Return true and the other node name when the node of name validated at a candidate address is
+// also another node: a healthy cluster node, or a node moved earlier in this tend, at that
+// address. Moves run before peers are parsed, so no other newcomer or collided peer exists yet.
+// A colliding moved node is dropped.
+static bool
+as_peers_find_move_collision(
+	as_peers* peers, as_cluster* cluster, const char* name, const as_node_info* info, char* other
+	)
+{
+	as_node* n = as_peers_find_validated_node(cluster->nodes->array, cluster->nodes->size, name,
+		info);
+
+	if (n) {
+		as_strncpy(other, n->name, AS_NODE_NAME_SIZE);
+		return true;
+	}
+
+	n = as_peers_find_validated_node((as_node**)peers->nodes.list, peers->nodes.size, name, info);
+
+	if (n) {
+		as_strncpy(other, n->name, AS_NODE_NAME_SIZE);
+		as_peers_drop_newcomer(peers, n);
+		return true;
+	}
+	return false;
+}
+
+void
+as_peers_move_node(as_peers* peers, as_cluster* cluster, as_node* node)
+{
+	if (node->failed_tends < AS_NODE_MOVE_FAILED_TENDS || ! node->active || ! node->hostname ||
+		! node->hostname_resolved) {
+		return;
+	}
+
+	uint16_t port = as_address_port((struct sockaddr*)&as_node_get_address(node)->addr);
+	as_error err;
+	as_error_init(&err);
+	as_address_iterator iter;
+
+	if (as_lookup_host(&iter, &err, node->hostname, port) != AEROSPIKE_OK) {
+		return;
+	}
+
+	struct sockaddr_storage candidate;
+	bool found = as_peers_next_address(node, &iter, &candidate);
+	as_lookup_end(&iter);
+
+	if (! found) {
+		return;
+	}
+	memcpy(&node->move_address, &candidate, sizeof(candidate));
+	node->has_move_address = true;
+
+	// A zero connect timeout means no deadline, so it only bounds the move when set.
+	uint32_t bound = cluster->tend_interval / 2;
+
+	if (cluster->conn_timeout_ms > 0 && cluster->conn_timeout_ms < bound) {
+		bound = cluster->conn_timeout_ms;
+	}
+
+	struct sockaddr* addr = (struct sockaddr*)&candidate;
+	char addr_name[AS_IP_ADDRESS_SIZE];
+	as_address_name(addr, addr_name, sizeof(addr_name));
+
+	as_host host = {.name = node->hostname, .tls_name = node->tls_name, .port = port};
+	as_node_info info;
+	as_status status = as_lookup_node_until(cluster, &err, &host, addr, false, &info, NULL,
+		as_socket_deadline(bound), true);
+
+	if (status != AEROSPIKE_OK) {
+		as_log_debug("Address %s of %s failed: %s %s", addr_name, node->hostname,
+			as_error_string(status), err.message);
+		return;
+	}
+
+	if (strcmp(info.name, node->name) != 0) {
+		as_log_debug("Address %s of %s is node %s, not node %s", addr_name, node->hostname,
+			info.name, node->name);
+		as_node_info_destroy(&info);
+		return;
+	}
+
+	char other[AS_NODE_NAME_SIZE];
+
+	if (as_peers_find_move_collision(peers, cluster, node->name, &info, other)) {
+		as_log_warn("Address %s of %s is also node %s, so node %s does not move to it", addr_name,
+			node->hostname, other, node->name);
+		as_node_info_destroy(&info);
+		return;
+	}
+
+	// Min connections are created when the swap adds the node.
+	as_node* moved = as_node_create(cluster, &info);
+	as_node_set_hostname(moved, node->hostname);
+	moved->hostname_resolved = true;
+
+	if (node->advertised_hosts) {
+		moved->advertised_hosts = cf_strdup(node->advertised_hosts);
+	}
+	as_vector_append(&peers->nodes, &moved);
+	as_peers_append_unique_node(&peers->nodes_to_remove, node);
+	as_lookup_set_valid_address(cluster, &host, addr, moved->name);
+
+	as_log_info("Move node %s %s from %s to %s", node->name, node->hostname,
+		as_node_get_address_string(node), as_node_get_address_string(moved));
 }
 
 //---------------------------------

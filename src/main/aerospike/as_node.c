@@ -213,6 +213,10 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 	node->conn_latency = NULL;
 	node->metrics_prior = NULL;
 	node->conn_iter = 0;
+	node->failed_tends = 0;
+	memset(&node->move_address, 0, sizeof(node->move_address));
+	node->has_move_address = false;
+	node->hostname_resolved = false;
 
 	uint32_t min = cluster->min_conns_per_node / cluster->conn_pools_per_node;
 	uint32_t rem_min = cluster->min_conns_per_node - (min * cluster->conn_pools_per_node);
@@ -1260,6 +1264,8 @@ as_node_refresh(as_cluster* cluster, as_error* err, as_node* node, as_peers* pee
 			node->rebalance_changed = cluster->rack_aware;
 		}
 		node->failures = 0;
+		node->failed_tends = 0;
+		node->has_move_address = false;
 	}
 	return status;
 }

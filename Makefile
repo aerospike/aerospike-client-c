@@ -201,6 +201,7 @@ COMMON-HEADERS += $(COMMON)/$(SOURCE_INCL)/citrusleaf/cf_queue.h
 
 EXCLUDE-HEADERS = $(SOURCE_INCL)/aerospike/as_metrics_internal.h
 EXCLUDE-HEADERS += $(SOURCE_INCL)/aerospike/as_aws_internal.h
+EXCLUDE-HEADERS += $(SOURCE_INCL)/aerospike/as_config_internal.h
 EXCLUDE-HEADERS += $(SOURCE_INCL)/aerospike/as_lookup_internal.h
 
 AEROSPIKE-HEADERS := $(filter-out $(EXCLUDE-HEADERS), $(wildcard $(SOURCE_INCL)/aerospike/*.h))

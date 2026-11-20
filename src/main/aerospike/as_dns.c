@@ -1779,7 +1779,7 @@ dns_refresh(as_error* err, const as_seed_candidate_context* context,
 				st->names[i].name, reasons[i]);
 		}
 		cf_free(reasons);
-		return as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, "%s", msg);
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "%s", msg);
 	}
 
 	for (uint32_t i = 0; i < st->names_size; i++) {

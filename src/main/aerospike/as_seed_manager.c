@@ -938,7 +938,7 @@ as_seed_inflight_wait(as_seed_inflight* inflight, uint32_t timeout_ms, as_error*
 
 	if (inflight->running) {
 		// name belongs to the old seed manager and is valid only while running.
-		as_error_update(err, AEROSPIKE_ERR_SEED_DISCOVERY_FAILED,
+		as_error_update(err, AEROSPIKE_ERR_CLIENT,
 			"Seed provider %s refresh started by a previous connection did not return within "
 			"refresh_timeout_ms %u", inflight->name, timeout_ms);
 		pthread_mutex_unlock(&inflight->lock);

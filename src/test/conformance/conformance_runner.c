@@ -1841,9 +1841,9 @@ check_step(uint32_t i, const step* s, const yaml_node_t* exp, const as_seed_cand
 			return o;
 		}
 
-		if (s->status != AEROSPIKE_ERR_SEED_DISCOVERY_FAILED) {
+		if (s->status != AEROSPIKE_ERR_CLIENT) {
 			return outcome_fail("refresh %u: failed with status %d instead of %d: %s", i,
-				(int)s->status, (int)AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, s->message);
+				(int)s->status, (int)AEROSPIKE_ERR_CLIENT, s->message);
 		}
 
 		if (!strstr(s->message, marker)) {

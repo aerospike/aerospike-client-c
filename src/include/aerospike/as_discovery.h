@@ -28,7 +28,10 @@
  * static map over as_config.ip_map (default), port-map and pass-through. Custom plugins are
  * registered with as_config_set_seed_provider() and as_config_set_address_translator(), language
  * bindings with as_config_set_binding_seed_provider(). The same built-ins can be selected from
- * the YAML config file under static.client.discovery and static.client.translation.
+ * the YAML config file under static.client.discovery and static.client.translation. Factories
+ * registered under a name with as_config_register_seed_provider() and
+ * as_config_register_address_translator() are selected by that name, from the file or from code
+ * (as_config_select_seed_provider(), as_config_select_address_translator()).
  *
  * Plugin guide (execution modes, thread context, merge policies, TLS identity, AWS, load
  * balancers): https://github.com/aerospike/aerospike-client-c/blob/master/docs/discovery-plugin-guide.md
@@ -47,6 +50,7 @@
 
 #include <aerospike/as_error.h>
 #include <aerospike/as_host.h>
+#include <aerospike/as_map.h>
 #include <aerospike/as_vector.h>
 
 #ifdef __cplusplus
@@ -137,7 +141,8 @@ typedef enum as_seed_merge_policy_e {
 } as_seed_merge_policy;
 
 /**
- * Behavior when a translator has no mapping for an advertised endpoint.
+ * Behavior when a translator has no mapping for an advertised endpoint. Any
+ * other value fails aerospike_connect() with AEROSPIKE_ERR_PARAM.
  *
  * Default: AS_TRANSLATION_PASS_THROUGH
  *
@@ -418,8 +423,12 @@ typedef struct as_aws_credentials_hook_s {
 		void* udata);
 
 	/**
-	 * Release udata, or NULL. Called exactly once when the provider is destroyed, possibly on the
-	 * discovery thread, so it must not block or wait for another thread.
+	 * Release udata, or NULL. Called exactly once, possibly on the discovery thread, so it must
+	 * not block or wait for another thread. For a provider built by
+	 * as_discovery_aws_seed_provider(), when that provider is destroyed. For
+	 * as_config_set_aws_seed_provider(), whose instances a sync aerospike_close() destroys and
+	 * aerospike_connect() rebuilds with the same hook, when the registration ends and the last
+	 * of its instances is destroyed, which can be after aerospike_destroy() returns.
 	 */
 	void (*destroy)(void* udata);
 
@@ -678,9 +687,8 @@ typedef struct as_seed_provider_s {
 	 * same aerospike object has not returned, aerospike_connect() waits at most
 	 * refresh_timeout_ms for it. This applies whichever provider is registered
 	 * now, including one registered while the old call was still running. If
-	 * the old call is still running, connect fails with
-	 * AEROSPIKE_ERR_SEED_DISCOVERY_FAILED, names the provider in the message and
-	 * starts nothing.
+	 * the old call is still running, connect fails with AEROSPIKE_ERR_CLIENT,
+	 * names the provider in the message and starts nothing.
 	 */
 	as_status (*refresh)(as_error* err, const as_seed_candidate_context* context,
 		as_seed_candidates* candidates, void* udata);
@@ -706,18 +714,27 @@ typedef struct as_seed_provider_s {
 	bool (*supports_deadline)(void* udata);
 
 	/**
-	 * Release udata. Called exactly once, after the last call has returned,
-	 * when the registration ends:
+	 * Release udata. Called exactly once per instance, after its last call has
+	 * returned, when the instance ends:
+	 * - at a sync aerospike_close();
 	 * - at aerospike_destroy() or as_config_destroy();
-	 * - on async aerospike_close() of a connected client;
-	 * - on async aerospike_close() of an unconnected client (registrations
-	 *   only);
+	 * - on async aerospike_close() of a connected or an unconnected client;
 	 * - on replacement whenever registration is unlocked: before the first
 	 *   connect, after a failed connect, or after a sync aerospike_close().
-	 *   Replacing with the same non-NULL udata destroys nothing.
+	 *   While an instance is registered, replacing it with the same non-NULL
+	 *   udata destroys nothing.
 	 *
-	 * A sync-only aerospike_close() does not destroy the registration, so the
-	 * client can reconnect with it.
+	 * After a sync aerospike_close(), aerospike_connect() builds a new instance
+	 * of a provider set by a built-in setter (as_config_set_dns_seed_provider(),
+	 * as_config_set_aws_seed_provider()), by the config file or by
+	 * as_config_select_seed_provider(), with the same configuration or options.
+	 * A rebuilt DNS provider reads the system resolvers again, and a rebuilt
+	 * aws-tags provider loads its CA files and resolves its credentials again.
+	 * An instance registered directly, with as_config_set_seed_provider() or
+	 * as_config_set_binding_seed_provider() (including one built by a low-level
+	 * constructor such as as_discovery_dns_seed_provider()), cannot be rebuilt:
+	 * aerospike_connect() fails with AEROSPIKE_ERR_PARAM until a provider is
+	 * registered again.
 	 *
 	 * When a refresh is still running at that point, destroy runs on the
 	 * discovery thread once it returns. So destroy may run on any client
@@ -789,8 +806,14 @@ typedef struct as_address_translator_s {
 
 	/**
 	 * Release udata. Same timing and rules as as_seed_provider.destroy: called
-	 * exactly once, after the last translate or on_cluster_view_changed call has
-	 * returned, and it must never block or wait for another thread. Optional.
+	 * exactly once per instance, after the last translate or
+	 * on_cluster_view_changed call has returned, and it must never block or
+	 * wait for another thread. After a sync aerospike_close(),
+	 * aerospike_connect() builds a new instance of a translator set by
+	 * as_config_set_port_map_translator(), as_config_set_pass_through_translator(),
+	 * the config file or as_config_select_address_translator(); one registered
+	 * with as_config_set_address_translator() must be registered again.
+	 * Optional.
 	 */
 	void (*destroy)(void* udata);
 
@@ -800,7 +823,57 @@ typedef struct as_address_translator_s {
 	void* udata;
 } as_address_translator;
 
+/**
+ * Seed provider factory registered under a name with as_config_register_seed_provider().
+ * The client calls it when the name is selected, from code with
+ * as_config_select_seed_provider() or in the config file with
+ * static.client.discovery.provider, on the thread that selects it or loads the file. A sync
+ * aerospike_close() destroys the instance; aerospike_connect() then calls the factory again,
+ * with the same options, on the thread that connects.
+ *
+ * Fill provider, which the client zeroes before the call, with a function table as for
+ * as_config_set_seed_provider(), and return AEROSPIKE_OK. The client validates and copies the
+ * table, including name, and takes ownership of provider->udata. When the table is invalid the
+ * client calls its destroy (if set) and the selection fails with "factory returned an invalid
+ * provider". On any other status the factory has released everything it built, the client
+ * calls nothing, and the selection fails with "factory failed: <err message>".
+ *
+ * Each call must return a new instance whose destroy releases its own udata (or a NULL udata);
+ * it must never be the factory udata. An instance's destroy can run after the factory udata
+ * was destroyed (see as_seed_provider.destroy), so an instance that shares state with the
+ * factory udata or with other instances must hold its own reference to that state, for
+ * example a reference count.
+ *
+ * options is a client-owned map (an as_orderedmap) of the settings that select the factory,
+ * valid only for the call. To keep it, take a reference with as_val_reserve() and release it
+ * with as_val_destroy(). Iteration order is not part of the contract.
+ *
+ * From the config file, options holds every key of the block except provider and the built-in
+ * sections, typed as the Java client's YAML parser (SnakeYAML) types them: as_nil, as_boolean,
+ * as_integer, as_double, as_string, as_arraylist, or as_orderedmap with string or integer
+ * keys. A timestamp, or an integer outside the int64 range, is an as_string. See "Option values"
+ * in docs/yaml-config-discovery.md.
+ *
+ * @ingroup discovery_api
+ */
+typedef as_status (*as_seed_provider_factory)(as_error* err, const as_map* options,
+	as_seed_provider* provider, void* udata);
+
+/**
+ * Address translator factory registered under a name with
+ * as_config_register_address_translator(). Selected from code with
+ * as_config_select_address_translator() or in the config file with
+ * static.client.translation.provider. Same contract as as_seed_provider_factory, with
+ * "factory returned an invalid translator" for an invalid table.
+ *
+ * @ingroup discovery_api
+ */
+typedef as_status (*as_address_translator_factory)(as_error* err, const as_map* options,
+	as_address_translator* translator, void* udata);
+
 struct as_seed_inflight_s;
+struct as_plugin_registry_s;
+struct as_plugin_recipe_s;
 
 /**
  * Seed discovery configuration owned by as_config. Register a provider with
@@ -864,9 +937,11 @@ typedef struct as_discovery_config_s {
 	bool provider_registered;
 
 	/**
-	 * True after aerospike_close() released the registration of an unconnected
-	 * async client. aerospike_connect() fails until a provider is registered
-	 * again. Do not set directly.
+	 * True after aerospike_close() destroyed a provider that aerospike_connect()
+	 * cannot build again: an instance registered directly, released by a sync
+	 * close, or any provider, released by the close of an unconnected async
+	 * client. aerospike_connect() fails until a provider is registered again.
+	 * Do not set directly.
 	 */
 	bool provider_released;
 
@@ -888,6 +963,21 @@ typedef struct as_discovery_config_s {
 	 * and released by as_config_destroy(). Do not set directly.
 	 */
 	struct as_seed_inflight_s* inflight;
+
+	/**
+	 * @private
+	 * Seed provider factories registered with as_config_register_seed_provider(). Released by
+	 * as_config_destroy(). Do not set directly.
+	 */
+	struct as_plugin_registry_s* registry;
+
+	/**
+	 * @private
+	 * How aerospike_connect() builds the provider again after a sync aerospike_close() released
+	 * it: set by the built-in setters, the config file and as_config_select_seed_provider(),
+	 * NULL for a provider registered as an instance. Do not set directly.
+	 */
+	struct as_plugin_recipe_s* recipe;
 } as_discovery_config;
 
 /**
@@ -914,9 +1004,11 @@ typedef struct as_translation_config_s {
 	bool provider_registered;
 
 	/**
-	 * True after aerospike_close() released the registration of an unconnected
-	 * async client. aerospike_connect() fails until a translator is registered
-	 * again. Do not set directly.
+	 * True after aerospike_close() destroyed a translator that aerospike_connect()
+	 * cannot build again: an instance registered directly, released by a sync
+	 * close, or any translator, released by the close of an unconnected async
+	 * client. aerospike_connect() fails until a translator is registered again.
+	 * Do not set directly.
 	 */
 	bool provider_released;
 
@@ -932,6 +1024,22 @@ typedef struct as_translation_config_s {
 	 * Number of file_ip_map entries.
 	 */
 	uint32_t file_ip_map_size;
+
+	/**
+	 * @private
+	 * Address translator factories registered with as_config_register_address_translator().
+	 * Released by as_config_destroy(). Do not set directly.
+	 */
+	struct as_plugin_registry_s* registry;
+
+	/**
+	 * @private
+	 * How aerospike_connect() builds the translator again after a sync aerospike_close()
+	 * released it: set by the built-in setters, the config file and
+	 * as_config_select_address_translator(), NULL for a translator registered as an instance.
+	 * Do not set directly.
+	 */
+	struct as_plugin_recipe_s* recipe;
 } as_translation_config;
 
 /**
@@ -1132,19 +1240,22 @@ as_dns_seed_provider_config_init(as_dns_seed_provider_config* config);
  * When some names resolve, their hosts are returned and each failed name is
  * logged at warning level. When no name yields a host (NXDOMAIN, SERVFAIL,
  * REFUSED, timeout, an empty or malformed answer, or no resolvable SRV target),
- * refresh returns AEROSPIKE_ERR_SEED_DISCOVERY_FAILED naming each name and its
- * failure, and the client keeps its previous seeds.
+ * refresh returns AEROSPIKE_ERR_CLIENT naming each name and its failure, and
+ * the client keeps its previous seeds.
  *
  * The configuration is validated and copied, and the system resolvers are read,
- * once; later changes to the configuration or to the system resolvers have no
- * effect. An invalid value returns AEROSPIKE_ERR_PARAM with a message naming
- * it, as does finding no usable system resolver when servers is empty;
- * provider is then left untouched.
+ * once per provider; later changes to the configuration or to the system
+ * resolvers have no effect on it. An invalid value returns AEROSPIKE_ERR_PARAM
+ * with a message naming it, as does finding no usable system resolver when
+ * servers is empty; provider is then left untouched.
  *
  * On success the caller owns provider->udata until it is registered with
  * as_config_set_seed_provider(), which then takes ownership; release an
- * unregistered table with provider->destroy(provider->udata). Most callers
- * should use as_config_set_dns_seed_provider().
+ * unregistered table with provider->destroy(provider->udata). A table
+ * registered this way is a direct instance: a sync aerospike_close() destroys
+ * it and it is not rebuilt. Most callers should use
+ * as_config_set_dns_seed_provider(), whose provider aerospike_connect() builds
+ * again after a sync close, reading the system resolvers again.
  *
  * @ingroup discovery_api
  */
@@ -1176,7 +1287,7 @@ as_aws_seed_provider_config_init(as_aws_seed_provider_config* config);
  * longer than 255 bytes or contains whitespace or control characters, are skipped and counted
  * at debug level. An empty result is a success. Any failed page, HTTP error, timeout, response
  * whose root element is not DescribeInstancesResponse or allocation failure fails the refresh
- * with AEROSPIKE_ERR_SEED_DISCOVERY_FAILED and a message that starts with
+ * with AEROSPIKE_ERR_CLIENT and a message that starts with
  * "AWS EC2 seed provider: " and includes the AWS error code and request id when EC2 returns
  * them; the client then keeps its previous seeds. Seeds returned by a seed provider are used as
  * returned, unless one equals a configured seed by name and port, so rewriting provider seeds
@@ -1294,7 +1405,9 @@ as_aws_seed_provider_config_init(as_aws_seed_provider_config* config);
  * On success the caller owns provider->udata until it is registered with
  * as_config_set_seed_provider(), which then takes ownership; release an unregistered table with
  * provider->destroy(provider->udata), which also runs the hook destroy. On failure the caller
- * keeps credentials_hook.udata. Most callers should use as_config_set_aws_seed_provider().
+ * keeps credentials_hook.udata. A table registered this way is a direct instance: a sync
+ * aerospike_close() destroys it, with its hook, and it is not rebuilt. Most callers should use
+ * as_config_set_aws_seed_provider(), which is.
  *
  * @ingroup discovery_api
  */

@@ -30,6 +30,7 @@
 
 #include "test.h"
 #include "aerospike_test.h"
+#include "discovery_fake_node.h"
 
 //---------------------------------
 // Macros
@@ -335,6 +336,10 @@ static bool before(atf_plan* plan)
 	as_error err;
 	as_error_reset(&err);
 
+#ifdef DISCOVERY_FAKE_SERVERS
+	discovery_nodes_resolver_install();
+#endif
+
 	as = aerospike_new(&config);
 
 	if (aerospike_connect(as, &err) != AEROSPIKE_OK) {
@@ -515,6 +520,13 @@ PLAN(aerospike_test)
 	plan_after(after);
 
 	plan_add(config_basics);
+	plan_add(discovery_config_file);
+	plan_add(discovery_contract);
+	plan_add(discovery_translation);
+	plan_add(discovery_seed_manager);
+	plan_add(discovery_dns);
+	plan_add(discovery_aws);
+	plan_add(discovery_nodes);
 	plan_add(metrics_basics);
 
 	plan_add(key_basics);

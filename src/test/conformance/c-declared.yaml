@@ -1,0 +1,24 @@
+# Expected C result per conformance row. A row not listed here is declared pass (blocked when the
+# fixture row is blocked). The conformance runner fails when any row's actual result differs.
+
+# The deprecated legacy name check (CN or dNSName, case-insensitive, with legacy wildcards) still
+# accepts these certificates after the strict match fails.
+tls/name-matching.yaml:
+  cn-only-no-san:
+    result: fail
+    reason: "legacy name check kept until the next major version (deferring per FR-45)"
+  cn-differs-only-in-case-no-san:
+    result: fail
+    reason: "legacy name check kept until the next major version (deferring per FR-45)"
+  cn-equal-dns-name-differs:
+    result: fail
+    reason: "legacy name check kept until the next major version (deferring per FR-45)"
+  ip-id-only-as-dns-name:
+    result: fail
+    reason: "legacy name check kept until the next major version (deferring per FR-45)"
+  ip-id-against-wildcard:
+    result: fail
+    reason: "legacy name check kept until the next major version (deferring per FR-45)"
+  ci-server-certificate-shape:
+    result: fail
+    reason: "legacy name check kept until the next major version (deferring per FR-45)"

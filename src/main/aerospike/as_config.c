@@ -15,14 +15,621 @@
  * the License.
  */
 #include <aerospike/as_config.h>
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_config_internal.h>
+#include <aerospike/as_discovery.h>
+#include <aerospike/as_msgpack_serializer.h>
+#include <aerospike/as_orderedmap.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_policy.h>
+#include <aerospike/as_serializer.h>
 #include <aerospike/as_string.h>
 #include <aerospike/mod_lua_config.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
+
+//---------------------------------
+// Types
+//---------------------------------
+
+typedef struct as_plugin_entry_s {
+	char* name;
+	union {
+		as_seed_provider_factory provider;
+		as_address_translator_factory translator;
+	} factory;
+	void (*destroy)(void* udata);
+	void* udata;
+} as_plugin_entry;
+
+// Entries are never removed, so an index stays valid while the vector reallocates.
+struct as_plugin_registry_s {
+	as_vector entries; // as_plugin_entry
+};
+
+//---------------------------------
+// Globals
+//---------------------------------
+
+const char* const as_config_builtin_providers[AS_CONFIG_BUILTIN_PROVIDERS] = {
+	"static", "dns", "aws-tags"
+};
+
+const char* const as_config_builtin_translators[AS_CONFIG_BUILTIN_TRANSLATORS] = {
+	"static-map", "port-map", "pass-through"
+};
+
+//---------------------------------
+// Static Functions
+//---------------------------------
+
+static bool
+provider_is_valid(const as_seed_provider* provider)
+{
+	return provider && provider->size >= sizeof(as_seed_provider) &&
+		provider->api_version == AS_DISCOVERY_API_VERSION && provider->name &&
+		provider->name[0] && provider->refresh && provider->needs_periodic_refresh;
+}
+
+static bool
+translator_is_valid(const as_address_translator* translator)
+{
+	return translator && translator->size >= sizeof(as_address_translator) &&
+		translator->api_version == AS_DISCOVERY_API_VERSION && translator->name &&
+		translator->name[0] && translator->translate;
+}
+
+static void
+destroy_provider(as_discovery_config* discovery)
+{
+	if (discovery->provider_registered) {
+		as_seed_provider* p = &discovery->provider;
+
+		// A refresh still running on a discovery thread destroys udata when it returns.
+		if (p->destroy &&
+			!as_seed_inflight_defer_destroy(discovery->inflight, p->destroy, p->udata)) {
+			p->destroy(p->udata);
+		}
+		cf_free((void*)p->name);
+	}
+	memset(&discovery->provider, 0, sizeof(as_seed_provider));
+	discovery->provider_registered = false;
+	discovery->binding_provider = false;
+}
+
+static void
+destroy_translator(as_translation_config* translation)
+{
+	if (translation->provider_registered) {
+		if (translation->provider.destroy) {
+			translation->provider.destroy(translation->provider.udata);
+		}
+		cf_free((void*)translation->provider.name);
+	}
+	memset(&translation->provider, 0, sizeof(as_address_translator));
+	translation->provider_registered = false;
+}
+
+// Only a direct table keeps a registered udata it is given again. A factory instance holds its
+// own reference, even when it shares the pointer, so the instance it replaces is destroyed.
+static void
+replace_provider(as_discovery_config* discovery, const as_seed_provider* copy, bool direct)
+{
+	if (direct && discovery->provider_registered && discovery->provider.udata &&
+		discovery->provider.udata == copy->udata) {
+		// Same state now owned by the new registration.
+		cf_free((void*)discovery->provider.name);
+		discovery->binding_provider = false;
+	}
+	else {
+		destroy_provider(discovery);
+	}
+	discovery->provider = *copy;
+	discovery->provider_registered = true;
+	discovery->provider_released = false;
+}
+
+static void
+replace_translator(as_translation_config* translation, const as_address_translator* copy,
+	bool direct)
+{
+	if (direct && translation->provider_registered && translation->provider.udata &&
+		translation->provider.udata == copy->udata) {
+		// Same state now owned by the new registration.
+		cf_free((void*)translation->provider.name);
+	}
+	else {
+		destroy_translator(translation);
+	}
+	translation->provider = *copy;
+	translation->provider_registered = true;
+	translation->provider_released = false;
+}
+
+static void
+registry_destroy(struct as_plugin_registry_s** registry)
+{
+	struct as_plugin_registry_s* r = *registry;
+
+	if (!r) {
+		return;
+	}
+
+	for (uint32_t i = 0; i < r->entries.size; i++) {
+		as_plugin_entry* entry = as_vector_get(&r->entries, i);
+
+		if (entry->destroy) {
+			entry->destroy(entry->udata);
+		}
+		cf_free(entry->name);
+	}
+	as_vector_destroy(&r->entries);
+	cf_free(r);
+	*registry = NULL;
+}
+
+static bool
+is_builtin(const char* name, const char* const* names, uint32_t size)
+{
+	for (uint32_t i = 0; i < size; i++) {
+		if (strcmp(name, names[i]) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static as_status
+registry_add(as_config* config, struct as_plugin_registry_s** registry, const char* type,
+	const char* name, bool has_factory, const char* const* builtins, uint32_t builtins_size,
+	const as_plugin_entry* entry, as_error* err)
+{
+	if (!config) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid %s registration", type);
+	}
+
+	if (!name || !name[0]) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid %s name: %s", type,
+			name ? name : "(null)");
+	}
+
+	if (is_builtin(name, builtins, builtins_size)) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid %s name '%s': built-in name",
+			type, name);
+	}
+
+	if (as_plugin_registry_find(*registry, name) >= 0) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid %s name '%s': already registered",
+			type, name);
+	}
+
+	if (!has_factory) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid %s factory for '%s': null",
+			type, name);
+	}
+
+	if (config->discovery.registration_locked) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"Invalid %s name '%s': cannot register while the client is connected", type, name);
+	}
+
+	as_plugin_entry copy = *entry;
+	copy.name = cf_strdup(name);
+
+	if (!copy.name) {
+		return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to copy %s name", type);
+	}
+
+	if (!*registry) {
+		struct as_plugin_registry_s* r = cf_malloc(sizeof(struct as_plugin_registry_s));
+
+		if (!r) {
+			cf_free(copy.name);
+			return as_error_update(err, AEROSPIKE_ERR_CLIENT, "Failed to allocate %s registry", type);
+		}
+		as_vector_init(&r->entries, sizeof(as_plugin_entry), 4);
+		*registry = r;
+	}
+	as_vector_append(&(*registry)->entries, &copy);
+	return AEROSPIKE_OK;
+}
+
+// Validate a selection from code and return the registry index of name.
+static as_status
+select_check(as_config* config, const struct as_plugin_registry_s* registry, const char* type,
+	const char* name, const char* const* builtins, uint32_t builtins_size, const char* locked,
+	int32_t* index, as_error* err)
+{
+	if (!config) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid %s", type);
+	}
+
+	if (!name || !name[0]) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid %s name: %s", type,
+			name ? name : "(null)");
+	}
+
+	if (config->discovery.registration_locked) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, locked);
+	}
+
+	if (is_builtin(name, builtins, builtins_size)) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"Invalid %s name '%s': built-in name, use its own setter", type, name);
+	}
+
+	*index = as_plugin_registry_find(registry, name);
+
+	if (*index < 0) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid %s name '%s': not registered",
+			type, name);
+	}
+	return AEROSPIKE_OK;
+}
+
+// Deep copy options into a client-owned map through a msgpack round trip.
+static as_status
+copy_options(const as_map* options, as_map** out, as_error* err)
+{
+	if (!options) {
+		*out = (as_map*)as_orderedmap_new(1);
+
+		if (!*out) {
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to allocate options");
+		}
+		return AEROSPIKE_OK;
+	}
+
+	as_serializer ser;
+	as_msgpack_init(&ser);
+
+	as_buffer buffer;
+	as_buffer_init(&buffer);
+
+	as_val* copy = NULL;
+	int rc = as_serializer_serialize(&ser, (as_val*)options, &buffer);
+
+	if (rc == 0) {
+		rc = as_serializer_deserialize(&ser, &buffer, &copy);
+	}
+	as_buffer_destroy(&buffer);
+	as_serializer_destroy(&ser);
+
+	if (rc != 0 || as_val_type(copy) != AS_MAP) {
+		as_val_destroy(copy);
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid options: cannot copy");
+	}
+	*out = (as_map*)copy;
+	return AEROSPIKE_OK;
+}
+
+static as_status
+factory_failed(as_error* err, as_status status, const as_error* local)
+{
+	return as_error_update(err, status, "factory failed: %s",
+		local->message[0] ? local->message : as_error_string(status));
+}
+
+// Copy the name of a built instance. On failure the instance is destroyed.
+static bool
+own_provider_name(as_seed_provider* provider)
+{
+	provider->name = cf_strdup(provider->name);
+
+	if (!provider->name) {
+		if (provider->destroy) {
+			provider->destroy(provider->udata);
+		}
+		return false;
+	}
+	return true;
+}
+
+static bool
+own_translator_name(as_address_translator* translator)
+{
+	translator->name = cf_strdup(translator->name);
+
+	if (!translator->name) {
+		if (translator->destroy) {
+			translator->destroy(translator->udata);
+		}
+		return false;
+	}
+	return true;
+}
+
+// Call a provider factory and validate its result, whose name is not copied.
+static as_status
+call_provider_factory_core(as_error* err, as_seed_provider_factory factory, void* factory_udata,
+	const as_map* options, as_seed_provider* out)
+{
+	memset(out, 0, sizeof(as_seed_provider));
+
+	as_error local;
+	as_error_init(&local);
+	as_status status = factory(&local, options, out, factory_udata);
+
+	if (status != AEROSPIKE_OK) {
+		return factory_failed(err, status, &local);
+	}
+
+	if (!provider_is_valid(out)) {
+		if (out->destroy) {
+			out->destroy(out->udata);
+		}
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"factory returned an invalid provider");
+	}
+	return AEROSPIKE_OK;
+}
+
+// Call the factory at index of the registry.
+static as_status
+call_provider_factory(as_error* err, const struct as_plugin_registry_s* registry, uint32_t index,
+	const as_map* options, as_seed_provider* out)
+{
+	const as_plugin_entry* entry = as_vector_get((as_vector*)&registry->entries, index);
+	return call_provider_factory_core(err, entry->factory.provider, entry->udata, options, out);
+}
+
+static as_status
+call_translator_factory_core(as_error* err, as_address_translator_factory factory,
+	void* factory_udata, const as_map* options, as_address_translator* out)
+{
+	memset(out, 0, sizeof(as_address_translator));
+
+	as_error local;
+	as_error_init(&local);
+	as_status status = factory(&local, options, out, factory_udata);
+
+	if (status != AEROSPIKE_OK) {
+		return factory_failed(err, status, &local);
+	}
+
+	if (!translator_is_valid(out)) {
+		if (out->destroy) {
+			out->destroy(out->udata);
+		}
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"factory returned an invalid translator");
+	}
+	return AEROSPIKE_OK;
+}
+
+static as_status
+call_translator_factory(as_error* err, const struct as_plugin_registry_s* registry,
+	uint32_t index, const as_map* options, as_address_translator* out)
+{
+	const as_plugin_entry* entry = as_vector_get((as_vector*)&registry->entries, index);
+	return call_translator_factory_core(err, entry->factory.translator, entry->udata, options,
+		out);
+}
+
+static void
+clear_recipe(struct as_plugin_recipe_s** recipe)
+{
+	as_plugin_recipe_destroy(*recipe);
+	*recipe = NULL;
+}
+
+//---------------------------------
+// Static Functions: recipes
+//---------------------------------
+
+// A factory recipe stores the registry index, which stays valid while the registry vector
+// reallocates, and a reference to client-owned options.
+typedef struct factory_state_s {
+	uint32_t index;
+	as_map* options;
+} factory_state;
+
+static void
+factory_state_destroy(void* state)
+{
+	factory_state* s = state;
+	as_map_destroy(s->options);
+	cf_free(s);
+}
+
+static as_status
+factory_build_provider(as_error* err, const struct as_plugin_registry_s* registry, void* state,
+	void* out)
+{
+	factory_state* s = state;
+	return call_provider_factory(err, registry, s->index, s->options, out);
+}
+
+static as_status
+factory_build_translator(as_error* err, const struct as_plugin_registry_s* registry,
+	void* state, void* out)
+{
+	factory_state* s = state;
+	return call_translator_factory(err, registry, s->index, s->options, out);
+}
+
+// The recipe of a factory set without a name owns the factory udata: it ends with the
+// registration. destroy stays NULL until the registration succeeds, so a failure leaves udata
+// to the caller.
+typedef struct unnamed_state_s {
+	union {
+		as_seed_provider_factory provider;
+		as_address_translator_factory translator;
+	} factory;
+	void (*destroy)(void* udata);
+	void* udata;
+	as_map* options;
+} unnamed_state;
+
+static void
+unnamed_state_destroy(void* state)
+{
+	unnamed_state* s = state;
+
+	if (s->destroy) {
+		s->destroy(s->udata);
+	}
+	as_map_destroy(s->options);
+	cf_free(s);
+}
+
+// Allocate the state with an empty options map. NULL on allocation failure.
+static unnamed_state*
+unnamed_state_create(void* udata)
+{
+	unnamed_state* s = cf_malloc(sizeof(unnamed_state));
+
+	if (!s) {
+		return NULL;
+	}
+	memset(s, 0, sizeof(unnamed_state));
+	s->udata = udata;
+	s->options = (as_map*)as_orderedmap_new(1);
+
+	if (!s->options) {
+		cf_free(s);
+		return NULL;
+	}
+	return s;
+}
+
+static as_status
+unnamed_build_provider(as_error* err, const struct as_plugin_registry_s* registry, void* state,
+	void* out)
+{
+	(void)registry;
+	unnamed_state* s = state;
+	return call_provider_factory_core(err, s->factory.provider, s->udata, s->options, out);
+}
+
+static as_status
+unnamed_build_translator(as_error* err, const struct as_plugin_registry_s* registry,
+	void* state, void* out)
+{
+	(void)registry;
+	unnamed_state* s = state;
+	return call_translator_factory_core(err, s->factory.translator, s->udata, s->options, out);
+}
+
+static void
+free_strings(const char* const* strings, uint32_t size)
+{
+	if (!strings) {
+		return;
+	}
+
+	for (uint32_t i = 0; i < size; i++) {
+		cf_free((void*)strings[i]);
+	}
+	cf_free((void*)strings);
+}
+
+// Copy size strings into *out, NULL when there are none. On failure *out holds what was copied.
+static bool
+copy_strings(const char* const* src, uint32_t size, const char* const** out)
+{
+	*out = NULL;
+
+	if (!src || size == 0) {
+		return true;
+	}
+
+	const char** copy = cf_calloc(size, sizeof(char*));
+
+	if (!copy) {
+		return false;
+	}
+	*out = copy;
+
+	for (uint32_t i = 0; i < size; i++) {
+		if (!(copy[i] = cf_strdup(src[i]))) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static void
+dns_config_destroy(void* state)
+{
+	as_dns_seed_provider_config* c = state;
+	free_strings(c->names, c->names_size);
+	free_strings(c->servers, c->servers_size);
+	cf_free((void*)c->tls_name);
+	cf_free(c);
+}
+
+static as_dns_seed_provider_config*
+dns_config_copy(const as_dns_seed_provider_config* src)
+{
+	as_dns_seed_provider_config* c = cf_malloc(sizeof(as_dns_seed_provider_config));
+
+	if (!c) {
+		return NULL;
+	}
+	*c = *src;
+	c->names = NULL;
+	c->servers = NULL;
+	c->tls_name = NULL;
+
+	bool ok = copy_strings(src->names, src->names_size, &c->names) &&
+		copy_strings(src->servers, src->servers_size, &c->servers) &&
+		(!src->tls_name || (c->tls_name = cf_strdup(src->tls_name)));
+
+	if (!ok) {
+		dns_config_destroy(c);
+		return NULL;
+	}
+	return c;
+}
+
+static as_status
+dns_build(as_error* err, const struct as_plugin_registry_s* registry, void* state, void* out)
+{
+	(void)registry;
+	return as_discovery_dns_seed_provider(err, state, out);
+}
+
+typedef struct port_map_state_s {
+	as_addr_map* entries;
+	uint32_t size;
+} port_map_state;
+
+static void
+port_map_state_destroy(void* state)
+{
+	port_map_state* s = state;
+
+	if (s->entries) {
+		for (uint32_t i = 0; i < s->size; i++) {
+			cf_free(s->entries[i].orig);
+			cf_free(s->entries[i].alt);
+		}
+		cf_free(s->entries);
+	}
+	cf_free(s);
+}
+
+static as_status
+port_map_build(as_error* err, const struct as_plugin_registry_s* registry, void* state, void* out)
+{
+	(void)registry;
+	port_map_state* s = state;
+	return as_discovery_port_map_translator(err, s->entries, s->size, out);
+}
+
+static as_status
+pass_through_build(as_error* err, const struct as_plugin_registry_s* registry, void* state,
+	void* out)
+{
+	(void)err;
+	(void)registry;
+	(void)state;
+	as_discovery_pass_through_translator(out);
+	return AEROSPIKE_OK;
+}
 
 //---------------------------------
 // Functions
@@ -40,6 +647,14 @@ as_config_init(as_config* c)
 	c->event_callback_udata = NULL;
 	c->ip_map = NULL;
 	c->ip_map_size = 0;
+	memset(&c->discovery, 0, sizeof(as_discovery_config));
+	c->discovery.merge_policy = AS_SEED_MERGE;
+	c->discovery.execution_mode = AS_DISCOVERY_EXECUTION_THREAD;
+	c->discovery.refresh_interval_ms = 30000;
+	c->discovery.refresh_timeout_ms = 10000;
+	c->discovery.tend_refresh_deadline_ms = 100;
+	memset(&c->translation, 0, sizeof(as_translation_config));
+	c->translation.on_miss = AS_TRANSLATION_PASS_THROUGH;
 	c->min_conns_per_node = 0;
 	c->max_conns_per_node = 100;
 	c->async_min_conns_per_node = 0;
@@ -106,6 +721,33 @@ as_config_destroy(as_config* config) {
 		cf_free(config->config_provider.path);
 	}
 
+	// Instances first, then the recipes that build them, then the factories the recipes call.
+	destroy_provider(&config->discovery);
+	as_seed_inflight_release(config->discovery.inflight);
+	config->discovery.inflight = NULL;
+	destroy_translator(&config->translation);
+	clear_recipe(&config->discovery.recipe);
+	clear_recipe(&config->translation.recipe);
+	registry_destroy(&config->discovery.registry);
+	registry_destroy(&config->translation.registry);
+
+	as_translation_config* translation = &config->translation;
+
+	if (translation->file_ip_map) {
+		for (uint32_t i = 0; i < translation->file_ip_map_size; i++) {
+			cf_free(translation->file_ip_map[i].orig);
+			cf_free(translation->file_ip_map[i].alt);
+		}
+
+		if (config->ip_map == translation->file_ip_map) {
+			config->ip_map = NULL;
+			config->ip_map_size = 0;
+		}
+		cf_free(translation->file_ip_map);
+		translation->file_ip_map = NULL;
+		translation->file_ip_map_size = 0;
+	}
+
 	as_policies_destroy(&config->policies);
 
 	as_config_tls* tls = &config->tls;
@@ -153,6 +795,650 @@ as_config_destroy(as_config* config) {
 	if (tls->certstring) {
 		cf_free(tls->certstring);
 	}
+}
+
+void
+as_config_release_plugins(as_config* config, bool keep_recipes)
+{
+	as_discovery_config* d = &config->discovery;
+	as_translation_config* t = &config->translation;
+	bool provider = d->provider_registered || d->recipe;
+	bool translator = t->provider_registered || t->recipe;
+
+	// The provider destroy is deferred while a refresh of the previous connection runs.
+	destroy_provider(d);
+	destroy_translator(t);
+
+	if (!keep_recipes) {
+		clear_recipe(&d->recipe);
+		clear_recipe(&t->recipe);
+		registry_destroy(&d->registry);
+		registry_destroy(&t->registry);
+	}
+
+	if (provider && !d->recipe) {
+		d->provider_released = true;
+	}
+
+	if (translator && !t->recipe) {
+		t->provider_released = true;
+	}
+}
+
+uint32_t
+as_plugin_registry_size(const struct as_plugin_registry_s* registry)
+{
+	return registry ? registry->entries.size : 0;
+}
+
+const char*
+as_plugin_registry_name(const struct as_plugin_registry_s* registry, uint32_t index)
+{
+	const as_plugin_entry* entry = as_vector_get((as_vector*)&registry->entries, index);
+	return entry->name;
+}
+
+int32_t
+as_plugin_registry_find(const struct as_plugin_registry_s* registry, const char* name)
+{
+	if (!registry) {
+		return -1;
+	}
+
+	for (uint32_t i = 0; i < registry->entries.size; i++) {
+		const as_plugin_entry* entry = as_vector_get((as_vector*)&registry->entries, i);
+
+		if (strcmp(entry->name, name) == 0) {
+			return (int32_t)i;
+		}
+	}
+	return -1;
+}
+
+as_status
+as_plugin_build_seed_provider(as_error* err, const struct as_plugin_registry_s* registry,
+	uint32_t index, const as_map* options, as_seed_provider* out)
+{
+	as_status status = call_provider_factory(err, registry, index, options, out);
+
+	if (status == AEROSPIKE_OK && !own_provider_name(out)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to copy seed provider name");
+	}
+	return status;
+}
+
+as_status
+as_plugin_build_translator(as_error* err, const struct as_plugin_registry_s* registry,
+	uint32_t index, const as_map* options, as_address_translator* out)
+{
+	as_status status = call_translator_factory(err, registry, index, options, out);
+
+	if (status == AEROSPIKE_OK && !own_translator_name(out)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to copy address translator name");
+	}
+	return status;
+}
+
+as_plugin_recipe*
+as_plugin_recipe_create(as_status (*build)(as_error*, const struct as_plugin_registry_s*, void*,
+	void*), void (*destroy_state)(void*), void* state)
+{
+	as_plugin_recipe* recipe = cf_malloc(sizeof(as_plugin_recipe));
+
+	if (!recipe) {
+		if (destroy_state) {
+			destroy_state(state);
+		}
+		return NULL;
+	}
+	recipe->build = build;
+	recipe->destroy_state = destroy_state;
+	recipe->state = state;
+	recipe->binding = false;
+	return recipe;
+}
+
+void
+as_plugin_recipe_destroy(as_plugin_recipe* recipe)
+{
+	if (!recipe) {
+		return;
+	}
+
+	if (recipe->destroy_state) {
+		recipe->destroy_state(recipe->state);
+	}
+	cf_free(recipe);
+}
+
+as_plugin_recipe*
+as_plugin_recipe_factory(uint32_t index, const as_map* options, bool translator)
+{
+	factory_state* state = cf_malloc(sizeof(factory_state));
+
+	if (!state) {
+		return NULL;
+	}
+	state->index = index;
+	state->options = (as_map*)as_val_reserve((as_val*)options);
+	return as_plugin_recipe_create(translator ? factory_build_translator : factory_build_provider,
+		factory_state_destroy, state);
+}
+
+as_plugin_recipe*
+as_plugin_recipe_dns(const as_dns_seed_provider_config* dns)
+{
+	as_dns_seed_provider_config* copy = dns_config_copy(dns);
+
+	if (!copy) {
+		return NULL;
+	}
+	return as_plugin_recipe_create(dns_build, dns_config_destroy, copy);
+}
+
+as_plugin_recipe*
+as_plugin_recipe_port_map(const as_addr_map* entries, uint32_t size)
+{
+	port_map_state* state = cf_calloc(1, sizeof(port_map_state));
+
+	if (!state) {
+		return NULL;
+	}
+
+	if (size > 0) {
+		state->entries = cf_calloc(size, sizeof(as_addr_map));
+
+		if (!state->entries) {
+			cf_free(state);
+			return NULL;
+		}
+		state->size = size;
+
+		for (uint32_t i = 0; i < size; i++) {
+			state->entries[i].orig = cf_strdup(entries[i].orig);
+			state->entries[i].alt = cf_strdup(entries[i].alt);
+
+			if (!state->entries[i].orig || !state->entries[i].alt) {
+				port_map_state_destroy(state);
+				return NULL;
+			}
+		}
+	}
+	return as_plugin_recipe_create(port_map_build, port_map_state_destroy, state);
+}
+
+as_plugin_recipe*
+as_plugin_recipe_pass_through(void)
+{
+	return as_plugin_recipe_create(pass_through_build, NULL, NULL);
+}
+
+void
+as_config_install_seed_provider(as_config* config, const as_seed_provider* owned,
+	as_plugin_recipe* recipe)
+{
+	if (owned) {
+		replace_provider(&config->discovery, owned, recipe == NULL);
+	}
+	else {
+		destroy_provider(&config->discovery);
+	}
+	clear_recipe(&config->discovery.recipe);
+	config->discovery.recipe = recipe;
+	config->discovery.binding_provider = owned && recipe && recipe->binding;
+}
+
+void
+as_config_install_translator(as_config* config, const as_address_translator* owned,
+	as_plugin_recipe* recipe)
+{
+	if (owned) {
+		replace_translator(&config->translation, owned, recipe == NULL);
+	}
+	else {
+		destroy_translator(&config->translation);
+	}
+	clear_recipe(&config->translation.recipe);
+	config->translation.recipe = recipe;
+}
+
+as_status
+as_config_rebuild_plugins(as_config* config, as_error* err)
+{
+	as_discovery_config* d = &config->discovery;
+	as_translation_config* t = &config->translation;
+	as_error local;
+	as_error_init(&local);
+
+	if (!d->provider_registered && d->recipe) {
+		as_seed_provider provider;
+		memset(&provider, 0, sizeof(provider));
+		as_status status = d->recipe->build(&local, d->registry, d->recipe->state, &provider);
+
+		if (status != AEROSPIKE_OK) {
+			return as_error_update(err, status, "Failed to rebuild the seed provider: %s",
+				local.message);
+		}
+
+		if (!own_provider_name(&provider)) {
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+				"Failed to copy seed provider name");
+		}
+		replace_provider(d, &provider, false);
+		d->binding_provider = d->recipe->binding;
+	}
+
+	if (!t->provider_registered && t->recipe) {
+		as_address_translator translator;
+		memset(&translator, 0, sizeof(translator));
+		as_status status = t->recipe->build(&local, t->registry, t->recipe->state, &translator);
+
+		if (status != AEROSPIKE_OK) {
+			return as_error_update(err, status, "Failed to rebuild the address translator: %s",
+				local.message);
+		}
+
+		if (!own_translator_name(&translator)) {
+			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+				"Failed to copy address translator name");
+		}
+		replace_translator(t, &translator, false);
+	}
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_config_set_seed_provider(as_config* config, const as_seed_provider* provider, as_error* err)
+{
+	if (!config || !provider_is_valid(provider)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid seed provider");
+	}
+
+	if (config->discovery.registration_locked) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Seed provider cannot be replaced while the client is connected");
+	}
+
+	as_seed_provider copy = *provider;
+	copy.name = cf_strdup(provider->name);
+
+	if (!copy.name) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to copy seed provider name");
+	}
+
+	as_config_install_seed_provider(config, &copy, NULL);
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_config_set_address_translator(as_config* config, const as_address_translator* translator,
+	as_error* err)
+{
+	if (!config || !translator_is_valid(translator)) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid address translator");
+	}
+
+	if (config->discovery.registration_locked) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Address translator cannot be replaced while the client is connected");
+	}
+
+	as_address_translator copy = *translator;
+	copy.name = cf_strdup(translator->name);
+
+	if (!copy.name) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to copy address translator name");
+	}
+
+	as_config_install_translator(config, &copy, NULL);
+	return AEROSPIKE_OK;
+}
+
+// Install a built translator whose name is not copied yet, with the recipe that rebuilds it.
+// On failure the translator is destroyed and the old registration is kept.
+static as_status
+install_built_translator(as_config* config, as_address_translator* translator,
+	as_plugin_recipe* recipe, as_error* err)
+{
+	if (!recipe) {
+		if (translator->destroy) {
+			translator->destroy(translator->udata);
+		}
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to allocate address translator recipe");
+	}
+
+	if (!own_translator_name(translator)) {
+		as_plugin_recipe_destroy(recipe);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to copy address translator name");
+	}
+	as_config_install_translator(config, translator, recipe);
+	return AEROSPIKE_OK;
+}
+
+static as_status
+translator_unlocked(as_config* config, as_error* err)
+{
+	if (!config) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid address translator");
+	}
+
+	if (config->discovery.registration_locked) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Address translator cannot be replaced while the client is connected");
+	}
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_config_set_port_map_translator(as_config* config, const as_addr_map* entries, uint32_t size,
+	as_error* err)
+{
+	as_status status = translator_unlocked(config, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	as_address_translator translator;
+	status = as_discovery_port_map_translator(err, entries, size, &translator);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+	return install_built_translator(config, &translator, as_plugin_recipe_port_map(entries, size),
+		err);
+}
+
+as_status
+as_config_set_pass_through_translator(as_config* config, as_error* err)
+{
+	as_status status = translator_unlocked(config, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	as_address_translator translator;
+	as_discovery_pass_through_translator(&translator);
+	return install_built_translator(config, &translator, as_plugin_recipe_pass_through(), err);
+}
+
+as_status
+as_config_set_dns_seed_provider(as_config* config, const as_dns_seed_provider_config* dns,
+	as_error* err)
+{
+	if (!config) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid seed provider");
+	}
+
+	if (config->discovery.registration_locked) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Seed provider cannot be replaced while the client is connected");
+	}
+
+	as_seed_provider provider;
+	as_status status = as_discovery_dns_seed_provider(err, dns, &provider);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	as_plugin_recipe* recipe = as_plugin_recipe_dns(dns);
+
+	if (!recipe) {
+		provider.destroy(provider.udata);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to allocate seed provider recipe");
+	}
+
+	if (!own_provider_name(&provider)) {
+		as_plugin_recipe_destroy(recipe);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to copy seed provider name");
+	}
+	as_config_install_seed_provider(config, &provider, recipe);
+	return AEROSPIKE_OK;
+}
+
+// Build the first instance from a factory set without a name and register it with the recipe
+// that builds it again. On failure the caller keeps udata and the registration is unchanged.
+static as_status
+set_provider_factory(as_config* config, as_seed_provider_factory factory,
+	void (*destroy)(void* udata), void* udata, bool binding, as_error* err)
+{
+	if (config->discovery.registration_locked) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Seed provider cannot be replaced while the client is connected");
+	}
+
+	unnamed_state* state = unnamed_state_create(udata);
+
+	if (!state) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to allocate seed provider recipe");
+	}
+	state->factory.provider = factory;
+
+	as_seed_provider provider;
+	as_status status = call_provider_factory_core(err, factory, udata, state->options, &provider);
+
+	if (status != AEROSPIKE_OK) {
+		unnamed_state_destroy(state);
+		return status;
+	}
+
+	as_plugin_recipe* recipe = as_plugin_recipe_create(unnamed_build_provider,
+		unnamed_state_destroy, state);
+
+	if (!recipe) {
+		if (provider.destroy) {
+			provider.destroy(provider.udata);
+		}
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to allocate seed provider recipe");
+	}
+	recipe->binding = binding;
+
+	if (!own_provider_name(&provider)) {
+		as_plugin_recipe_destroy(recipe);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to copy seed provider name");
+	}
+	state->destroy = destroy;
+	as_config_install_seed_provider(config, &provider, recipe);
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_config_set_seed_provider_factory(as_config* config, as_seed_provider_factory factory,
+	void (*destroy)(void* udata), void* udata, as_error* err)
+{
+	if (!config || !factory) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid seed provider");
+	}
+	return set_provider_factory(config, factory, destroy, udata, false, err);
+}
+
+as_status
+as_config_set_address_translator_factory(as_config* config,
+	as_address_translator_factory factory, void (*destroy)(void* udata), void* udata,
+	as_error* err)
+{
+	as_status status = translator_unlocked(config, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	if (!factory) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid address translator");
+	}
+
+	unnamed_state* state = unnamed_state_create(udata);
+
+	if (!state) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT,
+			"Failed to allocate address translator recipe");
+	}
+	state->factory.translator = factory;
+
+	as_address_translator translator;
+	status = call_translator_factory_core(err, factory, udata, state->options, &translator);
+
+	if (status != AEROSPIKE_OK) {
+		unnamed_state_destroy(state);
+		return status;
+	}
+
+	status = install_built_translator(config, &translator,
+		as_plugin_recipe_create(unnamed_build_translator, unnamed_state_destroy, state), err);
+
+	if (status == AEROSPIKE_OK) {
+		state->destroy = destroy;
+	}
+	return status;
+}
+
+as_status
+as_config_set_binding_seed_provider(as_config* config, as_seed_provider_factory factory,
+	void (*destroy)(void* udata), void* udata, as_error* err)
+{
+	if (!config || !factory) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "Invalid seed provider");
+	}
+
+	if (config->discovery.execution_mode != AS_DISCOVERY_EXECUTION_THREAD) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Binding seed provider requires thread execution mode");
+	}
+	return set_provider_factory(config, factory, destroy, udata, true, err);
+}
+
+as_status
+as_config_register_seed_provider(as_config* config, const char* name,
+	as_seed_provider_factory factory, void (*destroy)(void* udata), void* udata, as_error* err)
+{
+	as_plugin_entry entry = {
+		.factory.provider = factory,
+		.destroy = destroy,
+		.udata = udata
+	};
+	return registry_add(config, config ? &config->discovery.registry : NULL, "seed provider",
+		name, factory != NULL, as_config_builtin_providers, AS_CONFIG_BUILTIN_PROVIDERS, &entry,
+		err);
+}
+
+as_status
+as_config_register_address_translator(as_config* config, const char* name,
+	as_address_translator_factory factory, void (*destroy)(void* udata), void* udata,
+	as_error* err)
+{
+	as_plugin_entry entry = {
+		.factory.translator = factory,
+		.destroy = destroy,
+		.udata = udata
+	};
+	return registry_add(config, config ? &config->translation.registry : NULL,
+		"address translator", name, factory != NULL, as_config_builtin_translators,
+		AS_CONFIG_BUILTIN_TRANSLATORS, &entry, err);
+}
+
+as_status
+as_config_select_seed_provider(as_config* config, const char* name, const as_map* options,
+	as_error* err)
+{
+	int32_t index = -1;
+	as_status status = select_check(config, config ? config->discovery.registry : NULL,
+		"seed provider", name, as_config_builtin_providers, AS_CONFIG_BUILTIN_PROVIDERS,
+		"Seed provider cannot be replaced while the client is connected", &index, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	as_map* copy;
+	as_error local;
+	as_error_init(&local);
+	status = copy_options(options, &copy, &local);
+
+	if (status == AEROSPIKE_OK) {
+		as_seed_provider provider;
+		status = as_plugin_build_seed_provider(&local, config->discovery.registry,
+			(uint32_t)index, copy, &provider);
+
+		if (status == AEROSPIKE_OK) {
+			as_plugin_recipe* recipe = as_plugin_recipe_factory((uint32_t)index, copy, false);
+
+			if (recipe) {
+				as_config_install_seed_provider(config, &provider, recipe);
+			}
+			else {
+				if (provider.destroy) {
+					provider.destroy(provider.udata);
+				}
+				cf_free((void*)provider.name);
+				status = as_error_set_message(&local, AEROSPIKE_ERR_CLIENT,
+					"Failed to allocate seed provider recipe");
+			}
+		}
+		as_map_destroy(copy);
+	}
+
+	if (status != AEROSPIKE_OK) {
+		return as_error_update(err, status, "Invalid seed provider '%s': %s", name,
+			local.message);
+	}
+	return AEROSPIKE_OK;
+}
+
+as_status
+as_config_select_address_translator(as_config* config, const char* name,
+	const as_map* options, as_error* err)
+{
+	int32_t index = -1;
+	as_status status = select_check(config, config ? config->translation.registry : NULL,
+		"address translator", name, as_config_builtin_translators, AS_CONFIG_BUILTIN_TRANSLATORS,
+		"Address translator cannot be replaced while the client is connected", &index, err);
+
+	if (status != AEROSPIKE_OK) {
+		return status;
+	}
+
+	as_map* copy;
+	as_error local;
+	as_error_init(&local);
+	status = copy_options(options, &copy, &local);
+
+	if (status == AEROSPIKE_OK) {
+		as_address_translator translator;
+		status = as_plugin_build_translator(&local, config->translation.registry,
+			(uint32_t)index, copy, &translator);
+
+		if (status == AEROSPIKE_OK) {
+			as_plugin_recipe* recipe = as_plugin_recipe_factory((uint32_t)index, copy, true);
+
+			if (recipe) {
+				as_config_install_translator(config, &translator, recipe);
+			}
+			else {
+				if (translator.destroy) {
+					translator.destroy(translator.udata);
+				}
+				cf_free((void*)translator.name);
+				status = as_error_set_message(&local, AEROSPIKE_ERR_CLIENT,
+					"Failed to allocate address translator recipe");
+			}
+		}
+		as_map_destroy(copy);
+	}
+
+	if (status != AEROSPIKE_OK) {
+		return as_error_update(err, status, "Invalid address translator '%s': %s", name,
+			local.message);
+	}
+	return AEROSPIKE_OK;
 }
 
 bool

@@ -336,6 +336,9 @@ atf_plan_result_write_junit(atf_plan_result* result, const char* path)
 
 int atf_plan_run(atf_plan * plan, atf_plan_result * result) {
 
+    // Piped stdout is fully buffered, so a crash or hang would lose the failures printed so far.
+    setvbuf(stdout, NULL, _IONBF, 0);
+
     printf("\n");
     printf("===============================================================================\n");
     printf("\n");

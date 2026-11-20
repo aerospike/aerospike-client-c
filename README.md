@@ -5,6 +5,13 @@ The Aerospike C client provides a C interface for interacting with the
 64-bit distributions of Linux, MacOS or Windows. Unit tests and examples
 are also included.
 
+## Pluggable discovery
+
+The client can discover its seed hosts through DNS, AWS EC2 tags or a custom provider, and
+translate the addresses servers advertise, for example behind NAT or a load balancer. See the
+[plugin guide](docs/discovery-plugin-guide.md) and the
+[YAML configuration reference](docs/yaml-config-discovery.md).
+
 ## Build Prerequisites
 
 ### Debian and Ubuntu

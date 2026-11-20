@@ -37,7 +37,12 @@ typedef struct as_host_s {
 	char* name;
 	
 	/**
-	 * TLS certificate name for secure connections.
+	 * TLS certificate name for secure connections: the identity the server certificate must
+	 * carry, matched per RFC 9525 against a SAN dNSName entry (case-insensitive, at most one
+	 * left-most wildcard label) or, for an IP address, a SAN iPAddress entry. Address
+	 * translation never changes it. The previous matching (subject CN, or an IP address or
+	 * IP-shaped name matched as text) is still accepted as a deprecated fallback with a warning
+	 * and will be rejected in the next major release; see as_config_tls.
 	 */
 	char* tls_name;
 

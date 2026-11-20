@@ -699,8 +699,8 @@ typedef struct as_seed_provider_s {
 	 * started unless the provider is a binding provider (which runs its single
 	 * call there). Called synchronously once per connect on the application
 	 * thread that connects the client, with no time limit, so it must return
-	 * without blocking or waiting for another thread. A binding provider has no
-	 * such callback; it states periodic at registration.
+	 * without blocking or waiting for another thread. A binding provider sets
+	 * it in its factory and it must be pure C.
 	 */
 	bool (*needs_periodic_refresh)(void* udata);
 
@@ -714,15 +714,19 @@ typedef struct as_seed_provider_s {
 	bool (*supports_deadline)(void* udata);
 
 	/**
-	 * Release udata. Called exactly once per instance, after its last call has
-	 * returned, when the instance ends:
+	 * Release udata: C's counterpart of close() in other clients' seed provider
+	 * SPI. The client never frees plugin memory itself; this callback releases
+	 * the plugin's own udata. Called exactly once per instance, after its last
+	 * call has returned, when the instance ends. For a rebuilt instance it ends
+	 * only that connection's instance:
 	 * - at a sync aerospike_close();
 	 * - at aerospike_destroy() or as_config_destroy();
 	 * - on async aerospike_close() of a connected or an unconnected client;
 	 * - on replacement whenever registration is unlocked: before the first
 	 *   connect, after a failed connect, or after a sync aerospike_close().
-	 *   While an instance is registered, replacing it with the same non-NULL
-	 *   udata destroys nothing.
+	 *   While an instance is registered, registering a table directly with the
+	 *   same non-NULL udata destroys nothing; an instance built by a factory
+	 *   is always destroyed when it is replaced.
 	 *
 	 * After a sync aerospike_close(), aerospike_connect() builds a new instance
 	 * of a provider set by a built-in setter (as_config_set_dns_seed_provider(),
@@ -730,9 +734,13 @@ typedef struct as_seed_provider_s {
 	 * as_config_select_seed_provider(), with the same configuration or options.
 	 * A rebuilt DNS provider reads the system resolvers again, and a rebuilt
 	 * aws-tags provider loads its CA files and resolves its credentials again.
-	 * An instance registered directly, with as_config_set_seed_provider() or
-	 * as_config_set_binding_seed_provider() (including one built by a low-level
-	 * constructor such as as_discovery_dns_seed_provider()), cannot be rebuilt:
+	 * as_config_set_seed_provider_factory() and as_config_set_binding_seed_provider()
+	 * keep their factory, so aerospike_connect() calls it again and the provider
+	 * is rebuilt too; the factory udata is released by the registration, not by
+	 * an instance destroy.
+	 * An instance registered directly, with as_config_set_seed_provider()
+	 * (including one built by a low-level constructor such as
+	 * as_discovery_dns_seed_provider()), cannot be rebuilt:
 	 * aerospike_connect() fails with AEROSPIKE_ERR_PARAM until a provider is
 	 * registered again.
 	 *
@@ -805,14 +813,16 @@ typedef struct as_address_translator_s {
 	void (*on_cluster_view_changed)(uint32_t generation, void* udata);
 
 	/**
-	 * Release udata. Same timing and rules as as_seed_provider.destroy: called
+	 * Release udata: C's counterpart of close() in other clients' address
+	 * translator SPI. Same timing and rules as as_seed_provider.destroy: called
 	 * exactly once per instance, after the last translate or
 	 * on_cluster_view_changed call has returned, and it must never block or
 	 * wait for another thread. After a sync aerospike_close(),
 	 * aerospike_connect() builds a new instance of a translator set by
 	 * as_config_set_port_map_translator(), as_config_set_pass_through_translator(),
-	 * the config file or as_config_select_address_translator(); one registered
-	 * with as_config_set_address_translator() must be registered again.
+	 * as_config_set_address_translator_factory(), the config file or
+	 * as_config_select_address_translator(); one registered with
+	 * as_config_set_address_translator() must be registered again.
 	 * Optional.
 	 */
 	void (*destroy)(void* udata);
@@ -824,8 +834,10 @@ typedef struct as_address_translator_s {
 } as_address_translator;
 
 /**
- * Seed provider factory registered under a name with as_config_register_seed_provider().
- * The client calls it when the name is selected, from code with
+ * Seed provider factory registered under a name with as_config_register_seed_provider(), or
+ * set without a name with as_config_set_seed_provider_factory() or
+ * as_config_set_binding_seed_provider(), which call it at once with an empty options map.
+ * A named factory is called when the name is selected, from code with
  * as_config_select_seed_provider() or in the config file with
  * static.client.discovery.provider, on the thread that selects it or loads the file. A sync
  * aerospike_close() destroys the instance; aerospike_connect() then calls the factory again,
@@ -842,7 +854,8 @@ typedef struct as_address_translator_s {
  * it must never be the factory udata. An instance's destroy can run after the factory udata
  * was destroyed (see as_seed_provider.destroy), so an instance that shares state with the
  * factory udata or with other instances must hold its own reference to that state, for
- * example a reference count.
+ * example a reference count. Instances may share one udata pointer that way; the client still
+ * destroys each instance once, also when a new instance with the same pointer replaces it.
  *
  * options is a client-owned map (an as_orderedmap) of the settings that select the factory,
  * valid only for the call. To keep it, take a reference with as_val_reserve() and release it
@@ -861,7 +874,8 @@ typedef as_status (*as_seed_provider_factory)(as_error* err, const as_map* optio
 
 /**
  * Address translator factory registered under a name with
- * as_config_register_address_translator(). Selected from code with
+ * as_config_register_address_translator(), or set without a name with
+ * as_config_set_address_translator_factory(). Selected from code with
  * as_config_select_address_translator() or in the config file with
  * static.client.translation.provider. Same contract as as_seed_provider_factory, with
  * "factory returned an invalid translator" for an invalid table.
@@ -877,8 +891,9 @@ struct as_plugin_recipe_s;
 
 /**
  * Seed discovery configuration owned by as_config. Register a provider with
- * as_config_set_seed_provider() or as_config_set_binding_seed_provider(); when
- * none is registered the static configured-seed provider is used.
+ * as_config_set_seed_provider(), as_config_set_seed_provider_factory() or
+ * as_config_set_binding_seed_provider(); when none is registered the static
+ * configured-seed provider is used.
  *
  * Adding this structure changes the size of the public by-value as_config and
  * aerospike structures, so applications must be recompiled.

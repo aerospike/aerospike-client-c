@@ -53,6 +53,7 @@ typedef struct as_plugin_recipe_s {
 		void* out);
 	void (*destroy_state)(void* state);
 	void* state;
+	bool binding;
 } as_plugin_recipe;
 
 //---------------------------------

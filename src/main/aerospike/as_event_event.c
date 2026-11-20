@@ -937,6 +937,7 @@ as_event_connect_error(as_event_command* cmd, as_address* primary, int rv)
 	cf_free(cmd->conn);
 	as_event_decr_conn(cmd);
 	cmd->event_loop->errors++;
+	as_event_add_attempt_failure(cmd, AEROSPIKE_ERR_ASYNC_CONNECTION, false);
 
 	if (as_event_command_retry(cmd, false)) {
 		return;

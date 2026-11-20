@@ -31,18 +31,18 @@ extern "C" {
 
 /**
  * Built-in learn-metrics file exporter. Embeds as_metrics_exporter as its first field.
- * The log is header(3). CamelCase segment names are unchanged. Cpu, memory,
+ * The log is header(2). CamelCase segment names are unchanged. Cpu, memory,
  * namespace counters, and namespace latency are written when operational
  * metrics are enabled. Namespace latency is filled for a successful sampled
  * RPC. See as_ns_metrics.latency. The namespace conn slot is not recorded, so
  * each namespace's conn entry repeats the node's
  * as_metrics_node_snapshot.conn_latency. Read one namespace's conn entry per
  * node; summing conn across a node's namespaces overcounts connection opens.
- * Cluster command latency is not written.
- * blockingCount, deferredCount, and backgroundCount follow commandCount on
- * the cluster line. They are feature.api.blocking, feature.api.deferred, and
- * feature.api.background. The columns are always present. They increment only
- * while as_metrics_snapshot.usage_metrics_enabled is true.
+ * Fields added by metrics v3 are not written until the next major release, so
+ * existing shippers keep parsing the line. These are cluster command latency,
+ * the feature.api usage counters, the validation and connection failure
+ * counters, and the record too big and device overload counters. They are on
+ * as_metrics_snapshot.
  */
 typedef struct as_metrics_file_exporter_s as_metrics_file_exporter;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -41,6 +41,9 @@ as_policies_init(as_policies* p)
 	as_policy_txn_verify_init(&p->txn_verify);
 	as_policy_txn_roll_init(&p->txn_roll);
 	as_metrics_policy_init(&p->metrics);
+	// Dynamic configuration extended.operational.enabled defaults to false.
+	// See as_metrics_policy.operational_enabled.
+	p->metrics.operational_enabled = false;
 	return p;
 }
 

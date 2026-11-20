@@ -696,8 +696,10 @@ as_command_add_latencies(as_command* cmd, as_node* node, as_ns_metrics* metrics,
 
 	// Elapsed time from the first attempt, including retries.
 	// The cluster sample has no node. A retry can move to another node.
-	uint64_t command_elapsed = now - cmd->command_begin;
-	as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, command_elapsed);
+	if (cmd->metrics_whole_call) {
+		uint64_t command_elapsed = now - cmd->command_begin;
+		as_cluster_add_command_latency(cmd->cluster, cmd->latency_type, command_elapsed);
+	}
 
 	if (!cmd->metrics_sample_decision) {
 		return;
@@ -758,6 +760,7 @@ as_command_execute_sample(as_command* cmd, as_error* err, bool inherit_sample, b
 	}
 
 	cmd->metrics_sample_decision = sampled;
+	cmd->metrics_whole_call = count_command;
 	// Command latency starts once and includes retries.
 	cmd->command_begin = 0;
 

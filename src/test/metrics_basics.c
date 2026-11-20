@@ -64,7 +64,11 @@ typedef struct metrics_test_exporter_s {
 	as_metrics_exporter base;
 	uint32_t calls;
 	uint32_t enabled_calls;
-	bool fail;
+	// Calls whose snapshot had nodes_departed entries, by export result.
+	uint32_t departed_ok_calls;
+	uint32_t departed_failed_calls;
+	// uint8_t for as_load_uint8() and as_store_uint8(), which every platform has.
+	uint8_t fail;
 	bool last_operational;
 	uint64_t last_mem;
 	uint64_t last_write_latency;
@@ -147,8 +151,17 @@ metrics_test_export(
 		self->last_write_latency = metrics_write_latency_total(metrics_snapshot);
 	}
 
-	if (self->fail) {
+	bool has_departed = metrics_snapshot && metrics_snapshot->nodes_departed_count > 0;
+
+	if (as_load_uint8(&self->fail)) {
+		if (has_departed) {
+			as_incr_uint32(&self->departed_failed_calls);
+		}
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "metrics test exporter failed");
+	}
+
+	if (has_departed) {
+		as_incr_uint32(&self->departed_ok_calls);
 	}
 	return AEROSPIKE_OK;
 }
@@ -660,6 +673,19 @@ metrics_identity_ok(const as_metrics_snapshot* metrics_snapshot)
 	return metrics_snapshot->nodes_departed_count == 0 && metrics_snapshot->nodes_departed == NULL;
 }
 
+static const as_metrics_node_snapshot*
+metrics_find_node(const as_metrics_snapshot* metrics_snapshot, const char* name)
+{
+	for (uint32_t i = 0; i < metrics_snapshot->nodes_count; i++) {
+		const as_metrics_node_snapshot* node_snapshot = metrics_snapshot->nodes[i];
+
+		if (strcmp(node_snapshot->name, name) == 0) {
+			return node_snapshot;
+		}
+	}
+	return NULL;
+}
+
 static bool
 metrics_nodes_ok(const as_metrics_snapshot* metrics_snapshot)
 {
@@ -1107,6 +1133,142 @@ TEST(metrics_operational_namespace_latency, "operational metrics copy namespace 
 
 	metrics_disable();
 	as_metrics_policy_destroy(&policy);
+}
+
+TEST(metrics_rejoin_leaves_nodes_departed, "a node that rejoins before export leaves nodes_departed and keeps its counters")
+{
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+
+	as_cluster* cluster = as->cluster;
+	as_node* node = as_node_get_random(cluster);
+	assert_not_null(node);
+
+	// This simulates only the metrics side of a node leaving and rejoining, so
+	// the node stays in cluster->nodes throughout.
+	// A failed assert returns early, so the asserts run after the cleanup
+	// below. Otherwise metrics_prior stays on a live node and skews later tests.
+	pthread_mutex_lock(&cluster->metrics_lock);
+	as_status close_status = as_metrics_runtime_node_close(&err, cluster, node);
+	pthread_mutex_unlock(&cluster->metrics_lock);
+
+	as_metrics_snapshot* departed_snapshot = NULL;
+	as_status departed_status = aerospike_get_metrics_snapshot(as, &err, &departed_snapshot);
+	uint32_t departed_count = 0;
+	uint32_t departed_opened = 0;
+
+	if (departed_status == AEROSPIKE_OK) {
+		departed_count = departed_snapshot->nodes_departed_count;
+
+		if (departed_count == 1) {
+			departed_opened = departed_snapshot->nodes_departed[0]->sync.opened;
+		}
+		as_metrics_snapshot_destroy(departed_snapshot);
+	}
+
+	pthread_mutex_lock(&cluster->metrics_lock);
+	as_metrics_node_rejoin(cluster, node);
+	uint32_t prior_opened = 0;
+
+	if (node->metrics_prior) {
+		prior_opened = node->metrics_prior->sync.opened;
+	}
+	pthread_mutex_unlock(&cluster->metrics_lock);
+
+	as_metrics_snapshot* rejoin_snapshot = NULL;
+	as_status rejoin_status = aerospike_get_metrics_snapshot(as, &err, &rejoin_snapshot);
+	uint32_t rejoin_departed_count = 0;
+	bool rejoined_found = false;
+
+	if (rejoin_status == AEROSPIKE_OK) {
+		rejoin_departed_count = rejoin_snapshot->nodes_departed_count;
+		rejoined_found = metrics_find_node(rejoin_snapshot, node->name) != NULL;
+		as_metrics_snapshot_destroy(rejoin_snapshot);
+	}
+
+	// The live node in this test never left, so drop the prior stint before
+	// other tests read its counters.
+	pthread_mutex_lock(&cluster->metrics_lock);
+	as_metrics_node_snapshot_destroy(node->metrics_prior);
+	node->metrics_prior = NULL;
+	pthread_mutex_unlock(&cluster->metrics_lock);
+	as_node_release(node);
+
+	metrics_disable();
+	as_metrics_policy_destroy(&policy);
+
+	assert_int_eq(close_status, AEROSPIKE_OK);
+	assert_int_eq(departed_status, AEROSPIKE_OK);
+	assert_int_eq(departed_count, 1);
+	assert_true(departed_opened > 0);
+	assert_int_eq(prior_opened, departed_opened);
+	assert_int_eq(rejoin_status, AEROSPIKE_OK);
+	assert_int_eq(rejoin_departed_count, 0);
+	assert_true(rejoined_found);
+}
+
+// Wait up to 5 seconds for counter to reach min.
+static bool
+metrics_wait_count(uint32_t* counter, uint32_t min)
+{
+	for (uint32_t i = 0; i < 500; i++) {
+		if (as_load_uint32(counter) >= min) {
+			return true;
+		}
+		as_sleep(10);
+	}
+	return false;
+}
+
+TEST(metrics_departed_per_exporter, "a failing exporter still gets a departed node once its export succeeds")
+{
+	metrics_test_exporter* failing = metrics_exporter_new(true);
+	metrics_test_exporter* healthy = metrics_exporter_new(false);
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	strcpy(policy.export_interval, "50ms");
+	as_metrics_policy_add_exporter(&policy, &failing->base);
+	as_metrics_policy_add_exporter(&policy, &healthy->base);
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+
+	as_cluster* cluster = as->cluster;
+	as_node* node = as_node_get_random(cluster);
+	assert_not_null(node);
+
+	// This simulates only the metrics side of a node leaving. See
+	// metrics_rejoin_leaves_nodes_departed.
+	pthread_mutex_lock(&cluster->metrics_lock);
+	as_status close_status = as_metrics_runtime_node_close(&err, cluster, node);
+	pthread_mutex_unlock(&cluster->metrics_lock);
+	as_node_release(node);
+
+	// The healthy export drains only its own copy, so the failing exporter keeps
+	// getting the departed node until one of its exports succeeds.
+	bool failing_saw = metrics_wait_count(&failing->departed_failed_calls, 1);
+	bool healthy_saw = metrics_wait_count(&healthy->departed_ok_calls, 1);
+	as_store_uint8(&failing->fail, 0);
+	bool failing_recovered = metrics_wait_count(&failing->departed_ok_calls, 1);
+
+	// Disable joins the metrics thread, so these counts are stable.
+	metrics_disable();
+	uint32_t failing_ok = as_load_uint32(&failing->departed_ok_calls);
+	uint32_t healthy_ok = as_load_uint32(&healthy->departed_ok_calls);
+	as_metrics_policy_destroy(&policy);
+	cf_free(failing);
+	cf_free(healthy);
+
+	assert_int_eq(close_status, AEROSPIKE_OK);
+	assert_true(failing_saw);
+	assert_true(healthy_saw);
+	assert_true(failing_recovered);
+	assert_int_eq(failing_ok, 1);
+	assert_int_eq(healthy_ok, 1);
 }
 
 TEST(metrics_disable_exports_operational_latencies, "disable exports the final namespace latencies")
@@ -2264,6 +2426,10 @@ typedef struct metrics_command_counts_s {
 	uint64_t commands;
 	uint64_t batch_latency;
 	uint64_t read_latency;
+	uint64_t query_latency;
+	// Namespace latency on the "test" namespace.
+	uint64_t namespace_batch_latency;
+	uint64_t namespace_query_latency;
 } metrics_command_counts;
 
 static bool
@@ -2279,7 +2445,34 @@ metrics_read_command_counts(metrics_command_counts* counts)
 	counts->commands = metrics_snapshot->command_count;
 	counts->batch_latency = metrics_command_latency_total(metrics_snapshot, AS_LATENCY_TYPE_BATCH);
 	counts->read_latency = metrics_command_latency_total(metrics_snapshot, AS_LATENCY_TYPE_READ);
+	counts->query_latency = metrics_command_latency_total(metrics_snapshot, AS_LATENCY_TYPE_QUERY);
+	counts->namespace_batch_latency = metrics_namespace_latency_total(metrics_snapshot,
+		AS_LATENCY_TYPE_BATCH);
+	counts->namespace_query_latency = metrics_namespace_latency_total(metrics_snapshot,
+		AS_LATENCY_TYPE_QUERY);
 	as_metrics_snapshot_destroy(metrics_snapshot);
+	return true;
+}
+
+// A user call draws the sampler once. A sampled call records one cluster
+// latency sample and its node commands record namespace latency. An unsampled
+// call records neither.
+static bool
+metrics_query_sample_consistent(const metrics_command_counts* before, const metrics_command_counts* after)
+{
+	uint64_t commands = after->commands - before->commands;
+	uint64_t cluster_latency = after->query_latency - before->query_latency;
+	uint64_t namespace_latency = after->namespace_query_latency - before->namespace_query_latency;
+
+	if (commands == 0) {
+		return cluster_latency == 0 && namespace_latency == 0;
+	}
+	return commands == 1 && cluster_latency == 1 && namespace_latency >= 1;
+}
+
+static bool
+metrics_scan_callback(const as_val* val, void* udata)
+{
 	return true;
 }
 
@@ -2407,6 +2600,234 @@ TEST(metrics_async_batch_single_key, "an async single-key batch counts once as a
 	assert_true(after_get.commands == after_batch.commands + 1);
 	assert_true(after_get.batch_latency == after_batch.batch_latency);
 	assert_true(after_get.read_latency == after_batch.read_latency + 1);
+}
+
+#define METRICS_BATCH_KEYS 64
+
+static void
+metrics_batch_reserve_reads(as_batch_records* records)
+{
+	for (int64_t i = 0; i < METRICS_BATCH_KEYS; i++) {
+		as_batch_read_record* record = as_batch_read_reserve(records);
+		as_key_init_int64(&record->key, "test", "metrics", i);
+		record->read_all_bins = true;
+	}
+}
+
+TEST(metrics_batch_cluster_latency, "a batch records one cluster latency and namespace latency on its namespace")
+{
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = true;
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+
+	metrics_command_counts before;
+	assert_true(metrics_read_command_counts(&before));
+
+	// Each node gets a sub-batch of more than one key.
+	as_batch_records records;
+	as_batch_records_inita(&records, METRICS_BATCH_KEYS);
+	metrics_batch_reserve_reads(&records);
+	as_status batch_status = aerospike_batch_read(as, &err, NULL, &records);
+	as_batch_records_destroy(&records);
+
+	metrics_command_counts after;
+	bool counts_ok = metrics_read_command_counts(&after);
+
+	metrics_disable();
+	as_metrics_policy_destroy(&policy);
+
+	assert_int_eq(batch_status, AEROSPIKE_OK);
+	assert_true(counts_ok);
+	assert_true(after.commands == before.commands + 1);
+	assert_true(after.batch_latency == before.batch_latency + 1);
+	assert_true(after.namespace_batch_latency > before.namespace_batch_latency);
+}
+
+TEST(metrics_async_batch_cluster_latency, "an async batch records one cluster latency and namespace latency on its namespace")
+{
+	if (as_event_loop_size == 0) {
+		info("Skip because no event loops are running");
+		return;
+	}
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = true;
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+
+	metrics_command_counts before;
+	assert_true(metrics_read_command_counts(&before));
+
+	as_monitor monitor;
+	as_monitor_init(&monitor);
+
+	// The listener destroys records.
+	as_batch_records* records = as_batch_records_create(METRICS_BATCH_KEYS);
+	metrics_batch_reserve_reads(records);
+	as_monitor_begin(&monitor);
+	as_status batch_status = aerospike_batch_read_async(as, &err, NULL, records, metrics_async_batch_listener,
+		&monitor, NULL);
+
+	if (batch_status == AEROSPIKE_OK) {
+		as_monitor_wait(&monitor);
+	}
+	as_monitor_destroy(&monitor);
+
+	metrics_command_counts after;
+	bool counts_ok = metrics_read_command_counts(&after);
+
+	metrics_disable();
+	as_metrics_policy_destroy(&policy);
+
+	assert_int_eq(batch_status, AEROSPIKE_OK);
+	assert_true(counts_ok);
+	assert_true(after.commands == before.commands + 1);
+	assert_true(after.batch_latency == before.batch_latency + 1);
+	assert_true(after.namespace_batch_latency > before.namespace_batch_latency);
+}
+
+#define METRICS_SAMPLER_CALLS 8
+
+TEST(metrics_scan_query_sample_once, "scan and query node commands reuse the user-call sampler decision")
+{
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = true;
+	// About half of the calls are sampled.
+	policy.sampler_range = 2;
+	policy.sampler_threshold = 1;
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+
+	as_policy_scan scan_policy;
+	as_policy_scan_init(&scan_policy);
+	scan_policy.max_records = 1;
+
+	as_scan scan;
+	as_scan_init(&scan, "test", "metrics");
+
+	as_policy_query query_policy;
+	as_policy_query_init(&query_policy);
+
+	as_query query;
+	as_query_init(&query, "test", "metrics");
+	query.max_records = 1;
+
+	bool consistent = true;
+
+	for (uint32_t i = 0; i < METRICS_SAMPLER_CALLS; i++) {
+		metrics_command_counts before;
+		metrics_command_counts after;
+
+		bool counts_ok = metrics_read_command_counts(&before);
+		as_status status = aerospike_scan_foreach(as, &err, &scan_policy, &scan, metrics_scan_callback,
+			NULL);
+		counts_ok = counts_ok && metrics_read_command_counts(&after);
+		consistent = consistent && counts_ok && status == AEROSPIKE_OK &&
+			metrics_query_sample_consistent(&before, &after);
+
+		counts_ok = metrics_read_command_counts(&before);
+		status = aerospike_query_foreach(as, &err, &query_policy, &query, metrics_scan_callback, NULL);
+		counts_ok = counts_ok && metrics_read_command_counts(&after);
+		consistent = consistent && counts_ok && status == AEROSPIKE_OK &&
+			metrics_query_sample_consistent(&before, &after);
+	}
+
+	as_query_destroy(&query);
+	as_scan_destroy(&scan);
+	metrics_disable();
+	as_metrics_policy_destroy(&policy);
+
+	assert_true(consistent);
+}
+
+static bool
+metrics_async_query_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	if (err || !record) {
+		as_monitor_notify(udata);
+	}
+	return true;
+}
+
+TEST(metrics_async_scan_query_sample_once, "async scan and query node commands reuse the user-call sampler decision")
+{
+	if (as_event_loop_size == 0) {
+		info("Skip because no event loops are running");
+		return;
+	}
+
+	as_metrics_policy policy;
+	metrics_policy_init_without_default_file_exporter(&policy);
+	policy.operational_enabled = true;
+	// About half of the calls are sampled.
+	policy.sampler_range = 2;
+	policy.sampler_threshold = 1;
+
+	as_error err;
+	assert_int_eq(metrics_enable(&policy, &err), AEROSPIKE_OK);
+
+	as_policy_scan scan_policy;
+	as_policy_scan_init(&scan_policy);
+	scan_policy.max_records = 1;
+
+	as_scan scan;
+	as_scan_init(&scan, "test", "metrics");
+
+	as_policy_query query_policy;
+	as_policy_query_init(&query_policy);
+
+	as_query query;
+	as_query_init(&query, "test", "metrics");
+	query.max_records = 1;
+
+	as_monitor monitor;
+	as_monitor_init(&monitor);
+
+	bool consistent = true;
+
+	for (uint32_t i = 0; i < METRICS_SAMPLER_CALLS; i++) {
+		metrics_command_counts before;
+		metrics_command_counts after;
+
+		bool counts_ok = metrics_read_command_counts(&before);
+		as_monitor_begin(&monitor);
+		as_status status = aerospike_scan_async(as, &err, &scan_policy, &scan, NULL,
+			metrics_async_query_listener, &monitor, NULL);
+
+		if (status == AEROSPIKE_OK) {
+			as_monitor_wait(&monitor);
+		}
+		counts_ok = counts_ok && metrics_read_command_counts(&after);
+		consistent = consistent && counts_ok && status == AEROSPIKE_OK &&
+			metrics_query_sample_consistent(&before, &after);
+
+		counts_ok = metrics_read_command_counts(&before);
+		as_monitor_begin(&monitor);
+		status = aerospike_query_async(as, &err, &query_policy, &query, metrics_async_query_listener,
+			&monitor, NULL);
+
+		if (status == AEROSPIKE_OK) {
+			as_monitor_wait(&monitor);
+		}
+		counts_ok = counts_ok && metrics_read_command_counts(&after);
+		consistent = consistent && counts_ok && status == AEROSPIKE_OK &&
+			metrics_query_sample_consistent(&before, &after);
+	}
+
+	as_monitor_destroy(&monitor);
+	as_query_destroy(&query);
+	as_scan_destroy(&scan);
+	metrics_disable();
+	as_metrics_policy_destroy(&policy);
+
+	assert_true(consistent);
 }
 
 static bool
@@ -2728,6 +3149,8 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_export_interval);
 	suite_add(metrics_enable_leaves_operational_off);
 	suite_add(metrics_operational_namespace_latency);
+	suite_add(metrics_rejoin_leaves_nodes_departed);
+	suite_add(metrics_departed_per_exporter);
 	suite_add(metrics_disable_exports_operational_latencies);
 	suite_add(metrics_async_conn_latency);
 	suite_add(metrics_latency_unit_microseconds);
@@ -2759,6 +3182,10 @@ SUITE(metrics_basics, "metrics snapshot and exporter tests")
 	suite_add(metrics_operational_sampler_off);
 	suite_add(metrics_batch_single_key);
 	suite_add(metrics_async_batch_single_key);
+	suite_add(metrics_batch_cluster_latency);
+	suite_add(metrics_async_batch_cluster_latency);
+	suite_add(metrics_scan_query_sample_once);
+	suite_add(metrics_async_scan_query_sample_once);
 	suite_add(metrics_dynamic_config_export);
 	suite_add(metrics_dynamic_config_keeps_export_interval);
 	suite_add(metrics_dynamic_config_rejects_unknown_exporter);

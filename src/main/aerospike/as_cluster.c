@@ -234,6 +234,14 @@ as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes
 		as_log_info("Add node %s %s", node->name, as_node_get_address_string(node));
 		as_cluster_event_notify(cluster, node, AS_CLUSTER_ADD_NODE);
 	}
+
+	pthread_mutex_lock(&cluster->metrics_lock);
+
+	for (uint32_t i = 0; i < nodes_to_add->size; i++) {
+		as_node* node = as_vector_get_ptr(nodes_to_add, i);
+		as_metrics_node_rejoin(cluster, node);
+	}
+	pthread_mutex_unlock(&cluster->metrics_lock);
 	
 	// Create temporary nodes array.
 	as_nodes* nodes_old = cluster->nodes;
@@ -1964,6 +1972,7 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->metrics_usage_enabled = false;
 	cluster->metrics_file_writer = false;
 	cluster->metrics_nodes_departed = NULL;
+	cluster->metrics_departed_seq = 0;
 
 	for (uint8_t i = 0; i < AS_LATENCY_TYPE_MAX; i++) {
 		cluster->command_latency[i] = NULL;

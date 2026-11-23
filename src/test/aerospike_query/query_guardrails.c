@@ -86,12 +86,12 @@ extern aerospike* as;
 
 // The server's Top-K concurrency cap has been named differently in different
 // builds.
-static const char* g_jobs_cap_names[] = {"top-k-max-jobs", "order-by-jobs-limit"};
+static const char* g_server_jobs_cap_names[] = {"top-k-max-jobs", "order-by-jobs-limit"};
 
-static char g_run_time_limit_original[32];
-static bool g_has_run_time_limit;
-static const char* g_jobs_cap_name;
-static char g_jobs_cap_original[32];
+static char g_server_run_time_limit_original[32];
+static bool g_server_has_run_time_limit;
+static const char* g_server_jobs_cap_name;
+static char g_server_jobs_cap_original[32];
 
 //---------------------------------
 // Server Configuration
@@ -134,10 +134,10 @@ set_server_run_time_limit(const char* value)
 }
 
 static bool
-set_jobs_cap(const char* value)
+set_server_jobs_cap(const char* value)
 {
 	char command[128];
-	snprintf(command, sizeof(command), "set-config:context=service;%s=%s", g_jobs_cap_name,
+	snprintf(command, sizeof(command), "set-config:context=service;%s=%s", g_server_jobs_cap_name,
 		value);
 	return set_server_config(command);
 }
@@ -152,7 +152,7 @@ typedef struct stat_sum_s {
 } stat_sum;
 
 static bool
-sum_stat_callback(const as_error* err, const as_node* node, const char* req, char* res,
+sum_server_stat_callback(const as_error* err, const as_node* node, const char* req, char* res,
 	void* udata)
 {
 	stat_sum* ctx = (stat_sum*)udata;
@@ -183,12 +183,12 @@ sum_stat_callback(const as_error* err, const as_node* node, const char* req, cha
 
 // Sum a namespace statistic over every node.
 static uint64_t
-sum_namespace_stat(const char* name)
+sum_server_namespace_stat(const char* name)
 {
 	stat_sum ctx = {.name = name, .sum = 0};
 	as_error err;
 
-	aerospike_info_foreach(as, &err, NULL, "namespace/" NAMESPACE, sum_stat_callback, &ctx);
+	aerospike_info_foreach(as, &err, NULL, "namespace/" NAMESPACE, sum_server_stat_callback, &ctx);
 	return ctx.sum;
 }
 
@@ -390,13 +390,13 @@ run_query_thread(void* udata)
 static uint64_t
 run_to_run_time_limit(run* r)
 {
-	uint64_t timeouts_before = sum_namespace_stat(SERVER_TIMEOUT_STAT);
+	uint64_t timeouts_before = sum_server_namespace_stat(SERVER_TIMEOUT_STAT);
 
 	run_query(r);
 
 	// A node may count the timeout after it has sent the error.
 	as_sleep(500);
-	return sum_namespace_stat(SERVER_TIMEOUT_STAT) - timeouts_before;
+	return sum_server_namespace_stat(SERVER_TIMEOUT_STAT) - timeouts_before;
 }
 
 // Run a Top-K query while another Top-K query holds the only job slot on every
@@ -431,10 +431,10 @@ run_with_jobs_capped(run* refused)
 static bool
 server_supports_run_time_limit(void)
 {
-	if (! g_has_run_time_limit) {
+	if (! g_server_has_run_time_limit) {
 		info("skipping guardrail test; the server has no " SERVER_RUN_TIME_LIMIT_NAME);
 	}
-	return g_has_run_time_limit;
+	return g_server_has_run_time_limit;
 }
 
 static bool
@@ -444,10 +444,10 @@ server_supports_jobs_cap(void)
 		return false;
 	}
 
-	if (! g_jobs_cap_name) {
+	if (! g_server_jobs_cap_name) {
 		info("skipping guardrail test; the server has no Top-K job cap");
 	}
-	return g_jobs_cap_name != NULL;
+	return g_server_jobs_cap_name != NULL;
 }
 
 //---------------------------------
@@ -662,7 +662,7 @@ TEST(query_guardrails_top_k_jobs_cap,
 	}
 
 	assert_true(set_server_run_time_limit(SERVER_BLOCKER_RUN_TIME_LIMIT_MS));
-	assert_true(set_jobs_cap("1"));
+	assert_true(set_server_jobs_cap("1"));
 
 	run refused = {
 		.kind = RUN_TOP_K_QUERY,
@@ -687,7 +687,7 @@ TEST(query_guardrails_top_k_jobs_cap_async,
 	}
 
 	assert_true(set_server_run_time_limit(SERVER_BLOCKER_RUN_TIME_LIMIT_MS));
-	assert_true(set_jobs_cap("1"));
+	assert_true(set_server_jobs_cap("1"));
 
 	run refused = {
 		.kind = RUN_TOP_K_QUERY,
@@ -713,19 +713,19 @@ static bool
 before(atf_suite* suite)
 {
 	get_info_field("get-config:context=namespace;id=" NAMESPACE, SERVER_RUN_TIME_LIMIT_NAME,
-		g_run_time_limit_original, sizeof(g_run_time_limit_original));
-	g_has_run_time_limit = g_run_time_limit_original[0] != 0;
+		g_server_run_time_limit_original, sizeof(g_server_run_time_limit_original));
+	g_server_has_run_time_limit = g_server_run_time_limit_original[0] != 0;
 
-	if (! g_has_run_time_limit) {
+	if (! g_server_has_run_time_limit) {
 		return true;
 	}
 
-	for (uint32_t i = 0; i < sizeof(g_jobs_cap_names) / sizeof(g_jobs_cap_names[0]); i++) {
-		get_info_field("get-config:context=service", g_jobs_cap_names[i], g_jobs_cap_original,
-			sizeof(g_jobs_cap_original));
+	for (uint32_t i = 0; i < sizeof(g_server_jobs_cap_names) / sizeof(g_server_jobs_cap_names[0]); i++) {
+		get_info_field("get-config:context=service", g_server_jobs_cap_names[i],
+			g_server_jobs_cap_original, sizeof(g_server_jobs_cap_original));
 
-		if (g_jobs_cap_original[0] != 0) {
-			g_jobs_cap_name = g_jobs_cap_names[i];
+		if (g_server_jobs_cap_original[0] != 0) {
+			g_server_jobs_cap_name = g_server_jobs_cap_names[i];
 			break;
 		}
 	}
@@ -756,14 +756,14 @@ before(atf_suite* suite)
 static bool
 after(atf_suite* suite)
 {
-	if (! g_has_run_time_limit) {
+	if (! g_server_has_run_time_limit) {
 		return true;
 	}
 
-	bool restored = set_server_run_time_limit(g_run_time_limit_original);
+	bool restored = set_server_run_time_limit(g_server_run_time_limit_original);
 
-	if (g_jobs_cap_name) {
-		restored = set_jobs_cap(g_jobs_cap_original) && restored;
+	if (g_server_jobs_cap_name) {
+		restored = set_server_jobs_cap(g_server_jobs_cap_original) && restored;
 	}
 
 	for (uint32_t i = 0; i < N_RECORDS; i++) {

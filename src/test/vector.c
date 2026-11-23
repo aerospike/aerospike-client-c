@@ -1753,12 +1753,24 @@ TEST(vector_dist_exp_compiles, "vector distance expression compiles and packs (c
 	assert_not_null(dot_product);
 	assert_not_null(cosine);
 
-	// Each distance call packs as a 3-element msgpack array
-	// [metric-specific-op, query-vector, vector-bin].
-	assert_int_eq(euclidean->packed[0], 0x90 | 3);
-	assert_int_eq(euclidean->packed[1], _AS_EXP_CODE_VECTOR_EUCLIDEAN_DIST);
-	assert_int_eq(dot_product->packed[1], _AS_EXP_CODE_VECTOR_DOT_PRODUCT);
-	assert_int_eq(cosine->packed[1], _AS_EXP_CODE_VECTOR_COSINE_SIM);
+	// Each distance call packs as a 4-element msgpack array
+	// [52, metric, query-vector, vector-bin]. Ops 53 and 54 are never packed.
+	as_exp* exps[3] = {euclidean, dot_product, cosine};
+	as_vector_distance_metric metrics[3] = {
+		AS_VECTOR_DISTANCE_EUCLIDEAN_SQUARED,
+		AS_VECTOR_DISTANCE_DOT_PRODUCT,
+		AS_VECTOR_DISTANCE_COSINE_SIMILARITY
+	};
+
+	for (uint32_t i = 0; i < 3; i++) {
+		assert_int_eq(exps[i]->packed[0], 0x90 | 4);
+		assert_int_eq(exps[i]->packed[1], 52);
+		assert_int_eq(exps[i]->packed[2], metrics[i]);
+
+		// Everything after the metric is the same for every metric.
+		assert_int_eq(exps[i]->packed_sz, euclidean->packed_sz);
+		assert_int_eq(memcmp(exps[i]->packed + 3, euclidean->packed + 3, euclidean->packed_sz - 3), 0);
+	}
 
 	as_exp_destroy(euclidean);
 	as_exp_destroy(dot_product);

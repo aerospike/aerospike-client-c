@@ -111,9 +111,7 @@ typedef enum {
 
 	_AS_EXP_CODE_MIN = 50,
 	_AS_EXP_CODE_MAX = 51,
-	_AS_EXP_CODE_VECTOR_EUCLIDEAN_DIST = 52,
-	_AS_EXP_CODE_VECTOR_DOT_PRODUCT = 53,
-	_AS_EXP_CODE_VECTOR_COSINE_SIM = 54,
+	_AS_EXP_CODE_VECTOR_DIST = 52,
 
 	_AS_EXP_CODE_DIGEST_MODULO = 64,
 	_AS_EXP_CODE_DEVICE_SIZE = 65,
@@ -687,8 +685,8 @@ as_exp_destroy_base64(char* base64)
  * as_bytes_destroy(&qbytes);
  * @endcode
  *
- * @param __metric		Distance metric (as_vector_distance_metric). Any other value
- *						packs an invalid expression, which the server rejects with
+ * @param __metric		Distance metric (as_vector_distance_metric), sent to the
+ *						server as an integer. The server rejects any other value with
  *						AEROSPIKE_ERR_REQUEST_INVALID.
  * @param __query		Complete serialized query vector, including its header.
  * @param __query_size	Number of serialized query-vector bytes.
@@ -697,12 +695,8 @@ as_exp_destroy_base64(char* base64)
  * @ingroup expression
  */
 #define as_exp_vector_dist(__metric, __query, __query_size, __bin) \
-		{.op=(__metric) == AS_VECTOR_DISTANCE_EUCLIDEAN_SQUARED ? \
-			_AS_EXP_CODE_VECTOR_EUCLIDEAN_DIST : \
-			(__metric) == AS_VECTOR_DISTANCE_DOT_PRODUCT ? \
-			_AS_EXP_CODE_VECTOR_DOT_PRODUCT : \
-			(__metric) == AS_VECTOR_DISTANCE_COSINE_SIMILARITY ? \
-			_AS_EXP_CODE_VECTOR_COSINE_SIM : _AS_EXP_CODE_UNKNOWN, .count=3}, \
+		{.op=_AS_EXP_CODE_VECTOR_DIST, .count=4}, \
+		as_exp_int(__metric), \
 		as_exp_bytes((uint8_t*)(__query), __query_size), \
 		__bin
 

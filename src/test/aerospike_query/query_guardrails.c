@@ -386,7 +386,7 @@ run_query_thread(void* udata)
 // timeouts the servers counted for it: one per node if the client does not
 // retry it.
 static uint64_t
-run_to_run_time_limit(run* r)
+run_and_count_server_timeouts(run* r)
 {
 	uint64_t timeouts_before = sum_server_namespace_stat(SERVER_TIMEOUT_STAT);
 
@@ -452,7 +452,7 @@ TEST(query_guardrails_query_run_time_limit,
 	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_QUERY};
-	uint64_t timeouts = run_to_run_time_limit(&r);
+	uint64_t timeouts = run_and_count_server_timeouts(&r);
 
 	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
 	assert_true(timeouts >= 1);
@@ -469,7 +469,7 @@ TEST(query_guardrails_top_k_run_time_limit,
 	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_TOP_K_QUERY};
-	uint64_t timeouts = run_to_run_time_limit(&r);
+	uint64_t timeouts = run_and_count_server_timeouts(&r);
 
 	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
 	assert_int_eq(r.count, 0);
@@ -487,7 +487,7 @@ TEST(query_guardrails_scan_run_time_limit,
 	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_SCAN};
-	uint64_t timeouts = run_to_run_time_limit(&r);
+	uint64_t timeouts = run_and_count_server_timeouts(&r);
 
 	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
 	assert_true(timeouts >= 1);
@@ -505,7 +505,7 @@ TEST(query_guardrails_query_run_time_limit_async,
 	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_QUERY, .async = true};
-	uint64_t timeouts = run_to_run_time_limit(&r);
+	uint64_t timeouts = run_and_count_server_timeouts(&r);
 
 	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
 	assert_true(timeouts >= 1);
@@ -522,7 +522,7 @@ TEST(query_guardrails_top_k_run_time_limit_async,
 	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_TOP_K_QUERY, .async = true};
-	uint64_t timeouts = run_to_run_time_limit(&r);
+	uint64_t timeouts = run_and_count_server_timeouts(&r);
 
 	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
 	assert_int_eq(r.count, 0);

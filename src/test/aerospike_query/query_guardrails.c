@@ -1,0 +1,725 @@
+/*
+ * Copyright 2008-2026 Aerospike, Inc.
+ *
+ * Portions may be licensed to Aerospike, Inc. under one or more contributor
+ * license agreements.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+
+// Server query run-time guardrails: query-max-run-time-ms and the cap on
+// concurrent Top-K jobs. Each test checks what the application sees when a
+// guardrail stops a query, and that the client does not retry it. The tests
+// skip themselves on servers that do not have the settings.
+
+#include <aerospike/aerospike.h>
+#include <aerospike/aerospike_info.h>
+#include <aerospike/aerospike_key.h>
+#include <aerospike/aerospike_query.h>
+#include <aerospike/aerospike_scan.h>
+#include <aerospike/as_cluster.h>
+#include <aerospike/as_error.h>
+#include <aerospike/as_info.h>
+#include <aerospike/as_key.h>
+#if AS_EVENT_LIB_DEFINED
+#include <aerospike/as_monitor.h>
+#endif
+#include <aerospike/as_node.h>
+#include <aerospike/as_policy.h>
+#include <aerospike/as_query.h>
+#include <aerospike/as_record.h>
+#include <aerospike/as_scan.h>
+#include <aerospike/as_sleep.h>
+#include <aerospike/as_status.h>
+#include <aerospike/as_subcode.h>
+#include <aerospike/as_val.h>
+#include <citrusleaf/cf_clock.h>
+
+#include <pthread.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "../test.h"
+#include "../util/info_helper.h"
+
+//---------------------------------
+// Global Variables
+//---------------------------------
+
+extern aerospike* as;
+
+#define NAMESPACE "test"
+#define SET "query_guardrails"
+#define N_RECORDS 400
+#define TOP_K 5
+
+// A node applies the rate to each of its query threads. With the default of 4
+// threads, a node holding all the records needs 400 / (2 * 4) = 50 seconds, and
+// a node holding a third of them 17 seconds, so every query below outlasts
+// the limits and timeouts that are meant to stop it.
+#define RPS 2
+#define RUN_TIME_LIMIT_MS "500"
+
+// How long the query that holds a Top-K job slot runs.
+#define BLOCKER_RUN_TIME_LIMIT_MS "3000"
+
+// A client total timeout shorter than the throttled query's run time.
+#define TOTAL_TIMEOUT_MS 800
+
+#define RUN_TIME_LIMIT_NAME "query-max-run-time-ms"
+#define TIMEOUT_STAT "pi_query_long_basic_timeout"
+
+// The server's Top-K concurrency cap has been named differently in different
+// builds.
+static const char* g_jobs_cap_names[] = {"top-k-max-jobs", "order-by-jobs-limit"};
+
+static char g_run_time_limit_original[32];
+static bool g_has_run_time_limit;
+static const char* g_jobs_cap_name;
+static char g_jobs_cap_original[32];
+
+//---------------------------------
+// Server Configuration
+//---------------------------------
+
+static bool
+set_config_callback(const as_error* err, const as_node* node, const char* req, char* res,
+	void* udata)
+{
+	uint32_t* n_failed = (uint32_t*)udata;
+	char* value = NULL;
+	as_status status = as_info_parse_single_response(res, &value);
+
+	if (status != AEROSPIKE_OK || strcmp(value, "ok") != 0) {
+		error("%s failed on node %s: %s", req, node->name, res);
+		(*n_failed)++;
+	}
+	return true;
+}
+
+// Apply a set-config command on every node.
+static bool
+set_config(const char* command)
+{
+	uint32_t n_failed = 0;
+	as_error err;
+	as_status status = aerospike_info_foreach(as, &err, NULL, command, set_config_callback,
+		&n_failed);
+
+	return status == AEROSPIKE_OK && n_failed == 0;
+}
+
+static bool
+set_run_time_limit(const char* value)
+{
+	char command[128];
+	snprintf(command, sizeof(command),
+		"set-config:context=namespace;id=" NAMESPACE ";" RUN_TIME_LIMIT_NAME "=%s", value);
+	return set_config(command);
+}
+
+static bool
+set_jobs_cap(const char* value)
+{
+	char command[128];
+	snprintf(command, sizeof(command), "set-config:context=service;%s=%s", g_jobs_cap_name,
+		value);
+	return set_config(command);
+}
+
+//---------------------------------
+// Server Statistics
+//---------------------------------
+
+typedef struct stat_sum_s {
+	const char* name;
+	uint64_t sum;
+} stat_sum;
+
+static bool
+sum_stat_callback(const as_error* err, const as_node* node, const char* req, char* res,
+	void* udata)
+{
+	stat_sum* ctx = (stat_sum*)udata;
+	char* stats = NULL;
+	as_status status = as_info_parse_single_response(res, &stats);
+
+	if (status != AEROSPIKE_OK) {
+		return true;
+	}
+
+	size_t name_len = strlen(ctx->name);
+	char* stat = stats;
+
+	while (stat) {
+		if (strncmp(stat, ctx->name, name_len) == 0 && stat[name_len] == '=') {
+			ctx->sum += strtoull(stat + name_len + 1, NULL, 10);
+			break;
+		}
+
+		stat = strchr(stat, ';');
+
+		if (stat) {
+			stat++;
+		}
+	}
+	return true;
+}
+
+// Sum a namespace statistic over every node.
+static uint64_t
+sum_namespace_stat(const char* name)
+{
+	stat_sum ctx = {.name = name, .sum = 0};
+	as_error err;
+
+	aerospike_info_foreach(as, &err, NULL, "namespace/" NAMESPACE, sum_stat_callback, &ctx);
+	return ctx.sum;
+}
+
+static uint32_t
+cluster_size(void)
+{
+	as_nodes* nodes = as_nodes_reserve(as->cluster);
+	uint32_t size = nodes->size;
+	as_nodes_release(nodes);
+	return size;
+}
+
+//---------------------------------
+// Running Queries
+//---------------------------------
+
+typedef enum {
+	RUN_QUERY,
+	RUN_TOP_K_QUERY,
+	RUN_SCAN
+} run_kind;
+
+typedef struct run_s {
+	// Inputs.
+	run_kind kind;
+	bool async;
+	uint32_t total_timeout;
+	uint8_t error_detail_verbosity;
+	uint32_t sleep_between_retries;
+
+	// Outputs.
+	as_status status;
+	char message[AS_ERROR_MESSAGE_MAX_SIZE];
+	uint32_t count;
+	uint64_t elapsed_ms;
+
+#if AS_EVENT_LIB_DEFINED
+	as_monitor monitor;
+#endif
+} run;
+
+static void
+init_base_policy(as_policy_base* base, const run* r)
+{
+	base->total_timeout = r->total_timeout;
+	base->error_detail_verbosity = r->error_detail_verbosity;
+	base->sleep_between_retries = r->sleep_between_retries;
+}
+
+static void
+init_query(as_query* query, const run* r)
+{
+	as_query_init(query, NAMESPACE, SET);
+	query->records_per_second = RPS;
+
+	if (r->kind == RUN_TOP_K_QUERY) {
+		as_query_order_by(query, "score", AS_QUERY_ORDER_BY_INTEGER, AS_ORDER_DESCENDING,
+			AS_QUERY_ORDER_BY_FLAGS_DEFAULT);
+		as_query_top_k(query, TOP_K);
+	}
+}
+
+static void
+set_error(run* r, const as_error* err)
+{
+	r->status = err->code;
+	snprintf(r->message, sizeof(r->message), "%s", err->message);
+}
+
+static bool
+count_callback(const as_val* val, void* udata)
+{
+	if (val) {
+		run* r = (run*)udata;
+		r->count++;
+	}
+	return true;
+}
+
+static void
+run_sync_query(run* r)
+{
+	as_policy_query policy;
+	as_policy_query_init(&policy);
+	init_base_policy(&policy.base, r);
+
+	as_query query;
+	init_query(&query, r);
+
+	as_error err;
+	aerospike_query_foreach(as, &err, &policy, &query, count_callback, r);
+	set_error(r, &err);
+	as_query_destroy(&query);
+}
+
+static void
+run_sync_scan(run* r)
+{
+	as_policy_scan policy;
+	as_policy_scan_init(&policy);
+	init_base_policy(&policy.base, r);
+	policy.records_per_second = RPS;
+
+	as_scan scan;
+	as_scan_init(&scan, NAMESPACE, SET);
+
+	as_error err;
+	aerospike_scan_foreach(as, &err, &policy, &scan, count_callback, r);
+	set_error(r, &err);
+	as_scan_destroy(&scan);
+}
+
+#if AS_EVENT_LIB_DEFINED
+static bool
+async_listener(as_error* err, as_record* record, void* udata, as_event_loop* event_loop)
+{
+	run* r = (run*)udata;
+
+	if (err) {
+		set_error(r, err);
+		as_monitor_notify(&r->monitor);
+		return false;
+	}
+
+	if (! record) {
+		r->status = AEROSPIKE_OK;
+		as_monitor_notify(&r->monitor);
+		return false;
+	}
+
+	r->count++;
+	return true;
+}
+
+static void
+run_async_query(run* r)
+{
+	as_policy_query policy;
+	as_policy_query_init(&policy);
+	init_base_policy(&policy.base, r);
+
+	as_query query;
+	init_query(&query, r);
+
+	as_monitor_init(&r->monitor);
+	as_monitor_begin(&r->monitor);
+
+	as_error err;
+	as_status status = aerospike_query_async(as, &err, &policy, &query, async_listener, r, NULL);
+
+	if (status == AEROSPIKE_OK) {
+		as_monitor_wait(&r->monitor);
+	}
+	else {
+		set_error(r, &err);
+	}
+
+	as_monitor_destroy(&r->monitor);
+	as_query_destroy(&query);
+}
+#endif
+
+static void
+run_query(run* r)
+{
+	uint64_t begin_ms = cf_getms();
+
+	if (r->kind == RUN_SCAN) {
+		run_sync_scan(r);
+	}
+#if AS_EVENT_LIB_DEFINED
+	else if (r->async) {
+		run_async_query(r);
+	}
+#endif
+	else {
+		run_sync_query(r);
+	}
+
+	r->elapsed_ms = cf_getms() - begin_ms;
+}
+
+static void*
+run_query_thread(void* udata)
+{
+	run_query((run*)udata);
+	return NULL;
+}
+
+// Run a query that outlasts query-max-run-time-ms. Returns how many long-query
+// timeouts the servers counted for it: one per node if the client does not
+// retry it.
+static uint64_t
+run_to_run_time_limit(run* r)
+{
+	uint64_t timeouts_before = sum_namespace_stat(TIMEOUT_STAT);
+
+	run_query(r);
+
+	// A node may count the timeout after it has sent the error.
+	as_sleep(500);
+	return sum_namespace_stat(TIMEOUT_STAT) - timeouts_before;
+}
+
+// Run a Top-K query while another Top-K query holds the only job slot on every
+// node. Returns the status of the query that holds the slot.
+static as_status
+run_with_jobs_capped(run* refused)
+{
+	// A Top-K job that an earlier test left behind can take a moment to end.
+	as_sleep(1000);
+
+	run blocker = {.kind = RUN_TOP_K_QUERY};
+	pthread_t thread;
+	int rc = pthread_create(&thread, NULL, run_query_thread, &blocker);
+
+	if (rc != 0) {
+		error("pthread_create() returned %d", rc);
+		return AEROSPIKE_ERR_CLIENT;
+	}
+
+	// Let the blocker take its slot.
+	as_sleep(500);
+
+	run_query(refused);
+	pthread_join(thread, NULL);
+	return blocker.status;
+}
+
+//---------------------------------
+// Test Preconditions
+//---------------------------------
+
+static bool
+server_supports_run_time_limit(void)
+{
+	if (! g_has_run_time_limit) {
+		info("skipping guardrail test; the server has no " RUN_TIME_LIMIT_NAME);
+	}
+	return g_has_run_time_limit;
+}
+
+static bool
+server_supports_jobs_cap(void)
+{
+	if (! server_supports_run_time_limit()) {
+		return false;
+	}
+
+	if (! g_jobs_cap_name) {
+		info("skipping guardrail test; the server has no Top-K job cap");
+	}
+	return g_jobs_cap_name != NULL;
+}
+
+//---------------------------------
+// Run-Time Limit Tests
+//---------------------------------
+
+TEST(query_guardrails_query_run_time_limit,
+	"a long query stopped by query-max-run-time-ms returns QUERY_TIMEOUT and is not retried")
+{
+	if (! server_supports_run_time_limit()) {
+		return;
+	}
+
+	assert_true(set_run_time_limit(RUN_TIME_LIMIT_MS));
+
+	run r = {.kind = RUN_QUERY};
+	uint64_t timeouts = run_to_run_time_limit(&r);
+
+	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
+	assert_true(timeouts >= 1);
+	assert_true(timeouts <= cluster_size());
+}
+
+TEST(query_guardrails_top_k_run_time_limit,
+	"a Top-K query stopped by query-max-run-time-ms returns QUERY_TIMEOUT, not a partial result, and is not retried")
+{
+	if (! server_supports_run_time_limit()) {
+		return;
+	}
+
+	assert_true(set_run_time_limit(RUN_TIME_LIMIT_MS));
+
+	run r = {.kind = RUN_TOP_K_QUERY};
+	uint64_t timeouts = run_to_run_time_limit(&r);
+
+	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
+	assert_int_eq(r.count, 0);
+	assert_true(timeouts >= 1);
+	assert_true(timeouts <= cluster_size());
+}
+
+TEST(query_guardrails_scan_run_time_limit,
+	"a scan stopped by query-max-run-time-ms returns QUERY_TIMEOUT and is not retried")
+{
+	if (! server_supports_run_time_limit()) {
+		return;
+	}
+
+	assert_true(set_run_time_limit(RUN_TIME_LIMIT_MS));
+
+	run r = {.kind = RUN_SCAN};
+	uint64_t timeouts = run_to_run_time_limit(&r);
+
+	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
+	assert_true(timeouts >= 1);
+	assert_true(timeouts <= cluster_size());
+}
+
+#if AS_EVENT_LIB_DEFINED
+TEST(query_guardrails_query_run_time_limit_async,
+	"an async long query stopped by query-max-run-time-ms returns QUERY_TIMEOUT and is not retried")
+{
+	if (! server_supports_run_time_limit()) {
+		return;
+	}
+
+	assert_true(set_run_time_limit(RUN_TIME_LIMIT_MS));
+
+	run r = {.kind = RUN_QUERY, .async = true};
+	uint64_t timeouts = run_to_run_time_limit(&r);
+
+	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
+	assert_true(timeouts >= 1);
+	assert_true(timeouts <= cluster_size());
+}
+
+TEST(query_guardrails_top_k_run_time_limit_async,
+	"an async Top-K query stopped by query-max-run-time-ms returns QUERY_TIMEOUT, not a partial result, and is not retried")
+{
+	if (! server_supports_run_time_limit()) {
+		return;
+	}
+
+	assert_true(set_run_time_limit(RUN_TIME_LIMIT_MS));
+
+	run r = {.kind = RUN_TOP_K_QUERY, .async = true};
+	uint64_t timeouts = run_to_run_time_limit(&r);
+
+	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
+	assert_int_eq(r.count, 0);
+	assert_true(timeouts >= 1);
+	assert_true(timeouts <= cluster_size());
+}
+#endif
+
+//---------------------------------
+// Total Timeout Tests
+//---------------------------------
+
+// A query that passes its total timeout ends as a timeout, whether the client
+// or the server notices first, and does not run on past it. No server run-time
+// limit is set, so the total timeout is the only thing that can stop the query.
+
+TEST(query_guardrails_query_total_timeout,
+	"a long query that passes its total timeout returns a timeout without running on")
+{
+	if (! server_supports_run_time_limit()) {
+		return;
+	}
+
+	assert_true(set_run_time_limit("0"));
+
+	run r = {.kind = RUN_QUERY, .total_timeout = TOTAL_TIMEOUT_MS};
+	run_query(&r);
+
+	assert_true(r.status == AEROSPIKE_ERR_TIMEOUT || r.status == AEROSPIKE_ERR_QUERY_TIMEOUT);
+	assert_true(r.elapsed_ms < TOTAL_TIMEOUT_MS * 3);
+}
+
+TEST(query_guardrails_top_k_total_timeout,
+	"a Top-K query that passes its total timeout returns a timeout without running on")
+{
+	if (! server_supports_run_time_limit()) {
+		return;
+	}
+
+	assert_true(set_run_time_limit("0"));
+
+	run r = {.kind = RUN_TOP_K_QUERY, .total_timeout = TOTAL_TIMEOUT_MS};
+	run_query(&r);
+
+	assert_true(r.status == AEROSPIKE_ERR_TIMEOUT || r.status == AEROSPIKE_ERR_QUERY_TIMEOUT);
+	assert_int_eq(r.count, 0);
+	assert_true(r.elapsed_ms < TOTAL_TIMEOUT_MS * 3);
+}
+
+//---------------------------------
+// Top-K Job Cap Tests
+//---------------------------------
+
+// A refused query must come back at once. Retrying it with a sleep between
+// retries would take longer than the query that holds the slot.
+#define REFUSED_MAX_ELAPSED_MS 1000
+
+TEST(query_guardrails_top_k_jobs_cap,
+	"a Top-K query refused by the job cap returns FAIL_FORBIDDEN with the server's reason and is not retried")
+{
+	if (! server_supports_jobs_cap()) {
+		return;
+	}
+
+	assert_true(set_run_time_limit(BLOCKER_RUN_TIME_LIMIT_MS));
+	assert_true(set_jobs_cap("1"));
+
+	run refused = {
+		.kind = RUN_TOP_K_QUERY,
+		.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE,
+		.sleep_between_retries = 500
+	};
+	as_status blocker_status = run_with_jobs_capped(&refused);
+
+	assert_int_eq(blocker_status, AEROSPIKE_ERR_QUERY_TIMEOUT);
+	assert_int_eq(refused.status, AEROSPIKE_ERR_FAIL_FORBIDDEN);
+	assert_int_eq(refused.count, 0);
+	assert_true(strstr(refused.message, "retry later") != NULL);
+	assert_true(refused.elapsed_ms < REFUSED_MAX_ELAPSED_MS);
+}
+
+#if AS_EVENT_LIB_DEFINED
+TEST(query_guardrails_top_k_jobs_cap_async,
+	"an async Top-K query refused by the job cap returns FAIL_FORBIDDEN with the server's reason and is not retried")
+{
+	if (! server_supports_jobs_cap()) {
+		return;
+	}
+
+	assert_true(set_run_time_limit(BLOCKER_RUN_TIME_LIMIT_MS));
+	assert_true(set_jobs_cap("1"));
+
+	run refused = {
+		.kind = RUN_TOP_K_QUERY,
+		.async = true,
+		.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE,
+		.sleep_between_retries = 500
+	};
+	as_status blocker_status = run_with_jobs_capped(&refused);
+
+	assert_int_eq(blocker_status, AEROSPIKE_ERR_QUERY_TIMEOUT);
+	assert_int_eq(refused.status, AEROSPIKE_ERR_FAIL_FORBIDDEN);
+	assert_int_eq(refused.count, 0);
+	assert_true(strstr(refused.message, "retry later") != NULL);
+	assert_true(refused.elapsed_ms < REFUSED_MAX_ELAPSED_MS);
+}
+#endif
+
+//---------------------------------
+// Suite
+//---------------------------------
+
+static bool
+before(atf_suite* suite)
+{
+	get_info_field("get-config:context=namespace;id=" NAMESPACE, RUN_TIME_LIMIT_NAME,
+		g_run_time_limit_original, sizeof(g_run_time_limit_original));
+	g_has_run_time_limit = g_run_time_limit_original[0] != 0;
+
+	if (! g_has_run_time_limit) {
+		return true;
+	}
+
+	for (uint32_t i = 0; i < sizeof(g_jobs_cap_names) / sizeof(g_jobs_cap_names[0]); i++) {
+		get_info_field("get-config:context=service", g_jobs_cap_names[i], g_jobs_cap_original,
+			sizeof(g_jobs_cap_original));
+
+		if (g_jobs_cap_original[0] != 0) {
+			g_jobs_cap_name = g_jobs_cap_names[i];
+			break;
+		}
+	}
+
+	as_record rec;
+	as_record_inita(&rec, 1);
+
+	for (uint32_t i = 0; i < N_RECORDS; i++) {
+		as_record_set_int64(&rec, "score", (int64_t)i);
+
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
+
+		as_error err;
+		as_status status = aerospike_key_put(as, &err, NULL, &key, &rec);
+
+		if (status != AEROSPIKE_OK) {
+			error("aerospike_key_put() returned %d - %s", err.code, err.message);
+			as_record_destroy(&rec);
+			return false;
+		}
+	}
+
+	as_record_destroy(&rec);
+	return true;
+}
+
+static bool
+after(atf_suite* suite)
+{
+	if (! g_has_run_time_limit) {
+		return true;
+	}
+
+	bool restored = set_run_time_limit(g_run_time_limit_original);
+
+	if (g_jobs_cap_name) {
+		restored = set_jobs_cap(g_jobs_cap_original) && restored;
+	}
+
+	for (uint32_t i = 0; i < N_RECORDS; i++) {
+		as_key key;
+		as_key_init_int64(&key, NAMESPACE, SET, (int64_t)i);
+
+		as_error err;
+		aerospike_key_remove(as, &err, NULL, &key);
+	}
+
+	return restored;
+}
+
+SUITE(query_guardrails, "query run-time guardrail tests")
+{
+	suite_before(before);
+	suite_after(after);
+
+	suite_add(query_guardrails_query_run_time_limit);
+	suite_add(query_guardrails_top_k_run_time_limit);
+	suite_add(query_guardrails_scan_run_time_limit);
+#if AS_EVENT_LIB_DEFINED
+	suite_add(query_guardrails_query_run_time_limit_async);
+	suite_add(query_guardrails_top_k_run_time_limit_async);
+#endif
+	suite_add(query_guardrails_query_total_timeout);
+	suite_add(query_guardrails_top_k_total_timeout);
+	suite_add(query_guardrails_top_k_jobs_cap);
+#if AS_EVENT_LIB_DEFINED
+	suite_add(query_guardrails_top_k_jobs_cap_async);
+#endif
+}

@@ -84,13 +84,11 @@ extern aerospike* as;
 #define SERVER_RUN_TIME_LIMIT_NAME "query-max-run-time-ms"
 #define SERVER_TIMEOUT_STAT "pi_query_long_basic_timeout"
 
-// The server's Top-K concurrency cap has been named differently in different
-// builds.
-static const char* g_server_jobs_cap_names[] = {"top-k-max-jobs", "order-by-jobs-limit"};
+// The server's setting for how many Top-K queries may run on a node at once.
+#define SERVER_JOBS_CAP_NAME "order-by-jobs-limit"
 
 static char g_server_run_time_limit_original[32];
 static bool g_server_has_run_time_limit;
-static const char* g_server_jobs_cap_name;
 static char g_server_jobs_cap_original[32];
 
 //---------------------------------
@@ -137,7 +135,7 @@ static bool
 set_server_jobs_cap(const char* value)
 {
 	char command[128];
-	snprintf(command, sizeof(command), "set-config:context=service;%s=%s", g_server_jobs_cap_name,
+	snprintf(command, sizeof(command), "set-config:context=service;" SERVER_JOBS_CAP_NAME "=%s",
 		value);
 	return set_server_config(command);
 }
@@ -428,26 +426,16 @@ run_with_jobs_capped(run* refused)
 // Test Preconditions
 //---------------------------------
 
+// The run-time limit and the Top-K job cap come together, so a server that has
+// the limit but not the cap fails the job cap tests instead of skipping them. A
+// server with neither, such as 8.1.2.0, skips every test.
 static bool
-server_supports_run_time_limit(void)
+server_supports_guardrails(void)
 {
 	if (! g_server_has_run_time_limit) {
 		info("skipping guardrail test; the server has no " SERVER_RUN_TIME_LIMIT_NAME);
 	}
 	return g_server_has_run_time_limit;
-}
-
-static bool
-server_supports_jobs_cap(void)
-{
-	if (! server_supports_run_time_limit()) {
-		return false;
-	}
-
-	if (! g_server_jobs_cap_name) {
-		info("skipping guardrail test; the server has no Top-K job cap");
-	}
-	return g_server_jobs_cap_name != NULL;
 }
 
 //---------------------------------
@@ -457,7 +445,7 @@ server_supports_jobs_cap(void)
 TEST(query_guardrails_query_run_time_limit,
 	"a long query stopped by query-max-run-time-ms returns QUERY_TIMEOUT and is not retried")
 {
-	if (! server_supports_run_time_limit()) {
+	if (! server_supports_guardrails()) {
 		return;
 	}
 
@@ -474,7 +462,7 @@ TEST(query_guardrails_query_run_time_limit,
 TEST(query_guardrails_top_k_run_time_limit,
 	"a Top-K query stopped by query-max-run-time-ms returns QUERY_TIMEOUT, not a partial result, and is not retried")
 {
-	if (! server_supports_run_time_limit()) {
+	if (! server_supports_guardrails()) {
 		return;
 	}
 
@@ -492,7 +480,7 @@ TEST(query_guardrails_top_k_run_time_limit,
 TEST(query_guardrails_scan_run_time_limit,
 	"a scan stopped by query-max-run-time-ms returns QUERY_TIMEOUT and is not retried")
 {
-	if (! server_supports_run_time_limit()) {
+	if (! server_supports_guardrails()) {
 		return;
 	}
 
@@ -510,7 +498,7 @@ TEST(query_guardrails_scan_run_time_limit,
 TEST(query_guardrails_query_run_time_limit_async,
 	"an async long query stopped by query-max-run-time-ms returns QUERY_TIMEOUT and is not retried")
 {
-	if (! server_supports_run_time_limit()) {
+	if (! server_supports_guardrails()) {
 		return;
 	}
 
@@ -527,7 +515,7 @@ TEST(query_guardrails_query_run_time_limit_async,
 TEST(query_guardrails_top_k_run_time_limit_async,
 	"an async Top-K query stopped by query-max-run-time-ms returns QUERY_TIMEOUT, not a partial result, and is not retried")
 {
-	if (! server_supports_run_time_limit()) {
+	if (! server_supports_guardrails()) {
 		return;
 	}
 
@@ -554,7 +542,7 @@ TEST(query_guardrails_top_k_run_time_limit_async,
 TEST(query_guardrails_query_total_timeout,
 	"a long query that passes its total timeout returns a timeout without running on")
 {
-	if (! server_supports_run_time_limit()) {
+	if (! server_supports_guardrails()) {
 		return;
 	}
 
@@ -570,7 +558,7 @@ TEST(query_guardrails_query_total_timeout,
 TEST(query_guardrails_top_k_total_timeout,
 	"a Top-K query that passes its total timeout returns a timeout without running on")
 {
-	if (! server_supports_run_time_limit()) {
+	if (! server_supports_guardrails()) {
 		return;
 	}
 
@@ -604,7 +592,7 @@ TEST(query_guardrails_top_k_total_timeout,
 TEST(query_guardrails_top_k_socket_timeout,
 	"a Top-K query that exceeds its socket timeout returns TIMEOUT and is not retried")
 {
-	if (! server_supports_run_time_limit()) {
+	if (! server_supports_guardrails()) {
 		return;
 	}
 
@@ -626,7 +614,7 @@ TEST(query_guardrails_top_k_socket_timeout,
 TEST(query_guardrails_top_k_socket_timeout_async,
 	"an async Top-K query that exceeds its socket timeout returns TIMEOUT and is not retried")
 {
-	if (! server_supports_run_time_limit()) {
+	if (! server_supports_guardrails()) {
 		return;
 	}
 
@@ -657,7 +645,7 @@ TEST(query_guardrails_top_k_socket_timeout_async,
 TEST(query_guardrails_top_k_jobs_cap,
 	"a Top-K query refused by the job cap returns FAIL_FORBIDDEN with the server's reason and is not retried")
 {
-	if (! server_supports_jobs_cap()) {
+	if (! server_supports_guardrails()) {
 		return;
 	}
 
@@ -682,7 +670,7 @@ TEST(query_guardrails_top_k_jobs_cap,
 TEST(query_guardrails_top_k_jobs_cap_async,
 	"an async Top-K query refused by the job cap returns FAIL_FORBIDDEN with the server's reason and is not retried")
 {
-	if (! server_supports_jobs_cap()) {
+	if (! server_supports_guardrails()) {
 		return;
 	}
 
@@ -720,15 +708,8 @@ before(atf_suite* suite)
 		return true;
 	}
 
-	for (uint32_t i = 0; i < sizeof(g_server_jobs_cap_names) / sizeof(g_server_jobs_cap_names[0]); i++) {
-		get_info_field("get-config:context=service", g_server_jobs_cap_names[i],
-			g_server_jobs_cap_original, sizeof(g_server_jobs_cap_original));
-
-		if (g_server_jobs_cap_original[0] != 0) {
-			g_server_jobs_cap_name = g_server_jobs_cap_names[i];
-			break;
-		}
-	}
+	get_info_field("get-config:context=service", SERVER_JOBS_CAP_NAME,
+		g_server_jobs_cap_original, sizeof(g_server_jobs_cap_original));
 
 	as_record rec;
 	as_record_inita(&rec, 1);
@@ -762,7 +743,7 @@ after(atf_suite* suite)
 
 	bool restored = set_server_run_time_limit(g_server_run_time_limit_original);
 
-	if (g_server_jobs_cap_name) {
+	if (g_server_jobs_cap_original[0] != 0) {
 		restored = set_server_jobs_cap(g_server_jobs_cap_original) && restored;
 	}
 

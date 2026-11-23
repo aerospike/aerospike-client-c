@@ -63,17 +63,19 @@ extern aerospike* as;
 #define N_RECORDS 400
 #define TOP_K 5
 
-// A node applies the rate to each of its query threads. With the default of 4
-// threads, a node holding all the records needs 400 / (2 * 4) = 50 seconds, and
-// a node holding a third of them 17 seconds, so every query below outlasts
-// the limits and timeouts that are meant to stop it.
+// The rate keeps a query running past the limits and timeouts below. With 400
+// records, a query runs for about 5 seconds on a single node and about 2 seconds
+// on each node of a three-node cluster, against about 50 milliseconds without
+// the rate.
 #define RPS 2
 
 // The server's run-time limit for a query that the limit must stop.
 #define SERVER_RUN_TIME_LIMIT_MS "500"
 
 // The server's run-time limit for the query that holds a Top-K job slot, which
-// is how long that query runs.
+// is how long that query runs. It must be shorter than the query's run time
+// (see RPS), so the job cap tests need a single node, or more records on a
+// larger cluster.
 #define SERVER_BLOCKER_RUN_TIME_LIMIT_MS "3000"
 
 // A client total timeout shorter than the throttled query's run time.
@@ -383,8 +385,10 @@ run_query_thread(void* udata)
 }
 
 // Run a query that outlasts query-max-run-time-ms. Returns how many long-query
-// timeouts the servers counted for it: one per node if the client does not
-// retry it.
+// timeouts the servers counted for it. Each node that ran the query counts its
+// own, so a retry would raise the count. A query runs on all nodes at once and
+// each one times out, while a scan runs one node at a time and stops at the
+// first timeout.
 static uint64_t
 run_and_count_server_timeouts(run* r)
 {
@@ -442,6 +446,9 @@ server_supports_guardrails(void)
 // Run-Time Limit Tests
 //---------------------------------
 
+// Each test checks the timeout count that run_and_count_server_timeouts()
+// describes, which a retry would raise.
+
 TEST(query_guardrails_query_run_time_limit,
 	"a long query stopped by query-max-run-time-ms returns QUERY_TIMEOUT and is not retried")
 {
@@ -455,8 +462,8 @@ TEST(query_guardrails_query_run_time_limit,
 	uint64_t timeouts = run_and_count_server_timeouts(&r);
 
 	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
-	assert_true(timeouts >= 1);
-	assert_true(timeouts <= cluster_size());
+	uint32_t n_nodes = cluster_size();
+	assert_int_eq(timeouts, n_nodes);
 }
 
 TEST(query_guardrails_top_k_run_time_limit,
@@ -473,8 +480,8 @@ TEST(query_guardrails_top_k_run_time_limit,
 
 	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
 	assert_int_eq(r.count, 0);
-	assert_true(timeouts >= 1);
-	assert_true(timeouts <= cluster_size());
+	uint32_t n_nodes = cluster_size();
+	assert_int_eq(timeouts, n_nodes);
 }
 
 TEST(query_guardrails_scan_run_time_limit,
@@ -490,8 +497,7 @@ TEST(query_guardrails_scan_run_time_limit,
 	uint64_t timeouts = run_and_count_server_timeouts(&r);
 
 	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
-	assert_true(timeouts >= 1);
-	assert_true(timeouts <= cluster_size());
+	assert_int_eq(timeouts, 1);
 }
 
 #if AS_EVENT_LIB_DEFINED
@@ -508,8 +514,8 @@ TEST(query_guardrails_query_run_time_limit_async,
 	uint64_t timeouts = run_and_count_server_timeouts(&r);
 
 	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
-	assert_true(timeouts >= 1);
-	assert_true(timeouts <= cluster_size());
+	uint32_t n_nodes = cluster_size();
+	assert_int_eq(timeouts, n_nodes);
 }
 
 TEST(query_guardrails_top_k_run_time_limit_async,
@@ -526,8 +532,8 @@ TEST(query_guardrails_top_k_run_time_limit_async,
 
 	assert_int_eq(r.status, AEROSPIKE_ERR_QUERY_TIMEOUT);
 	assert_int_eq(r.count, 0);
-	assert_true(timeouts >= 1);
-	assert_true(timeouts <= cluster_size());
+	uint32_t n_nodes = cluster_size();
+	assert_int_eq(timeouts, n_nodes);
 }
 #endif
 

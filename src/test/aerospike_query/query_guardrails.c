@@ -544,6 +544,10 @@ TEST(query_guardrails_top_k_run_time_limit_async,
 // A query that passes its total timeout ends as a timeout, whether the client
 // or the server notices first, and does not run on past it. No server run-time
 // limit is set, so the total timeout is the only thing that can stop the query.
+// A retry that restarted the timeout would run for at least another
+// TOTAL_TIMEOUT_MS, so the query must end less than half of that past the total
+// timeout.
+#define TOTAL_TIMEOUT_MAX_ELAPSED_MS (TOTAL_TIMEOUT_MS * 3 / 2)
 
 TEST(query_guardrails_query_total_timeout,
 	"a long query that passes its total timeout returns a timeout without running on")
@@ -558,7 +562,7 @@ TEST(query_guardrails_query_total_timeout,
 	run_query(&r);
 
 	assert_true(r.status == AEROSPIKE_ERR_TIMEOUT || r.status == AEROSPIKE_ERR_QUERY_TIMEOUT);
-	assert_true(r.elapsed_ms < TOTAL_TIMEOUT_MS * 3);
+	assert_true(r.elapsed_ms < TOTAL_TIMEOUT_MAX_ELAPSED_MS);
 }
 
 TEST(query_guardrails_top_k_total_timeout,
@@ -575,7 +579,7 @@ TEST(query_guardrails_top_k_total_timeout,
 
 	assert_true(r.status == AEROSPIKE_ERR_TIMEOUT || r.status == AEROSPIKE_ERR_QUERY_TIMEOUT);
 	assert_int_eq(r.count, 0);
-	assert_true(r.elapsed_ms < TOTAL_TIMEOUT_MS * 3);
+	assert_true(r.elapsed_ms < TOTAL_TIMEOUT_MAX_ELAPSED_MS);
 }
 
 //---------------------------------

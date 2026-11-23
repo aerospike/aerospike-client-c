@@ -622,15 +622,18 @@ typedef struct as_query_predicates_s {
  * as_policy_base.max_retries, until its total timeout passes.
  *
  * The socket timeout is how long the client waits for the next results from a
- * node, and the total timeout is the time allowed for the whole query. A query
- * that streams results restarts the socket wait with every batch, but a query
- * with a filter that matches few records can leave a node silent for most of
- * its run, as a Top-K query does (see above). Use the total timeout to bound a
- * long query, and set the socket timeout above the longest silence you expect.
+ * node, and the total timeout is the time allowed for the whole query. A node
+ * sends results in batches, and a query that streams them restarts the socket
+ * wait with every batch. A query that returns little data, for example because
+ * an as_policy_base.filter_exp rejects most of the records it reads, can leave
+ * a node silent for most of its run, as a Top-K query does (see above). Use the
+ * total timeout to bound a long query, and set the socket timeout above the
+ * longest silence you expect.
  *
- * Use a selective as_query_where() predicate, or a smaller set. A query that
- * matches fewer records finishes sooner, holds a Top-K slot for less time and
- * is less likely to reach a limit.
+ * Use a selective as_query_where() predicate, or a smaller set, so the query
+ * reads fewer records. It then finishes sooner, holds a Top-K slot for less
+ * time and is less likely to reach a limit. An as_policy_base.filter_exp is
+ * applied after a record is read, so it shortens the result but not the run.
  *
  * @ingroup query_operations
  */

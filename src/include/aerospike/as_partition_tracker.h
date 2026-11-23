@@ -83,7 +83,7 @@ as_status
 as_partition_tracker_init_nodes(
 	as_partition_tracker* pt, struct as_cluster_s* cluster, const as_policy_base* policy,
 	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all,
-	bool paginate, uint32_t cluster_size, as_error* err
+	bool paginate, uint32_t cluster_size, bool retry_on_timeout, as_error* err
 	);
 
 as_status
@@ -97,7 +97,8 @@ as_status
 as_partition_tracker_init_filter(
 	as_partition_tracker* pt, struct as_cluster_s* cluster, const as_policy_base* policy,
 	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all,
-	bool paginate, uint32_t cluster_size, as_partition_filter* pf, struct as_error_s* err
+	bool paginate, uint32_t cluster_size, as_partition_filter* pf, bool retry_on_timeout,
+	struct as_error_s* err
 	);
 
 as_status

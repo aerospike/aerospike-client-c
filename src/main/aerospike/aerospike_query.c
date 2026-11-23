@@ -2017,7 +2017,6 @@ as_query_topk_partitions(
 	// Top-K: buffer every targeted node's (already server-ranked) batch and
 	// replay it to the real callback once, in final merged rank order, instead
 	// of streaming records to it as they arrive. See as_query_topk.h.
-	pt->retry_on_timeout = false;
 	as_query_topk_collector* collector = as_query_topk_collector_create(query, callback, udata);
 	as_status status = as_query_partitions(cluster, err, policy, query, pt, as_query_topk_complete,
 		collector);
@@ -2292,7 +2291,6 @@ as_query_topk_partition_async(
 {
 	// Buffer every targeted node's (already server-ranked) batch and replay it to the
 	// listener once, in final merged rank order. See as_query_topk.h.
-	pt->retry_on_timeout = false;
 	as_query_topk_collector* collector = as_query_topk_collector_create_async(query, listener, udata);
 
 	as_status status = as_query_partition_async(cluster, err, policy, query, pt,
@@ -2504,15 +2502,16 @@ aerospike_query_foreach_internal(
 			return status;
 		}
 
+		bool is_topk = as_query_is_topk(query);
 		as_partition_tracker pt;
 		status = as_partition_tracker_init_nodes(&pt, cluster, &policy->base, query->max_records,
-			policy->replica, &query->parts_all, query->paginate, n_nodes, err);
+			policy->replica, &query->parts_all, query->paginate, n_nodes, ! is_topk, err);
 
 		if (status != AEROSPIKE_OK) {
 			return status;
 		}
 
-		if (as_query_is_topk(query)) {
+		if (is_topk) {
 			status = as_query_topk_partitions(cluster, err, policy, query, &pt, callback, udata);
 		}
 		else {
@@ -2674,15 +2673,16 @@ aerospike_query_partitions(
 		as_query_set_partitions(query, pf->parts_all);
 	}
 
+	bool is_topk = as_query_is_topk(query);
 	as_partition_tracker pt;
 	status = as_partition_tracker_init_filter(&pt, cluster, &policy->base, query->max_records,
-		policy->replica, &query->parts_all, query->paginate, n_nodes, pf, err);
+		policy->replica, &query->parts_all, query->paginate, n_nodes, pf, ! is_topk, err);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
 
-	if (as_query_is_topk(query)) {
+	if (is_topk) {
 		status = as_query_topk_partitions(cluster, err, policy, query, &pt, callback, udata);
 	}
 	else {
@@ -2735,16 +2735,17 @@ aerospike_query_async(
 			return status;
 		}
 
+		bool is_topk = as_query_is_topk(query);
 		as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
 		status = as_partition_tracker_init_nodes(pt, cluster, &policy->base, query->max_records,
-			policy->replica, &query->parts_all, query->paginate, n_nodes, err);
+			policy->replica, &query->parts_all, query->paginate, n_nodes, ! is_topk, err);
 
 		if (status != AEROSPIKE_OK) {
 			cf_free(pt);
 			return status;
 		}
 
-		if (as_query_is_topk(query)) {
+		if (is_topk) {
 			return as_query_topk_partition_async(cluster, err, policy, query, pt, listener, udata,
 				event_loop);
 		}
@@ -2942,16 +2943,17 @@ aerospike_query_partitions_async(
 		as_query_set_partitions(query, pf->parts_all);
 	}
 
+	bool is_topk = as_query_is_topk(query);
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
 	status = as_partition_tracker_init_filter(pt, cluster, &policy->base, query->max_records,
-		policy->replica, &query->parts_all, query->paginate, n_nodes, pf, err);
+		policy->replica, &query->parts_all, query->paginate, n_nodes, pf, ! is_topk, err);
 
 	if (status != AEROSPIKE_OK) {
 		cf_free(pt);
 		return status;
 	}
 
-	if (as_query_is_topk(query)) {
+	if (is_topk) {
 		return as_query_topk_partition_async(cluster, err, policy, query, pt, listener, udata,
 			event_loop);
 	}

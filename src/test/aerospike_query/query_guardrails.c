@@ -68,16 +68,21 @@ extern aerospike* as;
 // a node holding a third of them 17 seconds, so every query below outlasts
 // the limits and timeouts that are meant to stop it.
 #define RPS 2
-#define RUN_TIME_LIMIT_MS "500"
 
-// How long the query that holds a Top-K job slot runs.
-#define BLOCKER_RUN_TIME_LIMIT_MS "3000"
+// The server's run-time limit for a query that the limit must stop.
+#define SERVER_RUN_TIME_LIMIT_MS "500"
+
+// The server's run-time limit for the query that holds a Top-K job slot, which
+// is how long that query runs.
+#define SERVER_BLOCKER_RUN_TIME_LIMIT_MS "3000"
 
 // A client total timeout shorter than the throttled query's run time.
 #define TOTAL_TIMEOUT_MS 800
 
-#define RUN_TIME_LIMIT_NAME "query-max-run-time-ms"
-#define TIMEOUT_STAT "pi_query_long_basic_timeout"
+// The server's setting for how long a long query may run, and its namespace
+// statistic that counts the long queries that timed out.
+#define SERVER_RUN_TIME_LIMIT_NAME "query-max-run-time-ms"
+#define SERVER_TIMEOUT_STAT "pi_query_long_basic_timeout"
 
 // The server's Top-K concurrency cap has been named differently in different
 // builds.
@@ -93,7 +98,7 @@ static char g_jobs_cap_original[32];
 //---------------------------------
 
 static bool
-set_config_callback(const as_error* err, const as_node* node, const char* req, char* res,
+set_server_config_callback(const as_error* err, const as_node* node, const char* req, char* res,
 	void* udata)
 {
 	uint32_t* n_failed = (uint32_t*)udata;
@@ -109,23 +114,23 @@ set_config_callback(const as_error* err, const as_node* node, const char* req, c
 
 // Apply a set-config command on every node.
 static bool
-set_config(const char* command)
+set_server_config(const char* command)
 {
 	uint32_t n_failed = 0;
 	as_error err;
-	as_status status = aerospike_info_foreach(as, &err, NULL, command, set_config_callback,
+	as_status status = aerospike_info_foreach(as, &err, NULL, command, set_server_config_callback,
 		&n_failed);
 
 	return status == AEROSPIKE_OK && n_failed == 0;
 }
 
 static bool
-set_run_time_limit(const char* value)
+set_server_run_time_limit(const char* value)
 {
 	char command[128];
 	snprintf(command, sizeof(command),
-		"set-config:context=namespace;id=" NAMESPACE ";" RUN_TIME_LIMIT_NAME "=%s", value);
-	return set_config(command);
+		"set-config:context=namespace;id=" NAMESPACE ";" SERVER_RUN_TIME_LIMIT_NAME "=%s", value);
+	return set_server_config(command);
 }
 
 static bool
@@ -134,7 +139,7 @@ set_jobs_cap(const char* value)
 	char command[128];
 	snprintf(command, sizeof(command), "set-config:context=service;%s=%s", g_jobs_cap_name,
 		value);
-	return set_config(command);
+	return set_server_config(command);
 }
 
 //---------------------------------
@@ -385,13 +390,13 @@ run_query_thread(void* udata)
 static uint64_t
 run_to_run_time_limit(run* r)
 {
-	uint64_t timeouts_before = sum_namespace_stat(TIMEOUT_STAT);
+	uint64_t timeouts_before = sum_namespace_stat(SERVER_TIMEOUT_STAT);
 
 	run_query(r);
 
 	// A node may count the timeout after it has sent the error.
 	as_sleep(500);
-	return sum_namespace_stat(TIMEOUT_STAT) - timeouts_before;
+	return sum_namespace_stat(SERVER_TIMEOUT_STAT) - timeouts_before;
 }
 
 // Run a Top-K query while another Top-K query holds the only job slot on every
@@ -427,7 +432,7 @@ static bool
 server_supports_run_time_limit(void)
 {
 	if (! g_has_run_time_limit) {
-		info("skipping guardrail test; the server has no " RUN_TIME_LIMIT_NAME);
+		info("skipping guardrail test; the server has no " SERVER_RUN_TIME_LIMIT_NAME);
 	}
 	return g_has_run_time_limit;
 }
@@ -456,7 +461,7 @@ TEST(query_guardrails_query_run_time_limit,
 		return;
 	}
 
-	assert_true(set_run_time_limit(RUN_TIME_LIMIT_MS));
+	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_QUERY};
 	uint64_t timeouts = run_to_run_time_limit(&r);
@@ -473,7 +478,7 @@ TEST(query_guardrails_top_k_run_time_limit,
 		return;
 	}
 
-	assert_true(set_run_time_limit(RUN_TIME_LIMIT_MS));
+	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_TOP_K_QUERY};
 	uint64_t timeouts = run_to_run_time_limit(&r);
@@ -491,7 +496,7 @@ TEST(query_guardrails_scan_run_time_limit,
 		return;
 	}
 
-	assert_true(set_run_time_limit(RUN_TIME_LIMIT_MS));
+	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_SCAN};
 	uint64_t timeouts = run_to_run_time_limit(&r);
@@ -509,7 +514,7 @@ TEST(query_guardrails_query_run_time_limit_async,
 		return;
 	}
 
-	assert_true(set_run_time_limit(RUN_TIME_LIMIT_MS));
+	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_QUERY, .async = true};
 	uint64_t timeouts = run_to_run_time_limit(&r);
@@ -526,7 +531,7 @@ TEST(query_guardrails_top_k_run_time_limit_async,
 		return;
 	}
 
-	assert_true(set_run_time_limit(RUN_TIME_LIMIT_MS));
+	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_TOP_K_QUERY, .async = true};
 	uint64_t timeouts = run_to_run_time_limit(&r);
@@ -553,7 +558,7 @@ TEST(query_guardrails_query_total_timeout,
 		return;
 	}
 
-	assert_true(set_run_time_limit("0"));
+	assert_true(set_server_run_time_limit("0"));
 
 	run r = {.kind = RUN_QUERY, .total_timeout = TOTAL_TIMEOUT_MS};
 	run_query(&r);
@@ -569,7 +574,7 @@ TEST(query_guardrails_top_k_total_timeout,
 		return;
 	}
 
-	assert_true(set_run_time_limit("0"));
+	assert_true(set_server_run_time_limit("0"));
 
 	run r = {.kind = RUN_TOP_K_QUERY, .total_timeout = TOTAL_TIMEOUT_MS};
 	run_query(&r);
@@ -594,7 +599,7 @@ TEST(query_guardrails_top_k_total_timeout,
 // server notices. The run-time limit, above the socket timeout so the client
 // always gives up first, ends the job soon so that it does not hold a Top-K
 // slot in the tests that follow.
-#define SOCKET_TIMEOUT_RUN_TIME_LIMIT_MS "1000"
+#define SERVER_SOCKET_TIMEOUT_RUN_TIME_LIMIT_MS "1000"
 
 TEST(query_guardrails_top_k_socket_timeout,
 	"a Top-K query that exceeds its socket timeout returns TIMEOUT and is not retried")
@@ -603,7 +608,7 @@ TEST(query_guardrails_top_k_socket_timeout,
 		return;
 	}
 
-	assert_true(set_run_time_limit(SOCKET_TIMEOUT_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_run_time_limit(SERVER_SOCKET_TIMEOUT_RUN_TIME_LIMIT_MS));
 
 	run r = {
 		.kind = RUN_TOP_K_QUERY,
@@ -625,7 +630,7 @@ TEST(query_guardrails_top_k_socket_timeout_async,
 		return;
 	}
 
-	assert_true(set_run_time_limit(SOCKET_TIMEOUT_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_run_time_limit(SERVER_SOCKET_TIMEOUT_RUN_TIME_LIMIT_MS));
 
 	run r = {
 		.kind = RUN_TOP_K_QUERY,
@@ -656,7 +661,7 @@ TEST(query_guardrails_top_k_jobs_cap,
 		return;
 	}
 
-	assert_true(set_run_time_limit(BLOCKER_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_run_time_limit(SERVER_BLOCKER_RUN_TIME_LIMIT_MS));
 	assert_true(set_jobs_cap("1"));
 
 	run refused = {
@@ -681,7 +686,7 @@ TEST(query_guardrails_top_k_jobs_cap_async,
 		return;
 	}
 
-	assert_true(set_run_time_limit(BLOCKER_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_run_time_limit(SERVER_BLOCKER_RUN_TIME_LIMIT_MS));
 	assert_true(set_jobs_cap("1"));
 
 	run refused = {
@@ -707,7 +712,7 @@ TEST(query_guardrails_top_k_jobs_cap_async,
 static bool
 before(atf_suite* suite)
 {
-	get_info_field("get-config:context=namespace;id=" NAMESPACE, RUN_TIME_LIMIT_NAME,
+	get_info_field("get-config:context=namespace;id=" NAMESPACE, SERVER_RUN_TIME_LIMIT_NAME,
 		g_run_time_limit_original, sizeof(g_run_time_limit_original));
 	g_has_run_time_limit = g_run_time_limit_original[0] != 0;
 
@@ -755,7 +760,7 @@ after(atf_suite* suite)
 		return true;
 	}
 
-	bool restored = set_run_time_limit(g_run_time_limit_original);
+	bool restored = set_server_run_time_limit(g_run_time_limit_original);
 
 	if (g_jobs_cap_name) {
 		restored = set_jobs_cap(g_jobs_cap_original) && restored;

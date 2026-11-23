@@ -210,6 +210,7 @@ typedef struct run_s {
 	// Inputs.
 	run_kind kind;
 	bool async;
+	uint32_t socket_timeout;
 	uint32_t total_timeout;
 	uint8_t error_detail_verbosity;
 	uint32_t sleep_between_retries;
@@ -228,6 +229,11 @@ typedef struct run_s {
 static void
 init_base_policy(as_policy_base* base, const run* r)
 {
+	// Zero keeps the policy's default socket timeout.
+	if (r->socket_timeout > 0) {
+		base->socket_timeout = r->socket_timeout;
+	}
+
 	base->total_timeout = r->total_timeout;
 	base->error_detail_verbosity = r->error_detail_verbosity;
 	base->sleep_between_retries = r->sleep_between_retries;
@@ -574,6 +580,68 @@ TEST(query_guardrails_top_k_total_timeout,
 }
 
 //---------------------------------
+// Top-K Socket Timeout Tests
+//---------------------------------
+
+// A Top-K node sends nothing until it has scanned everything, so a socket
+// timeout shorter than the scan ends the query. The query must come back after
+// that one wait. With the default of 5 retries, each retry would take another
+// socket timeout and a sleep.
+#define SOCKET_TIMEOUT_MS 500
+#define SOCKET_TIMEOUT_MAX_ELAPSED_MS 1500
+
+// A server job whose client has hung up can run for several seconds before the
+// server notices. The run-time limit, above the socket timeout so the client
+// always gives up first, ends the job soon so that it does not hold a Top-K
+// slot in the tests that follow.
+#define SOCKET_TIMEOUT_RUN_TIME_LIMIT_MS "1000"
+
+TEST(query_guardrails_top_k_socket_timeout,
+	"a Top-K query that exceeds its socket timeout returns TIMEOUT and is not retried")
+{
+	if (! server_supports_run_time_limit()) {
+		return;
+	}
+
+	assert_true(set_run_time_limit(SOCKET_TIMEOUT_RUN_TIME_LIMIT_MS));
+
+	run r = {
+		.kind = RUN_TOP_K_QUERY,
+		.socket_timeout = SOCKET_TIMEOUT_MS,
+		.sleep_between_retries = SOCKET_TIMEOUT_MS
+	};
+	run_query(&r);
+
+	assert_int_eq(r.status, AEROSPIKE_ERR_TIMEOUT);
+	assert_int_eq(r.count, 0);
+	assert_true(r.elapsed_ms < SOCKET_TIMEOUT_MAX_ELAPSED_MS);
+}
+
+#if AS_EVENT_LIB_DEFINED
+TEST(query_guardrails_top_k_socket_timeout_async,
+	"an async Top-K query that exceeds its socket timeout returns TIMEOUT and is not retried")
+{
+	if (! server_supports_run_time_limit()) {
+		return;
+	}
+
+	assert_true(set_run_time_limit(SOCKET_TIMEOUT_RUN_TIME_LIMIT_MS));
+
+	run r = {
+		.kind = RUN_TOP_K_QUERY,
+		.async = true,
+		.socket_timeout = SOCKET_TIMEOUT_MS,
+		.sleep_between_retries = SOCKET_TIMEOUT_MS
+	};
+	run_query(&r);
+
+	assert_int_eq(r.status, AEROSPIKE_ERR_TIMEOUT);
+	assert_int_eq(r.count, 0);
+	assert_true(r.elapsed_ms < SOCKET_TIMEOUT_MAX_ELAPSED_MS);
+}
+#endif
+
+//---------------------------------
 // Top-K Job Cap Tests
 //---------------------------------
 
@@ -718,6 +786,10 @@ SUITE(query_guardrails, "query run-time guardrail tests")
 #endif
 	suite_add(query_guardrails_query_total_timeout);
 	suite_add(query_guardrails_top_k_total_timeout);
+	suite_add(query_guardrails_top_k_socket_timeout);
+#if AS_EVENT_LIB_DEFINED
+	suite_add(query_guardrails_top_k_socket_timeout_async);
+#endif
 	suite_add(query_guardrails_top_k_jobs_cap);
 #if AS_EVENT_LIB_DEFINED
 	suite_add(query_guardrails_top_k_jobs_cap_async);

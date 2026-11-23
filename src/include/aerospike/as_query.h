@@ -584,9 +584,10 @@ typedef struct as_query_predicates_s {
  * records buffered at once (k capped at 1000).
  *
  * A node sends no results until it finishes its scan, so a Top-K query over a
- * large set can exceed the socket timeout, and the retry restarts that node's
- * scan. Raise as_policy_base.socket_timeout, or set it to 0, for Top-K over
- * large sets; as_policy_base.total_timeout still bounds the query.
+ * large set can exceed the socket timeout, and the query then returns
+ * AEROSPIKE_ERR_TIMEOUT without a retry. Raise as_policy_base.socket_timeout, or
+ * set it to 0, for Top-K over large sets; as_policy_base.total_timeout still
+ * bounds the query.
  *
  * ### Timeouts and Server Limits (Long Queries and Top-K)
  *
@@ -602,7 +603,8 @@ typedef struct as_query_predicates_s {
  *   a node at once. When a node is at its limit, it refuses a new Top-K query
  *   and the query returns AEROSPIKE_ERR_FAIL_FORBIDDEN. Set
  *   as_policy_base.error_detail_verbosity to AS_ERROR_DETAIL_MESSAGE to get the
- *   server's reason in as_error.message.
+ *   server's reason in as_error.message, for example `order-by queries running
+ *   on this node at 'order-by-jobs-limit' N - retry later`.
  * - **Total timeout:** the client stops a query that passes
  *   as_policy_base.total_timeout, and the query returns AEROSPIKE_ERR_TIMEOUT.
  *
@@ -612,6 +614,12 @@ typedef struct as_query_predicates_s {
  * to run the query again, for example later and with backoff. This holds for
  * synchronous and asynchronous queries and for scans. Servers that do not have
  * these settings behave as before.
+ *
+ * The client does not retry a Top-K query that returns AEROSPIKE_ERR_TIMEOUT
+ * either, whether its socket timeout or its total timeout ended it: a node sends
+ * nothing until it has scanned everything, so a retry would only run the scan
+ * again. Any other long query still retries AEROSPIKE_ERR_TIMEOUT within
+ * as_policy_base.max_retries, until its total timeout passes.
  *
  * The socket timeout is how long the client waits for the next results from a
  * node, and the total timeout is the time allowed for the whole query. A query

@@ -2017,6 +2017,7 @@ as_query_topk_partitions(
 	// Top-K: buffer every targeted node's (already server-ranked) batch and
 	// replay it to the real callback once, in final merged rank order, instead
 	// of streaming records to it as they arrive. See as_query_topk.h.
+	pt->retry_on_timeout = false;
 	as_query_topk_collector* collector = as_query_topk_collector_create(query, callback, udata);
 	as_status status = as_query_partitions(cluster, err, policy, query, pt, as_query_topk_complete,
 		collector);
@@ -2291,6 +2292,7 @@ as_query_topk_partition_async(
 {
 	// Buffer every targeted node's (already server-ranked) batch and replay it to the
 	// listener once, in final merged rank order. See as_query_topk.h.
+	pt->retry_on_timeout = false;
 	as_query_topk_collector* collector = as_query_topk_collector_create_async(query, listener, udata);
 
 	as_status status = as_query_partition_async(cluster, err, policy, query, pt,

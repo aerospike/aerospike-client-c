@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -72,6 +72,7 @@ typedef struct as_partition_tracker_s {
 	uint32_t max_retries;
 	uint32_t iteration;
 	bool check_max;
+	bool retry_on_timeout;
 } as_partition_tracker;
 
 /******************************************************************************

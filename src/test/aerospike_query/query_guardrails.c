@@ -593,11 +593,12 @@ TEST(query_guardrails_top_k_total_timeout,
 #define SOCKET_TIMEOUT_MS 500
 #define SOCKET_TIMEOUT_MAX_ELAPSED_MS 1500
 
-// A server job whose client has hung up can run for several seconds before the
-// server notices. The run-time limit, above the socket timeout so the client
-// always gives up first, ends the job soon so that it does not hold a Top-K
-// slot in the tests that follow.
-#define SERVER_SOCKET_TIMEOUT_RUN_TIME_LIMIT_MS "1000"
+// The server's run-time limit for a job whose client hung up after its socket
+// timeout. Such a job can run for several seconds before the server notices.
+// The limit is above the socket timeout, so the client always gives up first,
+// and it ends the job soon so that it does not hold a Top-K slot in the tests
+// that follow.
+#define SERVER_ABANDONED_JOB_RUN_TIME_LIMIT_MS "1000"
 
 TEST(query_guardrails_top_k_socket_timeout,
 	"a Top-K query that exceeds its socket timeout returns TIMEOUT and is not retried")
@@ -606,7 +607,7 @@ TEST(query_guardrails_top_k_socket_timeout,
 		return;
 	}
 
-	assert_true(set_server_run_time_limit(SERVER_SOCKET_TIMEOUT_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_run_time_limit(SERVER_ABANDONED_JOB_RUN_TIME_LIMIT_MS));
 
 	run r = {
 		.kind = RUN_TOP_K_QUERY,
@@ -628,7 +629,7 @@ TEST(query_guardrails_top_k_socket_timeout_async,
 		return;
 	}
 
-	assert_true(set_server_run_time_limit(SERVER_SOCKET_TIMEOUT_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_run_time_limit(SERVER_ABANDONED_JOB_RUN_TIME_LIMIT_MS));
 
 	run r = {
 		.kind = RUN_TOP_K_QUERY,

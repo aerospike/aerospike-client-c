@@ -1208,7 +1208,49 @@ TEST(exp_map_keys_values, "as_exp_map_keys_in and as_exp_map_values_in")
 	}
 
 	/*------------------------------------------------------------------
-	 * Case 3: literal map — map_keys_in / map_values_in via as_exp_val
+	 * Case 3: deprecated aliases with bin operand
+	 * as_exp_map_keys / as_exp_map_values must accept as_exp_bin_map.
+	 *----------------------------------------------------------------*/
+	{
+		as_exp_build(expr, as_exp_map_keys(as_exp_bin_map("m")));
+		assert_not_null(expr);
+
+		as_operations_inita(&ops, 1);
+		as_operations_exp_read(&ops, ExpVar, expr, AS_EXP_READ_DEFAULT);
+		oprec = NULL;
+		rc = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &oprec);
+		assert_int_eq(rc, AEROSPIKE_OK);
+		results = oprec->bins.entries;
+		assert_int_eq(as_bin_get_type(&results[0]), AS_LIST);
+		as_list* kl = (as_list*)as_bin_get_value(&results[0]);
+		assert_int_eq(as_list_size(kl), 2);
+
+		as_record_destroy(oprec);
+		as_operations_destroy(&ops);
+		as_exp_destroy(expr);
+	}
+
+	{
+		as_exp_build(expr, as_exp_map_values(as_exp_bin_map("m")));
+		assert_not_null(expr);
+
+		as_operations_inita(&ops, 1);
+		as_operations_exp_read(&ops, ExpVar, expr, AS_EXP_READ_DEFAULT);
+		oprec = NULL;
+		rc = aerospike_key_operate(as, &err, NULL, &rkey, &ops, &oprec);
+		assert_int_eq(rc, AEROSPIKE_OK);
+		results = oprec->bins.entries;
+		assert_int_eq(as_bin_get_type(&results[0]), AS_LIST);
+		as_list* vl = (as_list*)as_bin_get_value(&results[0]);
+		assert_int_eq(as_list_size(vl), 2);
+
+		as_record_destroy(oprec);
+		as_operations_destroy(&ops);
+		as_exp_destroy(expr);
+	}
+
+	/*------------------------------------------------------------------
+	 * Case 4: literal map — map_keys_in / map_values_in via as_exp_val
 	 *----------------------------------------------------------------*/
 	{
 		as_orderedmap* lit = as_orderedmap_new(2);

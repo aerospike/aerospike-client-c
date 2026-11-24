@@ -241,11 +241,19 @@ as_node_create(as_cluster* cluster, as_node_info* node_info)
 		node->pipe_conn_pools = as_node_create_async_pools(0, cluster->pipe_max_conns_per_node);
 	}
 
-	// as_node_get_tend_connection() must be called because the tend connection has not been created
-	// yet in shared memory mode. The combination of enabling retry_user_agent and calling
-	// as_node_get_tend_connection() will force as_node_send_user_agent() to be called.
-	as_error err;
 	node->retry_user_agent = true;
+
+	if (cluster->shm_info && ! cluster->shm_info->is_tend_master) {
+		// Shared memory followers do not tend, so do not create a tend connection here. Only the
+		// shared memory tend master sends the user agent. If this process later becomes the tend
+		// master, as_node_refresh() will create the tend connection and send the user agent.
+		return node;
+	}
+
+	// Send the user agent on the tend connection (normally the node_info socket). The combination
+	// of enabling retry_user_agent and calling as_node_get_tend_connection() will force
+	// as_node_send_user_agent() to be called. The tend connection is created if it does not exist.
+	as_error err;
 	as_status status = as_node_get_tend_connection(&err, node);
 
 	if (status != AEROSPIKE_OK) {

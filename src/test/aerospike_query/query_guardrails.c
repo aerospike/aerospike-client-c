@@ -82,22 +82,22 @@ extern aerospike* as;
 
 // The server's setting for how long a long query may run, and its namespace
 // statistic that counts the long queries that timed out.
-#define SERVER_RUN_TIME_LIMIT_NAME "query-max-run-time-ms"
+#define SERVER_QUERY_RUN_TIME_LIMIT_NAME "query-max-run-time-ms"
 #define SERVER_TIMEOUT_STAT "pi_query_long_basic_timeout"
 
 // The server's setting for how many Top-K queries may run on a node at once, and
 // its service statistic that counts the Top-K queries it refused for being over
 // that setting.
-#define SERVER_JOBS_CAP_NAME "order-by-jobs-limit"
+#define SERVER_TOP_K_JOBS_CAP_NAME "order-by-jobs-limit"
 #define SERVER_REFUSED_STAT "order_by_jobs_refused"
 
 // The info commands that return the namespace and service statistics above.
 #define SERVER_NAMESPACE_STATS_COMMAND "namespace/" NAMESPACE
 #define SERVER_SERVICE_STATS_COMMAND "statistics"
 
-static char g_server_run_time_limit_original[32];
-static bool g_server_has_run_time_limit;
-static char g_server_jobs_cap_original[32];
+static char g_server_query_run_time_limit_original[32];
+static bool g_server_has_query_run_time_limit;
+static char g_server_top_k_jobs_cap_original[32];
 
 //---------------------------------
 // Server Configuration
@@ -131,20 +131,21 @@ set_server_config(const char* command)
 }
 
 static bool
-set_server_run_time_limit(const char* value)
+set_server_query_run_time_limit(const char* value)
 {
 	char command[128];
 	snprintf(command, sizeof(command),
-		"set-config:context=namespace;id=" NAMESPACE ";" SERVER_RUN_TIME_LIMIT_NAME "=%s", value);
+		"set-config:context=namespace;id=" NAMESPACE ";" SERVER_QUERY_RUN_TIME_LIMIT_NAME "=%s",
+		value);
 	return set_server_config(command);
 }
 
 static bool
-set_server_jobs_cap(const char* value)
+set_server_top_k_jobs_cap(const char* value)
 {
 	char command[128];
-	snprintf(command, sizeof(command), "set-config:context=service;" SERVER_JOBS_CAP_NAME "=%s",
-		value);
+	snprintf(command, sizeof(command),
+		"set-config:context=service;" SERVER_TOP_K_JOBS_CAP_NAME "=%s", value);
 	return set_server_config(command);
 }
 
@@ -442,10 +443,10 @@ run_with_jobs_capped(run* refused, uint64_t* n_refused)
 static bool
 server_supports_guardrails(void)
 {
-	if (! g_server_has_run_time_limit) {
-		info("skipping guardrail test; the server has no " SERVER_RUN_TIME_LIMIT_NAME);
+	if (! g_server_has_query_run_time_limit) {
+		info("skipping guardrail test; the server has no " SERVER_QUERY_RUN_TIME_LIMIT_NAME);
 	}
-	return g_server_has_run_time_limit;
+	return g_server_has_query_run_time_limit;
 }
 
 //---------------------------------
@@ -462,7 +463,7 @@ TEST(query_guardrails_query_run_time_limit,
 		return;
 	}
 
-	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_query_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_QUERY};
 	uint64_t timeouts = run_and_count_server_timeouts(&r);
@@ -479,7 +480,7 @@ TEST(query_guardrails_top_k_run_time_limit,
 		return;
 	}
 
-	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_query_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_TOP_K_QUERY};
 	uint64_t timeouts = run_and_count_server_timeouts(&r);
@@ -497,7 +498,7 @@ TEST(query_guardrails_scan_run_time_limit,
 		return;
 	}
 
-	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_query_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_SCAN};
 	uint64_t timeouts = run_and_count_server_timeouts(&r);
@@ -514,7 +515,7 @@ TEST(query_guardrails_query_run_time_limit_async,
 		return;
 	}
 
-	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_query_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_QUERY, .async = true};
 	uint64_t timeouts = run_and_count_server_timeouts(&r);
@@ -531,7 +532,7 @@ TEST(query_guardrails_top_k_run_time_limit_async,
 		return;
 	}
 
-	assert_true(set_server_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_query_run_time_limit(SERVER_RUN_TIME_LIMIT_MS));
 
 	run r = {.kind = RUN_TOP_K_QUERY, .async = true};
 	uint64_t timeouts = run_and_count_server_timeouts(&r);
@@ -562,7 +563,7 @@ TEST(query_guardrails_query_total_timeout,
 		return;
 	}
 
-	assert_true(set_server_run_time_limit("0"));
+	assert_true(set_server_query_run_time_limit("0"));
 
 	run r = {.kind = RUN_QUERY, .total_timeout = TOTAL_TIMEOUT_MS};
 	run_query(&r);
@@ -578,7 +579,7 @@ TEST(query_guardrails_top_k_total_timeout,
 		return;
 	}
 
-	assert_true(set_server_run_time_limit("0"));
+	assert_true(set_server_query_run_time_limit("0"));
 
 	run r = {.kind = RUN_TOP_K_QUERY, .total_timeout = TOTAL_TIMEOUT_MS};
 	run_query(&r);
@@ -613,7 +614,7 @@ TEST(query_guardrails_top_k_socket_timeout,
 		return;
 	}
 
-	assert_true(set_server_run_time_limit(SERVER_ABANDONED_JOB_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_query_run_time_limit(SERVER_ABANDONED_JOB_RUN_TIME_LIMIT_MS));
 
 	run r = {
 		.kind = RUN_TOP_K_QUERY,
@@ -634,7 +635,7 @@ TEST(query_guardrails_top_k_socket_timeout_async,
 		return;
 	}
 
-	assert_true(set_server_run_time_limit(SERVER_ABANDONED_JOB_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_query_run_time_limit(SERVER_ABANDONED_JOB_RUN_TIME_LIMIT_MS));
 
 	run r = {
 		.kind = RUN_TOP_K_QUERY,
@@ -660,8 +661,8 @@ TEST(query_guardrails_top_k_jobs_cap,
 		return;
 	}
 
-	assert_true(set_server_run_time_limit(SERVER_BLOCKER_RUN_TIME_LIMIT_MS));
-	assert_true(set_server_jobs_cap("1"));
+	assert_true(set_server_query_run_time_limit(SERVER_BLOCKER_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_top_k_jobs_cap("1"));
 
 	run refused = {.kind = RUN_TOP_K_QUERY};
 	uint64_t n_refused;
@@ -682,8 +683,8 @@ TEST(query_guardrails_top_k_jobs_cap_async,
 		return;
 	}
 
-	assert_true(set_server_run_time_limit(SERVER_BLOCKER_RUN_TIME_LIMIT_MS));
-	assert_true(set_server_jobs_cap("1"));
+	assert_true(set_server_query_run_time_limit(SERVER_BLOCKER_RUN_TIME_LIMIT_MS));
+	assert_true(set_server_top_k_jobs_cap("1"));
 
 	run refused = {.kind = RUN_TOP_K_QUERY, .async = true};
 	uint64_t n_refused;
@@ -704,16 +705,16 @@ TEST(query_guardrails_top_k_jobs_cap_async,
 static bool
 before(atf_suite* suite)
 {
-	get_info_field("get-config:context=namespace;id=" NAMESPACE, SERVER_RUN_TIME_LIMIT_NAME,
-		g_server_run_time_limit_original, sizeof(g_server_run_time_limit_original));
-	g_server_has_run_time_limit = g_server_run_time_limit_original[0] != 0;
+	get_info_field("get-config:context=namespace;id=" NAMESPACE, SERVER_QUERY_RUN_TIME_LIMIT_NAME,
+		g_server_query_run_time_limit_original, sizeof(g_server_query_run_time_limit_original));
+	g_server_has_query_run_time_limit = g_server_query_run_time_limit_original[0] != 0;
 
-	if (! g_server_has_run_time_limit) {
+	if (! g_server_has_query_run_time_limit) {
 		return true;
 	}
 
-	get_info_field("get-config:context=service", SERVER_JOBS_CAP_NAME,
-		g_server_jobs_cap_original, sizeof(g_server_jobs_cap_original));
+	get_info_field("get-config:context=service", SERVER_TOP_K_JOBS_CAP_NAME,
+		g_server_top_k_jobs_cap_original, sizeof(g_server_top_k_jobs_cap_original));
 
 	as_record rec;
 	as_record_inita(&rec, 1);
@@ -741,14 +742,14 @@ before(atf_suite* suite)
 static bool
 after(atf_suite* suite)
 {
-	if (! g_server_has_run_time_limit) {
+	if (! g_server_has_query_run_time_limit) {
 		return true;
 	}
 
-	bool restored = set_server_run_time_limit(g_server_run_time_limit_original);
+	bool restored = set_server_query_run_time_limit(g_server_query_run_time_limit_original);
 
-	if (g_server_jobs_cap_original[0] != 0) {
-		restored = set_server_jobs_cap(g_server_jobs_cap_original) && restored;
+	if (g_server_top_k_jobs_cap_original[0] != 0) {
+		restored = set_server_top_k_jobs_cap(g_server_top_k_jobs_cap_original) && restored;
 	}
 
 	for (uint32_t i = 0; i < N_RECORDS; i++) {

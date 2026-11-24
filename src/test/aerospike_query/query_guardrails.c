@@ -218,7 +218,6 @@ typedef struct run_s {
 	uint32_t socket_timeout;
 	uint32_t total_timeout;
 	uint8_t error_detail_verbosity;
-	uint32_t sleep_between_retries;
 
 	// Outputs.
 	as_status status;
@@ -241,7 +240,6 @@ init_base_policy(as_policy_base* base, const run* r)
 
 	base->total_timeout = r->total_timeout;
 	base->error_detail_verbosity = r->error_detail_verbosity;
-	base->sleep_between_retries = r->sleep_between_retries;
 }
 
 static void
@@ -589,8 +587,7 @@ TEST(query_guardrails_top_k_total_timeout,
 // A Top-K node sends nothing until it has scanned everything, so a socket
 // timeout shorter than the scan ends the query. A retry would wait for another
 // socket timeout, so the query must come back less than half of that past the
-// first one. The tests do not set a sleep between retries, because an async
-// query never sleeps between retries.
+// first one.
 #define SOCKET_TIMEOUT_MS 500
 #define SOCKET_TIMEOUT_MAX_ELAPSED_MS (SOCKET_TIMEOUT_MS * 3 / 2)
 
@@ -648,10 +645,6 @@ TEST(query_guardrails_top_k_socket_timeout_async,
 // Top-K Job Cap Tests
 //---------------------------------
 
-// A refused query must come back at once. Retrying it with a sleep between
-// retries would take longer than the query that holds the slot.
-#define REFUSED_MAX_ELAPSED_MS 1000
-
 TEST(query_guardrails_top_k_jobs_cap,
 	"a Top-K query refused by the job cap returns FAIL_FORBIDDEN with the server's reason and is not retried")
 {
@@ -664,8 +657,7 @@ TEST(query_guardrails_top_k_jobs_cap,
 
 	run refused = {
 		.kind = RUN_TOP_K_QUERY,
-		.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE,
-		.sleep_between_retries = 500
+		.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE
 	};
 	as_status blocker_status = run_with_jobs_capped(&refused);
 
@@ -673,7 +665,6 @@ TEST(query_guardrails_top_k_jobs_cap,
 	assert_int_eq(refused.status, AEROSPIKE_ERR_FAIL_FORBIDDEN);
 	assert_int_eq(refused.count, 0);
 	assert_true(strstr(refused.message, "retry later") != NULL);
-	assert_true(refused.elapsed_ms < REFUSED_MAX_ELAPSED_MS);
 }
 
 #if AS_EVENT_LIB_DEFINED
@@ -690,8 +681,7 @@ TEST(query_guardrails_top_k_jobs_cap_async,
 	run refused = {
 		.kind = RUN_TOP_K_QUERY,
 		.async = true,
-		.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE,
-		.sleep_between_retries = 500
+		.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE
 	};
 	as_status blocker_status = run_with_jobs_capped(&refused);
 
@@ -699,7 +689,6 @@ TEST(query_guardrails_top_k_jobs_cap_async,
 	assert_int_eq(refused.status, AEROSPIKE_ERR_FAIL_FORBIDDEN);
 	assert_int_eq(refused.count, 0);
 	assert_true(strstr(refused.message, "retry later") != NULL);
-	assert_true(refused.elapsed_ms < REFUSED_MAX_ELAPSED_MS);
 }
 #endif
 

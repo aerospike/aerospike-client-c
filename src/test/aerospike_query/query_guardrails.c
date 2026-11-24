@@ -587,11 +587,12 @@ TEST(query_guardrails_top_k_total_timeout,
 //---------------------------------
 
 // A Top-K node sends nothing until it has scanned everything, so a socket
-// timeout shorter than the scan ends the query. The query must come back after
-// that one wait. With the default of 5 retries, each retry would take another
-// socket timeout and a sleep.
+// timeout shorter than the scan ends the query. A retry would wait for another
+// socket timeout, so the query must come back less than half of that past the
+// first one. The tests do not set a sleep between retries, because an async
+// query never sleeps between retries.
 #define SOCKET_TIMEOUT_MS 500
-#define SOCKET_TIMEOUT_MAX_ELAPSED_MS 1500
+#define SOCKET_TIMEOUT_MAX_ELAPSED_MS (SOCKET_TIMEOUT_MS * 3 / 2)
 
 // The server's run-time limit for a job whose client hung up after its socket
 // timeout. Such a job can run for several seconds before the server notices.
@@ -611,8 +612,7 @@ TEST(query_guardrails_top_k_socket_timeout,
 
 	run r = {
 		.kind = RUN_TOP_K_QUERY,
-		.socket_timeout = SOCKET_TIMEOUT_MS,
-		.sleep_between_retries = SOCKET_TIMEOUT_MS
+		.socket_timeout = SOCKET_TIMEOUT_MS
 	};
 	run_query(&r);
 
@@ -634,8 +634,7 @@ TEST(query_guardrails_top_k_socket_timeout_async,
 	run r = {
 		.kind = RUN_TOP_K_QUERY,
 		.async = true,
-		.socket_timeout = SOCKET_TIMEOUT_MS,
-		.sleep_between_retries = SOCKET_TIMEOUT_MS
+		.socket_timeout = SOCKET_TIMEOUT_MS
 	};
 	run_query(&r);
 

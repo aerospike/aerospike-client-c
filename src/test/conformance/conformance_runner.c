@@ -1141,9 +1141,18 @@ run_collision(const row* r)
 	uint32_t input_size = y_len(input);
 	uint32_t size = 0;
 
+	// The entry point would merge two consecutive peers of one name, so a fixture that repeats a
+	// name is rejected here, as the fixture validator does.
 	for (uint32_t i = 0; i < input_size; i++) {
 		const yaml_node_t* hosts = collision_hosts(y_at(input, i));
 		size += hosts ? y_len(hosts) : 1;
+		const char* name = need_str(y_at(input, i), "nodeName");
+
+		for (uint32_t k = 0; k < i; k++) {
+			if (strcmp(need_str(y_at(input, k), "nodeName"), name) == 0) {
+				die("collision peers repeat nodeName %s", name);
+			}
+		}
 	}
 
 	as_endpoint* peers = xcalloc(size, sizeof(as_endpoint));

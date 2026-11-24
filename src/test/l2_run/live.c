@@ -176,11 +176,47 @@ live_log_count(uint32_t from, const char* const* needles, uint32_t size)
 	return count;
 }
 
+// Does the list of a -26 in line hold entry ("<address> is used by <owner>") as a whole entry:
+// after ": " or ", ", and before ", ", " and " or " (".
+static bool
+live_has_entry(const char* line, const char* entry)
+{
+	size_t size = strlen(entry);
+
+	for (const char* p = strstr(line, entry); p; p = strstr(p + 1, entry)) {
+		bool start = p - line >= 2 && (p[-2] == ':' || p[-2] == ',') && p[-1] == ' ';
+		const char* end = p + size;
+
+		if (start && (strncmp(end, ", ", 2) == 0 || strncmp(end, " and ", 5) == 0 ||
+			strncmp(end, " (", 2) == 0)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Count the lines from index from that report peer with entry and contain named.
+static uint32_t
+live_count_collisions(uint32_t from, const char* peer, const char* entry, const char* named)
+{
+	uint32_t count = 0;
+	pthread_mutex_lock(&live_log_lock);
+
+	for (uint32_t i = from; i < live_log_size; i++) {
+		const char* line = live_log_lines[i];
+
+		if (strstr(line, peer) && strstr(line, named) && live_has_entry(line, entry)) {
+			count++;
+		}
+	}
+	pthread_mutex_unlock(&live_log_lock);
+	return count;
+}
+
 uint32_t
 live_collisions(uint32_t from, const char* translator, const char* a, const char* b,
 	const char* address, uint32_t* forward, uint32_t* reverse)
 {
-	// The address ends at the space before "is used by", so a port cannot match a longer one.
 	char named[300];
 	snprintf(named, sizeof(named), "(address translator %s)", translator);
 	char peer_a[300], peer_b[300], used_by_a[600], used_by_b[600];
@@ -189,10 +225,8 @@ live_collisions(uint32_t from, const char* translator, const char* a, const char
 	snprintf(used_by_a, sizeof(used_by_a), "%s is used by %s", address, a);
 	snprintf(used_by_b, sizeof(used_by_b), "%s is used by %s", address, b);
 
-	const char* fn[] = {peer_b, used_by_a, named};
-	const char* rn[] = {peer_a, used_by_b, named};
-	*forward = live_log_count(from, fn, 3);
-	*reverse = live_log_count(from, rn, 3);
+	*forward = live_count_collisions(from, peer_b, used_by_a, named);
+	*reverse = live_count_collisions(from, peer_a, used_by_b, named);
 	return *forward + *reverse;
 }
 

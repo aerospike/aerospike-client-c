@@ -2005,6 +2005,96 @@ TEST(nodes_peer_known_node_skipped,
 	assert_int_eq(counts[3], 0);
 }
 
+typedef struct known_host_result_s {
+	as_status connect;
+	as_status tend;
+	bool x_created;
+	uint32_t counts[LOG_COUNT_MAX];
+} known_host_result;
+
+// Peer X is advertised at one hostname that resolves to FIRST, where a server answers as the seed
+// S, and then SECOND, where a server answers as second_name. One tend refreshes the peers of S
+// and counts mismatches, skips of the hostname, -26 reports and connect failures.
+static void
+run_known_host(const char* label, const char* second_name, known_host_result* r)
+{
+	memset(r, 0, sizeof(*r));
+	DISCOVERY_SCOPED(fnode, s, fnode_stop);
+	DISCOVERY_SCOPED(fnode, first, fnode_stop);
+	DISCOVERY_SCOPED(fnode, second, fnode_stop);
+	r->connect = AEROSPIKE_ERR_CLIENT;
+
+	if (!peer_seed(&s)) {
+		return;
+	}
+	uint16_t port = free_port();
+
+	if (port == 0 || !start_named(&first, "S", FIRST, port) ||
+		!start_named(&second, second_name, SECOND, port)) {
+		return;
+	}
+	char hostname[64];
+	stagger_hostname(hostname, label, FIRST, SECOND);
+
+	as_config config;
+	nodes_config(&config, &s);
+	aerospike* client = NULL;
+	r->connect = nodes_connect(&client, &config);
+
+	if (r->connect != AEROSPIKE_OK) {
+		nodes_close(client);
+		return;
+	}
+	as_cluster* cluster = client->cluster;
+
+	char skip[160];
+	snprintf(skip, sizeof(skip), "Peer X skips address %s:%u because it answers as node S",
+		hostname, port);
+	set_peers(&s, "[[X,,[%s:%u]]]", hostname, port);
+	fnode_bump_peers_generation(&s);
+	log_count_start_many(PEER_MISMATCH, skip, "has no address of its own", PEER_FAILED, NULL);
+	r->tend = tend(cluster);
+	log_count_stop_many(r->counts);
+
+	as_node* node = get_node(cluster, "X");
+	r->x_created = node != NULL;
+
+	if (node) {
+		as_node_release(node);
+	}
+	nodes_close(client);
+}
+
+TEST(nodes_peer_known_host_logged_once,
+	"U-17 FR-47 a hostname whose addresses all answer as a known node logs one skip and one -26")
+{
+	known_host_result r;
+	run_known_host("peer-known-twice", "S", &r);
+
+	assert_int_eq(r.connect, AEROSPIKE_OK);
+	assert_int_eq(r.tend, AEROSPIKE_OK);
+	assert_false(r.x_created);
+	assert_int_eq(r.counts[0], 0);
+	assert_int_eq(r.counts[1], 1);
+	assert_int_eq(r.counts[2], 1);
+	assert_int_eq(r.counts[3], 0);
+}
+
+TEST(nodes_peer_known_and_unknown_fails,
+	"U-17 FR-47 a hostname with an address that answers as a known node and one that answers as an unknown node fails without -26")
+{
+	known_host_result r;
+	run_known_host("peer-known-unknown", "Y", &r);
+
+	assert_int_eq(r.connect, AEROSPIKE_OK);
+	assert_int_eq(r.tend, AEROSPIKE_OK);
+	assert_false(r.x_created);
+	assert_int_eq(r.counts[0], 1);
+	assert_int_eq(r.counts[1], 1);
+	assert_int_eq(r.counts[2], 0);
+	assert_int_eq(r.counts[3], 0);
+}
+
 TEST(nodes_peer_socket_collision_stops,
 	"U-17 a peer address where a cluster node answers under another name stops the peer's other addresses")
 {
@@ -3227,6 +3317,8 @@ SUITE(discovery_nodes, "pluggable discovery node lifecycle tests")
 	suite_add(nodes_peer_every_address_wrong_node);
 	suite_add(nodes_peer_wrong_node_then_alternate_missing);
 	suite_add(nodes_peer_known_node_skipped);
+	suite_add(nodes_peer_known_host_logged_once);
+	suite_add(nodes_peer_known_and_unknown_fails);
 	suite_add(nodes_peer_socket_collision_stops);
 	suite_add(nodes_peer_hung_address_joins_in_one_tend);
 	suite_add(nodes_valid_addresses_pruned);

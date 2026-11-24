@@ -62,7 +62,8 @@
 //   pass-through), translation_known_node_skipped (an alias before the peer's own, both reply
 //   orders), translation_known_node_translated (port-map, warning), translation_known_node_only
 //   (nothing left collides, a failed address keeps today's warning) and the alias phase of
-//   translation_collision_live_node.
+//   translation_collision_live_node. translation_miss_with_collision: a strict miss is reported
+//   with the -26 of the peer, before and after connect.
 // - U-15 FR-46 shared addresses, skipped for every translator while the peer has an address of
 //   its own: translation_shared_address_skipped (no translator, info log),
 //   translation_shared_address_registered (pass-through and an unchanged custom translator, info
@@ -2704,6 +2705,86 @@ TEST(translation_known_node_only, "U-17 FR-47 a peer whose only address answers 
 	}
 }
 
+// D advertises an address that strict port-map misses and one that it maps to B: one of B's
+// strings, so D collides before connect, or with after_connect an alias of B, so D's address
+// answers as B. Before connect B also advertises the alias, so B keeps an address of its own.
+// Both the -26 and the miss are reported.
+static const char*
+run_miss_with_collision(bool after_connect)
+{
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
+
+	if (!start_known_nodes(&s, &b, &d)) {
+		return "cannot start fake nodes";
+	}
+
+	char b_own[64], alias[64], b_list[160], list[256];
+	format(b_own, sizeof(b_own), "127.0.0.1:%u", b.port);
+	format(alias, sizeof(alias), "localhost:%u", b.port);
+	char* target = after_connect ? alias : b_own;
+
+	if (after_connect) {
+		format(b_list, sizeof(b_list), "%s", b_own);
+	}
+	else {
+		format(b_list, sizeof(b_list), "%s,%s", b_own, alias);
+	}
+	format(list, sizeof(list), "[[B,,[%s]],[D,,[10.255.0.1:3000,10.255.0.3:3000]]]", b_list);
+	fake_node_set_peers(&s, 1, list, NULL);
+
+	as_addr_map entries[] = {{b_own, b_own}, {alias, alias}, {"10.255.0.3:3000", target}};
+	as_config config;
+	fake_client c;
+	as_error err;
+	fake_config(&config, &s, false);
+	config.translation.on_miss = AS_TRANSLATION_STRICT;
+
+	if (as_config_set_port_map_translator(&config, entries, 3, &err) != AEROSPIKE_OK) {
+		return "cannot set the port-map translator";
+	}
+
+	char used[160];
+	format(used, sizeof(used), "Peer D has no address of its own: %s is used by B (address "
+		"translator port-map)", target);
+	const char* result = NULL;
+	log_capture_start();
+	as_status status = fake_client_connect(&c, &config);
+	log_capture_stop();
+
+	if (status != AEROSPIKE_OK) {
+		result = "unexpected connect status";
+	}
+	else if (node_count(c.as) != 2 || !has_node(c.as, "B") || has_node(c.as, "D")) {
+		result = "D was created, or B was not";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_WARN, used, NULL) == 0) {
+		result = "D's collision is not reported";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_WARN, "has no mapping for node D advertised address "
+		"10.255.0.1:3000", NULL) == 0) {
+		result = "D's strict miss is not reported";
+	}
+
+	fake_client_close(&c);
+	fake_node_stop(&d);
+	fake_node_stop(&b);
+	fake_node_stop(&s);
+	return result;
+}
+
+TEST(translation_miss_with_collision, "N-6 FR-46 FR-47 a strict miss of a peer that also collides is reported with the collision")
+{
+	for (int after_connect = 0; after_connect <= 1; after_connect++) {
+		const char* failure = run_miss_with_collision(after_connect);
+
+		if (failure) {
+			assert_log(true, "after_connect=%d: %s", after_connect, failure);
+		}
+	}
+}
+
 TEST(translation_distinct_ports_one_host, "U-15 peers on one host with distinct ports do not collide")
 {
 	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
@@ -3342,6 +3423,7 @@ SUITE(discovery_translation, "pluggable discovery translation, topology and TLS 
 	suite_add(translation_known_node_skipped);
 	suite_add(translation_known_node_translated);
 	suite_add(translation_known_node_only);
+	suite_add(translation_miss_with_collision);
 	suite_add(translation_distinct_ports_one_host);
 	suite_add(translation_tls_legacy_warn_once);
 	suite_add(translation_peer_tls_name_runtime);

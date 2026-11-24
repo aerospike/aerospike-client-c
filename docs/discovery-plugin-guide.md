@@ -263,10 +263,12 @@ or another peer of the reply), such as a server-side alias or a mapping typo, is
 same way: the peer tries its next address, the known node is untouched, and the skip is logged
 at the same levels. A peer whose every address is shared or skipped is not added: it is logged
 once with an `AEROSPIKE_ERR_TRANSLATION_COLLISION` message, its peers generation is kept so it is
-retried on every tend, and an existing live node is kept. When one of its addresses also failed
-for another reason, such as a connect timeout, the peer gets the usual connect failure warning
-instead. A peer address that validates at a socket where a node of another name already is
-collides at once, and the peer's other addresses are not tried.
+retried on every tend, and an existing live node is kept. When one of its hosts also failed for
+another reason, such as a connect timeout, or an address answered as an unknown node, the peer
+gets the usual failure warning instead. A host dropped by a strict translation miss is reported
+with its own `AEROSPIKE_ERR_TRANSLATION_MISS` message as well. A peer address that validates at a
+socket where a node of another name already is collides at once, and the peer's other addresses
+are not tried.
 
 ## TLS identity
 

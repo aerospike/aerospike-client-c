@@ -92,7 +92,8 @@ live_log_count(uint32_t from, const char* const* needles, uint32_t size);
 
 // Collision WARNs from index from on, in the form the client logs them, naming translator, nodes
 // a and b in either order, and address ("host:port"). forward counts peer b reported with address
-// used by a, reverse peer a with address used by b. Returns their sum.
+// used by a, reverse peer a with address used by b, each matched as a whole entry of the list.
+// Returns their sum.
 uint32_t
 live_collisions(uint32_t from, const char* translator, const char* a, const char* b,
 	const char* address, uint32_t* forward, uint32_t* reverse);

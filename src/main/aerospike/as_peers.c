@@ -101,8 +101,8 @@ as_peers_find_node(
 
 			if (host->port == port) {
 				// Check for IP address or hostname if it exists.
-				if (strcmp(host->name, addr_name) == 0 ||
-				   (node->hostname && strcmp(host->name, node->hostname) == 0)) {
+				if (strcasecmp(host->name, addr_name) == 0 ||
+				   (node->hostname && strcasecmp(host->name, node->hostname) == 0)) {
 					// Main node host is also the same as one of the peer hosts.
 					// Peer should not be added.
 					node->friends++;
@@ -171,7 +171,7 @@ as_peers_find_invalid_host(as_peers* peers, as_host* host)
 	for (uint32_t i = 0; i < invalid_hosts->size; i++) {
 		as_host* h = as_vector_get(invalid_hosts, i);
 
-		if (strcmp(h->name, host->name) == 0 && h->port == host->port) {
+		if (strcasecmp(h->name, host->name) == 0 && h->port == host->port) {
 			return true;
 		}
 	}
@@ -405,9 +405,9 @@ as_peers_node_collides(as_node* node, const char* name, const as_host* host)
 }
 
 // Return the name of a different node that host is also an endpoint of: the refreshing node, a
-// peer of the same reply, a live cluster node or a node validated earlier in this tend. The
-// comparison is host and port as strings, so it needs no DNS or I/O. node, cluster and peers are NULL
-// for the conformance entry point, which models the peers of one reply only.
+// peer of the same reply, a live cluster node or a node validated earlier in this tend. Hosts are
+// compared as in as_peers_host_equals(), so no DNS or I/O is needed. node, cluster and peers are
+// NULL for the conformance entry point, which models the peers of one reply only.
 static const char*
 as_peers_find_host_owner(
 	as_peers* peers, as_cluster* cluster, as_node* node, as_vector* records, uint32_t index,
@@ -737,7 +737,8 @@ as_peers_parse_record(
 			rec.tls_name, host.name, host.port, source, &translated);
 
 		if (tstatus == AEROSPIKE_OK) {
-			bool changed = translated.port != host.port || strcmp(translated.name, host.name) != 0;
+			bool changed = translated.port != host.port ||
+				strcasecmp(translated.name, host.name) != 0;
 			as_peer_record_append_host(&rec, &translated, changed);
 		}
 		else {
@@ -1065,9 +1066,9 @@ as_peers_log_known_host(as_cluster* cluster, const char* name, const as_host* ho
 
 // A collision and a known node are checked before the name, so neither is reported as a
 // mismatch. A socket collision stops the peer. An address that answers as a known node is skipped
-// like a shared address (FR-47): the next address is tried, the known node is untouched, and the
-// host is added once to the skipped hosts of the peer, which a -26 lists when the peer has nothing
-// left.
+// like a shared address (FR-47): the next address is tried and the known node is untouched. The
+// first skip of a host is logged and added to the skipped hosts of the peer, which a -26 lists
+// when the peer has nothing left.
 static as_lookup_verdict
 as_peers_accept_node(as_node_info* info, void* udata)
 {
@@ -1084,9 +1085,8 @@ as_peers_accept_node(as_node_info* info, void* udata)
 			return AS_LOOKUP_STOP;
 
 		case AS_PEERS_FOUND_KNOWN:
-			as_peers_log_known_host(a->cluster, rec->node_name, a->host, other, a->translated);
-
 			if (! a->skipped) {
+				as_peers_log_known_host(a->cluster, rec->node_name, a->host, other, a->translated);
 				as_peer_record_skip(rec, a->host, other, a->translated);
 				a->skipped = true;
 			}
@@ -1157,8 +1157,9 @@ as_peers_validate_node(
 		if (accept.collided) {
 			result = AS_PEERS_COLLIDED;
 		}
-		else if (accept.skipped) {
-			// The skip has already been logged.
+		else if (accept.skipped && accept.mismatches == 0) {
+			// The skip has already been logged. An address that answered as an unknown node
+			// was not shown to be shared, so a host with one fails as before.
 			result = AS_PEERS_SKIPPED;
 		}
 		else if (accept.mismatches == 0) {
@@ -1207,6 +1208,15 @@ as_peers_validate(
 	return failed ? AS_PEERS_FAILED : AS_PEERS_SKIPPED;
 }
 
+static void
+as_peers_report_translation_error(as_peers* peers, const as_peer_record* rec)
+{
+	if (rec->error) {
+		as_log_warn("%s", rec->error->message);
+		as_peers_record_error(peers, rec->error, false);
+	}
+}
+
 static bool
 as_peers_validate_record(
 	as_peers* peers, as_cluster* cluster, as_node* node, as_vector* records, uint32_t index
@@ -1219,35 +1229,35 @@ as_peers_validate_record(
 		return false;
 	}
 
+	// A host dropped by a translation error, such as a strict miss, is reported however the other
+	// hosts end. A collision of the peer is reported first, so it stays the recorded error.
 	if (rec->collided) {
+		as_peers_report_translation_error(peers, rec);
 		return false;
 	}
 
 	if (rec->hosts.size == 0) {
-		if (rec->error) {
-			as_log_warn("%s", rec->error->message);
-			as_peers_record_error(peers, rec->error, false);
-		}
+		as_peers_report_translation_error(peers, rec);
 		return false;
 	}
 
 	as_peers_validation result = as_peers_validate(peers, cluster, node, records, index);
 
 	if (result == AS_PEERS_SKIPPED) {
-		// Every remaining host answered as a known node, so the peer has no address of its own.
-		// When a host also failed otherwise, the peer is not reported as a collision: the failure
-		// warning stands, as it does for a peer without skipped hosts.
+		// Every host left after the shared ones were removed answered as a known node, so the
+		// peer has no address of its own. as_peers_validate() returns AS_PEERS_FAILED instead
+		// when a host failed otherwise, which keeps the failure warning and reports no -26.
 		as_error err;
 		as_peers_collision_error(&err, as_peers_translator_name(cluster), rec);
 		as_peers_report_collision(&err, peers);
+		as_peers_report_translation_error(peers, rec);
 		return false;
 	}
 
 	if (result != AS_PEERS_VALIDATED) {
 		// A collision has already logged its own warning.
-		if (result == AS_PEERS_FAILED && rec->error) {
-			as_log_warn("%s", rec->error->message);
-			as_peers_record_error(peers, rec->error, false);
+		if (result == AS_PEERS_FAILED) {
+			as_peers_report_translation_error(peers, rec);
 		}
 		return false;
 	}
@@ -1718,7 +1728,7 @@ as_discovery_conformance_collision(as_error* err, const as_conformance_translati
 		status = as_discovery_conformance_translate(err, translation, &peers[i], &host);
 
 		if (status == AEROSPIKE_OK) {
-			bool changed = host.port != peers[i].port || strcmp(host.name, peers[i].host) != 0;
+			bool changed = host.port != peers[i].port || strcasecmp(host.name, peers[i].host) != 0;
 			as_peer_record_append_host(rec, &host, changed);
 		}
 		else if (status != AEROSPIKE_ERR_TRANSLATION_MISS) {

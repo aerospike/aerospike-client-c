@@ -47,12 +47,12 @@ jobs:
           build aws-real-probe
           build conformance
 
-      # Conformance main of 2026-11-17
+      # Conformance main of 2026-11-24
       - name: Checkout conformance fixtures
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: aerospike/aerospike-client-conformance
-          ref: a30c0787dede434f15be3622e7007dc57b55209d
+          ref: 42db5e9c508226cc0ad1496d7dff1cb23dac2bb0
           path: conformance
 
       # The collect action and the schema step pip-install into whatever python3 is on PATH, so
@@ -95,7 +95,7 @@ jobs:
 
       - name: Collect conformance report
         if: ${{ !cancelled() && steps.l1.outcome != 'skipped' }}
-        uses: aerospike/aerospike-client-conformance/.github/actions/collect-conformance-report@a30c0787dede434f15be3622e7007dc57b55209d # main
+        uses: aerospike/aerospike-client-conformance/.github/actions/collect-conformance-report@42db5e9c508226cc0ad1496d7dff1cb23dac2bb0 # main
         with:
           reports-directory: target/conformance
           fixtures-directory: conformance

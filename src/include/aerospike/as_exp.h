@@ -1070,8 +1070,11 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_map_keys_in(__map) \
 		{.op=_AS_EXP_CODE_MAP_KEYS_IN, .count=2}, __map
 
-// Retain compatibility with 7.4.0 release
-#define as_exp_map_keys(__map)  as_exp_map_keys_in(__map)
+// Retain compatibility with 7.4.0 release.
+// Defined with the same body as as_exp_map_keys_in (not a forward) so that
+// operands which expand to comma-separated as_exp_entry initializers work.
+#define as_exp_map_keys(__map) \
+		{.op=_AS_EXP_CODE_MAP_KEYS_IN, .count=2}, __map
 
 /**
  * Return a list of values from a map-valued subexpression.
@@ -1088,8 +1091,11 @@ as_exp_destroy_base64(char* base64)
 #define as_exp_map_values_in(__map) \
 		{.op=_AS_EXP_CODE_MAP_VALUES_IN, .count=2}, __map
 
-// Retain compatibility with 7.4.0 release
-#define as_exp_map_values(__map)  as_exp_map_values_in(__map)
+// Retain compatibility with 7.4.0 release.
+// Defined with the same body as as_exp_map_values_in (not a forward) so that
+// operands which expand to comma-separated as_exp_entry initializers work.
+#define as_exp_map_values(__map) \
+		{.op=_AS_EXP_CODE_MAP_VALUES_IN, .count=2}, __map
 
 /**
  * Create expression that performs a regex match on a string bin or value

@@ -257,10 +257,16 @@ nothing resolved. A peer address that another node of the reply, the refreshing 
 or a node added earlier in the tend also has is shared, and the peer skips it and uses its other
 addresses. The skip is logged naming both nodes: at info level when the shared address is the
 server's own advertised address, unchanged, and as a warning naming the translator when the
-translator produced it. A peer whose every address is shared is not added: it is logged once with
-an `AEROSPIKE_ERR_TRANSLATION_COLLISION` message, its peers generation is kept so it is retried on
-every tend, and an existing live node is kept. A peer address that validates as a node at a socket
-where another node already is also collides.
+translator produced it. An address whose strings differ but that answers, once connected, as a
+node the client already knows (the refreshing node, a live node, a node added earlier in the tend
+or another peer of the reply), such as a server-side alias or a mapping typo, is skipped in the
+same way: the peer tries its next address, the known node is untouched, and the skip is logged
+at the same levels. A peer whose every address is shared or skipped is not added: it is logged
+once with an `AEROSPIKE_ERR_TRANSLATION_COLLISION` message, its peers generation is kept so it is
+retried on every tend, and an existing live node is kept. When one of its addresses also failed
+for another reason, such as a connect timeout, the peer gets the usual connect failure warning
+instead. A peer address that validates at a socket where a node of another name already is
+collides at once, and the peer's other addresses are not tried.
 
 ## TLS identity
 

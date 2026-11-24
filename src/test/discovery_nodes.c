@@ -302,7 +302,7 @@ fail_node(fnode* n)
 // Static Functions: log count
 //---------------------------------
 
-#define LOG_COUNT_MAX 3
+#define LOG_COUNT_MAX 4
 
 static pthread_mutex_t g_count_lock = PTHREAD_MUTEX_INITIALIZER;
 static as_log_callback g_count_saved;
@@ -1956,8 +1956,8 @@ TEST(nodes_peer_wrong_node_then_alternate_missing,
 	assert_int_eq(counts[1], 0);
 }
 
-TEST(nodes_peer_collision_stops,
-	"U-17 a peer address that collides with a cluster node stops the peer's other addresses")
+TEST(nodes_peer_known_node_skipped,
+	"U-17 FR-47 a peer address that answers as a cluster node is skipped for the peer's next address")
 {
 	DISCOVERY_SCOPED(fnode, s, fnode_stop);
 	DISCOVERY_SCOPED(fnode, impostor, fnode_stop);
@@ -1968,29 +1968,99 @@ TEST(nodes_peer_collision_stops,
 	assert_true(start_named(&impostor, "S", FIRST, port));
 	assert_true(start_named(&x, "X", SECOND, port));
 	char hostname[64];
-	stagger_hostname(hostname, "peer-collide", FIRST, SECOND);
+	stagger_hostname(hostname, "peer-known", FIRST, SECOND);
 	set_peers(&s, "[[X,,[%s:%u]]]", hostname, port);
 
+	char skip[160];
+	snprintf(skip, sizeof(skip), "Peer X skips address %s:%u because it answers as node S",
+		hostname, port);
 	as_config config;
 	nodes_config(&config, &s);
 	aerospike* client = NULL;
-	log_count_start_many(PEER_MISMATCH, "answer at the same address", PEER_FAILED, NULL);
+	log_count_start_many(PEER_MISMATCH, skip, "has no address of its own", PEER_FAILED, NULL);
 	as_status status = nodes_connect(&client, &config);
 	uint32_t counts[LOG_COUNT_MAX];
 	log_count_stop_many(counts);
 
 	as_cluster* cluster = client->cluster;
 	uint32_t size = status == AEROSPIKE_OK ? node_count(cluster) : 0;
-	uint32_t valid = status == AEROSPIKE_OK ? valid_count(cluster) : 0;
+	as_node* node = status == AEROSPIKE_OK ? get_node(cluster, "X") : NULL;
+	bool at_x = node_at(node, &x);
+	char valid[AS_NODE_NAME_SIZE] = {0};
+	bool recorded = status == AEROSPIKE_OK && valid_node(cluster, hostname, valid, sizeof(valid));
+
+	if (node) {
+		as_node_release(node);
+	}
 	nodes_close(client);
 
 	assert_int_eq(status, AEROSPIKE_OK);
-	assert_int_eq(size, 1);
-	assert_int_eq(valid, 0);
+	assert_int_eq(size, 2);
+	assert_true(at_x);
+	assert_true(recorded);
+	assert_string_eq(valid, "X");
+	assert_int_eq(counts[0], 0);
+	assert_that(counts[1] >= 1, "the skip was not logged");
+	assert_int_eq(counts[2], 0);
+	assert_int_eq(counts[3], 0);
+}
+
+TEST(nodes_peer_socket_collision_stops,
+	"U-17 a peer address where a cluster node answers under another name stops the peer's other addresses")
+{
+	DISCOVERY_SCOPED(fnode, s, fnode_stop);
+	DISCOVERY_SCOPED(fnode, holder, fnode_stop);
+	DISCOVERY_SCOPED(fnode, x, fnode_stop);
+	assert_true(peer_seed(&s));
+	uint16_t port = free_port();
+	assert_int_ne(port, 0);
+	assert_true(start_named(&holder, "B", SECOND, port));
+	assert_true(start_named(&x, "X", THIRD, port));
+	char hostname[64];
+	stagger_hostname(hostname, "peer-socket", SECOND, THIRD);
+	set_peers(&s, "[[B,,[%s:%u]]]", SECOND, port);
+
+	as_config config;
+	nodes_config(&config, &s);
+	aerospike* client = NULL;
+	assert_int_eq(nodes_connect(&client, &config), AEROSPIKE_OK);
+	as_cluster* cluster = client->cluster;
+	uint32_t before = node_count(cluster);
+
+	// B keeps its tend connection, so the client still sees B there, while a new connection to
+	// the same socket answers X.
+	fnode_set_new_name(&holder, "X");
+	log_count_start_many(PEER_MISMATCH, "answer at the same address", "has no address of its own",
+		PEER_FAILED, NULL);
+	set_peers(&s, "[[B,,[%s:%u]],[X,,[%s:%u]]]", SECOND, port, hostname, port);
+	fnode_bump_peers_generation(&s);
+	as_status status = tend(cluster);
+	uint32_t counts[LOG_COUNT_MAX];
+	log_count_stop_many(counts);
+
+	uint32_t size = node_count(cluster);
+	as_node* b = get_node(cluster, "B");
+	as_node* node = get_node(cluster, "X");
+
+	if (b) {
+		as_node_release(b);
+	}
+
+	if (node) {
+		as_node_release(node);
+	}
+	nodes_close(client);
+
+	assert_int_eq(before, 2);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(size, 2);
+	assert_not_null(b);
+	assert_null(node);
 	assert_int_eq(fnode_get(&x, &x.accepts), 0);
 	assert_int_eq(counts[0], 0);
 	assert_that(counts[1] >= 1, "no collision was reported");
 	assert_int_eq(counts[2], 0);
+	assert_int_eq(counts[3], 0);
 }
 
 TEST(nodes_peer_hung_address_joins_in_one_tend,
@@ -3156,7 +3226,8 @@ SUITE(discovery_nodes, "pluggable discovery node lifecycle tests")
 	suite_add(nodes_peer_wrong_node_tries_next);
 	suite_add(nodes_peer_every_address_wrong_node);
 	suite_add(nodes_peer_wrong_node_then_alternate_missing);
-	suite_add(nodes_peer_collision_stops);
+	suite_add(nodes_peer_known_node_skipped);
+	suite_add(nodes_peer_socket_collision_stops);
 	suite_add(nodes_peer_hung_address_joins_in_one_tend);
 	suite_add(nodes_valid_addresses_pruned);
 	suite_add(nodes_move_not_before_third_failed_tend);

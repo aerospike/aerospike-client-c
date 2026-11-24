@@ -876,8 +876,22 @@ as_peers_alt_missing_error(as_peers* peers, as_cluster* cluster, const char* nam
 typedef enum as_peers_validation_e {
 	AS_PEERS_VALIDATED,
 	AS_PEERS_FAILED,
-	AS_PEERS_COLLIDED
+	AS_PEERS_COLLIDED,
+
+	// No address validated, and at least one answered as a known node and was skipped.
+	AS_PEERS_SKIPPED
 } as_peers_validation;
+
+// What a validated address of a peer is, besides the peer.
+typedef enum as_peers_found_e {
+	AS_PEERS_FOUND_NONE,
+
+	// Another name is already at the socket, so two nodes would share one transport endpoint.
+	AS_PEERS_FOUND_SOCKET,
+
+	// The address answers as a node the client already knows, so it is not the peer's (FR-47).
+	AS_PEERS_FOUND_KNOWN
+} as_peers_found;
 
 static bool
 as_peers_node_has_addr(as_node* node, const struct sockaddr* addr)
@@ -888,23 +902,22 @@ as_peers_node_has_addr(as_node* node, const struct sockaddr* addr)
 		as_address_equals((struct sockaddr*)&address->addr, (struct sockaddr*)addr);
 }
 
-// Return a node, other than the advertised peer, that a validated peer actually is: a node with
-// the validated name, or a healthy node at the validated socket address.
+// Return a healthy node at the validated socket address whose name is neither the validated name
+// nor peer_name.
 static as_node*
-as_peers_find_validated_node(
+as_peers_find_socket_node(
 	as_node** array, uint32_t size, const char* peer_name, const as_node_info* info
 	)
 {
 	for (uint32_t i = 0; i < size; i++) {
 		as_node* node = array[i];
 
-		if (strcmp(node->name, peer_name) == 0) {
+		if (strcmp(node->name, peer_name) == 0 || strcmp(node->name, info->name) == 0) {
 			continue;
 		}
 
-		if (strcmp(node->name, info->name) == 0 ||
-			(node->active && node->failures == 0 &&
-			 as_peers_node_has_addr(node, (struct sockaddr*)&info->addr))) {
+		if (node->active && node->failures == 0 &&
+			as_peers_node_has_addr(node, (struct sockaddr*)&info->addr)) {
 			return node;
 		}
 	}
@@ -966,11 +979,15 @@ as_peers_add_collided(as_peers* peers, const char* name, const char* peer)
 	as_strncpy(entry->peer, peer, AS_NODE_NAME_SIZE);
 }
 
-// After a peer validated, check that it is not a node other than the advertised one: the
-// refreshing node, a cluster node, a newcomer of this tend, another advertised peer or a node
-// that an earlier peer of this tend collided with. A newcomer it resolves to is dropped, so
-// neither peer becomes a node. Returns true and the other node name on a collision.
-static bool
+// After a peer address validated, check what else it is, and copy the other node name to other.
+//
+// Socket: the refreshing node, a healthy cluster node or a newcomer of this tend is at the
+// validated socket under another name, or an earlier socket collision of this tend recorded the
+// validated name. A newcomer at the socket is dropped, so neither node becomes a node there.
+//
+// Known: the validated name is not the peer's but is the name of the refreshing node, a cluster
+// node, a newcomer or another advertised peer. That node keeps its address and nothing is dropped.
+static as_peers_found
 as_peers_find_validated_collision(
 	as_peers* peers, as_cluster* cluster, as_node* node, as_vector* records, uint32_t index,
 	const as_node_info* info, char* other
@@ -980,31 +997,39 @@ as_peers_find_validated_collision(
 	as_node* n;
 	other[0] = 0;
 
-	if (strcmp(node->name, info->name) == 0 ||
+	if (strcmp(node->name, info->name) != 0 && strcmp(node->name, rec->node_name) != 0 &&
 		as_peers_node_has_addr(node, (struct sockaddr*)&info->addr)) {
 		as_strncpy(other, node->name, AS_NODE_NAME_SIZE);
 	}
-	else if ((n = as_peers_find_validated_node(cluster->nodes->array, cluster->nodes->size,
+	else if ((n = as_peers_find_socket_node(cluster->nodes->array, cluster->nodes->size,
 		rec->node_name, info))) {
 		as_strncpy(other, n->name, AS_NODE_NAME_SIZE);
 	}
-	else if ((n = as_peers_find_validated_node((as_node**)peers->nodes.list, peers->nodes.size,
+	else if ((n = as_peers_find_socket_node((as_node**)peers->nodes.list, peers->nodes.size,
 		rec->node_name, info))) {
 		as_strncpy(other, n->name, AS_NODE_NAME_SIZE);
 		as_peers_drop_newcomer(peers, n);
-	}
-	else if (strcmp(rec->node_name, info->name) != 0 && as_peers_find_record(records, info->name)) {
-		as_strncpy(other, info->name, AS_NODE_NAME_SIZE);
 	}
 	else {
 		as_peers_find_collided(peers, info->name, other);
 	}
 
-	if (! other[0]) {
-		return false;
+	if (other[0]) {
+		as_peers_add_collided(peers, info->name, rec->node_name);
+		return AS_PEERS_FOUND_SOCKET;
 	}
-	as_peers_add_collided(peers, info->name, rec->node_name);
-	return true;
+
+	if (strcmp(info->name, rec->node_name) == 0) {
+		return AS_PEERS_FOUND_NONE;
+	}
+
+	if (strcmp(node->name, info->name) == 0 || as_peers_find_cluster_node(cluster, info->name) ||
+		as_peers_find_local_node(&peers->nodes, info->name) ||
+		as_peers_find_record(records, info->name)) {
+		as_strncpy(other, info->name, AS_NODE_NAME_SIZE);
+		return AS_PEERS_FOUND_KNOWN;
+	}
+	return AS_PEERS_FOUND_NONE;
 }
 
 // Accept check of the addresses of one peer host.
@@ -1016,10 +1041,33 @@ typedef struct as_peers_accept_s {
 	uint32_t index;
 	as_host* host;
 	uint32_t mismatches;
+	bool translated;
 	bool collided;
+	bool skipped;
 } as_peers_accept;
 
-// A collision is checked before the name, so a colliding node is never reported as a mismatch.
+// Log an address of a peer that answered as the known node owner: at info level for the server's
+// own address, such as a server-side alias, as a warning when the translator produced it.
+static void
+as_peers_log_known_host(as_cluster* cluster, const char* name, const as_host* host,
+	const char* owner, bool translated)
+{
+	if (translated) {
+		as_log_warn("Address translator %s gave peer %s the address %s:%u, which answers as "
+			"node %s. The peer skips it", as_peers_translator_name(cluster), name, host->name,
+			(unsigned)host->port, owner);
+	}
+	else {
+		as_log_info("Peer %s skips address %s:%u because it answers as node %s", name, host->name,
+			(unsigned)host->port, owner);
+	}
+}
+
+// A collision and a known node are checked before the name, so neither is reported as a
+// mismatch. A socket collision stops the peer. An address that answers as a known node is skipped
+// like a shared address (FR-47): the next address is tried, the known node is untouched, and the
+// host is added once to the skipped hosts of the peer, which a -26 lists when the peer has nothing
+// left.
 static as_lookup_verdict
 as_peers_accept_node(as_node_info* info, void* udata)
 {
@@ -1027,12 +1075,25 @@ as_peers_accept_node(as_node_info* info, void* udata)
 	as_peer_record* rec = as_vector_get(a->records, a->index);
 	char other[AS_NODE_NAME_SIZE];
 
-	if (as_peers_find_validated_collision(a->peers, a->cluster, a->node, a->records, a->index,
+	switch (as_peers_find_validated_collision(a->peers, a->cluster, a->node, a->records, a->index,
 		info, other)) {
-		as_peers_record_collision(a->peers, a->cluster, rec->node_name, other, a->host->name,
-			a->host->port);
-		a->collided = true;
-		return AS_LOOKUP_STOP;
+		case AS_PEERS_FOUND_SOCKET:
+			as_peers_record_collision(a->peers, a->cluster, rec->node_name, other, a->host->name,
+				a->host->port);
+			a->collided = true;
+			return AS_LOOKUP_STOP;
+
+		case AS_PEERS_FOUND_KNOWN:
+			as_peers_log_known_host(a->cluster, rec->node_name, a->host, other, a->translated);
+
+			if (! a->skipped) {
+				as_peer_record_skip(rec, a->host, other, a->translated);
+				a->skipped = true;
+			}
+			return AS_LOOKUP_NEXT;
+
+		default:
+			break;
 	}
 
 	if (strcmp(info->name, rec->node_name) == 0) {
@@ -1048,7 +1109,7 @@ as_peers_accept_node(as_node_info* info, void* udata)
 static as_peers_validation
 as_peers_validate_node(
 	as_peers* peers, as_cluster* cluster, as_node* node, as_vector* records, uint32_t index,
-	as_host* host
+	as_host* host, bool translated
 	)
 {
 	if (as_peers_find_invalid_host(peers, host)) {
@@ -1078,7 +1139,9 @@ as_peers_validate_node(
 		.index = index,
 		.host = host,
 		.mismatches = 0,
-		.collided = false
+		.translated = translated,
+		.collided = false,
+		.skipped = false
 	};
 
 	// A host with several addresses validates the first address whose connect completes, and
@@ -1094,6 +1157,10 @@ as_peers_validate_node(
 		if (accept.collided) {
 			result = AS_PEERS_COLLIDED;
 		}
+		else if (accept.skipped) {
+			// The skip has already been logged.
+			result = AS_PEERS_SKIPPED;
+		}
 		else if (accept.mismatches == 0) {
 			// A mismatch has already logged its own warning.
 			as_log_warn("Failed to connect to peer %s %d. %s %s",
@@ -1108,30 +1175,36 @@ as_peers_validate_node(
 	}
 	as_lookup_end(&iter);
 
-	// A collided host is reachable, so it is not an invalid host.
+	// A collided or skipped host is reachable, so it is not an invalid host.
 	if (result == AS_PEERS_FAILED) {
 		as_peers_add_invalid_host(peers, host);
 	}
 	return result;
 }
 
+// Validate the hosts of a peer in order until one validates or collides. Returns AS_PEERS_SKIPPED
+// when every host was skipped, and AS_PEERS_FAILED when any failed otherwise.
 static as_peers_validation
 as_peers_validate(
 	as_peers* peers, as_cluster* cluster, as_node* node, as_vector* records, uint32_t index
 	)
 {
 	as_peer_record* rec = as_vector_get(records, index);
+	bool failed = false;
 
 	for (uint32_t i = 0; i < rec->hosts.size; i++) {
 		as_host* host = as_vector_get(&rec->hosts, i);
 		as_peers_validation result = as_peers_validate_node(peers, cluster, node, records, index,
-			host);
+			host, as_peer_record_translated(rec, i));
 
-		if (result != AS_PEERS_FAILED) {
+		if (result == AS_PEERS_FAILED) {
+			failed = true;
+		}
+		else if (result != AS_PEERS_SKIPPED) {
 			return result;
 		}
 	}
-	return AS_PEERS_FAILED;
+	return failed ? AS_PEERS_FAILED : AS_PEERS_SKIPPED;
 }
 
 static bool
@@ -1159,6 +1232,16 @@ as_peers_validate_record(
 	}
 
 	as_peers_validation result = as_peers_validate(peers, cluster, node, records, index);
+
+	if (result == AS_PEERS_SKIPPED) {
+		// Every remaining host answered as a known node, so the peer has no address of its own.
+		// When a host also failed otherwise, the peer is not reported as a collision: the failure
+		// warning stands, as it does for a peer without skipped hosts.
+		as_error err;
+		as_peers_collision_error(&err, as_peers_translator_name(cluster), rec);
+		as_peers_report_collision(&err, peers);
+		return false;
+	}
 
 	if (result != AS_PEERS_VALIDATED) {
 		// A collision has already logged its own warning.
@@ -1382,7 +1465,7 @@ as_peers_find_move_collision(
 	as_peers* peers, as_cluster* cluster, const char* name, const as_node_info* info, char* other
 	)
 {
-	as_node* n = as_peers_find_validated_node(cluster->nodes->array, cluster->nodes->size, name,
+	as_node* n = as_peers_find_socket_node(cluster->nodes->array, cluster->nodes->size, name,
 		info);
 
 	if (n) {
@@ -1390,7 +1473,7 @@ as_peers_find_move_collision(
 		return true;
 	}
 
-	n = as_peers_find_validated_node((as_node**)peers->nodes.list, peers->nodes.size, name, info);
+	n = as_peers_find_socket_node((as_node**)peers->nodes.list, peers->nodes.size, name, info);
 
 	if (n) {
 		as_strncpy(other, n->name, AS_NODE_NAME_SIZE);

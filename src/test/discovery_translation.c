@@ -57,9 +57,12 @@
 // certificates rejected) intentionally stays red until the next major release
 // and the shared N-* workflows are owned by the final integration commit.
 // Component rows added with the collision checks after validation:
-// - U-15 aliases: translation_collision_alias (both orders, default and
-//   pass-through, no min connection reaches a dropped newcomer) and the alias
-//   phase of translation_collision_live_node.
+// - U-17 FR-47 addresses that answer as a known node, skipped like shared addresses:
+//   translation_known_node_alias (two aliases of one server, both orders, default and
+//   pass-through), translation_known_node_skipped (an alias before the peer's own, both reply
+//   orders), translation_known_node_translated (port-map, warning), translation_known_node_only
+//   (nothing left collides, a failed address keeps today's warning) and the alias phase of
+//   translation_collision_live_node.
 // - U-15 FR-46 shared addresses, skipped for every translator while the peer has an address of
 //   its own: translation_shared_address_skipped (no translator, info log),
 //   translation_shared_address_registered (pass-through and an unchanged custom translator, info
@@ -1844,7 +1847,8 @@ TEST(translation_collision_live_node, "U-15 a newcomer colliding with a live nod
 	assert_false(has_node(c.as, "E"));
 
 	// E is advertised at an alias of D's address. The strings differ, so only the check after
-	// validation finds that E is the live node D.
+	// validation finds that the address answers as the live node D, and E has nothing left
+	// (FR-47).
 	char e_alias[64];
 	format(e_alias, sizeof(e_alias), "localhost:%u", d.port);
 	log_capture_start();
@@ -1853,8 +1857,9 @@ TEST(translation_collision_live_node, "U-15 a newcomer colliding with a live nod
 	waited = wait_for_peers_requests(&s, 3, 5000);
 	as_sleep(300);
 	log_capture_stop();
-	warnings = log_capture_count(AS_LOG_LEVEL_WARN, "Nodes E and D answer at the same address",
-		e_alias, "(address translator pass-through)", NULL);
+	format(used, sizeof(used), ": %s is used by D (address translator pass-through)", e_alias);
+	warnings = log_capture_count(AS_LOG_LEVEL_WARN, "Peer E has no address of its own", used,
+		NULL);
 	uint32_t mismatches = log_capture_count(AS_LOG_LEVEL_WARN, "is different than actual node",
 		NULL);
 
@@ -2290,9 +2295,10 @@ TEST(translation_shared_address_live_node, "U-15 FR-46 a newcomer with a live no
 }
 
 // Two peers, B and C, are advertised at different strings that reach the one server B. The
-// strings differ, so only the check after validation finds the collision.
+// strings differ, so only the check after validation finds that C's address answers as B, which
+// is known either as a newcomer or as a listed peer (FR-47). B is created and C has nothing left.
 static const char*
-run_collision_alias(bool reversed, bool pass_through)
+run_known_alias(bool reversed, bool pass_through)
 {
 	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
 	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
@@ -2313,7 +2319,12 @@ run_collision_alias(bool reversed, bool pass_through)
 	}
 	fake_node_set_peers(&s, 1, list, NULL);
 
-	// Min connections would reach B if a dropped newcomer had any.
+	// B references the seed so that the seed is not dropped as an unreferenced node.
+	char seed_list[128];
+	format(seed_list, sizeof(seed_list), "[[S,,[127.0.0.1:%u]]]", s.port);
+	fake_node_set_peers(&b, 1, seed_list, NULL);
+
+	// B gets its min connections when it joins. Later tends only validate C again.
 	as_config config;
 	fake_client c;
 	as_error err;
@@ -2321,47 +2332,62 @@ run_collision_alias(bool reversed, bool pass_through)
 	config.min_conns_per_node = 2;
 #if AS_EVENT_LIB_DEFINED
 	config.async_min_conns_per_node = 2;
+	uint32_t slack = 2;
+#else
+	uint32_t slack = 0;
 #endif
 
 	if (pass_through) {
 		as_config_set_pass_through_translator(&config, &err);
 	}
 
+	char used[96];
+	format(used, sizeof(used), ": %s is used by B (address translator %s)", c_adv,
+		pass_through ? "pass-through" : "static-map");
 	const char* result = NULL;
 	log_capture_start();
 	as_status status = fake_client_connect(&c, &config);
 	log_capture_stop();
-	uint32_t warnings = log_capture_count(AS_LOG_LEVEL_WARN, "answer at the same address", "B",
-		"C", NULL);
+	uint32_t warnings = log_capture_count(AS_LOG_LEVEL_WARN, "Peer C has no address of its own",
+		used, NULL);
+	uint32_t mismatches = log_capture_count(AS_LOG_LEVEL_WARN, "is different than actual node",
+		NULL);
 
 	if (status != AEROSPIKE_OK) {
 		result = "unexpected connect status";
 	}
-	else if (node_count(c.as) != 1 || !has_node(c.as, "S") || has_node(c.as, "B") ||
+	else if (node_count(c.as) != 2 || !has_node(c.as, "S") || !has_node(c.as, "B") ||
 		has_node(c.as, "C")) {
-		result = "an alias peer was created";
+		result = "B is not the only peer created";
 	}
 	else if (warnings == 0) {
-		result = "no collision warning names both peers";
+		result = "C is not reported with its address and B as the owner";
 	}
-	else if (!wait_for_peers_requests(&s, 3, 5000)) {
-		result = "the seed was not tended";
-	}
-	else if (has_node(c.as, "B") || has_node(c.as, "C")) {
-		result = "an alias peer joined on a later tend";
+	else if (mismatches != 0) {
+		result = "the alias was reported as a mismatch";
 	}
 	else {
-		// Each peers reply of S makes one validation connection per alias at B, and node creation
-		// reuses the validation socket. Any min connection to B breaks the bound. The tender keeps
-		// running, so accepts is read first.
-		uint32_t accepts = fake_node_requests(&b, &b.accepts);
-		uint32_t requests = fake_node_requests(&s, &s.peers_std_requests);
+		// The tender keeps running, so the counters that bound are read on the lenient side.
+		uint32_t requests1 = fake_node_requests(&s, &s.peers_std_requests);
+		uint32_t accepts1 = fake_node_requests(&b, &b.accepts);
 
-		if (accepts > 2 * requests) {
-			result = "a dropped newcomer had min connections";
+		if (!wait_for_peers_requests(&s, 3, 5000)) {
+			result = "the seed was not tended";
 		}
-		else if (!discovery_one_node_per_name(c.as->cluster, NULL, 0)) {
-			result = "two nodes have one name";
+		else if (has_node(c.as, "C") || node_count(c.as) != 2) {
+			result = "C joined on a later tend";
+		}
+		else {
+			// Each later peers reply of S makes at most one validation connection to B, for C.
+			uint32_t accepts2 = fake_node_requests(&b, &b.accepts);
+			uint32_t requests2 = fake_node_requests(&s, &s.peers_std_requests);
+
+			if (accepts2 - accepts1 > requests2 - requests1 + slack) {
+				result = "C opened more than one connection to B per tend";
+			}
+			else if (!discovery_one_node_per_name(c.as->cluster, NULL, 0)) {
+				result = "two nodes have one name";
+			}
 		}
 	}
 
@@ -2371,15 +2397,309 @@ run_collision_alias(bool reversed, bool pass_through)
 	return result;
 }
 
-TEST(translation_collision_alias, "U-15 two peers that reach one server through aliases create neither node")
+TEST(translation_known_node_alias, "U-17 FR-47 of two peers that reach one server through aliases, only the node's own is created")
 {
 	for (int pass_through = 0; pass_through <= 1; pass_through++) {
 		for (int reversed = 0; reversed <= 1; reversed++) {
-			const char* failure = run_collision_alias(reversed, pass_through);
+			const char* failure = run_known_alias(reversed, pass_through);
 
 			if (failure) {
 				assert_log(true, "pass_through=%d reversed=%d: %s", pass_through, reversed, failure);
 			}
+		}
+	}
+}
+
+// Start S, B and D, with B and D listing only the seed.
+static bool
+start_known_nodes(fake_node* s, fake_node* b, fake_node* d)
+{
+	if (!fake_node_start(s, "S") || !fake_node_start(b, "B") || !fake_node_start(d, "D")) {
+		return false;
+	}
+
+	char seed_list[128];
+	format(seed_list, sizeof(seed_list), "[[S,,[127.0.0.1:%u]]]", s->port);
+	fake_node_set_peers(b, 1, seed_list, NULL);
+	fake_node_set_peers(d, 1, seed_list, NULL);
+	return true;
+}
+
+// Return NULL when, within 1200 ms, S is not asked for its peers again.
+static const char*
+generation_advanced(fake_node* s)
+{
+	uint32_t before = fake_node_requests(s, &s->peers_std_requests);
+	as_sleep(1200);
+	return fake_node_requests(s, &s->peers_std_requests) == before ? NULL :
+		"the peers generation did not advance";
+}
+
+// D advertises an alias of B's address and its own. Order 0 lists B first, order 1 D first, and
+// order 2 lists D's own address before the alias. D joins at its own address on the first tend.
+static const char*
+run_known_first(int order)
+{
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
+
+	if (!start_known_nodes(&s, &b, &d)) {
+		return "cannot start fake nodes";
+	}
+
+	char alias[64], b_own[64], d_own[64], d_list[160], list[256];
+	format(alias, sizeof(alias), "localhost:%u", b.port);
+	format(b_own, sizeof(b_own), "127.0.0.1:%u", b.port);
+	format(d_own, sizeof(d_own), "127.0.0.1:%u", d.port);
+
+	if (order == 2) {
+		format(d_list, sizeof(d_list), "%s,%s", d_own, alias);
+	}
+	else {
+		format(d_list, sizeof(d_list), "%s,%s", alias, d_own);
+	}
+
+	if (order == 1) {
+		format(list, sizeof(list), "[[D,,[%s]],[B,,[%s]]]", d_list, b_own);
+	}
+	else {
+		format(list, sizeof(list), "[[B,,[%s]],[D,,[%s]]]", b_own, d_list);
+	}
+	fake_node_set_peers(&s, 1, list, NULL);
+
+	as_config config;
+	fake_client c;
+	fake_config(&config, &s, false);
+
+	char skip[160];
+	format(skip, sizeof(skip), "Peer D skips address %s because it answers as node B", alias);
+	const char* result = NULL;
+	log_capture_start();
+	as_status status = fake_client_connect(&c, &config);
+	log_capture_stop();
+	uint32_t skips = log_capture_count(AS_LOG_LEVEL_INFO, skip, NULL);
+
+	if (status != AEROSPIKE_OK) {
+		result = "unexpected connect status";
+	}
+	else if (node_count(c.as) != 3 || !has_node(c.as, "B") || !has_node(c.as, "D")) {
+		result = "B and D did not both join on the first tend";
+	}
+	else if (node_port(c.as, "B") != b.port || node_port(c.as, "D") != d.port) {
+		result = "a peer is not at its own address";
+	}
+	else if (order == 2 ? skips != 0 : skips == 0) {
+		result = order == 2 ? "D's own address came first, yet the alias was skipped" :
+			"the skipped alias is not logged at info level";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_WARN, "has no address of its own", NULL) > 0) {
+		result = "a peer with an address of its own was reported as a collision";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_WARN, "is different than actual node", NULL) > 0) {
+		result = "the alias was reported as a mismatch";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_WARN, "Failed to connect to peer", NULL) > 0) {
+		result = "the alias was reported as a failure";
+	}
+	else {
+		result = generation_advanced(&s);
+	}
+
+	if (!result && !discovery_one_node_per_name(c.as->cluster, NULL, 0)) {
+		result = "two nodes have one name";
+	}
+
+	fake_client_close(&c);
+	fake_node_stop(&d);
+	fake_node_stop(&b);
+	fake_node_stop(&s);
+	return result;
+}
+
+TEST(translation_known_node_skipped, "U-17 FR-47 an address that answers as a known node is skipped and the peer joins at its own")
+{
+	for (int order = 0; order <= 2; order++) {
+		const char* failure = run_known_first(order);
+
+		if (failure) {
+			assert_log(true, "order=%d: %s", order, failure);
+		}
+	}
+}
+
+// Port-map sends D's first address to B's socket under another string than B advertises. D
+// skips it with a warning naming the translator and joins at its own address.
+static const char*
+run_known_translated(bool d_first)
+{
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
+
+	if (!start_known_nodes(&s, &b, &d)) {
+		return "cannot start fake nodes";
+	}
+
+	char b_adv[64], d_list[128], list[256];
+	format(b_adv, sizeof(b_adv), "localhost:%u", b.port);
+	format(d_list, sizeof(d_list), "10.0.0.4:3000,127.0.0.1:%u", d.port);
+
+	if (d_first) {
+		format(list, sizeof(list), "[[D,,[%s]],[B,,[%s]]]", d_list, b_adv);
+	}
+	else {
+		format(list, sizeof(list), "[[B,,[%s]],[D,,[%s]]]", b_adv, d_list);
+	}
+	fake_node_set_peers(&s, 1, list, NULL);
+
+	as_config config;
+	fake_client c;
+	as_error err;
+	fake_config(&config, &s, false);
+
+	char target[64];
+	format(target, sizeof(target), "127.0.0.1:%u", b.port);
+	as_addr_map entries[] = {{"10.0.0.4:3000", target}};
+
+	if (as_config_set_port_map_translator(&config, entries, 1, &err) != AEROSPIKE_OK) {
+		fake_node_stop(&d);
+		fake_node_stop(&b);
+		fake_node_stop(&s);
+		return "cannot set the port-map translator";
+	}
+
+	char warning[192];
+	format(warning, sizeof(warning), "Address translator port-map gave peer D the address %s, "
+		"which answers as node B. The peer skips it", target);
+	const char* result = NULL;
+	log_capture_start();
+	as_status status = fake_client_connect(&c, &config);
+	log_capture_stop();
+
+	if (status != AEROSPIKE_OK) {
+		result = "unexpected connect status";
+	}
+	else if (node_count(c.as) != 3 || !has_node(c.as, "B") || !has_node(c.as, "D")) {
+		result = "B and D did not both join on the first tend";
+	}
+	else if (node_port(c.as, "D") != d.port) {
+		result = "D is not at its own address";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_WARN, warning, NULL) == 0) {
+		result = "the translated address is not logged as a warning naming the translator";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_INFO, "skips address", NULL) > 0) {
+		result = "the translated address was logged at info level";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_WARN, "has no address of its own", NULL) > 0) {
+		result = "a peer with an address of its own was reported as a collision";
+	}
+	else {
+		result = generation_advanced(&s);
+	}
+
+	fake_client_close(&c);
+	fake_node_stop(&d);
+	fake_node_stop(&b);
+	fake_node_stop(&s);
+	return result;
+}
+
+TEST(translation_known_node_translated, "U-17 FR-47 a translated address that answers as a known node is skipped with a warning")
+{
+	for (int d_first = 0; d_first <= 1; d_first++) {
+		const char* failure = run_known_translated(d_first);
+
+		if (failure) {
+			assert_log(true, "d_first=%d: %s", d_first, failure);
+		}
+	}
+}
+
+// D advertises only an alias of B's address, so it collides on every tend and the generation is
+// kept. With mixed, D also advertises an address that refuses connections: the failure is
+// reported as today and D is not reported as a collision.
+static const char*
+run_known_only(bool mixed)
+{
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
+
+	if (!start_known_nodes(&s, &b, &d)) {
+		return "cannot start fake nodes";
+	}
+
+	char alias[64], list[256];
+	format(alias, sizeof(alias), "localhost:%u", b.port);
+	format(list, sizeof(list), "[[B,,[127.0.0.1:%u]],[D,,[%s%s]]]", b.port, alias,
+		mixed ? ",127.0.0.1:1" : "");
+	fake_node_set_peers(&s, 1, list, NULL);
+
+	as_config config;
+	fake_client c;
+	fake_config(&config, &s, false);
+
+	char used[160];
+	format(used, sizeof(used), "Peer D has no address of its own: %s is used by B (address "
+		"translator static-map)", alias);
+	const char* result = NULL;
+	log_capture_start();
+	as_status status = fake_client_connect(&c, &config);
+	log_capture_stop();
+	uint32_t collisions = log_capture_count(AS_LOG_LEVEL_WARN, used, NULL);
+	uint32_t failures = log_capture_count(AS_LOG_LEVEL_WARN, "Failed to connect to peer", NULL);
+
+	if (status != AEROSPIKE_OK) {
+		result = "unexpected connect status";
+	}
+	else if (node_count(c.as) != 2 || !has_node(c.as, "B") || has_node(c.as, "D")) {
+		result = "D was created, or B was not";
+	}
+	else if (mixed ? collisions != 0 : collisions == 0) {
+		result = mixed ? "a peer with a failed address was reported as a collision" :
+			"D is not reported with the alias and B as the owner";
+	}
+	else if (mixed && failures == 0) {
+		result = "the failed address is not reported";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_WARN, "is different than actual node", NULL) > 0) {
+		result = "the alias was reported as a mismatch";
+	}
+	else {
+		log_capture_start();
+		bool tended = wait_for_peers_requests(&s, 3, 5000);
+		log_capture_stop();
+
+		if (!tended) {
+			result = "the peers generation advanced";
+		}
+		else if (has_node(c.as, "D")) {
+			result = "D joined on a later tend";
+		}
+		else if (!mixed && log_capture_count(AS_LOG_LEVEL_WARN, used, NULL) == 0) {
+			result = "the collision is not reported again on later tends";
+		}
+		else if (!discovery_one_node_per_name(c.as->cluster, NULL, 0)) {
+			result = "two nodes have one name";
+		}
+	}
+
+	fake_client_close(&c);
+	fake_node_stop(&d);
+	fake_node_stop(&b);
+	fake_node_stop(&s);
+	return result;
+}
+
+TEST(translation_known_node_only, "U-17 FR-47 a peer whose only address answers as a known node collides, a failed address keeps today's warning")
+{
+	for (int mixed = 0; mixed <= 1; mixed++) {
+		const char* failure = run_known_only(mixed);
+
+		if (failure) {
+			assert_log(true, "mixed=%d: %s", mixed, failure);
 		}
 	}
 }
@@ -3018,7 +3338,10 @@ SUITE(discovery_translation, "pluggable discovery translation, topology and TLS 
 	suite_add(translation_shared_address_registered);
 	suite_add(translation_shared_address_translated);
 	suite_add(translation_shared_address_live_node);
-	suite_add(translation_collision_alias);
+	suite_add(translation_known_node_alias);
+	suite_add(translation_known_node_skipped);
+	suite_add(translation_known_node_translated);
+	suite_add(translation_known_node_only);
 	suite_add(translation_distinct_ports_one_host);
 	suite_add(translation_tls_legacy_warn_once);
 	suite_add(translation_peer_tls_name_runtime);

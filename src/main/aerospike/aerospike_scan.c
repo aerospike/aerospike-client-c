@@ -1483,7 +1483,7 @@ aerospike_scan_foreach_internal(
 
 	as_partition_tracker pt;
 	status = as_partition_tracker_init_nodes(&pt, cluster, &policy->base, policy->max_records,
-		policy->replica, &scan->parts_all, scan->paginate, n_nodes, err);
+		policy->replica, &scan->parts_all, scan->paginate, n_nodes, true, err);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1580,7 +1580,7 @@ aerospike_scan_partitions(
 
 	as_partition_tracker pt;
 	status = as_partition_tracker_init_filter(&pt, cluster, &policy->base, policy->max_records,
-		policy->replica, &scan->parts_all, scan->paginate, n_nodes, pf, err);
+		policy->replica, &scan->parts_all, scan->paginate, n_nodes, pf, true, err);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
@@ -1621,7 +1621,7 @@ aerospike_scan_async_internal(
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
 	status = as_partition_tracker_init_nodes(pt, cluster, &policy->base, policy->max_records,
-		policy->replica, &scan->parts_all, scan->paginate, n_nodes, err);
+		policy->replica, &scan->parts_all, scan->paginate, n_nodes, true, err);
 
 	if (status != AEROSPIKE_OK) {
 		cf_free(pt);
@@ -1711,7 +1711,7 @@ aerospike_scan_partitions_async(
 
 	as_partition_tracker* pt = cf_malloc(sizeof(as_partition_tracker));
 	status = as_partition_tracker_init_filter(pt, cluster, &policy->base, policy->max_records,
-		policy->replica, &scan->parts_all, scan->paginate, n_nodes, pf, err);
+		policy->replica, &scan->parts_all, scan->paginate, n_nodes, pf, true, err);
 
 	if (status != AEROSPIKE_OK) {
 		cf_free(pt);

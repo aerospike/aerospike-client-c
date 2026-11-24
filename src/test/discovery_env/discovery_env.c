@@ -652,8 +652,9 @@ TEST(n18_control_pass_through, "N-18 control: pass-through holds both nodes of t
 	check(live_wait_nodes(as, env_ns, names, ENV_WAIT_MS, last, sizeof(last)), "expected %s: %s", names, last);
 
 	as_sleep(ENV_QUIET_MS);
-	const char* needles[] = {"to the same address"};
-	uint32_t collisions = live_log_count(mark, needles, 1);
+	const char* shared[] = {"has no address of its own"};
+	const char* socket[] = {"answer at the same address"};
+	uint32_t collisions = live_log_count(mark, shared, 1) + live_log_count(mark, socket, 1);
 	char first[1024];
 	uint32_t failures = live_round_trip(as, env_ns, ENV_SET, "control", NULL, ENV_KEYS, first, sizeof(first));
 	printf("ENV-N18-RESULT control translator=pass-through %s collisionWarns=%u keys=%u failures=%u\n", last,

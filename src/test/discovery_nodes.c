@@ -1974,7 +1974,7 @@ TEST(nodes_peer_collision_stops,
 	as_config config;
 	nodes_config(&config, &s);
 	aerospike* client = NULL;
-	log_count_start_many(PEER_MISMATCH, "translated nodes", PEER_FAILED, NULL);
+	log_count_start_many(PEER_MISMATCH, "answer at the same address", PEER_FAILED, NULL);
 	as_status status = nodes_connect(&client, &config);
 	uint32_t counts[LOG_COUNT_MAX];
 	log_count_stop_many(counts);
@@ -2681,7 +2681,7 @@ TEST(nodes_move_collision_skipped,
 	snprintf(warning, sizeof(warning),
 		"Address %s:%u of %s is also node %s, so node %s does not move to it", SECOND, port,
 		hostname, MOVE_OTHER, MOVE_NODE);
-	log_count_start_many("Move node", warning, "translated nodes", NULL);
+	log_count_start_many("Move node", warning, "(address translator ", NULL);
 	bool kept[4];
 	bool b_kept[4];
 

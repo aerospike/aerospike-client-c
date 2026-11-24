@@ -961,10 +961,11 @@ translation_init(translation* t, const yaml_node_t* config)
 	return NULL;
 }
 
+// The node fields come from input, the host and port from address.
 static void
-endpoint_init(as_endpoint* e, const yaml_node_t* input)
+endpoint_init_at(as_endpoint* e, const yaml_node_t* input, const yaml_node_t* address)
 {
-	if (y_typeof(input) != Y_MAP) {
+	if (y_typeof(input) != Y_MAP || y_typeof(address) != Y_MAP) {
 		die("an advertised endpoint must be a map");
 	}
 
@@ -972,8 +973,8 @@ endpoint_init(as_endpoint* e, const yaml_node_t* input)
 
 	e->node_name = need_str(input, "nodeName");
 	e->tls_name = opt_str(input, "tlsName");
-	e->host = need_str(input, "host");
-	e->port = need_port(input, "port");
+	e->host = need_str(address, "host");
+	e->port = need_port(address, "port");
 
 	if (!strcmp(source, "standard")) {
 		e->source = AS_ENDPOINT_SOURCE_STANDARD;
@@ -984,6 +985,12 @@ endpoint_init(as_endpoint* e, const yaml_node_t* input)
 	else {
 		die("unknown sourceList %s", source);
 	}
+}
+
+static void
+endpoint_init(as_endpoint* e, const yaml_node_t* input)
+{
+	endpoint_init_at(e, input, input);
 }
 
 static const char*
@@ -1075,6 +1082,30 @@ collision_reports(const char* message, const yaml_node_t* error)
 	return !missing_fact(message, y_get(error, "messageContains"), buf);
 }
 
+// The hosts list of a collision peer, or NULL when the peer has its own host and port.
+static const yaml_node_t*
+collision_hosts(const yaml_node_t* peer)
+{
+	if (y_typeof(peer) != Y_MAP) {
+		die("a collision peer must be a map");
+	}
+
+	yaml_node_t* hosts = y_get(peer, "hosts");
+
+	if (y_typeof(hosts) == Y_NULL) {
+		return NULL;
+	}
+
+	if (y_typeof(hosts) != Y_SEQ || y_len(hosts) == 0) {
+		die("hosts must be a non-empty list");
+	}
+
+	if (y_get(peer, "host") || y_get(peer, "port")) {
+		die("a collision peer has hosts or host and port, not both");
+	}
+	return hosts;
+}
+
 static void
 join_strings(sb* b, char** items, uint32_t size)
 {
@@ -1106,11 +1137,30 @@ run_collision(const row* r)
 		return outcome_unsupported("translator %s is not implemented", unsupported);
 	}
 
-	uint32_t size = y_len(input);
-	as_endpoint* peers = xcalloc(size, sizeof(as_endpoint));
+	// Each host of a peer is one endpoint, and the endpoints of a peer are consecutive.
+	uint32_t input_size = y_len(input);
+	uint32_t size = 0;
 
-	for (uint32_t i = 0; i < size; i++) {
-		endpoint_init(&peers[i], y_at(input, i));
+	for (uint32_t i = 0; i < input_size; i++) {
+		const yaml_node_t* hosts = collision_hosts(y_at(input, i));
+		size += hosts ? y_len(hosts) : 1;
+	}
+
+	as_endpoint* peers = xcalloc(size, sizeof(as_endpoint));
+	uint32_t n = 0;
+
+	for (uint32_t i = 0; i < input_size; i++) {
+		const yaml_node_t* peer = y_at(input, i);
+		const yaml_node_t* hosts = collision_hosts(peer);
+
+		if (!hosts) {
+			endpoint_init(&peers[n++], peer);
+			continue;
+		}
+
+		for (uint32_t k = 0; k < y_len(hosts); k++) {
+			endpoint_init_at(&peers[n++], peer, y_at(hosts, k));
+		}
 	}
 
 	for (uint32_t i = 1; i < size; i++) {

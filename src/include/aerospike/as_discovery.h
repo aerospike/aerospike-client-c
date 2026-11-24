@@ -1517,27 +1517,35 @@ as_discovery_conformance_merge(as_error* err, as_seed_merge_policy policy,
 
 /**
  * Conformance entry point for one collision row: peers is the ordered list of
- * peers advertised in one peers reply, each translated as by
+ * endpoints advertised in one peers reply, each translated as by
  * as_discovery_conformance_translate() and then checked by the same collision
- * code and message the cluster uses when it parses a peers reply.
+ * code and message the cluster uses when it parses a peers reply. Consecutive
+ * endpoints with the same node_name are the hosts of one peer, in order, and
+ * share its tls_name.
  *
- * Each peer whose translated host and port is also the translated endpoint of
- * another peer collides and does not become a node. Each colliding peer is
- * reported once, with an AEROSPIKE_ERR_TRANSLATION_COLLISION message naming
- * the translator, the other peer, the colliding peer and the shared host:port,
- * so two peers on one endpoint give two messages, one naming each peer first.
- * A peer with a strict miss has no endpoint, so it is neither a node nor in a
- * collision. Every peer is a newcomer: collisions with the refreshing node,
- * live nodes and nodes validated earlier in a tend are not modeled.
+ * A translated host and port that another peer also has is shared: hostnames
+ * compare case-insensitively and nothing is resolved. Every shared host of the
+ * reply is found before any is removed. A shared host is never used, so a peer
+ * that still has a host of its own becomes a node, and a peer whose every host
+ * is shared collides and does not. Each colliding peer is reported once, with
+ * an AEROSPIKE_ERR_TRANSLATION_COLLISION message naming the peer, its shared
+ * hosts as it advertised them after translation with the peer that owns each
+ * (the first three, then how many more) and the translator. A strict miss
+ * drops only that host, and a peer left without hosts is neither a node nor in
+ * a collision. Every peer is a newcomer: collisions with the refreshing node,
+ * live nodes and nodes validated earlier in a tend, and hosts that answer as
+ * another node after connect, are not modeled.
  *
  * On AEROSPIKE_OK, out receives copies of the node names and messages; release
  * them with as_conformance_collisions_destroy(). On error out is zeroed and
  * nothing is left allocated.
  *
- * Returns AEROSPIKE_ERR_PARAM for invalid input: NULL arguments, no peers, a
- * peer without a node name or host, repeated node names, peers from both the
- * standard and alternate lists, or an invalid translation (including an
- * invalid port-map entry). Returns AEROSPIKE_ERR_CLIENT on allocation failure.
+ * Returns AEROSPIKE_ERR_PARAM for invalid input: NULL arguments, no peers, an
+ * endpoint without a node name or host, a node name repeated after another
+ * peer, two TLS names or a host and port repeated (hostnames compared
+ * case-insensitively) within one peer, endpoints from both the standard and
+ * alternate lists, or an invalid translation (including an invalid port-map
+ * entry). Returns AEROSPIKE_ERR_CLIENT on allocation failure.
  *
  * @ingroup discovery_api
  */

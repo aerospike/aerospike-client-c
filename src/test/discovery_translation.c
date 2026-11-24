@@ -60,8 +60,11 @@
 // - U-15 aliases: translation_collision_alias (both orders, default and
 //   pass-through, no min connection reaches a dropped newcomer) and the alias
 //   phase of translation_collision_live_node.
-// - U-15 shared addresses with a registered translator:
-//   translation_shared_address_registered.
+// - U-15 FR-46 shared addresses, skipped for every translator while the peer has an address of
+//   its own: translation_shared_address_skipped (no translator, info log),
+//   translation_shared_address_registered (pass-through and an unchanged custom translator, info
+//   log), translation_shared_address_translated (port-map and a static-map hit, warning) and
+//   translation_shared_address_live_node (a live node's address plus the peer's own).
 // - L1 collision fixture rows: discovery_conformance_collision in discovery_contract.c and
 //   src/test/conformance/conformance_runner.c.
 // - Init is not failed by collisions or strict misses: translation_collision_*,
@@ -1744,16 +1747,18 @@ run_collision(collision_kind kind, bool reversed, bool healthy_peer, as_status e
 
 	// D advertises a distinct host for static-map so that its address is also mapped.
 	const char* result = NULL;
+	char by_b[96], by_c[96], named[64];
+	format(by_b, sizeof(by_b), ": %s is used by B (", shared);
+	format(by_c, sizeof(by_c), ": %s is used by C (", shared);
+	format(named, sizeof(named), "(address translator %s)", translator);
 	log_capture_start();
 	as_status status = fake_client_connect(&c, &config);
 	log_capture_stop();
-	uint32_t warnings = log_capture_count(AS_LOG_LEVEL_WARN, "translated nodes", "B", "C", shared,
-		translator, NULL);
-	// One message per colliding peer, each naming the other peer as the first owner.
-	uint32_t b_first = log_capture_count(AS_LOG_LEVEL_WARN, "nodes B and C", shared, translator,
-		NULL);
-	uint32_t c_first = log_capture_count(AS_LOG_LEVEL_WARN, "nodes C and B", shared, translator,
-		NULL);
+	// One message per colliding peer, naming the other peer as the owner of the shared address.
+	uint32_t b_reported = log_capture_count(AS_LOG_LEVEL_WARN, "Peer B has no address of its own",
+		by_c, named, NULL);
+	uint32_t c_reported = log_capture_count(AS_LOG_LEVEL_WARN, "Peer C has no address of its own",
+		by_b, named, NULL);
 
 	if (status != expected) {
 		result = "unexpected connect status";
@@ -1762,11 +1767,9 @@ run_collision(collision_kind kind, bool reversed, bool healthy_peer, as_status e
 		!has_node(c.as, "S") || (healthy_peer && !has_node(c.as, "D"))) {
 		result = "colliding nodes were created";
 	}
-	else if (warnings == 0) {
-		result = "no collision warning names both nodes, the shared address and the translator";
-	}
-	else if (b_first == 0 || c_first == 0) {
-		result = "the collision is not reported once for each colliding peer";
+	else if (b_reported == 0 || c_reported == 0) {
+		result = "each colliding peer is not reported with the shared address, its owner and the "
+			"translator";
 	}
 	else if (!discovery_one_node_per_name(c.as->cluster, NULL, 0)) {
 		result = "two nodes have one name";
@@ -1830,8 +1833,10 @@ TEST(translation_collision_live_node, "U-15 a newcomer colliding with a live nod
 	bool waited = wait_for_peers_requests(&s, 3, 5000);
 	as_sleep(300);
 	log_capture_stop();
-	uint32_t warnings = log_capture_count(AS_LOG_LEVEL_WARN, "translated nodes", "E", "D",
-		"pass-through", NULL);
+	char used[96];
+	format(used, sizeof(used), ": %s is used by D (address translator pass-through)", d_adv);
+	uint32_t warnings = log_capture_count(AS_LOG_LEVEL_WARN, "Peer E has no address of its own",
+		used, NULL);
 
 	assert_true(waited);
 	assert_true(warnings > 0);
@@ -1848,8 +1853,8 @@ TEST(translation_collision_live_node, "U-15 a newcomer colliding with a live nod
 	waited = wait_for_peers_requests(&s, 3, 5000);
 	as_sleep(300);
 	log_capture_stop();
-	warnings = log_capture_count(AS_LOG_LEVEL_WARN, "translated nodes", "E", "D", "pass-through",
-		NULL);
+	warnings = log_capture_count(AS_LOG_LEVEL_WARN, "Nodes E and D answer at the same address",
+		e_alias, "(address translator pass-through)", NULL);
 	uint32_t mismatches = log_capture_count(AS_LOG_LEVEL_WARN, "is different than actual node",
 		NULL);
 
@@ -1883,11 +1888,14 @@ TEST(translation_collision_seed, "U-15 a peer advertised at the seed address is 
 	assert_int_eq(as_config_set_pass_through_translator(&config, &err), AEROSPIKE_OK);
 
 	// The collision alone does not fail init: the seed connects and B is retried.
+	char used[96];
+	format(used, sizeof(used), ": 127.0.0.1:%u is used by S (address translator pass-through)",
+		s.port);
 	log_capture_start();
 	as_status status = fake_client_connect(&c, &config);
 	log_capture_stop();
-	uint32_t warnings = log_capture_count(AS_LOG_LEVEL_WARN, "translated nodes", "S", "B",
-		"pass-through", NULL);
+	uint32_t warnings = log_capture_count(AS_LOG_LEVEL_WARN, "Peer B has no address of its own",
+		used, NULL);
 
 	assert_int_eq(status, AEROSPIKE_OK);
 	assert_true(warnings > 0);
@@ -1930,12 +1938,20 @@ TEST(translation_shared_address_skipped, "U-15 an address shared by peers is nev
 	fake_client c;
 	fake_config(&config, &s, false);
 
-	// The default static-map path only drops the shared address, so legacy configurations keep
-	// working. translation_shared_address_registered covers registered translators.
+	// No translator and no ip_map: the shared address is the servers' own, so the skip is logged
+	// at info level only.
+	log_capture_start();
 	assert_int_eq(fake_client_connect(&c, &config), AEROSPIKE_OK);
+	log_capture_stop();
 	assert_int_eq(node_count(c.as), 3);
 	assert_true(has_node(c.as, "B"));
 	assert_true(has_node(c.as, "D"));
+	assert_true(log_capture_count(AS_LOG_LEVEL_INFO, "Peer B skips address 127.0.0.1:1 because "
+		"node D has the same address", NULL) > 0);
+	assert_true(log_capture_count(AS_LOG_LEVEL_INFO, "Peer D skips address 127.0.0.1:1 because "
+		"node B has the same address", NULL) > 0);
+	assert_int_eq(log_capture_count(AS_LOG_LEVEL_WARN, "gave peer", NULL), 0);
+	assert_int_eq(log_capture_count(AS_LOG_LEVEL_WARN, "has no address of its own", NULL), 0);
 
 	// Nothing collided, so the peers generation advanced and S goes quiet.
 	uint32_t before = fake_node_requests(&s, &s.peers_std_requests);
@@ -1945,15 +1961,20 @@ TEST(translation_shared_address_skipped, "U-15 an address shared by peers is nev
 	assert_true(discovery_one_node_per_name(c.as->cluster, NULL, 0));
 	fake_client_close(&c);
 
-	// D has no address of its own left, so it collides and is not created. B still joins.
+	// D has no address of its own left, so it collides and is not created. B still joins. With
+	// nothing configured the translator is named static-map.
 	format(list, sizeof(list), "[[B,,[%s,127.0.0.1:%u]],[D,,[%s]]]", shared, b.port, shared);
 	fake_node_set_peers(&s, 1, list, NULL);
 	fake_config(&config, &s, false);
 
+	log_capture_start();
 	assert_int_eq(fake_client_connect(&c, &config), AEROSPIKE_OK);
+	log_capture_stop();
 	assert_int_eq(node_count(c.as), 2);
 	assert_true(has_node(c.as, "B"));
 	assert_false(has_node(c.as, "D"));
+	assert_true(log_capture_count(AS_LOG_LEVEL_WARN, "Peer D has no address of its own: "
+		"127.0.0.1:1 is used by B (address translator static-map)", NULL) > 0);
 
 	// The collision keeps the peers generation, so it is retried on later tends.
 	assert_true(wait_for_peers_requests(&s, 3, 5000));
@@ -1967,16 +1988,37 @@ TEST(translation_shared_address_skipped, "U-15 an address shared by peers is nev
 	fake_node_stop(&s);
 }
 
-TEST(translation_shared_address_registered, "U-15 with a registered translator a peer with any shared address is not created")
+// Register pass-through, or the probe translator, which returns every address unchanged. Returns
+// the translator name.
+static const char*
+register_unchanged_translator(as_config* config, bool custom, as_address_translator* translator,
+	probe* p)
+{
+	as_error err;
+
+	if (custom) {
+		probe_init(translator, p);
+		as_config_set_address_translator(config, translator, &err);
+		return "probe";
+	}
+	as_config_set_pass_through_translator(config, &err);
+	return "pass-through";
+}
+
+// The reply of translation_shared_address_skipped through a registered translator that returns
+// every address unchanged: each peer skips the shared address at info level and joins through
+// its own. Then D advertises only the shared address and collides.
+static const char*
+run_shared_registered(bool custom)
 {
 	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
 	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
 	DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
-	assert_true(fake_node_start(&s, "S"));
-	assert_true(fake_node_start(&b, "B"));
-	assert_true(fake_node_start(&d, "D"));
 
-	// The same reply as translation_shared_address_skipped: each peer has an address of its own.
+	if (!fake_node_start(&s, "S") || !fake_node_start(&b, "B") || !fake_node_start(&d, "D")) {
+		return "cannot start fake nodes";
+	}
+
 	const char* shared = "127.0.0.1:1";
 	char list[256];
 	format(list, sizeof(list), "[[B,,[%s,127.0.0.1:%u]],[D,,[127.0.0.1:%u,%s]]]", shared, b.port,
@@ -1990,30 +2032,260 @@ TEST(translation_shared_address_registered, "U-15 with a registered translator a
 
 	as_config config;
 	fake_client c;
-	as_error err;
+	as_address_translator translator;
+	probe p;
 	fake_config(&config, &s, false);
-	assert_int_eq(as_config_set_pass_through_translator(&config, &err), AEROSPIKE_OK);
+	const char* name = register_unchanged_translator(&config, custom, &translator, &p);
 
+	const char* result = NULL;
 	log_capture_start();
 	as_status status = fake_client_connect(&c, &config);
 	log_capture_stop();
-	uint32_t warnings = log_capture_count(AS_LOG_LEVEL_WARN, "translated nodes", "B", "D", shared,
-		"pass-through", NULL);
 
-	assert_int_eq(status, AEROSPIKE_OK);
-	assert_true(warnings > 0);
-	assert_int_eq(node_count(c.as), 1);
-	assert_true(has_node(c.as, "S"));
+	if (status != AEROSPIKE_OK) {
+		result = "unexpected connect status";
+	}
+	else if (node_count(c.as) != 3 || !has_node(c.as, "B") || !has_node(c.as, "D")) {
+		result = "a peer with an address of its own was not created";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_INFO, "Peer B skips address 127.0.0.1:1 because "
+			"node D has the same address", NULL) == 0 ||
+		log_capture_count(AS_LOG_LEVEL_INFO, "Peer D skips address 127.0.0.1:1 because "
+			"node B has the same address", NULL) == 0) {
+		result = "the skipped address is not logged at info level";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_WARN, "gave peer", NULL) > 0) {
+		result = "an unchanged shared address was logged as a warning";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_WARN, "has no address of its own", NULL) > 0) {
+		result = "a peer with an address of its own was reported as a collision";
+	}
+	else {
+		uint32_t before = fake_node_requests(&s, &s.peers_std_requests);
+		as_sleep(1200);
 
-	assert_true(wait_for_peers_requests(&s, 3, 5000));
-	assert_int_eq(node_count(c.as), 1);
-	assert_false(has_node(c.as, "B"));
-	assert_false(has_node(c.as, "D"));
-	assert_true(discovery_one_node_per_name(c.as->cluster, NULL, 0));
+		if (fake_node_requests(&s, &s.peers_std_requests) != before) {
+			result = "the peers generation did not advance";
+		}
+	}
 	fake_client_close(&c);
+
+	if (!result) {
+		// D has no address of its own left, so it collides and the generation is kept.
+		format(list, sizeof(list), "[[B,,[%s,127.0.0.1:%u]],[D,,[%s]]]", shared, b.port, shared);
+		fake_node_set_peers(&s, 1, list, NULL);
+		fake_config(&config, &s, false);
+		register_unchanged_translator(&config, custom, &translator, &p);
+
+		char used[128];
+		format(used, sizeof(used), "Peer D has no address of its own: %s is used by B "
+			"(address translator %s)", shared, name);
+		log_capture_start();
+		status = fake_client_connect(&c, &config);
+		log_capture_stop();
+
+		if (status != AEROSPIKE_OK) {
+			result = "unexpected connect status with only D shared";
+		}
+		else if (node_count(c.as) != 2 || !has_node(c.as, "B") || has_node(c.as, "D")) {
+			result = "D was created, or B was not, with only D shared";
+		}
+		else if (log_capture_count(AS_LOG_LEVEL_WARN, used, NULL) == 0) {
+			result = "D's collision does not name the shared address, B and the translator";
+		}
+		else if (!wait_for_peers_requests(&s, 3, 5000)) {
+			result = "the peers generation advanced after a collision";
+		}
+		else if (has_node(c.as, "D") || !discovery_one_node_per_name(c.as->cluster, NULL, 0)) {
+			result = "D joined on a later tend";
+		}
+		fake_client_close(&c);
+	}
 
 	fake_node_stop(&d);
 	fake_node_stop(&b);
+	fake_node_stop(&s);
+	return result;
+}
+
+TEST(translation_shared_address_registered, "U-15 FR-46 with a registered translator a shared address is skipped and peers keep their own")
+{
+	for (int custom = 0; custom <= 1; custom++) {
+		const char* failure = run_shared_registered(custom);
+
+		if (failure) {
+			assert_log(true, "custom=%d: %s", custom, failure);
+		}
+	}
+}
+
+// B and D each advertise one address that the translator maps to 127.0.0.1:1, which refuses
+// connections, and one of their own that it leaves unchanged. Each joins through its own address,
+// and the skip is a warning naming the translator.
+static const char*
+run_shared_translated(bool port_map)
+{
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, b, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
+
+	if (!fake_node_start(&s, "S") || !fake_node_start(&b, "B") || !fake_node_start(&d, "D")) {
+		return "cannot start fake nodes";
+	}
+
+	// The static map keeps the advertised port, so its addresses advertise port 1.
+	uint16_t port = port_map ? 3000 : 1;
+	char list[256];
+	format(list, sizeof(list), "[[B,,[10.0.0.1:%u,127.0.0.1:%u]],[D,,[127.0.0.1:%u,10.0.0.2:%u]]]",
+		port, b.port, d.port, port);
+	fake_node_set_peers(&s, 1, list, NULL);
+
+	char seed_list[128];
+	format(seed_list, sizeof(seed_list), "[[S,,[127.0.0.1:%u]]]", s.port);
+	fake_node_set_peers(&b, 1, seed_list, NULL);
+	fake_node_set_peers(&d, 1, seed_list, NULL);
+
+	as_config config;
+	fake_client c;
+	as_error err;
+	fake_config(&config, &s, false);
+
+	as_addr_map ip_entries[] = {{"10.0.0.1", "127.0.0.1"}, {"10.0.0.2", "127.0.0.1"}};
+	as_addr_map port_entries[] = {{"10.0.0.1:3000", "127.0.0.1:1"}, {"10.0.0.2:3000", "127.0.0.1:1"}};
+	const char* name;
+
+	if (port_map) {
+		as_config_set_port_map_translator(&config, port_entries, 2, &err);
+		name = "port-map";
+	}
+	else {
+		config.ip_map = ip_entries;
+		config.ip_map_size = 2;
+		name = "static-map";
+	}
+
+	char b_warning[160], d_warning[160];
+	format(b_warning, sizeof(b_warning), "Address translator %s gave peer B the address "
+		"127.0.0.1:1 of node D", name);
+	format(d_warning, sizeof(d_warning), "Address translator %s gave peer D the address "
+		"127.0.0.1:1 of node B", name);
+
+	const char* result = NULL;
+	log_capture_start();
+	as_status status = fake_client_connect(&c, &config);
+	log_capture_stop();
+
+	if (status != AEROSPIKE_OK) {
+		result = "unexpected connect status";
+	}
+	else if (node_count(c.as) != 3 || !has_node(c.as, "B") || !has_node(c.as, "D")) {
+		result = "a peer with an address of its own was not created";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_WARN, b_warning, NULL) == 0 ||
+		log_capture_count(AS_LOG_LEVEL_WARN, d_warning, NULL) == 0) {
+		result = "a translated shared address is not logged as a warning naming the translator";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_INFO, "skips address", NULL) > 0) {
+		result = "a translated shared address was logged at info level";
+	}
+	else if (log_capture_count(AS_LOG_LEVEL_WARN, "has no address of its own", NULL) > 0) {
+		result = "a peer with an address of its own was reported as a collision";
+	}
+	else {
+		uint32_t before = fake_node_requests(&s, &s.peers_std_requests);
+		as_sleep(1200);
+
+		if (fake_node_requests(&s, &s.peers_std_requests) != before) {
+			result = "the peers generation did not advance";
+		}
+	}
+
+	fake_client_close(&c);
+	fake_node_stop(&d);
+	fake_node_stop(&b);
+	fake_node_stop(&s);
+	return result;
+}
+
+TEST(translation_shared_address_translated, "U-15 FR-46 a shared address the translator produced is skipped with a warning")
+{
+	for (int port_map = 0; port_map <= 1; port_map++) {
+		const char* failure = run_shared_translated(port_map);
+
+		if (failure) {
+			assert_log(true, "port_map=%d: %s", port_map, failure);
+		}
+	}
+}
+
+static uint16_t
+node_port(aerospike* client, const char* name)
+{
+	as_nodes* nodes = as_nodes_reserve(client->cluster);
+	uint16_t port = 0;
+
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		if (strcmp(nodes->array[i]->name, name) == 0) {
+			as_address* address = as_node_get_address(nodes->array[i]);
+			port = as_address_port((struct sockaddr*)&address->addr);
+			break;
+		}
+	}
+	as_nodes_release(nodes);
+	return port;
+}
+
+TEST(translation_shared_address_live_node, "U-15 FR-46 a newcomer with a live node's address and its own joins through its own")
+{
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, d, fake_node_stop);
+	DISCOVERY_SCOPED(fake_node, e, fake_node_stop);
+	assert_true(fake_node_start(&s, "S"));
+	assert_true(fake_node_start(&d, "D"));
+	assert_true(fake_node_start(&e, "E"));
+
+	char d_adv[64], e_adv[64], list[256];
+	format(d_adv, sizeof(d_adv), "127.0.0.1:%u", d.port);
+	format(e_adv, sizeof(e_adv), "127.0.0.1:%u", e.port);
+	format(list, sizeof(list), "[[D,,[%s]]]", d_adv);
+	fake_node_set_peers(&s, 1, list, NULL);
+
+	char seed_list[128];
+	format(seed_list, sizeof(seed_list), "[[S,,[127.0.0.1:%u]]]", s.port);
+	fake_node_set_peers(&d, 1, seed_list, NULL);
+	fake_node_set_peers(&e, 1, seed_list, NULL);
+
+	as_config config;
+	fake_client c;
+	as_error err;
+	fake_config(&config, &s, false);
+	assert_int_eq(as_config_set_pass_through_translator(&config, &err), AEROSPIKE_OK);
+	assert_int_eq(fake_client_connect(&c, &config), AEROSPIKE_OK);
+	assert_int_eq(node_count(c.as), 2);
+
+	// E advertises the live node D's address first, then its own.
+	char skip[160];
+	format(skip, sizeof(skip), "Peer E skips address %s because node D has the same address",
+		d_adv);
+	log_capture_start();
+	format(list, sizeof(list), "[[D,,[%s]],[E,,[%s,%s]]]", d_adv, d_adv, e_adv);
+	fake_node_set_peers(&s, 2, list, NULL);
+	bool joined = wait_for_nodes(c.as, 3, 5000);
+	as_sleep(300);
+	log_capture_stop();
+
+	assert_true(joined);
+	assert_true(has_node(c.as, "D"));
+	assert_true(has_node(c.as, "E"));
+	assert_int_eq(node_port(c.as, "D"), d.port);
+	assert_int_eq(node_port(c.as, "E"), e.port);
+	assert_true(log_capture_count(AS_LOG_LEVEL_INFO, skip, NULL) > 0);
+	assert_int_eq(log_capture_count(AS_LOG_LEVEL_WARN, "has no address of its own", NULL), 0);
+	assert_true(discovery_one_node_per_name(c.as->cluster, NULL, 0));
+	fake_client_close(&c);
+
+	fake_node_stop(&e);
+	fake_node_stop(&d);
 	fake_node_stop(&s);
 }
 
@@ -2059,7 +2331,8 @@ run_collision_alias(bool reversed, bool pass_through)
 	log_capture_start();
 	as_status status = fake_client_connect(&c, &config);
 	log_capture_stop();
-	uint32_t warnings = log_capture_count(AS_LOG_LEVEL_WARN, "translated nodes", "B", "C", NULL);
+	uint32_t warnings = log_capture_count(AS_LOG_LEVEL_WARN, "answer at the same address", "B",
+		"C", NULL);
 
 	if (status != AEROSPIKE_OK) {
 		result = "unexpected connect status";
@@ -2743,6 +3016,8 @@ SUITE(discovery_translation, "pluggable discovery translation, topology and TLS 
 	suite_add(translation_collision_seed);
 	suite_add(translation_shared_address_skipped);
 	suite_add(translation_shared_address_registered);
+	suite_add(translation_shared_address_translated);
+	suite_add(translation_shared_address_live_node);
 	suite_add(translation_collision_alias);
 	suite_add(translation_distinct_ports_one_host);
 	suite_add(translation_tls_legacy_warn_once);

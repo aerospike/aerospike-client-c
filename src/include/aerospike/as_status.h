@@ -38,7 +38,8 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_TRANSLATION_MISS = -25,
 
 	/**
-	 * Address translation mapped two nodes to one transport endpoint.
+	 * A peer has no address that another node does not also have, or two nodes answer at one
+	 * transport endpoint.
 	 */
 	AEROSPIKE_ERR_TRANSLATION_COLLISION = -26,
 

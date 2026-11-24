@@ -180,18 +180,19 @@ uint32_t
 live_collisions(uint32_t from, const char* translator, const char* a, const char* b,
 	const char* address, uint32_t* forward, uint32_t* reverse)
 {
-	// The address ends at the period, so a port cannot match a longer one.
-	char f[512];
-	char r[512];
-	snprintf(f, sizeof(f), "Address translator %s translated nodes %s and %s to the same address %s.",
-		translator, a, b, address);
-	snprintf(r, sizeof(r), "Address translator %s translated nodes %s and %s to the same address %s.",
-		translator, b, a, address);
+	// The address ends at the space before "is used by", so a port cannot match a longer one.
+	char named[300];
+	snprintf(named, sizeof(named), "(address translator %s)", translator);
+	char peer_a[300], peer_b[300], used_by_a[600], used_by_b[600];
+	snprintf(peer_a, sizeof(peer_a), "Peer %s has no address of its own: ", a);
+	snprintf(peer_b, sizeof(peer_b), "Peer %s has no address of its own: ", b);
+	snprintf(used_by_a, sizeof(used_by_a), "%s is used by %s", address, a);
+	snprintf(used_by_b, sizeof(used_by_b), "%s is used by %s", address, b);
 
-	const char* fn[] = {f};
-	const char* rn[] = {r};
-	*forward = live_log_count(from, fn, 1);
-	*reverse = live_log_count(from, rn, 1);
+	const char* fn[] = {peer_b, used_by_a, named};
+	const char* rn[] = {peer_a, used_by_b, named};
+	*forward = live_log_count(from, fn, 3);
+	*reverse = live_log_count(from, rn, 3);
 	return *forward + *reverse;
 }
 

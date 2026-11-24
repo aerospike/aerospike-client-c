@@ -251,8 +251,16 @@ A translator returns false for a miss and leaves the policy to the client; it do
 either behaviour itself. The `pass-through` built-in always maps, so it succeeds even with
 `strict`.
 
-Two peers translated to the same `host:port` collide: each colliding peer is logged with an
-`AEROSPIKE_ERR_TRANSLATION_COLLISION` message and is not added, and an existing live node is kept.
+No address is used for more than one node, for every translator. Two addresses are the same when
+their host and port match after translation, with hostnames compared case-insensitively and
+nothing resolved. A peer address that another node of the reply, the refreshing node, a live node
+or a node added earlier in the tend also has is shared, and the peer skips it and uses its other
+addresses. The skip is logged naming both nodes: at info level when the shared address is the
+server's own advertised address, unchanged, and as a warning naming the translator when the
+translator produced it. A peer whose every address is shared is not added: it is logged once with
+an `AEROSPIKE_ERR_TRANSLATION_COLLISION` message, its peers generation is kept so it is retried on
+every tend, and an existing live node is kept. A peer address that validates as a node at a socket
+where another node already is also collides.
 
 ## TLS identity
 
@@ -374,10 +382,10 @@ directly:
 - `as_discovery_conformance_merge()`: one merge row. Given a merge policy, the configured seeds and a
   sequence of discovery results (the first at initialization, a NULL entry for a failed refresh), it
   returns the seed snapshot published after each result.
-- `as_discovery_conformance_collision()`: one collision row. Given a translator and the peers of one
-  peers reply, it returns the node names that become nodes and one
-  `AEROSPIKE_ERR_TRANSLATION_COLLISION` message per colliding peer, through the same collision code
-  the cluster uses.
+- `as_discovery_conformance_collision()`: one collision row. Given a translator and the endpoints of
+  one peers reply, where consecutive endpoints of one node name are the addresses of one peer, it
+  returns the node names that become nodes and one `AEROSPIKE_ERR_TRANSLATION_COLLISION` message
+  per peer left without an address of its own, through the same collision code the cluster uses.
 
 They share their implementation with the cluster (`as_discovery_complete_translation()` and
 `as_discovery_merge_hosts()`). The client's own runner in `src/test/conformance` runs the fixture
@@ -388,7 +396,7 @@ rows through them.
 | Code | Name | Returned by |
 | --- | --- | --- |
 | -25 | `AEROSPIKE_ERR_TRANSLATION_MISS` | A strict miss: logged for a peer that cannot be added, returned by the conformance entry points, and returned by `aerospike_connect()` instead of the generic connection error when initialization fails for another reason after a miss was recorded. |
-| -26 | `AEROSPIKE_ERR_TRANSLATION_COLLISION` | Two peers translated to one `host:port`: logged for each colliding peer, and returned in the same way as -25. |
+| -26 | `AEROSPIKE_ERR_TRANSLATION_COLLISION` | A peer with no address of its own, or two nodes at one socket: logged for each such peer, and returned in the same way as -25. The message names the peer, each of its shared addresses with the node that owns it (the first three, then how many more) and the translator, `static-map` when none is registered, for example `Peer B has no address of its own: 10.0.0.1:3000 is used by A, 10.0.0.2:3000 is used by C (address translator static-map)`. |
 | -27 | `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED` | `aerospike_connect()`, when the initial refresh fails or times out and no configured seed is left to fall back on. |
 
 The `dns` and `aws-tags` providers fail a refresh with `AEROSPIKE_ERR_CLIENT` (-1). After

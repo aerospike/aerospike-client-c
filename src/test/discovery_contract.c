@@ -937,15 +937,30 @@ TEST(discovery_conformance_merge, "L1 merge rows publish one snapshot per discov
 	hosts_destroy(empty);
 }
 
-// The cluster's collision message for name2 colliding with the earlier owner name1.
+// The cluster's collision message for peer, whose shared hosts and their owners are list.
 static const char*
-collision_text(char* buf, size_t size, const char* translator, const char* name1,
-	const char* name2, const char* host, uint16_t port)
+collision_text(char* buf, size_t size, const char* translator, const char* peer,
+	const char* list)
 {
-	snprintf(buf, size, "Address translator %s translated nodes %s and %s to the same address "
-		"%s:%u. Give each node its own reachable address or mapping", translator, name1, name2,
-		host, (unsigned)port);
+	snprintf(buf, size, "Peer %s has no address of its own: %s (address translator %s). "
+		"Give each node its own reachable address or mapping", peer, list, translator);
 	return buf;
+}
+
+static bool
+collision_nodes_are(const as_conformance_collisions* out, const char* const* names,
+	uint32_t size)
+{
+	if (out->nodes_size != size) {
+		return false;
+	}
+
+	for (uint32_t i = 0; i < size; i++) {
+		if (strcmp(out->nodes[i], names[i]) != 0) {
+			return false;
+		}
+	}
+	return true;
 }
 
 static uint32_t
@@ -988,11 +1003,11 @@ TEST(discovery_conformance_collision, "L1 collision rows report every colliding 
 	assert_int_eq(out.nodes_size, 1);
 	assert_string_eq(out.nodes[0], "C");
 	assert_int_eq(out.errors_size, 2);
-	// One message per colliding peer, each naming the other peer first, as the cluster logs.
+	// One message per colliding peer, naming the other peer as the owner, as the cluster logs.
 	assert_string_eq(out.errors[0],
-		collision_text(text, sizeof(text), "static-map", "B", "A", "203.0.113.1", 3000));
+		collision_text(text, sizeof(text), "static-map", "A", "203.0.113.1:3000 is used by B"));
 	assert_string_eq(out.errors[1],
-		collision_text(text, sizeof(text), "static-map", "A", "B", "203.0.113.1", 3000));
+		collision_text(text, sizeof(text), "static-map", "B", "203.0.113.1:3000 is used by A"));
 	as_conformance_collisions_destroy(&out);
 	assert_null(out.nodes);
 	assert_null(out.errors);
@@ -1029,9 +1044,9 @@ TEST(discovery_conformance_collision, "L1 collision rows report every colliding 
 	assert_int_eq(out.nodes_size, 0);
 	assert_int_eq(out.errors_size, 2);
 	assert_string_eq(out.errors[0],
-		collision_text(text, sizeof(text), "port-map", "B", "A", "lb.example.com", 30001));
+		collision_text(text, sizeof(text), "port-map", "A", "lb.example.com:30001 is used by B"));
 	assert_string_eq(out.errors[1],
-		collision_text(text, sizeof(text), "port-map", "A", "B", "lb.example.com", 30001));
+		collision_text(text, sizeof(text), "port-map", "B", "lb.example.com:30001 is used by A"));
 	as_conformance_collisions_destroy(&out);
 
 	// Same host, distinct ports: no collision.
@@ -1095,13 +1110,42 @@ TEST(discovery_conformance_collision, "L1 collision rows report every colliding 
 	assert_null(out.errors);
 	assert_int_eq(out.errors_size, 0);
 
+	// Consecutive endpoints of one name are one peer; a name after another peer is a repeat.
 	as_endpoint repeated[] = {
 		{.node_name = "A", .host = "10.0.0.1", .port = 3000},
-		{.node_name = "A", .host = "10.0.0.2", .port = 3000}
+		{.node_name = "B", .host = "10.0.0.2", .port = 3000},
+		{.node_name = "A", .host = "10.0.0.3", .port = 3000}
 	};
-	assert_int_eq(as_discovery_conformance_collision(&err, &translation, repeated, 2, &out),
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, repeated, 3, &out),
 		AEROSPIKE_ERR_PARAM);
 	assert_not_null(strstr(err.message, "repeat node name A"));
+	assert_null(out.nodes);
+
+	as_endpoint two_tls[] = {
+		{.node_name = "A", .tls_name = "a1", .host = "10.0.0.1", .port = 3000},
+		{.node_name = "A", .tls_name = "a2", .host = "10.0.0.2", .port = 3000}
+	};
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, two_tls, 2, &out),
+		AEROSPIKE_ERR_PARAM);
+	assert_not_null(strstr(err.message, "peer A has more than one TLS name"));
+	two_tls[1].tls_name = NULL;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, two_tls, 2, &out),
+		AEROSPIKE_ERR_PARAM);
+
+	// A host repeated within a peer, also when only the case differs.
+	as_endpoint repeated_host[] = {
+		{.node_name = "A", .host = "node-a.example", .port = 3000},
+		{.node_name = "A", .host = "Node-A.example", .port = 3000}
+	};
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, repeated_host, 2, &out),
+		AEROSPIKE_ERR_PARAM);
+	assert_not_null(strstr(err.message, "peer A repeats host Node-A.example:3000"));
+	repeated_host[1].port = 3001;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, repeated_host, 2, &out),
+		AEROSPIKE_OK);
+	assert_int_eq(out.nodes_size, 1);
+	assert_int_eq(out.errors_size, 0);
+	as_conformance_collisions_destroy(&out);
 
 	ports[1].host = NULL;
 	assert_int_eq(as_discovery_conformance_collision(&err, &translation, ports, 2, &out),
@@ -1124,6 +1168,193 @@ TEST(discovery_conformance_collision, "L1 collision rows report every colliding 
 	assert_int_eq(as_discovery_conformance_collision(&err, &translation, peers, 2, NULL),
 		AEROSPIKE_ERR_PARAM);
 	as_conformance_collisions_destroy(NULL);
+}
+
+TEST(discovery_conformance_collision_hosts, "FR-46 collision peers with several hosts skip shared hosts and keep their own")
+{
+	char text[512];
+	as_error err;
+	as_conformance_collisions out;
+	as_conformance_translation translation = {
+		.kind = AS_TRANSLATOR_PASS_THROUGH,
+		.on_miss = AS_TRANSLATION_PASS_THROUGH
+	};
+
+	// Partial overlap: each peer keeps its other host, for every translator.
+	as_endpoint partial[] = {
+		{.node_name = "A", .host = "h", .port = 31001},
+		{.node_name = "A", .host = "h", .port = 31002},
+		{.node_name = "B", .host = "h", .port = 31001},
+		{.node_name = "B", .host = "h", .port = 31003}
+	};
+	const char* both[] = {"A", "B"};
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, partial, 4, &out),
+		AEROSPIKE_OK);
+	assert_true(collision_nodes_are(&out, both, 2));
+	assert_int_eq(out.errors_size, 0);
+	as_conformance_collisions_destroy(&out);
+
+	as_addr_map port_entries[] = {
+		{"10.0.0.1:3000", "lb.example.com:30001"}, {"10.0.0.2:3000", "lb.example.com:30001"},
+		{"10.0.0.3:3000", "lb.example.com:30003"}, {"10.0.0.4:3000", "lb.example.com:30004"}
+	};
+	as_endpoint mapped[] = {
+		{.node_name = "A", .host = "10.0.0.1", .port = 3000},
+		{.node_name = "A", .host = "10.0.0.3", .port = 3000},
+		{.node_name = "B", .host = "10.0.0.2", .port = 3000},
+		{.node_name = "B", .host = "10.0.0.4", .port = 3000}
+	};
+	translation.kind = AS_TRANSLATOR_PORT_MAP;
+	translation.map = port_entries;
+	translation.map_size = 4;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, mapped, 4, &out),
+		AEROSPIKE_OK);
+	assert_true(collision_nodes_are(&out, both, 2));
+	assert_int_eq(out.errors_size, 0);
+	as_conformance_collisions_destroy(&out);
+
+	// One side overlap through static-map: only the peer left without a host collides.
+	as_addr_map ip_entries[] = {
+		{"10.0.0.1", "203.0.113.1"}, {"10.0.0.2", "203.0.113.1"}, {"10.0.0.3", "203.0.113.3"}
+	};
+	as_endpoint one_side[] = {
+		{.node_name = "A", .host = "10.0.0.1", .port = 3000},
+		{.node_name = "A", .host = "10.0.0.3", .port = 3000},
+		{.node_name = "B", .host = "10.0.0.2", .port = 3000}
+	};
+	const char* only_a[] = {"A"};
+	translation.kind = AS_TRANSLATOR_STATIC_MAP;
+	translation.map = ip_entries;
+	translation.map_size = 3;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, one_side, 3, &out),
+		AEROSPIKE_OK);
+	assert_true(collision_nodes_are(&out, only_a, 1));
+	assert_int_eq(out.errors_size, 1);
+	assert_string_eq(out.errors[0],
+		collision_text(text, sizeof(text), "static-map", "B", "203.0.113.1:3000 is used by A"));
+	as_conformance_collisions_destroy(&out);
+
+	// Shared hosts are all found before any is removed: B shares :31001 with A and :31002 with
+	// C, so B and C have nothing left while A keeps :31003.
+	as_endpoint before_removal[] = {
+		{.node_name = "A", .host = "h", .port = 31001},
+		{.node_name = "A", .host = "h", .port = 31003},
+		{.node_name = "B", .host = "h", .port = 31001},
+		{.node_name = "B", .host = "h", .port = 31002},
+		{.node_name = "C", .host = "h", .port = 31002}
+	};
+	translation.kind = AS_TRANSLATOR_PASS_THROUGH;
+	translation.map = NULL;
+	translation.map_size = 0;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, before_removal, 5, &out),
+		AEROSPIKE_OK);
+	assert_true(collision_nodes_are(&out, only_a, 1));
+	assert_int_eq(out.errors_size, 2);
+	assert_string_eq(out.errors[0], collision_text(text, sizeof(text), "pass-through", "B",
+		"h:31001 is used by A, h:31002 is used by C"));
+	assert_string_eq(out.errors[1],
+		collision_text(text, sizeof(text), "pass-through", "C", "h:31002 is used by B"));
+	as_conformance_collisions_destroy(&out);
+
+	// A chain shares every host, and B's message names both of its owners.
+	as_endpoint chain[] = {
+		{.node_name = "A", .host = "h", .port = 31001},
+		{.node_name = "B", .host = "h", .port = 31001},
+		{.node_name = "B", .host = "h", .port = 31002},
+		{.node_name = "C", .host = "h", .port = 31002}
+	};
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, chain, 4, &out),
+		AEROSPIKE_OK);
+	assert_int_eq(out.nodes_size, 0);
+	assert_int_eq(out.errors_size, 3);
+	assert_string_eq(out.errors[1], collision_text(text, sizeof(text), "pass-through", "B",
+		"h:31001 is used by A, h:31002 is used by C"));
+	as_conformance_collisions_destroy(&out);
+
+	// Every host shared: one message per peer, listing both hosts.
+	as_endpoint every[] = {
+		{.node_name = "A", .host = "h", .port = 31001},
+		{.node_name = "A", .host = "h", .port = 31002},
+		{.node_name = "B", .host = "h", .port = 31001},
+		{.node_name = "B", .host = "h", .port = 31002}
+	};
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, every, 4, &out),
+		AEROSPIKE_OK);
+	assert_int_eq(out.nodes_size, 0);
+	assert_int_eq(out.errors_size, 2);
+	assert_string_eq(out.errors[0], collision_text(text, sizeof(text), "pass-through", "A",
+		"h:31001 is used by B, h:31002 is used by B"));
+	assert_string_eq(out.errors[1], collision_text(text, sizeof(text), "pass-through", "B",
+		"h:31001 is used by A, h:31002 is used by A"));
+	as_conformance_collisions_destroy(&out);
+
+	// Hostnames compare case-insensitively, and a peer is reported on its own spelling.
+	as_endpoint cased[] = {
+		{.node_name = "A", .host = "AS.Priv.Example.com", .port = 31001},
+		{.node_name = "B", .host = "as.priv.example.com", .port = 31001},
+		{.node_name = "B", .host = "as.priv.example.com", .port = 31002}
+	};
+	const char* only_b[] = {"B"};
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, cased, 3, &out),
+		AEROSPIKE_OK);
+	assert_true(collision_nodes_are(&out, only_b, 1));
+	assert_int_eq(out.errors_size, 1);
+	assert_string_eq(out.errors[0], collision_text(text, sizeof(text), "pass-through", "A",
+		"AS.Priv.Example.com:31001 is used by B"));
+	as_conformance_collisions_destroy(&out);
+
+	// Five shared hosts: the first three are listed, then how many more.
+	as_endpoint many[] = {
+		{.node_name = "A", .host = "h", .port = 1},
+		{.node_name = "A", .host = "h", .port = 2},
+		{.node_name = "A", .host = "h", .port = 3},
+		{.node_name = "A", .host = "h", .port = 4},
+		{.node_name = "A", .host = "h", .port = 5},
+		{.node_name = "B", .host = "h", .port = 1},
+		{.node_name = "C", .host = "h", .port = 2},
+		{.node_name = "D", .host = "h", .port = 3},
+		{.node_name = "E", .host = "h", .port = 4},
+		{.node_name = "F", .host = "h", .port = 5}
+	};
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, many, 10, &out),
+		AEROSPIKE_OK);
+	assert_int_eq(out.nodes_size, 0);
+	assert_int_eq(out.errors_size, 6);
+	assert_string_eq(out.errors[0], collision_text(text, sizeof(text), "pass-through", "A",
+		"h:1 is used by B, h:2 is used by C, h:3 is used by D and 2 more"));
+	as_conformance_collisions_destroy(&out);
+
+	// A strict miss drops only that host: A keeps 203.0.113.3. M misses on every host, so it is
+	// neither a node nor a collision.
+	as_endpoint miss[] = {
+		{.node_name = "A", .host = "10.0.0.9", .port = 3000},
+		{.node_name = "A", .host = "10.0.0.3", .port = 3000},
+		{.node_name = "M", .host = "10.0.0.8", .port = 3000},
+		{.node_name = "M", .host = "10.0.0.9", .port = 3000},
+		{.node_name = "B", .host = "10.0.0.1", .port = 3000},
+		{.node_name = "C", .host = "10.0.0.2", .port = 3000}
+	};
+	translation.kind = AS_TRANSLATOR_STATIC_MAP;
+	translation.on_miss = AS_TRANSLATION_STRICT;
+	translation.map = ip_entries;
+	translation.map_size = 3;
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, miss, 6, &out),
+		AEROSPIKE_OK);
+	assert_true(collision_nodes_are(&out, only_a, 1));
+	assert_int_eq(out.errors_size, 2);
+	assert_int_eq(collision_errors_naming(&out, "Peer M "), 0);
+	assert_int_eq(collision_errors_naming(&out, "used by M"), 0);
+	as_conformance_collisions_destroy(&out);
+
+	// The strict miss leaves A only the shared host, so A collides too.
+	miss[1].host = "10.0.0.1";
+	assert_int_eq(as_discovery_conformance_collision(&err, &translation, miss, 6, &out),
+		AEROSPIKE_OK);
+	assert_int_eq(out.nodes_size, 0);
+	assert_int_eq(out.errors_size, 3);
+	assert_string_eq(out.errors[0],
+		collision_text(text, sizeof(text), "static-map", "A", "203.0.113.1:3000 is used by B"));
+	as_conformance_collisions_destroy(&out);
 }
 
 //---------------------------------
@@ -2742,6 +2973,7 @@ SUITE(discovery_contract, "pluggable discovery contract tests")
 	suite_add(discovery_conformance_translate);
 	suite_add(discovery_conformance_merge);
 	suite_add(discovery_conformance_collision);
+	suite_add(discovery_conformance_collision_hosts);
 	suite_add(discovery_provider_validation);
 	suite_add(discovery_translator_validation);
 	suite_add(discovery_registration_ownership);

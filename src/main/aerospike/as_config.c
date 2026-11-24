@@ -42,6 +42,7 @@ typedef struct as_plugin_entry_s {
 	} factory;
 	void (*destroy)(void* udata);
 	void* udata;
+	bool binding;
 } as_plugin_entry;
 
 // Entries are never removed, so an index stays valid while the vector reallocates.
@@ -838,6 +839,13 @@ as_plugin_registry_name(const struct as_plugin_registry_s* registry, uint32_t in
 	return entry->name;
 }
 
+bool
+as_plugin_registry_binding(const struct as_plugin_registry_s* registry, uint32_t index)
+{
+	const as_plugin_entry* entry = as_vector_get((as_vector*)&registry->entries, index);
+	return entry->binding;
+}
+
 int32_t
 as_plugin_registry_find(const struct as_plugin_registry_s* registry, const char* name)
 {
@@ -913,7 +921,8 @@ as_plugin_recipe_destroy(as_plugin_recipe* recipe)
 }
 
 as_plugin_recipe*
-as_plugin_recipe_factory(uint32_t index, const as_map* options, bool translator)
+as_plugin_recipe_factory(const struct as_plugin_registry_s* registry, uint32_t index,
+	const as_map* options, bool translator)
 {
 	factory_state* state = cf_malloc(sizeof(factory_state));
 
@@ -922,8 +931,14 @@ as_plugin_recipe_factory(uint32_t index, const as_map* options, bool translator)
 	}
 	state->index = index;
 	state->options = (as_map*)as_val_reserve((as_val*)options);
-	return as_plugin_recipe_create(translator ? factory_build_translator : factory_build_provider,
-		factory_state_destroy, state);
+
+	as_plugin_recipe* recipe = as_plugin_recipe_create(translator ? factory_build_translator :
+		factory_build_provider, factory_state_destroy, state);
+
+	if (recipe && !translator) {
+		recipe->binding = as_plugin_registry_binding(registry, index);
+	}
+	return recipe;
 }
 
 as_plugin_recipe*
@@ -1316,18 +1331,34 @@ as_config_set_binding_seed_provider(as_config* config, as_seed_provider_factory 
 	return set_provider_factory(config, factory, destroy, udata, true, err);
 }
 
-as_status
-as_config_register_seed_provider(as_config* config, const char* name,
-	as_seed_provider_factory factory, void (*destroy)(void* udata), void* udata, as_error* err)
+static as_status
+register_provider(as_config* config, const char* name, as_seed_provider_factory factory,
+	void (*destroy)(void* udata), void* udata, bool binding, as_error* err)
 {
 	as_plugin_entry entry = {
 		.factory.provider = factory,
 		.destroy = destroy,
-		.udata = udata
+		.udata = udata,
+		.binding = binding
 	};
 	return registry_add(config, config ? &config->discovery.registry : NULL, "seed provider",
 		name, factory != NULL, as_config_builtin_providers, AS_CONFIG_BUILTIN_PROVIDERS, &entry,
 		err);
+}
+
+as_status
+as_config_register_seed_provider(as_config* config, const char* name,
+	as_seed_provider_factory factory, void (*destroy)(void* udata), void* udata, as_error* err)
+{
+	return register_provider(config, name, factory, destroy, udata, false, err);
+}
+
+as_status
+as_config_register_binding_seed_provider(as_config* config, const char* name,
+	as_seed_provider_factory factory, void (*destroy)(void* udata), void* udata, as_error* err)
+{
+	// The execution mode is checked at select and connect: the config file sets it after this.
+	return register_provider(config, name, factory, destroy, udata, true, err);
 }
 
 as_status
@@ -1358,6 +1389,13 @@ as_config_select_seed_provider(as_config* config, const char* name, const as_map
 		return status;
 	}
 
+	if (as_plugin_registry_binding(config->discovery.registry, (uint32_t)index) &&
+		config->discovery.execution_mode != AS_DISCOVERY_EXECUTION_THREAD) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM,
+			"Invalid seed provider '%s': Binding seed provider requires thread execution mode",
+			name);
+	}
+
 	as_map* copy;
 	as_error local;
 	as_error_init(&local);
@@ -1369,7 +1407,8 @@ as_config_select_seed_provider(as_config* config, const char* name, const as_map
 			(uint32_t)index, copy, &provider);
 
 		if (status == AEROSPIKE_OK) {
-			as_plugin_recipe* recipe = as_plugin_recipe_factory((uint32_t)index, copy, false);
+			as_plugin_recipe* recipe = as_plugin_recipe_factory(config->discovery.registry,
+				(uint32_t)index, copy, false);
 
 			if (recipe) {
 				as_config_install_seed_provider(config, &provider, recipe);
@@ -1417,7 +1456,8 @@ as_config_select_address_translator(as_config* config, const char* name,
 			(uint32_t)index, copy, &translator);
 
 		if (status == AEROSPIKE_OK) {
-			as_plugin_recipe* recipe = as_plugin_recipe_factory((uint32_t)index, copy, true);
+			as_plugin_recipe* recipe = as_plugin_recipe_factory(config->translation.registry,
+				(uint32_t)index, copy, true);
 
 			if (recipe) {
 				as_config_install_translator(config, &translator, recipe);

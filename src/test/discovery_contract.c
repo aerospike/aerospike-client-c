@@ -1643,6 +1643,7 @@ typedef struct binding_ctx_s {
 	uint32_t instance_destroyed;
 	uint32_t udata_destroyed;
 	bool periodic;
+	bool deadline;
 	bool invalid;
 	as_status fail;
 	uint32_t options_size;
@@ -1650,6 +1651,13 @@ typedef struct binding_ctx_s {
 
 static bool
 binding_periodic(void* udata)
+{
+	(void)udata;
+	return true;
+}
+
+static bool
+binding_deadline(void* udata)
 {
 	(void)udata;
 	return true;
@@ -1670,6 +1678,10 @@ binding_factory(as_error* err, const as_map* options, as_seed_provider* provider
 
 	if (ctx->periodic) {
 		provider->needs_periodic_refresh = binding_periodic;
+	}
+
+	if (ctx->deadline) {
+		provider->supports_deadline = binding_deadline;
 	}
 	return AEROSPIKE_OK;
 }
@@ -1695,6 +1707,21 @@ live_config(as_config* config)
 	as_config_set_user(config, as->config.user, as->config.password);
 	config->use_services_alternate = as->config.use_services_alternate;
 	config->auth_mode = as->config.auth_mode;
+}
+
+// Release a client that is not connected, in every event-loop mode.
+static void
+binding_client_release(aerospike* client)
+{
+	if (as_event_loop_size > 0 && !as_event_single_thread) {
+		// aerospike_destroy() does nothing in async mode, so close releases the registration.
+		as_error err;
+		aerospike_close(client, &err);
+		as_config_destroy(&client->config);
+	}
+	else {
+		aerospike_destroy(client);
+	}
 }
 
 TEST(discovery_binding_mode, "U-1 binding seed callbacks are thread mode only")
@@ -1749,16 +1776,8 @@ TEST(discovery_binding_mode, "U-1 binding seed callbacks are thread mode only")
 	assert_int_eq(ctx.udata_destroyed, 1);
 	assert_false(client.config.discovery.binding_provider);
 
-	if (as_event_loop_size > 0 && !as_event_single_thread) {
-		// aerospike_destroy() does nothing in async mode, so close releases the registration.
-		aerospike_close(&client, &err);
-		assert_int_eq(other, 1);
-		as_config_destroy(&client.config);
-	}
-	else {
-		aerospike_destroy(&client);
-		assert_int_eq(other, 1);
-	}
+	binding_client_release(&client);
+	assert_int_eq(other, 1);
 	assert_int_eq(ctx.instance_destroyed, 1);
 	assert_int_eq(ctx.udata_destroyed, 1);
 }
@@ -1878,14 +1897,241 @@ TEST(discovery_binding_reconnect, "U-1 sync close destroys the binding instance,
 	assert_int_eq(ctx.instance_destroyed, 2);
 	assert_int_eq(ctx.udata_destroyed, 0);
 
-	// Tend mode is still rejected for the rebuilt binding provider.
+	// Tend mode is still rejected for the rebuilt binding provider, before the factory is called.
 	client->config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_TEND;
 	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_ERR_PARAM);
 	assert_message(err, "Binding seed provider requires thread execution mode");
 	assert_null(client->cluster);
-	assert_int_eq(ctx.factory_calls, 4);
+	assert_int_eq(ctx.factory_calls, 3);
+	assert_int_eq(ctx.instance_destroyed, 2);
+	assert_false(client->config.discovery.provider_registered);
+
+	aerospike_destroy(client);
+	assert_int_eq(ctx.instance_destroyed, 2);
+	assert_int_eq(ctx.udata_destroyed, 1);
+}
+
+static as_status
+binding_register_named(as_config* config, const char* name, binding_ctx* ctx, as_error* err)
+{
+	return as_config_register_binding_seed_provider(config, name, binding_factory,
+		binding_udata_destroy, ctx, err);
+}
+
+TEST(discovery_binding_registered, "U-1 a binding factory registered under a name builds nothing, shares the names, and is selected in thread mode only as a binding provider")
+{
+	as_config config;
+	as_error err;
+	binding_ctx ctx = {0};
+	binding_ctx regular = {0};
+	binding_ctx rejected = {0};
+	char needle[64];
+
+	as_config_init(&config);
+
+	static const char* const providers[] = {"static", "dns", "aws-tags"};
+
+	for (uint32_t i = 0; i < 3; i++) {
+		assert_int_eq(binding_register_named(&config, providers[i], &rejected, &err),
+			AEROSPIKE_ERR_PARAM);
+		snprintf(needle, sizeof(needle), "'%s': built-in name", providers[i]);
+		assert_message(err, needle);
+	}
+
+	assert_int_eq(binding_register_named(&config, NULL, &rejected, &err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(binding_register_named(&config, "", &rejected, &err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(binding_register_named(NULL, "py", &rejected, &err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(as_config_register_binding_seed_provider(&config, "py", NULL,
+		binding_udata_destroy, &rejected, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Invalid seed provider factory for 'py': null");
+
+	assert_int_eq(binding_register_named(&config, "py", &ctx, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_register_seed_provider(&config, "regular", binding_factory,
+		binding_udata_destroy, &regular, &err), AEROSPIKE_OK);
+
+	// Binding and other factories share one set of names.
+	assert_int_eq(binding_register_named(&config, "py", &rejected, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Invalid seed provider name 'py': already registered");
+	assert_int_eq(binding_register_named(&config, "regular", &rejected, &err),
+		AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Invalid seed provider name 'regular': already registered");
+	assert_int_eq(as_config_register_seed_provider(&config, "py", binding_factory,
+		binding_udata_destroy, &rejected, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Invalid seed provider name 'py': already registered");
+
+	// Registering builds nothing, and a failed registration leaves udata with the caller.
+	assert_int_eq(ctx.factory_calls, 0);
+	assert_int_eq(rejected.factory_calls, 0);
+	assert_int_eq(rejected.udata_destroyed, 0);
+	assert_false(config.discovery.provider_registered);
+
+	// In tend mode the select fails before the factory is called.
+	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_TEND;
+	assert_int_eq(as_config_select_seed_provider(&config, "py", NULL, &err), AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message,
+		"Invalid seed provider 'py': Binding seed provider requires thread execution mode");
+	assert_int_eq(ctx.factory_calls, 0);
+	assert_false(config.discovery.provider_registered);
+	assert_null(config.discovery.recipe);
+
+	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_THREAD;
+	assert_int_eq(as_config_select_seed_provider(&config, "py", NULL, &err), AEROSPIKE_OK);
+	assert_int_eq(ctx.factory_calls, 1);
+	assert_true(config.discovery.provider_registered);
+	assert_true(config.discovery.binding_provider);
+	assert_true(config.discovery.recipe->binding);
+	assert_string_eq(config.discovery.provider.name, "binding");
+
+	// A failed select in tend mode keeps the selected binding provider.
+	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_TEND;
+	assert_int_eq(as_config_select_seed_provider(&config, "py", NULL, &err), AEROSPIKE_ERR_PARAM);
+	assert_int_eq(ctx.factory_calls, 1);
+	assert_int_eq(ctx.instance_destroyed, 0);
+	assert_true(config.discovery.binding_provider);
+	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_THREAD;
+
+	// A regular name replaces it and clears the flag.
+	assert_int_eq(as_config_select_seed_provider(&config, "regular", NULL, &err), AEROSPIKE_OK);
+	assert_int_eq(regular.factory_calls, 1);
+	assert_int_eq(ctx.instance_destroyed, 1);
+	assert_false(config.discovery.binding_provider);
+	assert_false(config.discovery.recipe->binding);
+
+	assert_int_eq(as_config_select_seed_provider(&config, "py", NULL, &err), AEROSPIKE_OK);
+	assert_int_eq(ctx.factory_calls, 2);
+	assert_int_eq(regular.instance_destroyed, 1);
+	assert_true(config.discovery.binding_provider);
+
+	as_config_destroy(&config);
+	assert_int_eq(ctx.instance_destroyed, 2);
+	assert_int_eq(ctx.udata_destroyed, 1);
+	assert_int_eq(regular.instance_destroyed, 1);
+	assert_int_eq(regular.udata_destroyed, 1);
+	assert_int_eq(rejected.udata_destroyed, 0);
+}
+
+TEST(discovery_binding_registered_deadline, "U-1 FR-2 a named binding provider that is periodic and supports a deadline is still thread mode only")
+{
+	as_config config;
+	as_error err;
+	binding_ctx ctx = {.periodic = true, .deadline = true};
+
+	as_config_init(&config);
+	as_config_add_host(&config, "127.0.0.1", 3000);
+	assert_int_eq(binding_register_named(&config, "py", &ctx, &err), AEROSPIKE_OK);
+
+	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_TEND;
+	assert_int_eq(as_config_select_seed_provider(&config, "py", NULL, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Binding seed provider requires thread execution mode");
+	assert_int_eq(ctx.factory_calls, 0);
+
+	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_THREAD;
+	assert_int_eq(as_config_select_seed_provider(&config, "py", NULL, &err), AEROSPIKE_OK);
+	assert_true(config.discovery.binding_provider);
+	assert_true(config.discovery.provider.needs_periodic_refresh(NULL));
+	assert_true(config.discovery.provider.supports_deadline(NULL));
+
+	// Switching to tend after the selection fails connect before any cluster work.
+	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_TEND;
+
+	aerospike client;
+	aerospike_init(&client, &config);
+	assert_int_eq(aerospike_connect(&client, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Binding seed provider requires thread execution mode");
+	assert_null(client.cluster);
+	assert_int_eq(ctx.factory_calls, 1);
+	assert_int_eq(ctx.instance_destroyed, 0);
+
+	binding_client_release(&client);
+	assert_int_eq(ctx.instance_destroyed, 1);
+	assert_int_eq(ctx.udata_destroyed, 1);
+}
+
+TEST(discovery_binding_registered_tend_contrast, "U-1 FR-2 the same periodic factory with a deadline, registered as a regular one, passes the binding check and connects in tend mode")
+{
+	if (as->config.tls.enable) {
+		info("skipped: lifecycle test does not copy TLS configuration");
+		return;
+	}
+
+	as_config config;
+	as_error err;
+	binding_ctx regular = {.periodic = true, .deadline = true};
+	live_config(&config);
+	assert_int_eq(as_config_register_seed_provider(&config, "regular", binding_factory,
+		binding_udata_destroy, &regular, &err), AEROSPIKE_OK);
+	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_TEND;
+	assert_int_eq(as_config_select_seed_provider(&config, "regular", NULL, &err),
+		AEROSPIKE_OK);
+	assert_false(config.discovery.binding_provider);
+
+	aerospike* live = aerospike_new(&config);
+	assert_int_eq(aerospike_connect(live, &err), AEROSPIKE_OK);
+	assert_not_null(live->cluster);
+	assert_int_eq(regular.factory_calls, 1);
+	aerospike_close(live, &err);
+
+	if (as_event_loop_size == 0 || as_event_single_thread) {
+		aerospike_destroy(live);
+	}
+	assert_int_eq(regular.instance_destroyed, 1);
+	assert_int_eq(regular.udata_destroyed, 1);
+}
+
+TEST(discovery_binding_registered_reconnect, "U-1 a named binding provider is rebuilt as a binding provider by reconnect, and tend mode fails reconnect before the factory")
+{
+	if (as->config.tls.enable) {
+		info("skipped: lifecycle test does not copy TLS configuration");
+		return;
+	}
+
+	if (as_event_loop_size > 0 && !as_event_single_thread) {
+		info("skipped: async close does not keep the registration");
+		return;
+	}
+
+	as_config config;
+	as_error err;
+	binding_ctx ctx = {0};
+
+	live_config(&config);
+	assert_int_eq(binding_register_named(&config, "py", &ctx, &err), AEROSPIKE_OK);
+	assert_int_eq(as_config_select_seed_provider(&config, "py", NULL, &err), AEROSPIKE_OK);
+	assert_int_eq(ctx.factory_calls, 1);
+
+	aerospike* client = aerospike_new(&config);
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_OK);
+	assert_true(client->config.discovery.binding_provider);
+	assert_int_eq(ctx.factory_calls, 1);
+
+	aerospike_close(client, &err);
+	assert_int_eq(ctx.instance_destroyed, 1);
+	assert_false(client->config.discovery.binding_provider);
+	assert_true(client->config.discovery.recipe->binding);
+
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_OK);
+	assert_int_eq(ctx.factory_calls, 2);
+	assert_true(client->config.discovery.binding_provider);
+	assert_string_eq(client->config.discovery.provider.name, "binding");
+
+	aerospike_close(client, &err);
 	assert_int_eq(ctx.instance_destroyed, 2);
 
+	// Tend mode after close fails the connect without a factory call or an installed instance.
+	client->config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_TEND;
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_ERR_PARAM);
+	assert_message(err, "Binding seed provider requires thread execution mode");
+	assert_null(client->cluster);
+	assert_int_eq(ctx.factory_calls, 2);
+	assert_false(client->config.discovery.provider_registered);
+
+	// Back in thread mode the next connect builds it again.
+	client->config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_THREAD;
+	assert_int_eq(aerospike_connect(client, &err), AEROSPIKE_OK);
+	assert_int_eq(ctx.factory_calls, 3);
+	assert_true(client->config.discovery.binding_provider);
+
+	aerospike_close(client, &err);
 	aerospike_destroy(client);
 	assert_int_eq(ctx.instance_destroyed, 3);
 	assert_int_eq(ctx.udata_destroyed, 1);
@@ -2983,6 +3229,10 @@ SUITE(discovery_contract, "pluggable discovery contract tests")
 	suite_add(discovery_binding_factory_errors);
 	suite_add(discovery_binding_unconnected_release);
 	suite_add(discovery_binding_reconnect);
+	suite_add(discovery_binding_registered);
+	suite_add(discovery_binding_registered_deadline);
+	suite_add(discovery_binding_registered_tend_contrast);
+	suite_add(discovery_binding_registered_reconnect);
 	suite_add(discovery_live_lifecycle);
 	suite_add(discovery_on_miss_range);
 	suite_add(discovery_factory_registration);

@@ -5847,8 +5847,15 @@ as_config_file_apply_discovery(aerospike* as, as_yaml_discovery* d, as_error* er
 	as_seed_provider provider;
 	memset(&provider, 0, sizeof(provider));
 	bool registered_provider = d->provider == AS_YAML_PROVIDER_REGISTERED;
-	bool has_provider = d->provider == AS_YAML_PROVIDER_DNS ||
-		d->provider == AS_YAML_PROVIDER_AWS || registered_provider;
+
+	// The file has already set execution_mode. Outside thread mode aerospike_connect() fails
+	// before it builds a binding provider, so only its recipe is kept and the factory, which
+	// enters the binding runtime, is not called.
+	bool deferred_provider = registered_provider &&
+		as_plugin_registry_binding(config->discovery.registry, d->provider_index) &&
+		config->discovery.execution_mode != AS_DISCOVERY_EXECUTION_THREAD;
+	bool has_provider = (d->provider == AS_YAML_PROVIDER_DNS ||
+		d->provider == AS_YAML_PROVIDER_AWS || registered_provider) && !deferred_provider;
 	char* provider_name = NULL;
 	as_plugin_recipe* provider_recipe = NULL;
 
@@ -5865,16 +5872,19 @@ as_config_file_apply_discovery(aerospike* as, as_yaml_discovery* d, as_error* er
 	if (registered_provider) {
 		as_error local;
 
-		if (as_plugin_build_seed_provider(&local, config->discovery.registry, d->provider_index,
-				d->provider_options, &provider) != AEROSPIKE_OK) {
-			return as_apply_error(err, path, "Invalid static.client.discovery.provider: %s. %s",
-				d->provider_name, local.message);
+		if (has_provider) {
+			if (as_plugin_build_seed_provider(&local, config->discovery.registry,
+					d->provider_index, d->provider_options, &provider) != AEROSPIKE_OK) {
+				return as_apply_error(err, path,
+					"Invalid static.client.discovery.provider: %s. %s", d->provider_name,
+					local.message);
+			}
+			// The build copied the name.
+			provider_name = (char*)provider.name;
 		}
-		// The build copied the name.
-		provider_name = (char*)provider.name;
 
-		if (!(provider_recipe = as_plugin_recipe_factory(d->provider_index, d->provider_options,
-				false))) {
+		if (!(provider_recipe = as_plugin_recipe_factory(config->discovery.registry,
+				d->provider_index, d->provider_options, false))) {
 			status = as_apply_error(err, path, "Failed to allocate seed provider recipe");
 			goto Release;
 		}
@@ -5899,8 +5909,8 @@ as_config_file_apply_discovery(aerospike* as, as_yaml_discovery* d, as_error* er
 		has_translator = true;
 		registered_translator = true;
 		translator_name = (char*)translator.name;
-		translator_recipe = as_plugin_recipe_factory(d->translator_index, d->translator_options,
-			true);
+		translator_recipe = as_plugin_recipe_factory(config->translation.registry,
+			d->translator_index, d->translator_options, true);
 	}
 	else if (d->translator == AS_YAML_TRANSLATOR_PORT_MAP) {
 		as_error local;

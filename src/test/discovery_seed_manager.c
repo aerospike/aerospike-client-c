@@ -514,6 +514,24 @@ fp_register_binding(as_config* config, fake_provider* fp, as_error* err)
 	return status;
 }
 
+// Register the binding factory under a name, as a binding factory or a regular one, and select it.
+static as_status
+fp_select_named(as_config* config, fake_provider* fp, bool binding, as_error* err)
+{
+	fake_provider** holder = malloc(sizeof(fake_provider*));
+	*holder = fp;
+	as_status status = binding ?
+		as_config_register_binding_seed_provider(config, "named", fp_binding_factory, free,
+			holder, err) :
+		as_config_register_seed_provider(config, "named", fp_binding_factory, free, holder, err);
+
+	if (status != AEROSPIKE_OK) {
+		free(holder);
+		return status;
+	}
+	return as_config_select_seed_provider(config, "named", NULL, err);
+}
+
 static void
 fp_set_hosts(fake_provider* fp, const char* hosts)
 {
@@ -2376,6 +2394,40 @@ TEST(seed_binding_thread, "a non-periodic binding provider runs its single call 
 	fp_free(&fp);
 }
 
+TEST(seed_binding_registered_thread, "a non-periodic factory selected by name runs its single call on the discovery thread only when registered as a binding")
+{
+	as_config config;
+	as_error err;
+	as_seed_manager* m;
+	fake_provider fp;
+	char buf[256];
+
+	fp_init(&fp, false, false, "b:1");
+	mgr_config(&config, AS_DISCOVERY_EXECUTION_THREAD, AS_TEND_INTERVAL_MIN);
+	assert_int_eq(fp_select_named(&config, &fp, true, &err), AEROSPIKE_OK);
+	assert_true(config.discovery.binding_provider);
+	assert_int_eq(mgr_open(&config, NULL, &m, &err), AEROSPIKE_OK);
+	assert_int_eq(fp_get(&fp, &fp.calls), 1);
+	assert_false(pthread_equal(fp.thread[0], pthread_self()));
+	assert_string_eq(snap_str(m, buf, sizeof(buf)), "b:1");
+	mgr_close(m, &config);
+	fp_settle(&fp);
+	assert_int_eq(fp.destroyed, 1);
+
+	// The same factory registered as a regular one runs on the caller thread.
+	mgr_config(&config, AS_DISCOVERY_EXECUTION_THREAD, AS_TEND_INTERVAL_MIN);
+	assert_int_eq(fp_select_named(&config, &fp, false, &err), AEROSPIKE_OK);
+	assert_false(config.discovery.binding_provider);
+	assert_int_eq(mgr_open(&config, NULL, &m, &err), AEROSPIKE_OK);
+	assert_int_eq(fp_get(&fp, &fp.calls), 2);
+	assert_true(pthread_equal(fp.thread[1], pthread_self()));
+	assert_string_eq(snap_str(m, buf, sizeof(buf)), "b:1");
+	mgr_close(m, &config);
+	fp_settle(&fp);
+	assert_int_eq(fp.destroyed, 2);
+	fp_free(&fp);
+}
+
 // Format the ip_map flags of the current snapshot as "1,0,...".
 static const char*
 ip_map_str(as_seed_manager* m, char* buf, size_t size)
@@ -3601,6 +3653,7 @@ SUITE(discovery_seed_manager, "pluggable discovery seed manager and execution mo
 	suite_add(seed_reconnect_wait);
 	suite_add(seed_deferred_destroy_sites);
 	suite_add(seed_binding_thread);
+	suite_add(seed_binding_registered_thread);
 	suite_add(seed_snapshot_ip_map_flags);
 	suite_add(seed_thread_stop_in_flight);
 #ifdef DISCOVERY_FAKE_SERVERS

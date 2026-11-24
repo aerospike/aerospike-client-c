@@ -131,11 +131,13 @@ as_plugin_recipe_destroy(as_plugin_recipe* recipe);
 
 /**
  * @private
- * Recipe of a factory registration: the registry index and a reference to options, which must
- * be client-owned. NULL on allocation failure.
+ * Recipe of the factory at index in registry: the index and a reference to options, which must
+ * be client-owned. A seed provider recipe is a binding one when the factory was registered with
+ * as_config_register_binding_seed_provider(). NULL on allocation failure.
  */
 as_plugin_recipe*
-as_plugin_recipe_factory(uint32_t index, const as_map* options, bool translator);
+as_plugin_recipe_factory(const struct as_plugin_registry_s* registry, uint32_t index,
+	const as_map* options, bool translator);
 
 /**
  * @private
@@ -192,6 +194,14 @@ as_plugin_registry_size(const struct as_plugin_registry_s* registry);
  */
 const char*
 as_plugin_registry_name(const struct as_plugin_registry_s* registry, uint32_t index);
+
+/**
+ * @private
+ * True when the seed provider factory at index was registered with
+ * as_config_register_binding_seed_provider().
+ */
+bool
+as_plugin_registry_binding(const struct as_plugin_registry_s* registry, uint32_t index);
 
 /**
  * @private

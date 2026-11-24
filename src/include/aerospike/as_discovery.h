@@ -834,14 +834,17 @@ typedef struct as_address_translator_s {
 } as_address_translator;
 
 /**
- * Seed provider factory registered under a name with as_config_register_seed_provider(), or
- * set without a name with as_config_set_seed_provider_factory() or
- * as_config_set_binding_seed_provider(), which call it at once with an empty options map.
+ * Seed provider factory registered under a name with as_config_register_seed_provider() or
+ * as_config_register_binding_seed_provider(), or set without a name with
+ * as_config_set_seed_provider_factory() or as_config_set_binding_seed_provider(), which call it
+ * at once with an empty options map.
  * A named factory is called when the name is selected, from code with
  * as_config_select_seed_provider() or in the config file with
  * static.client.discovery.provider, on the thread that selects it or loads the file. A sync
  * aerospike_close() destroys the instance; aerospike_connect() then calls the factory again,
- * with the same options, on the thread that connects.
+ * with the same options, on the thread that connects. A binding factory selected by the file
+ * in tend mode is first called by aerospike_connect() in thread mode; see
+ * as_config_register_binding_seed_provider().
  *
  * Fill provider, which the client zeroes before the call, with a function table as for
  * as_config_set_seed_provider(), and return AEROSPIKE_OK. The client validates and copies the
@@ -961,8 +964,12 @@ typedef struct as_discovery_config_s {
 	bool provider_released;
 
 	/**
-	 * True when the registered provider is a binding seed callback, which is
-	 * restricted to AS_DISCOVERY_EXECUTION_THREAD. Do not set directly.
+	 * True when the registered provider is a binding seed callback, set by
+	 * as_config_set_binding_seed_provider() or selected by name from a factory
+	 * registered with as_config_register_binding_seed_provider(), from code or
+	 * the config file. Restricted to AS_DISCOVERY_EXECUTION_THREAD. False while
+	 * no instance is built: after a sync aerospike_close(), or after the config
+	 * file selected the name in tend mode. Do not set directly.
 	 */
 	bool binding_provider;
 
@@ -981,15 +988,17 @@ typedef struct as_discovery_config_s {
 
 	/**
 	 * @private
-	 * Seed provider factories registered with as_config_register_seed_provider(). Released by
-	 * as_config_destroy(). Do not set directly.
+	 * Seed provider factories registered with as_config_register_seed_provider() or
+	 * as_config_register_binding_seed_provider(). Released by as_config_destroy(). Do not set
+	 * directly.
 	 */
 	struct as_plugin_registry_s* registry;
 
 	/**
 	 * @private
 	 * How aerospike_connect() builds the provider again after a sync aerospike_close() released
-	 * it: set by the built-in setters, the config file and as_config_select_seed_provider(),
+	 * it, or builds a binding provider the config file selected in tend mode: set by the
+	 * built-in setters, the config file and as_config_select_seed_provider(),
 	 * NULL for a provider registered as an instance. Do not set directly.
 	 */
 	struct as_plugin_recipe_s* recipe;

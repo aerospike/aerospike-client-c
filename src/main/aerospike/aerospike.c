@@ -258,25 +258,29 @@ aerospike_connect(aerospike* as, as_error* err)
 			"Address translator was released by aerospike_close(). Register it again");
 	}
 
-	// Build again what aerospike_close() released.
-	status = as_config_rebuild_plugins(&as->config, err);
+	as_config* config = &as->config;
+
+	// Before the rebuild, which would call a binding factory only to fail the connect.
+	if ((config->discovery.binding_provider ||
+			(config->discovery.recipe && config->discovery.recipe->binding)) &&
+		config->discovery.execution_mode != AS_DISCOVERY_EXECUTION_THREAD) {
+		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
+			"Binding seed provider requires thread execution mode");
+	}
+
+	// Build again what aerospike_close() released, or a binding provider the config file selected
+	// outside thread mode.
+	status = as_config_rebuild_plugins(config, err);
 
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
 
-	as_config* config = &as->config;
 	as_vector* hosts = config->hosts;
 	
 	// Verify seed hosts are specified. A registered seed provider may supply all of them.
 	if ((hosts == NULL || hosts->size == 0) && ! config->discovery.provider_registered) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM, "No hosts provided");
-	}
-
-	if (config->discovery.binding_provider &&
-		config->discovery.execution_mode != AS_DISCOVERY_EXECUTION_THREAD) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"Binding seed provider requires thread execution mode");
 	}
 
 	// Verify max_socket_idle.

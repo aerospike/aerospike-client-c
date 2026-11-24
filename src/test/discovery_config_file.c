@@ -1775,6 +1775,98 @@ TEST(cf_registrations_carry, "registrations made before aerospike_init carry int
 	cf_plugins_done();
 }
 
+static cf_plugin cf_binding;
+
+// Register cf_binding, reset, as a binding factory on config.
+static bool
+cf_register_binding(as_config* config)
+{
+	as_error err;
+	as_val_destroy(cf_binding.options);
+	memset(&cf_binding, 0, sizeof(cf_plugin));
+	cf_binding.name = "py-consul";
+	return as_config_register_binding_seed_provider(config, cf_binding.name, cf_provider_factory,
+		cf_plugin_release, &cf_binding, &err) == AEROSPIKE_OK;
+}
+
+static void
+cf_binding_done(void)
+{
+	as_val_destroy(cf_binding.options);
+	cf_binding.options = NULL;
+}
+
+#define CF_BINDING_MODE "Binding seed provider requires thread execution mode"
+
+TEST(cf_registered_binding, "a binding name from the file gives a binding provider; with execution_mode tend the file applies, the factory is not called and aerospike_connect fails")
+{
+	as_config config;
+	as_config_init(&config);
+	assert_true(cf_register_binding(&config));
+	aerospike* client = cf_init(&config, CF_HEAD
+		"    discovery:\n"
+		"      provider: py-consul\n"
+		"      service: aerospike\n");
+	assert_not_null(client);
+
+	bool binding = client->config.discovery.provider_registered &&
+		client->config.discovery.binding_provider &&
+		strcmp(client->config.discovery.provider.name, "py-consul") == 0;
+	uint32_t errors = cf_log_find(AS_LOG_LEVEL_ERROR, "");
+	cf_close(client);
+
+	assert_true(binding);
+	assert_int_eq(errors, 0);
+	assert_int_eq(cf_binding.calls, 1);
+	assert_true(cf_val_str_eq(cf_binding.options, "{\"service\":\"aerospike\"}"));
+	assert_int_eq(cf_binding.destroyed, 1);
+	assert_int_eq(cf_binding.released, 1);
+
+	// With execution_mode tend the file is accepted, every key applies and the code provider
+	// is replaced, but only the recipe is kept: neither init nor connect calls the factory.
+	assert_true(cf_code_config(&config));
+	assert_true(cf_register_binding(&config));
+	client = cf_init(&config, CF_HEAD
+		"    max_connections_per_node: 77\n"
+		"    discovery:\n"
+		"      provider: py-consul\n"
+		"      execution_mode: tend\n"
+		"      merge_policy: discovery_only\n");
+	assert_not_null(client);
+
+	as_config* c = &client->config;
+	bool applied = c->discovery.execution_mode == AS_DISCOVERY_EXECUTION_TEND &&
+		c->discovery.merge_policy == AS_SEED_DISCOVERY_ONLY && c->max_conns_per_node == 77;
+	bool deferred = !c->discovery.provider_registered && !c->discovery.binding_provider &&
+		!c->discovery.provider_released && c->discovery.recipe && c->discovery.recipe->binding;
+	uint32_t replaced = cf_log_find(AS_LOG_LEVEL_WARN,
+		"Seed provider code-provider registered in code is replaced by "
+		"static.client.discovery.provider py-consul");
+	uint32_t code_destroys = cf_provider_destroys;
+	errors = cf_log_find(AS_LOG_LEVEL_ERROR, "");
+	uint32_t init_calls = cf_binding.calls;
+	as_error err;
+	as_status status = aerospike_connect(client, &err);
+	bool message = strstr(err.message, CF_BINDING_MODE) != NULL;
+	bool connected = client->cluster != NULL;
+	uint32_t calls = cf_binding.calls;
+	cf_close(client);
+
+	assert_true(applied);
+	assert_true(deferred);
+	assert_int_eq(replaced, 1);
+	assert_int_eq(code_destroys, 1);
+	assert_int_eq(errors, 0);
+	assert_int_eq(init_calls, 0);
+	assert_int_eq(status, AEROSPIKE_ERR_PARAM);
+	assert_true(message);
+	assert_false(connected);
+	assert_int_eq(calls, 0);
+	assert_int_eq(cf_binding.created, 0);
+	assert_int_eq(cf_binding.released, 1);
+	cf_binding_done();
+}
+
 typedef struct cf_typed_s {
 	const char* yaml;
 	as_val_t type;
@@ -2426,15 +2518,22 @@ cf_replace_later(const char* body)
 	return true;
 }
 
-// A client from config connected to fnode a from body, reading the file every tend.
-static aerospike*
-cf_connect_config(as_config* config, fnode* a, const char* body, as_error* err)
+// Settings of a client from config that connects to fnode a and reads the file every tend.
+static void
+cf_fnode_config(as_config* config, fnode* a)
 {
 	config->tender_interval = AS_TEND_INTERVAL_MIN;
 	config->config_provider.interval = AS_TEND_INTERVAL_MIN;
 	config->conn_timeout_ms = 1000;
 	config->fail_if_not_connected = true;
 	as_config_add_host(config, "127.0.0.1", a->port);
+}
+
+// A client from config connected to fnode a from body, reading the file every tend.
+static aerospike*
+cf_connect_config(as_config* config, fnode* a, const char* body, as_error* err)
+{
+	cf_fnode_config(config, a);
 
 	aerospike* client = cf_init(config, body);
 
@@ -2754,6 +2853,84 @@ TEST(cf_reconnect_rebuilds, "plugins from the file are destroyed at close and re
 	assert_string_eq(buf, "lb.example.com:30001");
 }
 
+TEST(cf_registered_binding_reconnect, "a binding name from the file stays a binding provider after close and reconnect; selected in tend mode, connect builds it once the mode is thread")
+{
+	DISCOVERY_SCOPED(fnode, a, fnode_stop);
+	assert_true(fnode_start(&a, "A"));
+
+	as_config config;
+	as_config_init(&config);
+	assert_true(cf_register_binding(&config));
+
+	as_error err;
+	aerospike* client = cf_connect_config(&config, &a, CF_HEAD
+		"    discovery:\n"
+		"      provider: py-consul\n", &err);
+
+	if (!client) {
+		fnode_stop(&a);
+		cf_binding_done();
+		fail("connect: %d %s", err.code, err.message);
+	}
+
+	as_discovery_config* d = &client->config.discovery;
+	bool first = d->provider_registered && d->binding_provider;
+	cf_sync_close(client);
+	bool released = !d->provider_registered && !d->binding_provider && d->recipe &&
+		d->recipe->binding;
+	as_status status = aerospike_connect(client, &err);
+	bool rebuilt = d->provider_registered && d->binding_provider &&
+		strcmp(d->provider.name, "py-consul") == 0;
+	uint32_t calls = cf_binding.calls;
+	cf_close(client);
+
+	assert_true(first);
+	assert_true(released);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(rebuilt);
+	assert_int_eq(calls, 2);
+	assert_int_eq(cf_binding.destroyed, 2);
+	assert_int_eq(cf_binding.released, 1);
+
+	// Selected in tend mode: the factory runs only at the first connect in thread mode.
+	as_config_init(&config);
+	assert_true(cf_register_binding(&config));
+	cf_fnode_config(&config, &a);
+	client = cf_init(&config, CF_HEAD
+		"    discovery:\n"
+		"      provider: py-consul\n"
+		"      execution_mode: tend\n");
+
+	if (!client) {
+		fnode_stop(&a);
+		cf_binding_done();
+		fail("Failed to write %s", cf_path);
+	}
+
+	d = &client->config.discovery;
+	uint32_t init_calls = cf_binding.calls;
+	as_status tend_status = aerospike_connect(client, &err);
+	bool message = strstr(err.message, CF_BINDING_MODE) != NULL;
+	uint32_t tend_calls = cf_binding.calls;
+	d->execution_mode = AS_DISCOVERY_EXECUTION_THREAD;
+	status = aerospike_connect(client, &err);
+	bool built = client->cluster != NULL && d->provider_registered && d->binding_provider;
+	calls = cf_binding.calls;
+	cf_close(client);
+	fnode_stop(&a);
+
+	assert_int_eq(init_calls, 0);
+	assert_int_eq(tend_status, AEROSPIKE_ERR_PARAM);
+	assert_true(message);
+	assert_int_eq(tend_calls, 0);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_true(built);
+	assert_int_eq(calls, 1);
+	assert_int_eq(cf_binding.destroyed, 1);
+	assert_int_eq(cf_binding.released, 1);
+	cf_binding_done();
+}
+
 TEST(cf_fr41_at_connect, "FR-41 from the file: a refresh_interval_ms below the tend interval fails aerospike_connect")
 {
 	aerospike* client = cf_init_default(CF_HEAD
@@ -2888,6 +3065,7 @@ SUITE(discovery_config_file, "YAML discovery and translation keys")
 	suite_add(cf_unregistered_name);
 	suite_add(cf_registered_staging);
 	suite_add(cf_registrations_carry);
+	suite_add(cf_registered_binding);
 	suite_add(cf_registered_typing);
 	suite_add(cf_registered_keys);
 	suite_add(cf_registered_aliases);
@@ -2900,6 +3078,7 @@ SUITE(discovery_config_file, "YAML discovery and translation keys")
 	suite_add(cf_registered_connect);
 	suite_add(cf_registered_reload);
 	suite_add(cf_reconnect_rebuilds);
+	suite_add(cf_registered_binding_reconnect);
 	suite_add(cf_fr41_at_connect);
 	suite_add(cf_m10_at_connect);
 #endif

@@ -1234,7 +1234,9 @@ as_config_set_aws_seed_provider(as_config* config, const as_aws_seed_provider_co
  *   thread, which also completes the destroy.
  * - Python: release the GIL around connect, close and destroy.
  *
- * A binding translate callback is not supported.
+ * A binding translate callback is not supported. To let the config file or
+ * as_config_select_seed_provider() select a binding provider by name, register its factory with
+ * as_config_register_binding_seed_provider() instead.
  *
  * Returns what as_config_set_seed_provider_factory() returns, and AEROSPIKE_ERR_PARAM in tend
  * mode. On failure the previous registration is unchanged.
@@ -1265,10 +1267,57 @@ as_config_set_binding_seed_provider(as_config* config, as_seed_provider_factory 
  * registered ("... '<name>': already registered"), a NULL factory, or while a client created
  * from this config is connected.
  *
+ * A factory implemented by a language binding is registered with
+ * as_config_register_binding_seed_provider() instead.
+ *
  * @relates as_config
  */
 AS_EXTERN as_status
 as_config_register_seed_provider(as_config* config, const char* name,
+	as_seed_provider_factory factory, void (*destroy)(void* udata), void* udata, as_error* err);
+
+/**
+ * Register a seed provider factory implemented by a language binding (Python, Node.js) under
+ * name, so that static.client.discovery.provider in the config file or
+ * as_config_select_seed_provider() can select it. Name, ownership and error rules are those of
+ * as_config_register_seed_provider(); binding and other factories share one set of names.
+ * Registering does not call the factory.
+ *
+ * A selected instance is a binding provider (as_discovery_config.binding_provider) and follows
+ * the threading, blocking and timeout rules of as_config_set_binding_seed_provider(): every
+ * refresh call, including the initial one, runs on the client-owned discovery thread, periodic
+ * or not, and never on the connecting or tend thread; aerospike_connect() waits at most
+ * discovery.refresh_timeout_ms for the initial result, which must be > 0. A sync
+ * aerospike_close() destroys the instance and the rebuilt instance is a binding provider too.
+ *
+ * The provider is only valid with AS_DISCOVERY_EXECUTION_THREAD, and the factory is never called
+ * in AS_DISCOVERY_EXECUTION_TEND. Registration does not check execution_mode, since the config
+ * file sets it after the registration. In tend mode:
+ * - as_config_select_seed_provider() fails with AEROSPIKE_ERR_PARAM.
+ * - The config file keeps the selection without building it, and its other keys apply.
+ *   aerospike_connect() fails with AEROSPIKE_ERR_PARAM ("Binding seed provider requires thread
+ *   execution mode"). After execution_mode is set to AS_DISCOVERY_EXECUTION_THREAD, connect
+ *   calls the factory, so a factory error shows there and not at init.
+ * - aerospike_connect() fails the same way when execution_mode is changed to tend after a
+ *   selection, also after a sync aerospike_close().
+ *
+ * The factory may enter the runtime the way refresh does. It is called on the thread that calls
+ * as_config_select_seed_provider(), on the thread that calls aerospike_init() or
+ * aerospike_new() when the config file selects it in thread mode, and on the thread that calls
+ * aerospike_connect() after each sync aerospike_close() or after a selection by the file in
+ * tend mode:
+ * - Python: aerospike_connect() runs with the GIL released, so the factory acquires it.
+ * - Node.js: with async event loops aerospike_close() ends the registration, so only connect
+ *   after a selection by the file in tend mode calls the factory, on the connecting worker
+ *   thread. A factory called from aerospike_new() or a select on the JS main thread runs on
+ *   that thread, so it must not wait for it.
+ *
+ * Returns what as_config_register_seed_provider() returns.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_register_binding_seed_provider(as_config* config, const char* name,
 	as_seed_provider_factory factory, void (*destroy)(void* udata), void* udata, as_error* err);
 
 /**
@@ -1302,7 +1351,11 @@ as_config_register_address_translator(as_config* config, const char* name,
  * factory, or while a client created from this config is connected; a factory error returns
  * the factory's status. The message names the selected name. On failure the previous
  * registration is unchanged. Built-in requirements such as the thread execution mode of the
- * AWS provider do not apply here; aerospike_connect() validates every provider.
+ * AWS provider do not apply here; aerospike_connect() validates every provider. The exception
+ * is a factory registered with as_config_register_binding_seed_provider(): in
+ * AS_DISCOVERY_EXECUTION_TEND the selection fails with AEROSPIKE_ERR_PARAM ("Invalid seed
+ * provider '<name>': Binding seed provider requires thread execution mode") before the factory
+ * is called.
  *
  * @relates as_config
  */

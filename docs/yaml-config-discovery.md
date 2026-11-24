@@ -93,7 +93,7 @@ static value, not to the code value.
 | `static` | None: the code registration is destroyed and the default static provider over the configured seeds is used, the same as registering nothing. |
 | `dns` | The built-in DNS provider built from the `dns` block, as `as_config_set_dns_seed_provider()` would. |
 | `aws-tags` | The built-in AWS EC2 provider built from the `aws` block, as `as_config_set_aws_seed_provider()` would. |
-| a registered name | The provider returned by the factory registered under that name with `as_config_register_seed_provider()`, called with the block's other keys as options; see [Registered providers and translators](#registered-providers-and-translators). |
+| a registered name | The provider returned by the factory registered under that name with `as_config_register_seed_provider()` or `as_config_register_binding_seed_provider()` (a binding provider), called with the block's other keys as options; see [Registered providers and translators](#registered-providers-and-translators). |
 
 A provider from the file replaces, and destroys, a provider registered in code before
 `aerospike_init()` or `aerospike_new()`, and logs at warning level:
@@ -110,9 +110,10 @@ For what each merge policy and execution mode does, see
 The integers are not range checked in the file. They are checked by `aerospike_connect()`,
 whether they came from the file or from code, and only when the provider needs periodic
 refresh (`dns`, `aws-tags`, or a code provider whose `needs_periodic_refresh` returns true).
-A binding provider (`as_config_set_binding_seed_provider()`, code only) needs `execution_mode:
-thread` and a `refresh_timeout_ms` above 0 even when it is not periodic. `aerospike_connect()`
-then fails with `AEROSPIKE_ERR_PARAM` and one of these messages:
+A binding provider (`as_config_set_binding_seed_provider()`, or a name registered with
+`as_config_register_binding_seed_provider()`) needs `execution_mode: thread` and a
+`refresh_timeout_ms` above 0 even when it is not periodic. `aerospike_connect()` then fails with
+`AEROSPIKE_ERR_PARAM` and one of these messages:
 
 | Rule | Message |
 | --- | --- |
@@ -266,10 +267,19 @@ static:
   (`merge_policy`, `execution_mode`, the discovery integers, `on_miss`) are applied to the client
   as usual and passed in the options too.
 - **When the factory runs.** Once, while the file is loaded, on the thread that calls
-  `aerospike_init()` or `aerospike_new()`. A sync `aerospike_close()` destroys the instance and
+  `aerospike_init()` or `aerospike_new()` (a binding factory in `tend` mode is the exception,
+  below). A sync `aerospike_close()` destroys the instance and
   `aerospike_connect()` calls the factory again with the same options. The `static` section is
   not reloaded, so the factory is not called again when the file changes; changed options need a
   new client.
+- **Binding providers.** A provider implemented by a language binding (Python, Node.js) is
+  registered with `as_config_register_binding_seed_provider()` under a name from the same set.
+  The file selects it as any registered name, and the instance follows the binding rules of the
+  [plugin guide](discovery-plugin-guide.md#language-bindings): every call runs on the discovery
+  thread, bounded by `refresh_timeout_ms`. With `execution_mode: tend` the file is still accepted
+  and its other keys apply, but the factory is not called: `aerospike_connect()` fails with
+  `Binding seed provider requires thread execution mode`. After the mode is set to `thread` in
+  code, connect calls the factory, so a factory error shows there and not at init.
 - **Option errors.** A value the client cannot type (below) makes the file invalid only under a
   registered name, and the error names its full path:
   `Invalid static.client.discovery.x.a[1].b: 'z' is not a valid !!int`. With a built-in provider
@@ -389,7 +399,8 @@ registrations set in code. Code registrations are not destroyed.
 - With a registered name: a factory that fails
   (`Invalid static.client.discovery.provider: consul. factory failed: <message>`) or returns an
   invalid table (`... factory returned an invalid provider`, or `translator`), and an option
-  value the client cannot type (see [Option values](#option-values)).
+  value the client cannot type (see [Option values](#option-values)). A binding factory is not
+  called in `tend` mode, so its errors show at `aerospike_connect()` instead.
 
 Example error:
 

@@ -59,6 +59,7 @@ Register a plugin on the `as_config` before `aerospike_init()` or `aerospike_new
 | `as_config_set_port_map_translator()`, `as_config_set_pass_through_translator()` | a built-in translator |
 | `as_config_set_binding_seed_provider()` | a provider implemented by a language binding, built by a factory that is called again after a sync close; see [Language bindings](#language-bindings) |
 | `as_config_register_seed_provider()`, `as_config_register_address_translator()` | a factory under a name, which the config file (`provider: <name>`) or a select call picks; registering builds nothing; see [Registered providers and translators](yaml-config-discovery.md#registered-providers-and-translators) |
+| `as_config_register_binding_seed_provider()` | a language-binding provider factory under a name, picked the same way; the instance it builds is a binding provider; see [Language bindings](#language-bindings) |
 | `as_config_select_seed_provider()`, `as_config_select_address_translator()` | the instance a registered factory builds from the options passed, as the config file would |
 
 Rules:
@@ -152,7 +153,7 @@ called once, on the connecting thread, in either mode, and no thread starts.
 | `static` | no | yes | Either; no thread and no periodic work. |
 | `dns` | yes | yes | `thread` (default) or `tend`. In `tend`, `timeout_ms` must not exceed `tend_refresh_deadline_ms`, and at the default 100 ms only a local resolver answers reliably. In `thread`, `timeout_ms` must not exceed `refresh_timeout_ms`. |
 | `aws-tags` | yes | no | `thread` only. `as_config_set_aws_seed_provider()` and `aerospike_connect()` fail in `tend`. |
-| binding | as registered | no | `thread` only, periodic or not; a non-periodic binding runs its single call on the discovery thread. Registration fails in `tend`, and switching to `tend` afterwards fails `aerospike_connect()`. |
+| binding | as registered | no | `thread` only, periodic or not; a non-periodic binding runs its single call on the discovery thread. Registration (or the select of a name registered as a binding) fails in `tend`, and switching to `tend` afterwards fails `aerospike_connect()`. |
 | custom | `needs_periodic_refresh` | `supports_deadline` | `thread` (default) or `tend`; `tend` requires `supports_deadline` to return true. |
 
 `aws-tags` is thread-only because of latency: a cold EC2 call takes several hundred milliseconds,
@@ -375,6 +376,31 @@ connect works on the same `aerospike` object:
   close then waits for a running refresh on a client thread, which also completes the destroy.
   Python releases the GIL around all three.
 - A binding translator is not supported.
+
+`as_config_register_binding_seed_provider(config, name, factory, destroy, udata, err)` registers
+the same kind of factory under a name, so that the config file (`provider: <name>`) or
+`as_config_select_seed_provider()` can pick it. Name, ownership and error rules are those of
+`as_config_register_seed_provider()`, and registering builds nothing. The instance it builds is a
+binding provider, with every rule above, also after a rebuild by reconnect: even a periodic
+instance whose `supports_deadline` returns true never runs on the tend thread. The factory is
+never called in `tend`. Registration does not check the mode, because the config file sets
+`execution_mode` afterwards. In `tend`:
+
+- Selecting the name from code fails with
+  `Invalid seed provider '<name>': Binding seed provider requires thread execution mode`.
+- The file keeps the selection without building it, and its other keys apply.
+  `aerospike_connect()` fails with `Binding seed provider requires thread execution mode` until
+  the mode is `thread`. Then connect calls the factory, so a factory error shows there and not
+  at init.
+- Switching to `tend` after a selection, also after a sync close, fails `aerospike_connect()`
+  the same way.
+
+The factory is called on the thread that selects the name, on the thread that calls
+`aerospike_init()` or `aerospike_new()` when the file selects it in `thread`, and on the thread
+that connects after each sync close or after the file selected it in `tend`. Python takes the
+GIL in the factory. A Node.js factory called from `aerospike_new()` or a select on the JS main
+thread must not wait for that thread; one called by connect runs on the connecting worker
+thread.
 
 ## Conformance entry points
 

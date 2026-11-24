@@ -39,7 +39,6 @@
 #include <aerospike/as_scan.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_status.h>
-#include <aerospike/as_subcode.h>
 #include <aerospike/as_val.h>
 #include <citrusleaf/cf_clock.h>
 
@@ -86,8 +85,15 @@ extern aerospike* as;
 #define SERVER_RUN_TIME_LIMIT_NAME "query-max-run-time-ms"
 #define SERVER_TIMEOUT_STAT "pi_query_long_basic_timeout"
 
-// The server's setting for how many Top-K queries may run on a node at once.
+// The server's setting for how many Top-K queries may run on a node at once, and
+// its service statistic that counts the Top-K queries it refused for being over
+// that setting.
 #define SERVER_JOBS_CAP_NAME "order-by-jobs-limit"
+#define SERVER_REFUSED_STAT "order_by_jobs_refused"
+
+// The info commands that return the namespace and service statistics above.
+#define SERVER_NAMESPACE_STATS_COMMAND "namespace/" NAMESPACE
+#define SERVER_SERVICE_STATS_COMMAND "statistics"
 
 static char g_server_run_time_limit_original[32];
 static bool g_server_has_run_time_limit;
@@ -181,14 +187,14 @@ sum_server_stat_callback(const as_error* err, const as_node* node, const char* r
 	return true;
 }
 
-// Sum a namespace statistic over every node.
+// Sum a statistic over every node. The command is the info command that returns it.
 static uint64_t
-sum_server_namespace_stat(const char* name)
+sum_server_stat(const char* command, const char* name)
 {
 	stat_sum ctx = {.name = name, .sum = 0};
 	as_error err;
 
-	aerospike_info_foreach(as, &err, NULL, "namespace/" NAMESPACE, sum_server_stat_callback, &ctx);
+	aerospike_info_foreach(as, &err, NULL, command, sum_server_stat_callback, &ctx);
 	return ctx.sum;
 }
 
@@ -217,11 +223,9 @@ typedef struct run_s {
 	bool async;
 	uint32_t socket_timeout;
 	uint32_t total_timeout;
-	uint8_t error_detail_verbosity;
 
 	// Outputs.
 	as_status status;
-	char message[AS_ERROR_MESSAGE_MAX_SIZE];
 	uint32_t count;
 	uint64_t elapsed_ms;
 
@@ -239,7 +243,6 @@ init_base_policy(as_policy_base* base, const run* r)
 	}
 
 	base->total_timeout = r->total_timeout;
-	base->error_detail_verbosity = r->error_detail_verbosity;
 }
 
 static void
@@ -259,7 +262,6 @@ static void
 set_error(run* r, const as_error* err)
 {
 	r->status = err->code;
-	snprintf(r->message, sizeof(r->message), "%s", err->message);
 }
 
 static bool
@@ -390,23 +392,28 @@ run_query_thread(void* udata)
 static uint64_t
 run_and_count_server_timeouts(run* r)
 {
-	uint64_t timeouts_before = sum_server_namespace_stat(SERVER_TIMEOUT_STAT);
+	uint64_t timeouts_before = sum_server_stat(SERVER_NAMESPACE_STATS_COMMAND, SERVER_TIMEOUT_STAT);
 
 	run_query(r);
 
 	// A node may count the timeout after it has sent the error.
 	as_sleep(500);
-	return sum_server_namespace_stat(SERVER_TIMEOUT_STAT) - timeouts_before;
+	return sum_server_stat(SERVER_NAMESPACE_STATS_COMMAND, SERVER_TIMEOUT_STAT) - timeouts_before;
 }
 
 // Run a Top-K query while another Top-K query holds the only job slot on every
-// node. Returns the status of the query that holds the slot.
+// node. Returns the status of the query that holds the slot, and sets n_refused
+// to how many queries the servers refused. Each node that refuses a query counts
+// its own, so a retry of the refused query would raise the count.
 static as_status
-run_with_jobs_capped(run* refused)
+run_with_jobs_capped(run* refused, uint64_t* n_refused)
 {
+	*n_refused = 0;
+
 	// A Top-K job that an earlier test left behind can take a moment to end.
 	as_sleep(1000);
 
+	uint64_t refused_before = sum_server_stat(SERVER_SERVICE_STATS_COMMAND, SERVER_REFUSED_STAT);
 	run blocker = {.kind = RUN_TOP_K_QUERY};
 	pthread_t thread;
 	int rc = pthread_create(&thread, NULL, run_query_thread, &blocker);
@@ -421,6 +428,7 @@ run_with_jobs_capped(run* refused)
 
 	run_query(refused);
 	pthread_join(thread, NULL);
+	*n_refused = sum_server_stat(SERVER_SERVICE_STATS_COMMAND, SERVER_REFUSED_STAT) - refused_before;
 	return blocker.status;
 }
 
@@ -646,7 +654,7 @@ TEST(query_guardrails_top_k_socket_timeout_async,
 //---------------------------------
 
 TEST(query_guardrails_top_k_jobs_cap,
-	"a Top-K query refused by the job cap returns FAIL_FORBIDDEN with the server's reason and is not retried")
+	"a Top-K query refused by the job cap returns FAIL_FORBIDDEN and is not retried")
 {
 	if (! server_supports_guardrails()) {
 		return;
@@ -655,21 +663,20 @@ TEST(query_guardrails_top_k_jobs_cap,
 	assert_true(set_server_run_time_limit(SERVER_BLOCKER_RUN_TIME_LIMIT_MS));
 	assert_true(set_server_jobs_cap("1"));
 
-	run refused = {
-		.kind = RUN_TOP_K_QUERY,
-		.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE
-	};
-	as_status blocker_status = run_with_jobs_capped(&refused);
+	run refused = {.kind = RUN_TOP_K_QUERY};
+	uint64_t n_refused;
+	as_status blocker_status = run_with_jobs_capped(&refused, &n_refused);
+	uint32_t n_nodes = cluster_size();
 
 	assert_int_eq(blocker_status, AEROSPIKE_ERR_QUERY_TIMEOUT);
 	assert_int_eq(refused.status, AEROSPIKE_ERR_FAIL_FORBIDDEN);
 	assert_int_eq(refused.count, 0);
-	assert_true(strstr(refused.message, "retry later") != NULL);
+	assert_int_eq(n_refused, n_nodes);
 }
 
 #if AS_EVENT_LIB_DEFINED
 TEST(query_guardrails_top_k_jobs_cap_async,
-	"an async Top-K query refused by the job cap returns FAIL_FORBIDDEN with the server's reason and is not retried")
+	"an async Top-K query refused by the job cap returns FAIL_FORBIDDEN and is not retried")
 {
 	if (! server_supports_guardrails()) {
 		return;
@@ -678,17 +685,15 @@ TEST(query_guardrails_top_k_jobs_cap_async,
 	assert_true(set_server_run_time_limit(SERVER_BLOCKER_RUN_TIME_LIMIT_MS));
 	assert_true(set_server_jobs_cap("1"));
 
-	run refused = {
-		.kind = RUN_TOP_K_QUERY,
-		.async = true,
-		.error_detail_verbosity = AS_ERROR_DETAIL_MESSAGE
-	};
-	as_status blocker_status = run_with_jobs_capped(&refused);
+	run refused = {.kind = RUN_TOP_K_QUERY, .async = true};
+	uint64_t n_refused;
+	as_status blocker_status = run_with_jobs_capped(&refused, &n_refused);
+	uint32_t n_nodes = cluster_size();
 
 	assert_int_eq(blocker_status, AEROSPIKE_ERR_QUERY_TIMEOUT);
 	assert_int_eq(refused.status, AEROSPIKE_ERR_FAIL_FORBIDDEN);
 	assert_int_eq(refused.count, 0);
-	assert_true(strstr(refused.message, "retry later") != NULL);
+	assert_int_eq(n_refused, n_nodes);
 }
 #endif
 

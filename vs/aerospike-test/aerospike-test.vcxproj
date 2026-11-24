@@ -285,6 +285,7 @@
     <ClCompile Include="..\..\src\test\aerospike_query\query_async.c" />
     <ClCompile Include="..\..\src\test\aerospike_query\query_background.c" />
     <ClCompile Include="..\..\src\test\aerospike_query\query_foreach.c" />
+    <ClCompile Include="..\..\src\test\aerospike_query\query_guardrails.c" />
     <ClCompile Include="..\..\src\test\aerospike_query\query_topk.c" />
     <ClCompile Include="..\..\src\test\aerospike_scan\scan_async.c" />
     <ClCompile Include="..\..\src\test\aerospike_scan\scan_basics.c" />

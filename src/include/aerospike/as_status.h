@@ -281,6 +281,10 @@ typedef enum as_status_e {
 	
 	/**
 	 * Operation not allowed at this time.
+	 *
+	 * For example, a server refuses a new Top-K query while it is running its
+	 * limit of Top-K queries. The client does not retry such a query. See
+	 * "Timeouts and Server Limits (Long Queries and Top-K)" in as_query.
 	 */
 	AEROSPIKE_ERR_FAIL_FORBIDDEN = 22,
 
@@ -560,7 +564,11 @@ typedef enum as_status_e {
 	AEROSPIKE_ERR_QUERY_QUEUE_FULL = 211,
 
 	/**
-	 * Secondary index query timed out on server.
+	 * Query timed out on server.
+	 *
+	 * For example, a server stops a long query that has run longer than its
+	 * run-time limit. The client does not retry such a query. See
+	 * "Timeouts and Server Limits (Long Queries and Top-K)" in as_query.
 	 */
 	AEROSPIKE_ERR_QUERY_TIMEOUT = 212,
 

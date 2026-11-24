@@ -146,6 +146,9 @@
     <ClCompile Include="..\..\src\test\aerospike_query\query_foreach.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\test\aerospike_query\query_guardrails.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\test\aerospike_query\query_topk.c">
       <Filter>Source Files</Filter>
     </ClCompile>

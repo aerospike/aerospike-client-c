@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -71,7 +71,7 @@ static as_status
 tracker_init(
 	as_partition_tracker* pt, const as_policy_base* policy, as_partitions_status** pp_resume,
 	uint64_t max_records, as_policy_replica replica, bool paginate, uint16_t part_begin,
-	uint16_t part_count, const as_digest* digest, as_error* err
+	uint16_t part_count, const as_digest* digest, bool retry_on_timeout, as_error* err
 	)
 {
 	if (replica == AS_POLICY_REPLICA_RANDOM) {
@@ -121,6 +121,7 @@ tracker_init(
 	pt->max_records = max_records;
 	pt->record_count = 0;
 	pt->check_max = false;
+	pt->retry_on_timeout = retry_on_timeout;
 	pt->replica = replica;
 
 	pt->sleep_between_retries = policy->sleep_between_retries;
@@ -264,7 +265,7 @@ as_status
 as_partition_tracker_init_nodes(
 	as_partition_tracker* pt, as_cluster* cluster, const as_policy_base* policy,
 	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all,
-	bool paginate, uint32_t cluster_size, as_error* err
+	bool paginate, uint32_t cluster_size, bool retry_on_timeout, as_error* err
 	)
 {
 	pt->node_filter = NULL;
@@ -275,7 +276,7 @@ as_partition_tracker_init_nodes(
 	ppn += ppn >> 2;
 	pt->parts_capacity = ppn;
 	return tracker_init(pt, policy, parts_all, max_records, replica, paginate, 0,
-		cluster->n_partitions, NULL, err);
+		cluster->n_partitions, NULL, retry_on_timeout, err);
 }
 
 as_status
@@ -289,14 +290,15 @@ as_partition_tracker_init_node(
 	pt->node_capacity = 1;
 	pt->parts_capacity = cluster->n_partitions;
 	return tracker_init(pt, policy, parts_all, max_records, replica, paginate, 0,
-		cluster->n_partitions, NULL, err);
+		cluster->n_partitions, NULL, true, err);
 }
 
 as_status
 as_partition_tracker_init_filter(
 	as_partition_tracker* pt, as_cluster* cluster, const as_policy_base* policy,
 	uint64_t max_records, as_policy_replica replica, as_partitions_status** parts_all,
-	bool paginate, uint32_t cluster_size, as_partition_filter* pf, as_error* err
+	bool paginate, uint32_t cluster_size, as_partition_filter* pf, bool retry_on_timeout,
+	as_error* err
 	)
 {
 	if (pf->digest.init) {
@@ -320,7 +322,7 @@ as_partition_tracker_init_filter(
 	pt->node_filter = NULL;
 	pt->node_capacity = cluster_size;
 	pt->parts_capacity = pf->count;
-	return tracker_init(pt, policy, parts_all, max_records, replica, paginate, pf->begin, pf->count, &pf->digest, err);
+	return tracker_init(pt, policy, parts_all, max_records, replica, paginate, pf->begin, pf->count, &pf->digest, retry_on_timeout, err);
 }
 
 as_status
@@ -602,6 +604,12 @@ as_partition_tracker_should_retry(
 	as_partition_tracker* pt, as_node_partitions* np, as_status status
 	)
 {
+	// A Top-K query that times out is not retried: its nodes send nothing until
+	// they have finished scanning, so a retry would only run the scan again.
+	if (status == AEROSPIKE_ERR_TIMEOUT && ! pt->retry_on_timeout) {
+		return false;
+	}
+
 	switch (status) {
 	case AEROSPIKE_ERR_CLUSTER:
 	case AEROSPIKE_ERR_INVALID_NODE:
@@ -615,6 +623,9 @@ as_partition_tracker_should_retry(
 		np->parts_unavailable = np->parts_full.size + np->parts_partial.size;
 		return true;
 
+	// AEROSPIKE_ERR_QUERY_TIMEOUT and AEROSPIKE_ERR_FAIL_FORBIDDEN are not
+	// retried: a retry would repeat the work that hit the server's run-time
+	// limit, or add load to a node that refused the query.
 	default:
 		return false;
 	}

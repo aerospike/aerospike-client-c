@@ -500,7 +500,8 @@ typedef struct as_policy_base_s {
 	 * transaction-max-ms (default 1000ms) for all commands except queries. For short
 	 * queries (`expected_duration == AS_QUERY_DURATION_SHORT`), the server
 	 * converts zero timeouts to a hard-coded 1000ms. For long queries, there is no
-	 * timeout conversion on the server.
+	 * timeout conversion on the server. See "Timeouts and Server Limits (Long Queries
+	 * and Top-K)" in as_query for how total_timeout and socket_timeout apply to them.
 	 *
 	 * Default for scan/query: 0
 	 *
@@ -1452,6 +1453,9 @@ typedef struct as_policy_query_s {
 	/**
 	 * Expected query duration. The server treats the query in different ways depending on the expected duration.
 	 * This field is ignored for aggregation queries, background queries and server versions &lt; 6.0.
+	 *
+	 * For the timeouts and server limits that apply to long queries, see
+	 * "Timeouts and Server Limits (Long Queries and Top-K)" in as_query.
 	 *
 	 * Default: AS_QUERY_DURATION_LONG
 	 */

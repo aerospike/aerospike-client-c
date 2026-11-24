@@ -584,9 +584,56 @@ typedef struct as_query_predicates_s {
  * records buffered at once (k capped at 1000).
  *
  * A node sends no results until it finishes its scan, so a Top-K query over a
- * large set can exceed the socket timeout, and the retry restarts that node's
- * scan. Raise as_policy_base.socket_timeout, or set it to 0, for Top-K over
- * large sets; as_policy_base.total_timeout still bounds the query.
+ * large set can exceed the socket timeout, and the query then returns
+ * AEROSPIKE_ERR_TIMEOUT without a retry. Raise as_policy_base.socket_timeout, or
+ * set it to 0, for Top-K over large sets; as_policy_base.total_timeout still
+ * bounds the query.
+ *
+ * ### Timeouts and Server Limits (Long Queries and Top-K)
+ *
+ * A Top-K query is always a long query on the server, and so is any query that
+ * is not a short query (see as_policy_query.expected_duration). These can run
+ * for a long time, so more than the timeouts of as_policy_base can end them:
+ *
+ * - **Run-time limit:** a server can stop a long query that has run longer than
+ *   its `query-max-run-time-ms` setting (namespace or set). The query then
+ *   returns AEROSPIKE_ERR_QUERY_TIMEOUT. A Top-K query never returns a partial
+ *   result when it is stopped.
+ * - **Top-K concurrency cap:** a server can limit how many Top-K queries run on
+ *   a node at once. When a node is at its limit, it refuses a new Top-K query
+ *   and the query returns AEROSPIKE_ERR_FAIL_FORBIDDEN. Set
+ *   as_policy_base.error_detail_verbosity to AS_ERROR_DETAIL_MESSAGE to get the
+ *   server's reason in as_error.message, for example `order-by queries running
+ *   on this node at 'order-by-jobs-limit' N - retry later`.
+ * - **Total timeout:** the client stops a query that passes
+ *   as_policy_base.total_timeout, and the query returns AEROSPIKE_ERR_TIMEOUT.
+ *
+ * The client does not retry AEROSPIKE_ERR_QUERY_TIMEOUT or
+ * AEROSPIKE_ERR_FAIL_FORBIDDEN: a retry would only repeat the work that hit the
+ * limit, or add load to a node that refused it. The application decides whether
+ * to run the query again, for example later and with backoff. This holds for
+ * synchronous and asynchronous queries and for scans. Servers that do not have
+ * these settings behave as before.
+ *
+ * The client does not retry a Top-K query that returns AEROSPIKE_ERR_TIMEOUT
+ * either, whether its socket timeout or its total timeout ended it: a node sends
+ * nothing until it has scanned everything, so a retry would only run the scan
+ * again. Any other long query still retries AEROSPIKE_ERR_TIMEOUT within
+ * as_policy_base.max_retries, until its total timeout passes.
+ *
+ * The socket timeout is how long the client waits for the next results from a
+ * node, and the total timeout is the time allowed for the whole query. A node
+ * sends results in batches, and a query that streams them restarts the socket
+ * wait with every batch. A query that returns little data, for example because
+ * an as_policy_base.filter_exp rejects most of the records it reads, can leave
+ * a node silent for most of its run, as a Top-K query does (see above). Use the
+ * total timeout to bound a long query, and set the socket timeout above the
+ * longest silence you expect.
+ *
+ * Use a selective as_query_where() predicate, or a smaller set, so the query
+ * reads fewer records. It then finishes sooner, holds a Top-K slot for less
+ * time and is less likely to reach a limit. An as_policy_base.filter_exp is
+ * applied after a record is read, so it shortens the result but not the run.
  *
  * @ingroup query_operations
  */

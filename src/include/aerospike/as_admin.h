@@ -1,5 +1,5 @@
 /*
- * Copyright 2008-2025 Aerospike, Inc.
+ * Copyright 2008-2026 Aerospike, Inc.
  *
  * Portions may be licensed to Aerospike, Inc. under one or more contributor
  * license agreements.
@@ -80,6 +80,21 @@ typedef enum as_privilege_code_e {
 	 * Requires server version 6.0+
 	 */
 	AS_PRIVILEGE_SINDEX_ADMIN = 4,
+
+	/**
+	 * User can perform backup administration actions.
+	 * Examples include starting and aborting a backup. Global scope only.
+	 * Requires server version 8.2.1+. This privilege is only returned by query roles and
+	 * query users when the server is started with "--preview backup-restore".
+	 */
+	AS_PRIVILEGE_BACKUP_ADMIN = 5,
+
+	/**
+	 * User can perform restore administration actions.
+	 * Examples include starting and aborting a restore. Global scope only.
+	 * See AS_PRIVILEGE_BACKUP_ADMIN for server version and preview requirements.
+	 */
+	AS_PRIVILEGE_RESTORE_ADMIN = 6,
 
 	/**
 	 * User can read data only.

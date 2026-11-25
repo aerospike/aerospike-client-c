@@ -1,0 +1,332 @@
+name: Discovery L3 kind
+
+# L3: the conformance l3-kind harness runs every profile against this commit through the L5 driver
+# (src/test/l5_driver) and its manifest, in a kind cluster with the Aerospike Kubernetes Operator
+# (AKO). The rows are the Testing Strategy K-2, K-3, K-4, K-6, K-9 and K-10 checks; K-10 is the
+# default profile's row every-pod-advertises-shared-endpoint-with-own-node-port. Each profile is
+# its own job; l3-kind.yaml names its results artifact after the profile and the run, so the jobs
+# do not collide. It is separate from discovery-integration-ee.yml so that its nightly and its run
+# time stay apart.
+#
+# Every job needs AES_FEATURES_CONF, which fork pull requests do not get: the gate job decides that
+# once and reports the skipped layer with report-skipped-layers, as discovery-integration-ee.yml
+# does. Drafts wait until they are ready for review. A schedule runs only from the default branch,
+# so the nightly starts once this file reaches master and then tests master; dispatch it on stage
+# meanwhile. The harness is not versioned: it is pinned in each job below to the conformance main
+# commit L1 also uses.
+#
+# AKO pins: every job passes its AKO inputs, so the AKO installed does not move when the harness's
+# own deps/Chart.yaml pin does. They are the values of aerospike-client-java's
+# .github/workflows/discovery-l3-kind-*.yaml; move them when Java moves its pins. default runs AKO
+# 4.7.0, per-node and tls 4.5.0, and nlb, nlb-per-pod and nlb-tls 4.8.0-dev1 from the operator's
+# Helm repository with the aerospike-cluster chart 4.7.0.
+#
+# The nlb, nlb-per-pod and nlb-tls jobs must not be required checks while they run AKO 4.8.0-dev1
+# (AKO 4.8.0 is due 2026-12-17). Jobs that call a reusable workflow cannot set continue-on-error,
+# so a failure of these jobs shows as a failed run; leave them out of the branch protection rules.
+
+on:
+  pull_request:
+    branches: [stage]
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [stage]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: discovery-l3-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # The only place the Enterprise gate is decided, so a skip and its report cannot drift apart.
+  gate:
+    name: Skipped layers
+    runs-on: ubuntu-24.04
+    outputs:
+      enterprise: ${{ steps.gate.outputs.enterprise }}
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - name: Decide the Enterprise gate
+        id: gate
+        env:
+          ENTERPRISE: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          set -euo pipefail
+          layers='[]'
+          if [[ "${ENTERPRISE}" != true ]]; then
+            reason='fork pull requests get no AES_FEATURES_CONF'
+            layers=$(jq -cn --arg reason "${reason}" '[
+              {layer: "L3 kind", tests: "l3-kind profiles default, per-node, tls, nlb, nlb-per-pod and nlb-tls (K-2, K-3, K-4, K-6, K-9, K-10)", reason: $reason}
+            ]')
+          fi
+          echo "enterprise=${ENTERPRISE}" >> "${GITHUB_OUTPUT}"
+          echo "layers=${layers}" >> "${GITHUB_OUTPUT}"
+      - name: Report skipped layers
+        uses: aerospike/aerospike-client-conformance/.github/actions/report-skipped-layers@42db5e9c508226cc0ad1496d7dff1cb23dac2bb0 # main
+        with:
+          layers: ${{ steps.gate.outputs.layers }}
+
+  l3-default:
+    name: L3 kind (default)
+    needs: gate
+    if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l3-kind.yaml@42db5e9c508226cc0ad1496d7dff1cb23dac2bb0 # main
+    with:
+      client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      commit: ${{ github.event.pull_request.head.sha || github.sha }}
+      manifest: src/test/l5_driver/l5-aws.manifest
+      profile: default
+      ako-version: 4.7.0
+      conformance-ref: 42db5e9c508226cc0ad1496d7dff1cb23dac2bb0
+    secrets:
+      FEATURES_CONF: ${{ secrets.AES_FEATURES_CONF }}
+
+  l3-per-node:
+    name: L3 kind (per-node)
+    needs: gate
+    if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l3-kind.yaml@42db5e9c508226cc0ad1496d7dff1cb23dac2bb0 # main
+    with:
+      client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      commit: ${{ github.event.pull_request.head.sha || github.sha }}
+      manifest: src/test/l5_driver/l5-aws.manifest
+      profile: per-node
+      ako-version: 4.5.0
+      conformance-ref: 42db5e9c508226cc0ad1496d7dff1cb23dac2bb0
+    secrets:
+      FEATURES_CONF: ${{ secrets.AES_FEATURES_CONF }}
+
+  l3-tls:
+    name: L3 kind (tls)
+    needs: gate
+    if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l3-kind.yaml@42db5e9c508226cc0ad1496d7dff1cb23dac2bb0 # main
+    with:
+      client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      commit: ${{ github.event.pull_request.head.sha || github.sha }}
+      manifest: src/test/l5_driver/l5-aws.manifest
+      profile: tls
+      ako-version: 4.5.0
+      conformance-ref: 42db5e9c508226cc0ad1496d7dff1cb23dac2bb0
+    secrets:
+      FEATURES_CONF: ${{ secrets.AES_FEATURES_CONF }}
+
+  l3-nlb:
+    name: L3 kind (nlb, AKO 4.8.0-dev1, not required)
+    needs: gate
+    if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l3-kind.yaml@42db5e9c508226cc0ad1496d7dff1cb23dac2bb0 # main
+    with:
+      client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      commit: ${{ github.event.pull_request.head.sha || github.sha }}
+      manifest: src/test/l5_driver/l5-aws.manifest
+      profile: nlb
+      ako-version: 4.8.0-dev1
+      ako-helm-repo: https://aerospike.github.io/aerospike-kubernetes-operator
+      cluster-chart-version: 4.7.0
+      conformance-ref: 42db5e9c508226cc0ad1496d7dff1cb23dac2bb0
+    secrets:
+      FEATURES_CONF: ${{ secrets.AES_FEATURES_CONF }}
+
+  l3-nlb-per-pod:
+    name: L3 kind (nlb-per-pod, AKO 4.8.0-dev1, not required)
+    needs: gate
+    if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l3-kind.yaml@42db5e9c508226cc0ad1496d7dff1cb23dac2bb0 # main
+    with:
+      client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      commit: ${{ github.event.pull_request.head.sha || github.sha }}
+      manifest: src/test/l5_driver/l5-aws.manifest
+      profile: nlb-per-pod
+      ako-version: 4.8.0-dev1
+      ako-helm-repo: https://aerospike.github.io/aerospike-kubernetes-operator
+      cluster-chart-version: 4.7.0
+      conformance-ref: 42db5e9c508226cc0ad1496d7dff1cb23dac2bb0
+    secrets:
+      FEATURES_CONF: ${{ secrets.AES_FEATURES_CONF }}
+
+  l3-nlb-tls:
+    name: L3 kind (nlb-tls, AKO 4.8.0-dev1, not required)
+    needs: gate
+    if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l3-kind.yaml@42db5e9c508226cc0ad1496d7dff1cb23dac2bb0 # main
+    with:
+      client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+      commit: ${{ github.event.pull_request.head.sha || github.sha }}
+      manifest: src/test/l5_driver/l5-aws.manifest
+      profile: nlb-tls
+      ako-version: 4.8.0-dev1
+      ako-helm-repo: https://aerospike.github.io/aerospike-kubernetes-operator
+      cluster-chart-version: 4.7.0
+      conformance-ref: 42db5e9c508226cc0ad1496d7dff1cb23dac2bb0
+    secrets:
+      FEATURES_CONF: ${{ secrets.AES_FEATURES_CONF }}
+
+  l3-default-summary:
+    name: L3 rows (default)
+    needs: l3-default
+    if: ${{ !cancelled() && needs.l3-default.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        continue-on-error: true
+        with:
+          name: l3-kind-results-default-${{ github.run_id }}-${{ github.run_attempt }}
+          path: l3-kind-results
+      - run: |
+          {
+            echo '### L3 kind rows (default, AKO 4.7.0)'
+            echo '```'
+            if [[ -s l3-kind-results/rows.txt ]]; then
+              cat l3-kind-results/rows.txt
+            else
+              echo 'No rows.txt: the run stopped before the rows. Last lines of build.log:'
+              tail -n 40 l3-kind-results/build.log 2>/dev/null || echo 'No build.log either.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  l3-per-node-summary:
+    name: L3 rows (per-node)
+    needs: l3-per-node
+    if: ${{ !cancelled() && needs.l3-per-node.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        continue-on-error: true
+        with:
+          name: l3-kind-results-per-node-${{ github.run_id }}-${{ github.run_attempt }}
+          path: l3-kind-results
+      - run: |
+          {
+            echo '### L3 kind rows (per-node, AKO 4.5.0)'
+            echo '```'
+            if [[ -s l3-kind-results/rows.txt ]]; then
+              cat l3-kind-results/rows.txt
+            else
+              echo 'No rows.txt: the run stopped before the rows. Last lines of build.log:'
+              tail -n 40 l3-kind-results/build.log 2>/dev/null || echo 'No build.log either.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  l3-tls-summary:
+    name: L3 rows (tls)
+    needs: l3-tls
+    if: ${{ !cancelled() && needs.l3-tls.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        continue-on-error: true
+        with:
+          name: l3-kind-results-tls-${{ github.run_id }}-${{ github.run_attempt }}
+          path: l3-kind-results
+      - run: |
+          {
+            echo '### L3 kind rows (tls, AKO 4.5.0)'
+            echo '```'
+            if [[ -s l3-kind-results/rows.txt ]]; then
+              cat l3-kind-results/rows.txt
+            else
+              echo 'No rows.txt: the run stopped before the rows. Last lines of build.log:'
+              tail -n 40 l3-kind-results/build.log 2>/dev/null || echo 'No build.log either.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  l3-nlb-summary:
+    name: L3 rows (nlb)
+    needs: l3-nlb
+    if: ${{ !cancelled() && needs.l3-nlb.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        continue-on-error: true
+        with:
+          name: l3-kind-results-nlb-${{ github.run_id }}-${{ github.run_attempt }}
+          path: l3-kind-results
+      - run: |
+          {
+            echo '### L3 kind rows (nlb, AKO 4.8.0-dev1)'
+            echo '```'
+            if [[ -s l3-kind-results/rows.txt ]]; then
+              cat l3-kind-results/rows.txt
+            else
+              echo 'No rows.txt: the run stopped before the rows. Last lines of build.log:'
+              tail -n 40 l3-kind-results/build.log 2>/dev/null || echo 'No build.log either.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  l3-nlb-per-pod-summary:
+    name: L3 rows (nlb-per-pod)
+    needs: l3-nlb-per-pod
+    if: ${{ !cancelled() && needs.l3-nlb-per-pod.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        continue-on-error: true
+        with:
+          name: l3-kind-results-nlb-per-pod-${{ github.run_id }}-${{ github.run_attempt }}
+          path: l3-kind-results
+      - run: |
+          {
+            echo '### L3 kind rows (nlb-per-pod, AKO 4.8.0-dev1)'
+            echo '```'
+            if [[ -s l3-kind-results/rows.txt ]]; then
+              cat l3-kind-results/rows.txt
+            else
+              echo 'No rows.txt: the run stopped before the rows. Last lines of build.log:'
+              tail -n 40 l3-kind-results/build.log 2>/dev/null || echo 'No build.log either.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  l3-nlb-tls-summary:
+    name: L3 rows (nlb-tls)
+    needs: l3-nlb-tls
+    if: ${{ !cancelled() && needs.l3-nlb-tls.result != 'skipped' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+      - uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        continue-on-error: true
+        with:
+          name: l3-kind-results-nlb-tls-${{ github.run_id }}-${{ github.run_attempt }}
+          path: l3-kind-results
+      - run: |
+          {
+            echo '### L3 kind rows (nlb-tls, AKO 4.8.0-dev1)'
+            echo '```'
+            if [[ -s l3-kind-results/rows.txt ]]; then
+              cat l3-kind-results/rows.txt
+            else
+              echo 'No rows.txt: the run stopped before the rows. Last lines of build.log:'
+              tail -n 40 l3-kind-results/build.log 2>/dev/null || echo 'No build.log either.'
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -151,6 +151,12 @@ l5-driver: $(TARGET_TEST)/l5_driver
 l5-driver-test: $(TARGET_TEST)/l5_driver_test
 	$(TARGET_TEST)/l5_driver_test
 
+# The U-8 translate guard and latency tests are built against installed headers only, like the L5
+# driver tests, and need no server.
+.PHONY: discovery-translate-test
+discovery-translate-test: $(TARGET_TEST)/discovery_translate_test
+	$(TARGET_TEST)/discovery_translate_test
+
 # Client tests for the aerospike-client-conformance topologies, built against installed headers
 # only like the L5 driver: l2_run is the l2-proxy L2_RUN, discovery_env the envs/ client. The
 # harnesses run them, so neither target does. EVENT_LIB must be the one libaerospike.a was built
@@ -194,6 +200,10 @@ $(TARGET_TEST)/l5_driver: $(SOURCE_TEST)/l5_driver/l5_driver.c $(TARGET_LIB)/lib
 $(TARGET_TEST)/l5_driver_test: $(SOURCE_TEST)/l5_driver/l5_driver_test.c $(SOURCE_TEST)/l5_driver/l5_driver.c $(SOURCE_TEST)/test.c $(TARGET_LIB)/libaerospike.a | build prepare
 	@mkdir -p $(dir $@)
 	$(CC) $(CC_FLAGS) -DL5_DRIVER_NO_MAIN -I$(TARGET_INCL) -I$(SOURCE_TEST) -o $@ $< $(SOURCE_TEST)/test.c $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)
+
+$(TARGET_TEST)/discovery_translate_test: $(SOURCE_TEST)/discovery_translate/discovery_translate_test.c $(SOURCE_TEST)/test.c $(TARGET_LIB)/libaerospike.a | build prepare
+	@mkdir -p $(dir $@)
+	$(CC) $(CC_FLAGS) -I$(TARGET_INCL) -I$(SOURCE_TEST) -o $@ $< $(SOURCE_TEST)/test.c $(TARGET_LIB)/libaerospike.a $(TEST_LDFLAGS)
 
 LIVE_SOURCE = $(SOURCE_TEST)/l2_run/live.c $(SOURCE_TEST)/test.c
 

@@ -68,6 +68,13 @@ AS_EXTERN as_tls_match_kind as_tls_match_identity(X509* cert, const char* identi
 
 int as_tls_wrap(as_tls_context* ctx, as_socket* sock, const char* tls_name);
 
+/**
+ * @private
+ * Return the TLS name of ssl when its handshake failed because the server certificate does not
+ * match that name, otherwise NULL. Call before the socket is closed, which frees ssl.
+ */
+const char* as_tls_rejected_name(SSL* ssl);
+
 void as_tls_set_name(as_socket* sock, const char* tls_name);
 
 struct ssl_st;

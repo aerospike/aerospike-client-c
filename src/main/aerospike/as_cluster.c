@@ -586,6 +586,68 @@ as_cluster_is_resolved(as_address_iterator* iter, struct sockaddr* addr)
 	return false;
 }
 
+// Room kept for "; and N more" until the last seed is listed.
+#define AS_SEED_FAILURES_TAIL 24
+
+// The init error when no seed connects: each seed with the first error it failed with.
+typedef struct as_seed_failures_s {
+	char message[AS_ERROR_MESSAGE_MAX_SIZE];
+	uint32_t len;
+	uint32_t count;
+	uint32_t added;
+	uint32_t omitted;
+} as_seed_failures;
+
+static void
+as_seed_failures_init(as_seed_failures* f, uint32_t count)
+{
+	int len = snprintf(f->message, sizeof(f->message), "Failed to connect to [%u] host(s): ", count);
+	f->len = len > 0 ? (uint32_t)len : 0;
+	f->count = count;
+	f->added = 0;
+	f->omitted = 0;
+}
+
+// List the next seed, with no message when it is NULL. A seed that does not fit, and every seed
+// after it, is counted in "; and N more". The first seed is cut to fit instead.
+static void
+as_seed_failures_add(as_seed_failures* f, const as_host* host, const char* message)
+{
+	uint32_t index = f->added++;
+
+	if (f->omitted > 0) {
+		f->omitted++;
+		return;
+	}
+
+	char entry[AS_ERROR_MESSAGE_MAX_SIZE];
+	int n = snprintf(entry, sizeof(entry), "%s%s %u%s%s", index > 0 ? "; " : "", host->name,
+		host->port, message ? " " : "", message ? message : "");
+	size_t len = n < 0 ? 0 : ((size_t)n < sizeof(entry) ? (size_t)n : sizeof(entry) - 1);
+	size_t reserve = index + 1 < f->count ? AS_SEED_FAILURES_TAIL : 0;
+	size_t room = sizeof(f->message) - 1 - f->len - reserve;
+
+	if (len > room) {
+		if (index > 0) {
+			f->omitted++;
+			return;
+		}
+		len = room;
+	}
+	memcpy(f->message + f->len, entry, len);
+	f->len += (uint32_t)len;
+	f->message[f->len] = 0;
+}
+
+static const char*
+as_seed_failures_end(as_seed_failures* f)
+{
+	if (f->omitted > 0) {
+		snprintf(f->message + f->len, sizeof(f->message) - f->len, "; and %u more", f->omitted);
+	}
+	return f->message;
+}
+
 static as_status
 as_cluster_seed_node(
 	as_cluster* cluster, as_error* err, as_peers* peers, as_seed_snapshot* seeds,
@@ -609,6 +671,9 @@ as_cluster_seed_node(
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "No seed host to connect to");
 	}
 
+	as_seed_failures failures;
+	as_seed_failures_init(&failures, hosts->size);
+
 	for (uint32_t i = 0; i < hosts->size && node == NULL; i++) {
 		as_host* seed = as_vector_get((as_vector*)hosts, i);
 
@@ -619,6 +684,7 @@ as_cluster_seed_node(
 		host.port = seed->port;
 
 		if (as_peers_find_invalid_host(peers, &host)) {
+			as_seed_failures_add(&failures, &host, NULL);
 			continue;
 		}
 
@@ -631,11 +697,13 @@ as_cluster_seed_node(
 			if (enable_warnings) {
 				as_log_warn("Failed to lookup %s %d. %s %s", host.name, host.port, as_error_string(status), error_local.message);
 			}
+			as_seed_failures_add(&failures, &host, error_local.message);
 			continue;
 		}
 
 		struct sockaddr* addr;
 		bool found_node = false;
+		bool listed = false;
 		bool alternate_missing;
 
 		while (as_lookup_next(&iter, &addr)) {
@@ -664,6 +732,11 @@ as_cluster_seed_node(
 					conn_status = status;
 					as_node_destroy(node);
 					node = NULL;
+
+					if (! listed) {
+						as_seed_failures_add(&failures, &host, error_local.message);
+						listed = true;
+					}
 					continue;
 				}
 				found_node = true;
@@ -699,12 +772,21 @@ as_cluster_seed_node(
 					topology_error = error_local;
 					has_topology_error = true;
 				}
+
+				if (! listed) {
+					as_seed_failures_add(&failures, &host, error_local.message);
+					listed = true;
+				}
 			}
 		}
 		as_lookup_end(&iter);
 
 		if (! found_node) {
 			as_peers_add_invalid_host(peers, &host);
+
+			if (! listed) {
+				as_seed_failures_add(&failures, &host, NULL);
+			}
 		}
 	}
 
@@ -725,7 +807,7 @@ as_cluster_seed_node(
 			*err = peers->topology_error;
 			return err->code;
 		}
-		return as_error_set_message(err, conn_status, "Failed to connect");
+		return as_error_set_message(err, conn_status, as_seed_failures_end(&failures));
 	}
 
 	as_node_create_min_connections(node);

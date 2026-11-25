@@ -863,7 +863,8 @@ as_peers_alt_missing_error(as_peers* peers, as_cluster* cluster, const char* nam
 {
 	as_error err;
 	as_error_update(&err, AEROSPIKE_ERR_INVALID_NODE,
-		"Node %s has no alternate-access-address and use_services_alternate is true. "
+		"Node %s has no alternate-access-address and use_services_alternate "
+		"(useServicesAlternate) is true. "
 		"Configure alternate-access-address on the server or set use_services_alternate to false",
 		name);
 	as_log_error("%s", err.message);

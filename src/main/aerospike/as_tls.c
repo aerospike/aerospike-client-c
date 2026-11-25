@@ -32,6 +32,13 @@
 #include <pthread.h>
 #include <signal.h>
 
+// Verify result of a certificate rejected for its TLS name.
+#if defined(X509_V_ERR_HOSTNAME_MISMATCH)
+#define AS_TLS_NAME_REJECTED X509_V_ERR_HOSTNAME_MISMATCH
+#else
+#define AS_TLS_NAME_REJECTED X509_V_ERR_APPLICATION_VERIFICATION
+#endif
+
 static void* cert_blacklist_read(const char * path);
 static bool cert_blacklist_check(void* cert_blacklist,
 								 const char* snhex,
@@ -634,14 +641,15 @@ static int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
 
 		bool matched = as_tls_match_identity(cert, hostname) != AS_TLS_MATCH_NONE;
 
-		if (matched) {
-			as_log_debug("TLS name '%s' matches", hostname);
-		}
-		else {
-			as_log_warn("TLS name '%s' mismatch", hostname);
+		if (! matched) {
+			// Marks the rejection for as_tls_rejected_name().
+			X509_STORE_CTX_set_error(ctx, AS_TLS_NAME_REJECTED);
+			as_log_warn("Invalid TLS name: %s", hostname);
+			return 0;
 		}
 
-		return matched ? 1 : 0;
+		as_log_debug("TLS name '%s' matches", hostname);
+		return 1;
 	}
 
 	// If we make it here we are a root or chain cert and are not
@@ -1148,6 +1156,15 @@ as_tls_wrap(as_tls_context* ctx, as_socket* sock, const char* tls_name)
 	SSL_set_ex_data(sock->ssl, s_ex_ctxt_index, ctx);
 	
 	return 0;
+}
+
+const char*
+as_tls_rejected_name(SSL* ssl)
+{
+	if (! ssl || SSL_get_verify_result(ssl) != AS_TLS_NAME_REJECTED) {
+		return NULL;
+	}
+	return SSL_get_ex_data(ssl, s_ex_name_index);
 }
 
 void

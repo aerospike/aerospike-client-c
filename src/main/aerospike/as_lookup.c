@@ -37,6 +37,9 @@
 // Most milliseconds between the connect starts to the addresses of one host.
 #define AS_LOOKUP_STAGGER_DELAY 100
 
+// Fits "Invalid TLS name: " and a host name.
+#define AS_LOOKUP_FAILURE_SIZE 288
+
 //---------------------------------
 // Types
 //---------------------------------
@@ -52,7 +55,7 @@ typedef struct as_lookup_probe_s {
 // First connect or TLS failure of the addresses of one host.
 typedef struct as_lookup_failure_s {
 	struct sockaddr_storage addr;
-	char message[64];
+	char message[AS_LOOKUP_FAILURE_SIZE];
 	bool set;
 } as_lookup_failure;
 
@@ -111,7 +114,8 @@ as_lookup_alternate_missing(
 	}
 
 	return as_error_update(err, AEROSPIKE_ERR_INVALID_NODE,
-		"Node %s%s%s has no alternate-access-address and use_services_alternate is true. "
+		"Node %s%s%s has no alternate-access-address and use_services_alternate "
+		"(useServicesAlternate) is true. "
 		"Configure alternate-access-address on the server or set use_services_alternate to false",
 		node_name, *where ? " " : "", where);
 }
@@ -960,22 +964,22 @@ Error: {
 
 // Validate the node on fd, whose TCP connect to addr completed. The TLS handshake ends at
 // deadline in nanoseconds, at least one millisecond from now. When the socket or the handshake
-// fails, failure names it and fd is closed.
+// fails, failure names it and fd is closed. Otherwise failure is empty.
 static as_status
 as_lookup_node_connected(
 	as_cluster* cluster, as_error* err, as_host* host, struct sockaddr* addr, as_socket_fd fd,
-	uint64_t deadline, as_node_info* node_info, bool* alternate_missing, const char** failure
+	uint64_t deadline, as_node_info* node_info, bool* alternate_missing, char* failure
 	)
 {
 	as_socket* sock = &node_info->socket;
 	char name[AS_IP_ADDRESS_SIZE];
 
-	*failure = NULL;
+	failure[0] = 0;
 
 	// as_socket_wrap() closes fd when it fails.
 	if (! as_socket_wrap(sock, addr->sa_family, fd, cluster->tls_ctx, host->tls_name)) {
 		as_cluster_add_validation_open_failure(cluster);
-		*failure = "TLS wrap failed";
+		as_strncpy(failure, "TLS wrap failed", AS_LOOKUP_FAILURE_SIZE);
 		as_address_name(addr, name, sizeof(name));
 		return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket create failed: %d, %s", -5,
 			name);
@@ -994,9 +998,18 @@ as_lookup_node_connected(
 		if (as_tls_connect(sock, deadline_ms)) {
 			sock->tls_handshake_failed = true;
 			as_lookup_record_connect_failure(cluster, sock);
+
+			// Read before the close, which frees the SSL.
+			const char* rejected = as_tls_rejected_name(sock->ssl);
 			as_socket_close(sock);
-			*failure = "TLS handshake failed";
 			as_address_name(addr, name, sizeof(name));
+
+			if (rejected) {
+				snprintf(failure, AS_LOOKUP_FAILURE_SIZE, "Invalid TLS name: %s", rejected);
+				return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Invalid TLS name: %s (%s)",
+					rejected, name);
+			}
+			as_strncpy(failure, "TLS handshake failed", AS_LOOKUP_FAILURE_SIZE);
 			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "TLS handshake failed: %s", name);
 		}
 	}
@@ -1147,9 +1160,9 @@ as_lookup_validate_any(
 		as_error error_local;
 		as_error_init(&error_local);
 		bool alt = false;
-		const char* connect_failure;
+		char connect_failure[AS_LOOKUP_FAILURE_SIZE];
 		as_status status = as_lookup_node_connected(cluster, &error_local, host, winner_addr,
-			winner.fd, deadline, node_info, &alt, &connect_failure);
+			winner.fd, deadline, node_info, &alt, connect_failure);
 
 		if (status == AEROSPIKE_OK) {
 			as_lookup_verdict verdict = as_lookup_check(accept, udata, node_info);
@@ -1170,7 +1183,7 @@ as_lookup_validate_any(
 
 		as_lookup_log_failure(host, winner_addr, error_local.message);
 
-		if (connect_failure) {
+		if (connect_failure[0]) {
 			as_lookup_set_failure(&failure, winner_addr, connect_failure);
 			continue;
 		}

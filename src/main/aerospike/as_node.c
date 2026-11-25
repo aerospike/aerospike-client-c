@@ -484,8 +484,10 @@ as_node_try_connections(as_node* node, as_socket* sock, as_address* addresses, i
 	return -1;
 }
 
+// When every address of the family fails, rejected is set to the TLS name the certificate of the
+// last address was rejected for, or NULL. It is not changed when no address was tried.
 static int
-as_node_try_family_connections(as_node* node, int family, int begin, int end, int index, as_address* primary, as_socket* sock, uint64_t deadline_ms)
+as_node_try_family_connections(as_node* node, int family, int begin, int end, int index, as_address* primary, as_socket* sock, uint64_t deadline_ms, const char** rejected)
 {
 	// Create a non-blocking socket.
 	as_tls_context* ctx = as_socket_get_tls_context(node->cluster->tls_ctx);
@@ -519,6 +521,11 @@ as_node_try_family_connections(as_node* node, int family, int begin, int end, in
 	}
 	
 	if (rv < 0) {
+		if (index >= 0 || begin < end) {
+			// Read before the close, which frees the SSL.
+			*rejected = sock->tls_handshake_failed ? as_tls_rejected_name(sock->ssl) : NULL;
+		}
+
 		// Couldn't start a connection on any socket address - close the socket.
 		as_socket_close(sock);
 		return -5;
@@ -534,28 +541,33 @@ as_node_create_socket(
 	// Try addresses.
 	uint32_t index = node->address_index;
 	as_address* primary = &node->addresses[index];
+	const char* rejected = NULL;
 	int rv;
 	
 	if (primary->addr.ss_family == AF_INET) {
 		// Try IPv4 addresses first.
-		rv = as_node_try_family_connections(node, AF_INET, 0, node->address4_size, index, primary, sock, deadline_ms);
+		rv = as_node_try_family_connections(node, AF_INET, 0, node->address4_size, index, primary, sock, deadline_ms, &rejected);
 		
 		if (rv < 0) {
 			// Try IPv6 addresses.
-			rv = as_node_try_family_connections(node, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, -1, NULL, sock, deadline_ms);
+			rv = as_node_try_family_connections(node, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, -1, NULL, sock, deadline_ms, &rejected);
 		}
 	}
 	else {
 		// Try IPv6 addresses first.
-		rv = as_node_try_family_connections(node, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, index, primary, sock, deadline_ms);
+		rv = as_node_try_family_connections(node, AF_INET6, AS_ADDRESS4_MAX, AS_ADDRESS4_MAX + node->address6_size, index, primary, sock, deadline_ms, &rejected);
 		
 		if (rv < 0) {
 			// Try IPv4 addresses.
-			rv = as_node_try_family_connections(node, AF_INET, 0, node->address4_size, -1, NULL, sock, deadline_ms);
+			rv = as_node_try_family_connections(node, AF_INET, 0, node->address4_size, -1, NULL, sock, deadline_ms, &rejected);
 		}
 	}
 	
 	if (rv < 0) {
+		if (rejected) {
+			return as_error_update(err, AEROSPIKE_ERR_CONNECTION,
+				"Failed to connect: %s %s: Invalid TLS name: %s", node->name, primary->name, rejected);
+		}
 		return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Failed to connect: %s %s", node->name, primary->name);
 	}
 	sock->pool = pool;

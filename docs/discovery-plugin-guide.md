@@ -307,6 +307,23 @@ TLS certificate matched 'node1' only through the legacy name check, which is not
 The fallback is removed in the next major release. Issue certificates with a SAN dNSName entry for
 a host-name TLS name, or an iPAddress entry for an IP TLS name.
 
+**Rejected certificates.** A certificate that matches the TLS name in neither way is rejected. The
+client logs the warning `Invalid TLS name: <name>`, and the connect fails with an error that
+contains the same text: `Invalid TLS name: <name> (<address>)` for a seed, peer or command
+connection, and `Invalid TLS name: <name>` for an async connection. The status code does not
+change. A handshake that fails for another reason keeps its own message.
+
+When no seed connects, `aerospike_connect()` fails with an error that lists each seed with the
+error it failed with, as the Java client does:
+
+```
+Failed to connect to [2] host(s): 10.0.0.1 4333 Invalid TLS name: cluster.example.com (10.0.0.1:4333); 10.0.0.2 4333 Socket write error: 111, 10.0.0.2:4333
+```
+
+A seed skipped because it already failed in the same attempt is listed without an error. When the
+list does not fit in the error message, it ends with `; and N more`. A missing alternate address,
+a strict translation miss or a collision is returned instead of the list.
+
 ## aws-tags IAM policy and credentials
 
 The `aws-tags` provider sends one SigV4-signed EC2 `DescribeInstances` request per refresh (plus

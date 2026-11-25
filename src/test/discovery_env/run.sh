@@ -105,7 +105,8 @@ fi
 
 # The driver over TLS through the proxy's forwarders: once a snapshot holds both nodes at their
 # forwarders with every partition owned, a served reply for every partition; then exit 3 with the
-# certificate mismatch logged when the tls-name is the dialed host.
+# rejection, "Invalid TLS name: <host>", in the error line and the log when the tls-name is the
+# dialed host.
 driver="$target/test/l5_driver"
 port_map="$PROXY_NODE_A_NAME=$PROXY_NODE_A_HOST:$PROXY_NODE_A_PORT,$PROXY_NODE_B_NAME=$PROXY_NODE_B_HOST:$PROXY_NODE_B_PORT"
 driver_args=(--seed "$PROXY_NODE_A_HOST:$PROXY_NODE_A_PORT" --shape port-map --port-map "$port_map"
@@ -215,8 +216,11 @@ if [ "$negative_status" -eq 124 ]; then
 elif [ "$negative_status" -ne 3 ] || ! grep -q '"type":"error"' "$negative_out"; then
 	echo "DRIVER-TLS problem: the dialed host as tls-name gave exit $negative_status, not 3 after an error line"
 	smoke=FAIL
-elif ! grep -qF "TLS name '$PROXY_NODE_A_HOST' mismatch" "$negative_err"; then
-	echo "DRIVER-TLS problem: exit 3 without the TLS name '$PROXY_NODE_A_HOST' mismatch warning"
+elif ! grep -F '"type":"error"' "$negative_out" | grep -qF "Invalid TLS name: $PROXY_NODE_A_HOST"; then
+	echo "DRIVER-TLS problem: exit 3, but the error line does not contain 'Invalid TLS name: $PROXY_NODE_A_HOST'"
+	smoke=FAIL
+elif ! grep -qF "Invalid TLS name: $PROXY_NODE_A_HOST" "$negative_err"; then
+	echo "DRIVER-TLS problem: exit 3 without the 'Invalid TLS name: $PROXY_NODE_A_HOST' warning"
 	smoke=FAIL
 fi
 echo "DRIVER-TLS-SMOKE $smoke"

@@ -1217,7 +1217,7 @@ static uint32_t
 env_mismatch_warns(uint32_t mark, const char* name)
 {
 	char needle[300];
-	snprintf(needle, sizeof(needle), "TLS name '%s' mismatch", name);
+	snprintf(needle, sizeof(needle), "Invalid TLS name: %s", name);
 	const char* needles[] = {needle};
 	return live_log_count(mark, needles, 1);
 }
@@ -1500,12 +1500,21 @@ env_n6_dialed(void* arg, char* msg, size_t size)
 
 	uint32_t mismatch = env_mismatch_warns(mark, dialed);
 	uint32_t legacy = env_legacy_warns(mark, dialed);
-	printf("ENV-N6-DIALED tlsName=%s status=%d mismatchWarns=%u legacyWarns=%u message=%s\n", dialed,
-		err.code, mismatch, legacy, err.message);
+	char expected[300];
+	snprintf(expected, sizeof(expected), "Invalid TLS name: %s", dialed);
+	bool named = strstr(err.message, expected) != NULL;
+	printf("ENV-N6-DIALED tlsName=%s status=%d mismatchWarns=%u legacyWarns=%u errorNamesTlsName=%s "
+		"message=%s\n", dialed, err.code, mismatch, legacy, named ? "true" : "false", err.message);
 
 	if (mismatch == 0) {
-		snprintf(msg, size, "client not created (%d %s), but no \"TLS name '%s' mismatch\" warning", err.code,
-			err.message, dialed);
+		snprintf(msg, size, "client not created (%d %s), but no \"%s\" warning", err.code,
+			err.message, expected);
+		return false;
+	}
+
+	if (! named) {
+		snprintf(msg, size, "client not created, but the error does not contain \"%s\": %d %s",
+			expected, err.code, err.message);
 		return false;
 	}
 
@@ -1882,11 +1891,21 @@ env_n17_run(void* arg, char* msg, size_t size)
 
 	if (! as) {
 		uint32_t mismatch = env_mismatch_warns(mark, c->tls_name);
-		printf("ENV-N17-CONNECT not created: %d %s mismatchWarns=%u\n", err.code, err.message, mismatch);
+		char expected[300];
+		snprintf(expected, sizeof(expected), "Invalid TLS name: %s", c->tls_name);
+		bool named = strstr(err.message, expected) != NULL;
+		printf("ENV-N17-CONNECT not created: %d %s mismatchWarns=%u errorNamesTlsName=%s\n", err.code,
+			err.message, mismatch, named ? "true" : "false");
 
 		if (mismatch == 0) {
-			snprintf(msg, size, "client not created (%d %s), but no \"TLS name '%s' mismatch\" warning",
-				err.code, err.message, c->tls_name);
+			snprintf(msg, size, "client not created (%d %s), but no \"%s\" warning",
+				err.code, err.message, expected);
+			return false;
+		}
+
+		if (! named) {
+			snprintf(msg, size, "client not created, but the error does not contain \"%s\": %d %s",
+				expected, err.code, err.message);
 			return false;
 		}
 		printf("ENV-N17-RESULT rejected\n");

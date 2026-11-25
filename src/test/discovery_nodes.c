@@ -3271,6 +3271,168 @@ TEST(nodes_move_load_balancer_seed_no_move,
 	assert_int_eq(moves, 0);
 }
 
+//---------------------------------
+// Tests: init error when no seed connects
+//---------------------------------
+
+#define SEEDS_MANY 40
+
+static void
+seeds_config(as_config* config)
+{
+	as_config_init(config);
+	config->tender_interval = NODES_TEND_INTERVAL;
+	config->conn_timeout_ms = 1000;
+	config->fail_if_not_connected = true;
+	resolver_install();
+}
+
+// Does s end with suffix?
+static bool
+ends_with(const char* s, const char* suffix)
+{
+	size_t len = strlen(s);
+	size_t size = strlen(suffix);
+	return len >= size && strcmp(s + len - size, suffix) == 0;
+}
+
+static uint32_t
+occurrences(const char* s, const char* needle)
+{
+	uint32_t count = 0;
+
+	for (const char* p = strstr(s, needle); p; p = strstr(p + 1, needle)) {
+		count++;
+	}
+	return count;
+}
+
+TEST(nodes_seeds_failed_lists_each,
+	"init with no reachable seed fails with each seed and its error, and a skipped seed with none")
+{
+	uint16_t port = free_port();
+	assert_int_ne(port, 0);
+	as_config config;
+	seeds_config(&config);
+	as_config_add_host(&config, FIRST, port);
+	as_config_add_host(&config, SECOND, port);
+
+	// ip_map points the third seed at the first, which is a known invalid host by then, so it is
+	// skipped.
+	as_config_add_host(&config, "10.255.0.1", port);
+	as_addr_map map = {.orig = "10.255.0.1", .alt = FIRST};
+	config.ip_map = &map;
+	config.ip_map_size = 1;
+	as_error err;
+	as_status status = connect_error(&config, &err);
+	resolver_remove();
+	info("%d %s", status, err.message);
+
+	char first[96];
+	snprintf(first, sizeof(first), "Failed to connect to [3] host(s): %s %u ", FIRST, port);
+	char second[64];
+	snprintf(second, sizeof(second), "; %s %u ", SECOND, port);
+	char skipped[64];
+	snprintf(skipped, sizeof(skipped), "; %s %u", FIRST, port);
+	const char* second_at = strstr(err.message, second);
+
+	assert_int_ne(status, AEROSPIKE_OK);
+	assert_that(strncmp(err.message, first, strlen(first)) == 0, "%s", err.message);
+	assert_that(err.message[strlen(first)] != ';', "no error for the first seed: %s", err.message);
+	assert_that(second_at && second_at[strlen(second)] != ';', "%s", err.message);
+	assert_that(ends_with(err.message, skipped), "%s", err.message);
+}
+
+TEST(nodes_seeds_failed_cut_to_fit,
+	"init with more failed seeds than the error holds lists those that fit and counts the rest")
+{
+	uint16_t port = free_port();
+	assert_int_ne(port, 0);
+	as_config config;
+	seeds_config(&config);
+
+	for (uint32_t i = 0; i < SEEDS_MANY; i++) {
+		char ip[INET_ADDRSTRLEN];
+		snprintf(ip, sizeof(ip), "127.0.1.%u", i + 1);
+		as_config_add_host(&config, ip, port);
+	}
+	as_error err;
+	as_status status = connect_error(&config, &err);
+	resolver_remove();
+	info("%d %s", status, err.message);
+
+	char first[96];
+	snprintf(first, sizeof(first), "Failed to connect to [%u] host(s): 127.0.1.1 %u ", SEEDS_MANY,
+		port);
+	const char* tail = NULL;
+
+	for (const char* p = strstr(err.message, "; and "); p; p = strstr(p + 1, "; and ")) {
+		tail = p;
+	}
+
+	unsigned int more = 0;
+	uint32_t listed = 1 + occurrences(err.message, "; 127.0.1.");
+
+	assert_int_ne(status, AEROSPIKE_OK);
+	assert_that(strncmp(err.message, first, strlen(first)) == 0, "%s", err.message);
+	assert_that(strlen(err.message) < AS_ERROR_MESSAGE_MAX_SIZE, "%s", err.message);
+	assert_that(tail && sscanf(tail, "; and %u more", &more) == 1 && ends_with(err.message, " more"),
+		"%s", err.message);
+	assert_that(more > 0 && listed + more == SEEDS_MANY, "%u listed and %u more: %s", listed, more,
+		err.message);
+}
+
+TEST(nodes_seeds_failed_alternate_missing,
+	"init returns the alternate-missing error of a seed, not the list of failed seeds")
+{
+	uint16_t port = free_port();
+	assert_int_ne(port, 0);
+	DISCOVERY_SCOPED(fnode, x, fnode_stop);
+	assert_true(start_named(&x, "X", SECOND, port));
+	fnode_set_empty_alt(&x, true);
+	as_config config;
+	seeds_config(&config);
+	config.use_services_alternate = true;
+	as_config_add_host(&config, FIRST, port);
+	as_config_add_host(&config, SECOND, port);
+	as_error err;
+	as_status status = connect_error(&config, &err);
+	resolver_remove();
+	info("%d %s", status, err.message);
+
+	assert_int_eq(status, AEROSPIKE_ERR_INVALID_NODE);
+	assert_that(strstr(err.message, "Node X ") && strstr(err.message, "no alternate-access-address") &&
+		strstr(err.message, "use_services_alternate (useServicesAlternate) is true"), "%s", err.message);
+	assert_that(! strstr(err.message, "Failed to connect to ["), "%s", err.message);
+}
+
+TEST(nodes_seeds_failed_lookup_listed,
+	"init lists a seed whose name does not resolve with its lookup error")
+{
+	uint16_t port = free_port();
+	assert_int_ne(port, 0);
+	as_config config;
+	seeds_config(&config);
+	char hostname[64];
+	stagger_hostname(hostname, "no-address", NULL);
+	as_config_add_host(&config, hostname, port);
+	as_config_add_host(&config, FIRST, port);
+	as_error err;
+	as_status status = connect_error(&config, &err);
+	resolver_remove();
+	info("%d %s", status, err.message);
+
+	char first[256];
+	snprintf(first, sizeof(first), "Failed to connect to [2] host(s): %s %u Invalid hostname %s: ",
+		hostname, port, hostname);
+	char second[64];
+	snprintf(second, sizeof(second), "; %s %u ", FIRST, port);
+
+	assert_int_ne(status, AEROSPIKE_OK);
+	assert_that(strncmp(err.message, first, strlen(first)) == 0, "%s", err.message);
+	assert_that(strstr(err.message, second), "%s", err.message);
+}
+
 #endif // __linux__
 
 #else
@@ -3339,6 +3501,10 @@ SUITE(discovery_nodes, "pluggable discovery node lifecycle tests")
 	suite_add(nodes_move_loopback_peer_match_no_move);
 	suite_add(nodes_move_loopback_before_address_moves);
 	suite_add(nodes_move_load_balancer_seed_no_move);
+	suite_add(nodes_seeds_failed_lists_each);
+	suite_add(nodes_seeds_failed_cut_to_fit);
+	suite_add(nodes_seeds_failed_alternate_missing);
+	suite_add(nodes_seeds_failed_lookup_listed);
 #endif
 #else
 	suite_add(nodes_fake_servers_skipped);

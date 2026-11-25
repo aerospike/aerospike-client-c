@@ -2358,8 +2358,11 @@ TEST(dns_deadline_unanswered, "an unanswered refresh returns within timeout_ms f
 		as_dns_seed_provider_config* cfg = setup_init(&d, names, 3, &silent,
 			servers == 2 ? &silent2 : NULL);
 
-		// The last name gets 1/16 of the budget, enough to outlast scheduling delays.
-		cfg->timeout_ms = 400;
+		// The last name gets 1/16 of the budget, enough to outlast scheduling delays. Each resolver
+		// gets a share of that, so the budget grows with the resolvers: the time left before the
+		// second resolver is asked for the last name absorbs the delays of every earlier wait.
+		uint32_t timeout_ms = 400 * (uint32_t)servers;
+		cfg->timeout_ms = timeout_ms;
 		as_seed_provider provider;
 		as_error err;
 		assert_int_eq(as_discovery_dns_seed_provider(&err, cfg, &provider), AEROSPIKE_OK);
@@ -2369,12 +2372,12 @@ TEST(dns_deadline_unanswered, "an unanswered refresh returns within timeout_ms f
 			uint64_t begin = cf_getns();
 			assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
 			uint64_t elapsed = (cf_getns() - begin) / 1000000;
-			info("unanswered servers=%d elapsed=%llu ms timeout=400 ms", servers,
-				(unsigned long long)elapsed);
-			assert_true(elapsed <= 400 + DNS_MARGIN_MS);
+			info("unanswered servers=%d elapsed=%llu ms timeout=%u ms", servers,
+				(unsigned long long)elapsed, timeout_ms);
+			assert_true(elapsed <= timeout_ms + DNS_MARGIN_MS);
 
 			// The first name alone takes 3/4 of the budget.
-			assert_true(elapsed >= 300);
+			assert_true(elapsed >= timeout_ms * 3 / 4);
 			assert_string_eq(err.message, "DNS seed discovery failed for every name: "
 				"a.example.com: timeout; b.example.com: timeout; c.example.com: timeout");
 		}

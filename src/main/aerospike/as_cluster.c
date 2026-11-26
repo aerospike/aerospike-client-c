@@ -40,6 +40,8 @@
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
 
+#include "as_discovery_internal.h"
+
 //---------------------------------
 // Globals
 //---------------------------------
@@ -1961,9 +1963,11 @@ as_cluster_create(aerospike* as, as_error* err)
 	// registered, configured seeds included.
 	if (config->ip_map && config->ip_map_size > 0) {
 		if (cluster->translator_registered) {
+			char label[AS_DISCOVERY_TRANSLATOR_LABEL_SIZE];
 			as_log_warn("ip_map is ignored while address translator %s is registered, configured "
 				"seeds included. Move the mappings into the translator (for example port-map "
-				"entries) and configure seeds with reachable addresses", cluster->translator.name);
+				"entries) and configure seeds with reachable addresses",
+				as_discovery_translator_label(label, cluster->translator.name));
 		}
 		else {
 			cluster->ip_map = as_vector_create(sizeof(as_addr_map), config->ip_map_size);

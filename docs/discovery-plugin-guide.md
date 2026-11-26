@@ -151,7 +151,7 @@ called once, on the connecting thread, in either mode, and no thread starts.
 | Provider | Periodic | Supports a deadline | Modes |
 | --- | --- | --- | --- |
 | `static` | no | yes | Either; no thread and no periodic work. |
-| `dns` | yes | yes | `thread` (default) or `tend`. All I/O of one refresh is bounded by `timeout_ms`, default 2000 ms in `thread` mode and 80 ms in `tend` mode. In `tend`, `timeout_ms` must not exceed `tend_refresh_deadline_ms`, and at the default 100 ms only a local resolver answers reliably. In `thread`, `timeout_ms` must not exceed `refresh_timeout_ms`. |
+| `dns` | yes | yes | `thread` (default) or `tend`. All I/O of one refresh is bounded by `timeout_ms`, default 2000 ms in `thread` mode and 80 ms in `tend` mode. In `tend`, `timeout_ms` must not exceed `tend_refresh_deadline_ms`, and at the default 100 ms only a local resolver answers reliably. In `thread`, `timeout_ms` must not exceed `refresh_timeout_ms`. When `timeout_ms` is left at 0 and the default is too large, the error marks it, for example `DNS seed provider timeout_ms 2000 (thread-mode default) exceeds discovery refresh_timeout_ms 1999. Set timeout_ms or raise refresh_timeout_ms`, or in `tend` `... timeout_ms 80 (tend-mode default) exceeds discovery tend_refresh_deadline_ms 79. Set timeout_ms or use execution_mode thread`. The default is chosen again at each `aerospike_connect()` whose discovery settings pass these checks, even if that connect then fails, for example because no seed answers. A connect rejected by the checks leaves the provider unchanged. |
 | `aws-tags` | yes | no | `thread` only. `as_config_set_aws_seed_provider()` and `aerospike_connect()` fail in `tend`. |
 | binding | as registered | no | `thread` only, periodic or not; a non-periodic binding runs its single call on the discovery thread. Registration (or the select of a name registered as a binding) fails in `tend`, and switching to `tend` afterwards fails `aerospike_connect()`. |
 | custom | `needs_periodic_refresh` | `supports_deadline` | `thread` (default) or `tend`; `tend` requires `supports_deadline` to return true. |
@@ -277,6 +277,40 @@ there, its remaining addresses are not tried, and the `AEROSPIKE_ERR_TRANSLATION
 message lists them as not tried. The node already at the socket is kept; no node is ever removed
 because another peer collided with it. Addresses after the one a peer validates or collides at
 are never reached, so they are not logged.
+
+Each IP address of a peer hostname is an address of that host. The first one whose connect
+completes is validated: the address cached from an earlier tend, then the resolver's order. When
+that IP is another node's socket, the whole peer stops, as in the Java client, even if a later IP
+of the same hostname is the peer's own.
+
+A socket collision is found against the nodes validated before the peer, so its outcome depends
+on order:
+
+- The resolver's order of a hostname's IP addresses: the peer above can join on a tend where the
+  resolver lists its own IP first.
+- The order of the server's reply: a peer whose first address is another node's socket stops when
+  the reply lists that node before the peer. When the reply lists that node after it, the address
+  answers as an unknown node, and the peer can join through its own address. Once that node is in
+  the cluster, the peer stops on every tend.
+- A shared address string does not depend on order: every peer's shared addresses are found
+  before any peer is validated. A round-robin name that every peer advertises is caught this way,
+  before any connect.
+
+A stopped peer is retried on every tend and logged at warning level each time. The fix is to give
+each node its own address or mapping.
+
+### Reading a collision message
+
+- "no address of its own" means that no usable address was found before the peer stopped.
+- The addresses after "Not tried:" were never checked and may be the peer's own.
+- An address that failed to connect is not listed.
+- The translator is `static-map` when none is registered, even when the shared address came from
+  the server, because the rule applies to the default translator too.
+- After a socket collision, the message is reported even if an earlier address of the peer failed
+  to connect. When no address validated or reached another node's socket, and at least one failed
+  to connect, the peer gets the usual failure warning instead of this message.
+- A translator name over 128 bytes is cut with `...` in this and every other translation message,
+  so the node name and the advice are always shown.
 
 ## TLS identity
 
@@ -454,7 +488,7 @@ rows through them.
 | Code | Name | Returned by |
 | --- | --- | --- |
 | -25 | `AEROSPIKE_ERR_TRANSLATION_MISS` | A strict miss: logged for a peer that cannot be added, returned by the conformance entry points, and returned by `aerospike_connect()` instead of the generic connection error when initialization fails for another reason after a miss was recorded. |
-| -26 | `AEROSPIKE_ERR_TRANSLATION_COLLISION` | A peer with no address of its own, or a peer that stopped at another node's socket: logged for each such peer, and returned in the same way as -25. The message names the translator, `static-map` when none is registered, the peer, each address it skipped with the node that has it, in address order up to and including the one it stopped at (the first three, then how many more), and, after a socket collision, every address not tried, for example `Address translator static-map left node B with no address of its own: 10.0.0.1:3000 is used by A, lb.example.com:3000 is used by C. Not tried: 10.0.0.9:3000. Give each node its own reachable address or mapping`. A message longer than the error buffer cuts its lists with `...` and keeps the advice. |
+| -26 | `AEROSPIKE_ERR_TRANSLATION_COLLISION` | A peer with no address of its own, or a peer that stopped at another node's socket: logged for each such peer, and returned in the same way as -25. The message names the translator, `static-map` when none is registered, the peer, each address it skipped with the node that has it, in address order up to and including the one it stopped at (the first three, then how many more), and, after a socket collision, every address not tried, for example `Address translator static-map left node B with no address of its own: 10.0.0.1:3000 is used by A, lb.example.com:3000 is used by C. Not tried: 10.0.0.9:3000. Give each node its own reachable address or mapping`. A message longer than the error buffer cuts its lists with `...` and keeps the advice. See [Reading a collision message](#reading-a-collision-message). |
 | -27 | `AEROSPIKE_ERR_SEED_DISCOVERY_FAILED` | `aerospike_connect()`, when the initial refresh fails or times out and no configured seed is left to fall back on. |
 
 The `dns` and `aws-tags` providers fail a refresh with `AEROSPIKE_ERR_CLIENT` (-1). After

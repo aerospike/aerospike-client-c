@@ -139,12 +139,13 @@ fnode_set_partitions(fnode* n, bool partitions);
 
 // Connections accepted from now on answer node with name. Established connections keep the
 // name they were accepted with, like a load balancer address that reaches another node on each
-// new connection.
+// new connection. Replaces any earlier fnode_set_name_after().
 void
 fnode_set_new_name(fnode* n, const char* name);
 
 // Like fnode_set_new_name(), but only connections accepted after the next count accepts answer
-// name, so the next count connections still answer the current name.
+// name, so the next count connections still answer the current name. Replaces any earlier
+// fnode_set_new_name().
 void
 fnode_set_name_after(fnode* n, uint32_t count, const char* name);
 

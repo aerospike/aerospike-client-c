@@ -788,15 +788,18 @@ start_thread(as_seed_manager* m, as_error* err)
 // timeouts are known, can be range checked.
 static as_status
 check_builtin_timeout(
-	as_error* err, const as_seed_provider* provider, uint32_t limit, const char* limit_name,
-	const char* advice
+	as_error* err, const as_seed_provider* provider, bool tend, uint32_t limit,
+	const char* limit_name, const char* alternative
 	)
 {
 	uint32_t timeout;
+	bool mode_default = false;
 	const char* label;
+	const char* verb = "Lower";
 
-	if (as_dns_seed_provider_timeout(provider, &timeout)) {
+	if (as_dns_seed_provider_timeout(provider, tend, &timeout, &mode_default)) {
 		label = "DNS";
+		verb = mode_default ? "Set" : "Lower";
 	}
 	else if (as_aws_seed_provider_timeout(provider, &timeout)) {
 		label = "AWS EC2";
@@ -806,9 +809,16 @@ check_builtin_timeout(
 	}
 
 	if (timeout > limit) {
+		// Name the default, so that the user does not look for a value that was never set.
+		const char* source = "";
+
+		if (mode_default) {
+			source = tend ? " (tend-mode default)" : " (thread-mode default)";
+		}
+
 		return as_error_update(err, AEROSPIKE_ERR_PARAM,
-			"%s seed provider timeout_ms %u exceeds discovery %s %u. %s", label, timeout,
-			limit_name, limit, advice);
+			"%s seed provider timeout_ms %u%s exceeds discovery %s %u. %s timeout_ms or %s", label,
+			timeout, source, limit_name, limit, verb, alternative);
 	}
 	return AEROSPIKE_OK;
 }
@@ -840,11 +850,6 @@ validate(
 	*periodic = provider->needs_periodic_refresh(provider->udata);
 	*threaded = (d->provider_registered && d->binding_provider) ||
 		(*periodic && d->execution_mode == AS_DISCOVERY_EXECUTION_THREAD);
-
-	// Java picks the DNS default by threaded. The mode gives the same answer here: DNS is always
-	// periodic, and a built-in name cannot be a binding provider.
-	as_dns_seed_provider_apply_mode_default(provider,
-		d->execution_mode == AS_DISCOVERY_EXECUTION_TEND);
 
 	if (!*periodic) {
 		if (*threaded && d->refresh_timeout_ms == 0) {
@@ -880,16 +885,16 @@ validate(
 				"Invalid discovery tend_refresh_deadline_ms %u: must be > 0 and <= tend interval / 2 (%u)",
 				d->tend_refresh_deadline_ms, max);
 		}
-		return check_builtin_timeout(err, provider, d->tend_refresh_deadline_ms,
-			"tend_refresh_deadline_ms", "Lower timeout_ms or use execution_mode thread");
+		return check_builtin_timeout(err, provider, true, d->tend_refresh_deadline_ms,
+			"tend_refresh_deadline_ms", "use execution_mode thread");
 	}
 
 	if (d->refresh_timeout_ms == 0) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"Invalid discovery refresh_timeout_ms 0: must be > 0");
 	}
-	return check_builtin_timeout(err, provider, d->refresh_timeout_ms, "refresh_timeout_ms",
-		"Lower timeout_ms or raise refresh_timeout_ms");
+	return check_builtin_timeout(err, provider, false, d->refresh_timeout_ms, "refresh_timeout_ms",
+		"raise refresh_timeout_ms");
 }
 
 //---------------------------------
@@ -979,6 +984,13 @@ as_seed_manager_create(as_error* err, as_config* config, as_seed_manager** manag
 	if (status != AEROSPIKE_OK) {
 		return status;
 	}
+
+	// Java picks the DNS default by threaded. The mode gives the same answer here: DNS is always
+	// periodic, and a built-in name cannot be a binding provider. Applied only after validation
+	// succeeds, so a connect rejected by validation leaves the provider untouched. A connect that
+	// fails later, such as on the initial refresh, keeps the applied default.
+	as_dns_seed_provider_apply_mode_default(&provider,
+		config->discovery.execution_mode == AS_DISCOVERY_EXECUTION_TEND);
 
 	as_seed_manager* m = cf_calloc(1, sizeof(as_seed_manager));
 

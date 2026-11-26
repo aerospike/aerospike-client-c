@@ -22,6 +22,7 @@
 #include <aerospike/as_lookup_internal.h>
 #include <aerospike/as_string_builder.h>
 #include <citrusleaf/cf_byte_order.h>
+#include "as_discovery_internal.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -597,9 +598,10 @@ as_peers_collision_error(
 	as_peers_message m;
 	as_peers_message_init(&m);
 
+	char label[AS_DISCOVERY_TRANSLATOR_LABEL_SIZE];
 	char piece[AS_ERROR_MESSAGE_MAX_SIZE];
 	snprintf(piece, sizeof(piece), "Address translator %s left node %s with no address of its own: ",
-		translator, rec->node_name);
+		as_discovery_translator_label(label, translator), rec->node_name);
 	as_peers_message_append(&m, piece);
 
 	uint32_t size = 0;
@@ -646,9 +648,10 @@ static void
 as_peers_log_shared_host(const char* translator, const char* name, const as_peer_skip* skip)
 {
 	if (skip->translated) {
+		char label[AS_DISCOVERY_TRANSLATOR_LABEL_SIZE];
 		as_log_warn("Address translator %s gave peer %s the address %s:%u of node %s. "
-			"The peer uses its other addresses", translator, name, skip->host.name,
-			(unsigned)skip->host.port, skip->owner);
+			"The peer uses its other addresses", as_discovery_translator_label(label, translator),
+			name, skip->host.name, (unsigned)skip->host.port, skip->owner);
 	}
 	else {
 		as_log_info("Peer %s skips address %s:%u because node %s has the same address",
@@ -671,8 +674,13 @@ as_peers_report_collision(const as_error* err, void* udata)
 }
 
 // Detect collisions of all newcomers before any of them is validated. The shared hosts of every
-// peer are found before any peer is validated, so the result does not depend on the order of the
-// reply.
+// peer are found before any peer is validated, so this check does not depend on the order of the
+// reply. A socket collision does: it is found during the in-order walk of as_peers_validate(),
+// against the nodes validated earlier in the same tend. A peer whose first address is another
+// node's socket stops when the reply lists that node before the peer, and then on every later
+// tend, once that node is in the cluster. When the reply lists that node after the peer, the
+// address answers as an unknown node, and the peer can join through its own address (Java
+// findSocketOwner behaves the same).
 //
 // A shared host is never used, for every translator, so two nodes cannot become one transport
 // endpoint (FR-46). A peer that still has hosts of its own is created through them, as servers
@@ -1067,9 +1075,11 @@ as_peers_log_known_host(as_cluster* cluster, const char* name, const as_host* ho
 	const char* owner, bool translated)
 {
 	if (translated) {
+		char label[AS_DISCOVERY_TRANSLATOR_LABEL_SIZE];
 		as_log_warn("Address translator %s gave peer %s the address %s:%u, which answers as "
-			"node %s. The peer skips it", as_peers_translator_name(cluster), name, host->name,
-			(unsigned)host->port, owner);
+			"node %s. The peer skips it",
+			as_discovery_translator_label(label, as_peers_translator_name(cluster)), name,
+			host->name, (unsigned)host->port, owner);
 	}
 	else {
 		as_log_info("Peer %s skips address %s:%u because it answers as node %s", name, host->name,
@@ -1213,7 +1223,18 @@ as_peers_validate(
 
 	for (uint32_t i = 0; i < rec->hosts.size; i++) {
 		if (as_peer_record_shared(rec, i)) {
-			as_peers_log_shared_host(translator, rec->node_name, as_peer_record_find_skip(rec, i));
+			// as_peers_find_shared_hosts() records a skip for every shared host. Without one, the
+			// host is still skipped, logged without its owner.
+			const as_peer_skip* skip = as_peer_record_find_skip(rec, i);
+
+			if (skip) {
+				as_peers_log_shared_host(translator, rec->node_name, skip);
+			}
+			else {
+				as_host* shared = as_vector_get(&rec->hosts, i);
+				as_log_info("Peer %s skips address %s:%u because another node has the same "
+					"address", rec->node_name, shared->name, (unsigned)shared->port);
+			}
 			continue;
 		}
 

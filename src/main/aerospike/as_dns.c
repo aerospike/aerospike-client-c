@@ -116,7 +116,8 @@ typedef struct dns_server_s {
 } dns_server;
 
 // Immutable after creation, except timeout_ms. as_dns_seed_provider_apply_mode_default() sets it
-// from seed manager validation, before any refresh of this state can run.
+// from as_seed_manager_create() after validation succeeds, before any refresh of this state can
+// run. A connect that fails validation leaves it untouched; a connect that fails later does not.
 typedef struct dns_state_s {
 	uint32_t magic;
 	dns_name* names;
@@ -2012,8 +2013,16 @@ as_discovery_dns_seed_provider(as_error* err, const as_dns_seed_provider_config*
 	return AEROSPIKE_OK;
 }
 
+static inline uint32_t
+dns_mode_default_timeout(bool tend)
+{
+	return tend ? AS_DNS_DEFAULT_TEND_TIMEOUT_MS : AS_DNS_DEFAULT_THREAD_TIMEOUT_MS;
+}
+
 bool
-as_dns_seed_provider_timeout(const as_seed_provider* provider, uint32_t* timeout_ms)
+as_dns_seed_provider_timeout(
+	const as_seed_provider* provider, bool tend, uint32_t* timeout_ms, bool* mode_default
+	)
 {
 	if (!provider || provider->refresh != dns_refresh || !provider->udata) {
 		return false;
@@ -2024,7 +2033,9 @@ as_dns_seed_provider_timeout(const as_seed_provider* provider, uint32_t* timeout
 	if (st->magic != DNS_STATE_MAGIC) {
 		return false;
 	}
-	*timeout_ms = st->timeout_ms;
+
+	*mode_default = st->configured_timeout_ms == 0;
+	*timeout_ms = *mode_default ? dns_mode_default_timeout(tend) : st->configured_timeout_ms;
 	return true;
 }
 
@@ -2046,5 +2057,5 @@ as_dns_seed_provider_apply_mode_default(const as_seed_provider* provider, bool t
 	// start only after validation, so this store happens before every read in dns_refresh().
 	// Java returns a copy instead; a copy would break the udata identity that the inflight
 	// tracking and the deferred destroy rely on.
-	st->timeout_ms = tend ? AS_DNS_DEFAULT_TEND_TIMEOUT_MS : AS_DNS_DEFAULT_THREAD_TIMEOUT_MS;
+	st->timeout_ms = dns_mode_default_timeout(tend);
 }

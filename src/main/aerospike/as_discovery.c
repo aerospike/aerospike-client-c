@@ -16,6 +16,7 @@
  */
 #include <aerospike/as_discovery.h>
 #include <aerospike/as_config.h>
+#include "as_discovery_internal.h"
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -442,6 +443,27 @@ copy_candidates(const as_seed_candidates* src, as_seed_candidates* trg)
 // Functions
 //---------------------------------
 
+const char*
+as_discovery_translator_label(char label[AS_DISCOVERY_TRANSLATOR_LABEL_SIZE], const char* name)
+{
+	size_t len = strlen(name);
+
+	if (len <= AS_DISCOVERY_TRANSLATOR_SHOWN) {
+		memcpy(label, name, len + 1);
+		return label;
+	}
+
+	// Back off over UTF-8 continuation bytes, so that the cut does not split a character.
+	size_t cut = AS_DISCOVERY_TRANSLATOR_SHOWN;
+
+	while (cut > 0 && ((unsigned char)name[cut] & 0xC0) == 0x80) {
+		cut--;
+	}
+	memcpy(label, name, cut);
+	memcpy(label + cut, "...", 4);
+	return label;
+}
+
 bool
 as_seed_candidates_init(as_seed_candidates* candidates, uint32_t capacity)
 {
@@ -633,6 +655,7 @@ as_discovery_complete_translation(as_error* err, const char* translator_name,
 	out->port = 0;
 
 	const char* node = endpoint->node_name ? endpoint->node_name : "";
+	char label[AS_DISCOVERY_TRANSLATOR_LABEL_SIZE];
 
 	if (mapped) {
 		const char* name = mapped_host->name;
@@ -650,8 +673,8 @@ as_discovery_complete_translation(as_error* err, const char* translator_name,
 		if (!valid) {
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
 				"Address translator %s returned an invalid host or port for node %s advertised "
-				"address %s:%u in the %s list", translator_name, node, endpoint->host,
-				(unsigned)endpoint->port, source_name(endpoint->source));
+				"address %s:%u in the %s list", as_discovery_translator_label(label, translator_name),
+				node, endpoint->host, (unsigned)endpoint->port, source_name(endpoint->source));
 		}
 		return AEROSPIKE_OK;
 	}
@@ -660,8 +683,8 @@ as_discovery_complete_translation(as_error* err, const char* translator_name,
 		return as_error_update(err, AEROSPIKE_ERR_TRANSLATION_MISS,
 			"Address translator %s has no mapping for node %s advertised address %s:%u in the "
 			"%s list. Add a mapping for that endpoint or node, or set translation.on_miss to "
-			"pass_through", translator_name, node, endpoint->host, (unsigned)endpoint->port,
-			source_name(endpoint->source));
+			"pass_through", as_discovery_translator_label(label, translator_name), node,
+			endpoint->host, (unsigned)endpoint->port, source_name(endpoint->source));
 	}
 
 	as_host_copy_fields(out, endpoint->host, endpoint->tls_name, endpoint->port);

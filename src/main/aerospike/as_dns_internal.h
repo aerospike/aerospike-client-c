@@ -25,12 +25,16 @@ extern "C" {
 #endif
 
 /**
- * Return true and set timeout_ms to the configured refresh timeout when provider is the
- * built-in DNS seed provider. Identification uses the function table and state, never the
- * provider name, so a custom provider named "dns" is not matched.
+ * Return true when provider is the built-in DNS seed provider. Then set timeout_ms to the refresh
+ * timeout that a client in the given mode would use: the configured value, or the mode default
+ * when the configured value is 0, in which case mode_default is set to true. Nothing is changed.
+ * Identification uses the function table and state, never the provider name, so a custom
+ * provider named "dns" is not matched.
  */
 bool
-as_dns_seed_provider_timeout(const as_seed_provider* provider, uint32_t* timeout_ms);
+as_dns_seed_provider_timeout(
+	const as_seed_provider* provider, bool tend, uint32_t* timeout_ms, bool* mode_default
+	);
 
 /**
  * When provider is the built-in DNS seed provider configured with timeout_ms 0, set its

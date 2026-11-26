@@ -124,6 +124,7 @@ A binding provider (`as_config_set_binding_seed_provider()`, or a name registere
 | In `thread`, `refresh_timeout_ms` must be above 0 (also for a non-periodic binding provider) | `Invalid discovery refresh_timeout_ms 0: must be > 0` |
 | In `tend`, the `dns` `timeout_ms` must not exceed `tend_refresh_deadline_ms` | `DNS seed provider timeout_ms 150 exceeds discovery tend_refresh_deadline_ms 100. Lower timeout_ms or use execution_mode thread` |
 | In `thread`, the `dns` or `aws` `timeout_ms` must not exceed `refresh_timeout_ms` | `AWS EC2 seed provider timeout_ms 15000 exceeds discovery refresh_timeout_ms 10000. Lower timeout_ms or raise refresh_timeout_ms` |
+| The same rules apply to the default `timeout_ms` of 0, which is 2000 ms in `thread` and 80 ms in `tend`; the message then marks the default and advises setting it | `DNS seed provider timeout_ms 80 (tend-mode default) exceeds discovery tend_refresh_deadline_ms 79. Set timeout_ms or use execution_mode thread` |
 
 These rules also apply when the provider comes from code and only `execution_mode` comes from
 the file: an `aws-tags` provider registered in code with `execution_mode: tend` in the file is

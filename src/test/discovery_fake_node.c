@@ -450,6 +450,7 @@ fnode_set_new_name(fnode* n, const char* name)
 	pthread_mutex_lock(&n->lock);
 	snprintf(n->new_name, sizeof(n->new_name), "%s", name);
 	n->renamed = true;
+	n->rename_at = 0;
 	pthread_mutex_unlock(&n->lock);
 }
 
@@ -459,6 +460,7 @@ fnode_set_name_after(fnode* n, uint32_t count, const char* name)
 	pthread_mutex_lock(&n->lock);
 	snprintf(n->new_name, sizeof(n->new_name), "%s", name);
 	n->rename_at = n->accepts + count;
+	n->renamed = false;
 	pthread_mutex_unlock(&n->lock);
 }
 

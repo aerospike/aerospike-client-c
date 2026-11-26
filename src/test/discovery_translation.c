@@ -31,6 +31,7 @@
 #include <aerospike/as_node.h>
 #include <aerospike/as_sleep.h>
 #include <aerospike/as_tls.h>
+#include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_clock.h>
 
 #include "test.h"
@@ -3119,6 +3120,102 @@ TEST(translation_collision_truncated, "U-17 a -26 longer than the error buffer c
 	fake_node_stop(&s);
 }
 
+TEST(translation_collision_long_translator_name, "U-17 a translator name with 2000 characters is cut in the -26, which still names the node and keeps the advice")
+{
+	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
+	assert_true(fake_node_start(&s, "S"));
+
+	char list[128];
+	format(list, sizeof(list), "[[D,,[127.0.0.1:%u]]]", s.port);
+	fake_node_set_peers(&s, 1, list, NULL);
+
+	char name[2001];
+	memset(name, 'T', sizeof(name) - 1);
+	name[sizeof(name) - 1] = 0;
+
+	as_config config;
+	fake_client c;
+	as_error err;
+	as_address_translator translator;
+	probe p;
+	fake_config(&config, &s, false);
+	probe_init(&translator, &p);
+	translator.name = name;
+	assert_int_eq(as_config_set_address_translator(&config, &translator, &err), AEROSPIKE_OK);
+
+	// D's only address is the seed's, so D collides before any connect.
+	log_capture_start();
+	assert_int_eq(fake_client_connect(&c, &config), AEROSPIKE_OK);
+	log_capture_stop();
+
+	char text[LOG_CAPTURE_TEXT];
+	assert_true(log_capture_copy(AS_LOG_LEVEL_WARN, "left node D with no address of its own:",
+		text, sizeof(text)));
+
+	char expected[512];
+	format(expected, sizeof(expected), "Address translator %.128s... left node D with no address "
+		"of its own: 127.0.0.1:%u is used by S. Give each node its own reachable address or "
+		"mapping", name, s.port);
+	assert_string_eq(text, expected);
+	assert_int_eq(node_count(c.as), 1);
+	assert_false(has_node(c.as, "D"));
+	fake_client_close(&c);
+
+	fake_node_stop(&s);
+}
+
+TEST(translation_miss_long_translator_name, "U-9 a translator name over 128 bytes is cut in the strict-miss and invalid-host messages, without splitting a UTF-8 character, so the node and the advice are kept")
+{
+	char name[2001];
+	memset(name, 'T', sizeof(name) - 1);
+	name[sizeof(name) - 1] = 0;
+
+	as_endpoint endpoint = {
+		.node_name = "BB9020011AC4202",
+		.tls_name = NULL,
+		.host = "10.0.0.1",
+		.port = 3000,
+		.source = AS_ENDPOINT_SOURCE_STANDARD
+	};
+	as_error err;
+	as_host out = {0};
+	char expected[512];
+
+	assert_int_eq(as_discovery_complete_translation(&err, name, AS_TRANSLATION_STRICT, &endpoint,
+		false, NULL, &out), AEROSPIKE_ERR_TRANSLATION_MISS);
+	format(expected, sizeof(expected), "Address translator %.128s... has no mapping for node "
+		"BB9020011AC4202 advertised address 10.0.0.1:3000 in the standard list. Add a mapping for "
+		"that endpoint or node, or set translation.on_miss to pass_through", name);
+	assert_string_eq(err.message, expected);
+	assert_null(out.name);
+
+	as_host mapped = {.name = cf_strdup("198.51.100.1"), .tls_name = NULL, .port = 0};
+	assert_int_eq(as_discovery_complete_translation(&err, name, AS_TRANSLATION_PASS_THROUGH,
+		&endpoint, true, &mapped, &out), AEROSPIKE_ERR_CLIENT);
+	format(expected, sizeof(expected), "Address translator %.128s... returned an invalid host or "
+		"port for node BB9020011AC4202 advertised address 10.0.0.1:3000 in the standard list", name);
+	assert_string_eq(err.message, expected);
+	assert_null(mapped.name);
+
+	// A two-byte character across the 128-byte boundary is dropped whole.
+	name[127] = (char)0xC3;
+	name[128] = (char)0xA9;
+	assert_int_eq(as_discovery_complete_translation(&err, name, AS_TRANSLATION_STRICT, &endpoint,
+		false, NULL, &out), AEROSPIKE_ERR_TRANSLATION_MISS);
+	format(expected, sizeof(expected), "Address translator %.127s... has no mapping for node "
+		"BB9020011AC4202", name);
+	assert_not_null(strstr(err.message, expected));
+
+	// A name of exactly 128 bytes is shown whole.
+	memset(name, 'T', 128);
+	name[128] = 0;
+	assert_int_eq(as_discovery_complete_translation(&err, name, AS_TRANSLATION_STRICT, &endpoint,
+		false, NULL, &out), AEROSPIKE_ERR_TRANSLATION_MISS);
+	format(expected, sizeof(expected), "Address translator %s has no mapping for node "
+		"BB9020011AC4202", name);
+	assert_not_null(strstr(err.message, expected));
+}
+
 TEST(translation_distinct_ports_one_host, "U-15 peers on one host with distinct ports do not collide")
 {
 	DISCOVERY_SCOPED(fake_node, s, fake_node_stop);
@@ -3761,6 +3858,8 @@ SUITE(discovery_translation, "pluggable discovery translation, topology and TLS 
 	suite_add(translation_live_node_socket_first_stops);
 	suite_add(translation_collision_in_order);
 	suite_add(translation_collision_truncated);
+	suite_add(translation_collision_long_translator_name);
+	suite_add(translation_miss_long_translator_name);
 	suite_add(translation_distinct_ports_one_host);
 	suite_add(translation_tls_legacy_warn_once);
 	suite_add(translation_peer_tls_name_runtime);

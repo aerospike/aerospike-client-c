@@ -74,7 +74,8 @@ extern "C" {
 /**
  * Total time in milliseconds of one DNS seed provider refresh when
  * as_dns_seed_provider_config.timeout_ms is 0 and discovery runs with
- * AS_DISCOVERY_EXECUTION_THREAD, or when the provider is called directly.
+ * AS_DISCOVERY_EXECUTION_THREAD, or when the provider is called directly before
+ * any aerospike_connect() has validated it.
  */
 #define AS_DNS_DEFAULT_THREAD_TIMEOUT_MS 2000
 
@@ -302,8 +303,15 @@ typedef struct as_dns_seed_provider_config_s {
 	 * Total time in milliseconds of one refresh, across every name, record type,
 	 * SRV target, resolver and UDP or TCP exchange. 0 (default) selects the mode
 	 * default: 2000 (AS_DNS_DEFAULT_THREAD_TIMEOUT_MS) in thread mode, 80
-	 * (AS_DNS_DEFAULT_TEND_TIMEOUT_MS) in tend mode. A provider called directly,
-	 * outside a client, uses 2000. The value must not exceed
+	 * (AS_DNS_DEFAULT_TEND_TIMEOUT_MS) in tend mode. The mode default is
+	 * resolved at each aerospike_connect() whose discovery settings pass
+	 * validation, for that client's mode, even if the connect fails later, for
+	 * example because no seed answers. A connect that fails the validation, with
+	 * AEROSPIKE_ERR_PARAM, leaves it unchanged. A provider called directly uses
+	 * 2000 until a connect has resolved it; after that it keeps the mode
+	 * default of the last connect that did.
+	 * A built provider belongs to one as_config. Registering it in two configs
+	 * is not supported. The value must not exceed
 	 * discovery.tend_refresh_deadline_ms with AS_DISCOVERY_EXECUTION_TEND, or
 	 * discovery.refresh_timeout_ms with AS_DISCOVERY_EXECUTION_THREAD;
 	 * otherwise aerospike_connect() fails with AEROSPIKE_ERR_PARAM. With the

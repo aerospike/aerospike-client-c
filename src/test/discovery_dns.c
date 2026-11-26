@@ -2897,7 +2897,7 @@ TEST(dns_tend_validation, "execution-mode validation rejects a DNS timeout above
 	stub_stop(&s);
 }
 
-TEST(dns_timeout_mode_default, "timeout_ms 0 is 2000 ms in thread mode and 80 ms in tend mode, recomputed on every connect; a direct refresh uses 2000 ms")
+TEST(dns_timeout_mode_default, "timeout_ms 0 is 2000 ms in thread mode and 80 ms in tend mode, recomputed on every connect and untouched by a failed one; a direct refresh uses 2000 ms")
 {
 	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
 	assert_true(stub_start(&s));
@@ -2913,8 +2913,8 @@ TEST(dns_timeout_mode_default, "timeout_ms 0 is 2000 ms in thread mode and 80 ms
 	assert_int_eq(mgr_register(&config, &s, "seeds.example.com", 0, &err), AEROSPIKE_OK);
 	config.discovery.refresh_timeout_ms = 1999;
 	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_PARAM);
-	assert_string_eq(err.message, "DNS seed provider timeout_ms 2000 exceeds discovery "
-		"refresh_timeout_ms 1999. Lower timeout_ms or raise refresh_timeout_ms");
+	assert_string_eq(err.message, "DNS seed provider timeout_ms 2000 (thread-mode default) exceeds discovery "
+		"refresh_timeout_ms 1999. Set timeout_ms or raise refresh_timeout_ms");
 	config.discovery.refresh_timeout_ms = 2000;
 	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_OK);
 	as_seed_manager_destroy(m);
@@ -2924,8 +2924,8 @@ TEST(dns_timeout_mode_default, "timeout_ms 0 is 2000 ms in thread mode and 80 ms
 	config.discovery.refresh_interval_ms = 1000;
 	config.discovery.tend_refresh_deadline_ms = 79;
 	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_PARAM);
-	assert_string_eq(err.message, "DNS seed provider timeout_ms 80 exceeds discovery "
-		"tend_refresh_deadline_ms 79. Lower timeout_ms or use execution_mode thread");
+	assert_string_eq(err.message, "DNS seed provider timeout_ms 80 (tend-mode default) exceeds discovery "
+		"tend_refresh_deadline_ms 79. Set timeout_ms or use execution_mode thread");
 	config.discovery.tend_refresh_deadline_ms = 80;
 	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_OK);
 	as_seed_manager_destroy(m);
@@ -2935,8 +2935,8 @@ TEST(dns_timeout_mode_default, "timeout_ms 0 is 2000 ms in thread mode and 80 ms
 	config.discovery.refresh_interval_ms = 600000;
 	config.discovery.refresh_timeout_ms = 1999;
 	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_PARAM);
-	assert_string_eq(err.message, "DNS seed provider timeout_ms 2000 exceeds discovery "
-		"refresh_timeout_ms 1999. Lower timeout_ms or raise refresh_timeout_ms");
+	assert_string_eq(err.message, "DNS seed provider timeout_ms 2000 (thread-mode default) exceeds discovery "
+		"refresh_timeout_ms 1999. Set timeout_ms or raise refresh_timeout_ms");
 	assert_int_eq(stub_get(&s, &s.udp_queries), 0);
 	as_config_destroy(&config);
 
@@ -2945,8 +2945,8 @@ TEST(dns_timeout_mode_default, "timeout_ms 0 is 2000 ms in thread mode and 80 ms
 	config.discovery.tend_refresh_deadline_ms = 79;
 	assert_int_eq(mgr_register(&config, &s, "seeds.example.com", 0, &err), AEROSPIKE_OK);
 	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_PARAM);
-	assert_string_eq(err.message, "DNS seed provider timeout_ms 80 exceeds discovery "
-		"tend_refresh_deadline_ms 79. Lower timeout_ms or use execution_mode thread");
+	assert_string_eq(err.message, "DNS seed provider timeout_ms 80 (tend-mode default) exceeds discovery "
+		"tend_refresh_deadline_ms 79. Set timeout_ms or use execution_mode thread");
 	config.discovery.tend_refresh_deadline_ms = 80;
 	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_OK);
 	as_seed_manager_destroy(m);
@@ -2968,25 +2968,29 @@ TEST(dns_timeout_mode_default, "timeout_ms 0 is 2000 ms in thread mode and 80 ms
 	as_config_destroy(&config);
 	assert_int_eq(stub_get(&s, &s.udp_queries), 0);
 
-	// A provider refreshed directly, outside a seed manager, uses 2000 ms.
+	// A failed connect leaves the provider untouched. The tend-mode connect below fails on the
+	// generic deadline rule, so the 80 ms tend default must not stick. A refresh called directly
+	// on that provider, outside a seed manager, then uses 2000 ms.
 	stub_set(&s, &s.silent, true);
-	const char* names[] = {"seeds.example.com"};
-	dns_setup d;
-	as_dns_seed_provider_config* cfg = setup_init(&d, names, 1, &s, NULL);
-	cfg->timeout_ms = 0;
-	as_seed_provider provider;
-	assert_int_eq(as_discovery_dns_seed_provider(&err, cfg, &provider), AEROSPIKE_OK);
+	mgr_config(&config, AS_DISCOVERY_EXECUTION_TEND, 1000);
+	config.discovery.tend_refresh_deadline_ms = 0;
+	assert_int_eq(mgr_register(&config, &s, "seeds.example.com", 0, &err), AEROSPIKE_OK);
+	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_PARAM);
+	assert_not_null(strstr(err.message, "tend_refresh_deadline_ms 0"));
+	assert_not_null(config.discovery.provider.udata);
 
 	char buf[256];
 	uint64_t begin = cf_getms();
-	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
+	assert_int_eq(refresh_str(&config.discovery.provider, &err, buf, sizeof(buf)),
+		AEROSPIKE_ERR_CLIENT);
 	uint64_t elapsed = cf_getms() - begin;
-	info("direct refresh with timeout_ms 0: elapsed=%llu ms", (unsigned long long)elapsed);
+	info("direct refresh with timeout_ms 0 after a failed tend connect: elapsed=%llu ms",
+		(unsigned long long)elapsed);
 	assert_true(elapsed >= 1000);
 	assert_true(elapsed <= 5000);
 	assert_string_eq(err.message,
 		"DNS seed discovery failed for every name: seeds.example.com: timeout");
-	provider.destroy(provider.udata);
+	as_config_destroy(&config);
 	stub_stop(&s);
 }
 

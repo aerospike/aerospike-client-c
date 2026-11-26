@@ -1120,7 +1120,6 @@ as_cluster_destroy_peers(as_peers* peers)
 {
 	as_vector_destroy(&peers->nodes);
 	as_vector_destroy(&peers->nodes_to_remove);
-	as_vector_destroy(&peers->collided);
 
 	as_vector* invalid_hosts = &peers->invalid_hosts;
 	
@@ -1170,7 +1169,6 @@ as_cluster_tend_nodes(as_cluster* cluster, as_error* err, bool is_init)
 	as_vector_inita(&peers.nodes, sizeof(as_node*), 16);
 	as_vector_inita(&peers.nodes_to_remove, sizeof(as_node*), 8);
 	as_vector_inita(&peers.invalid_hosts, sizeof(as_host), 4);
-	as_vector_inita(&peers.collided, sizeof(as_peers_collided), 4);
 	peers.refresh_count = 0;
 	peers.gen_changed = false;
 	peers.view_changed = false;

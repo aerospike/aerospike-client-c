@@ -2356,7 +2356,8 @@ TEST(cf_dns_provider, "the dns provider from the file uses its servers and timeo
 	int fd = cf_silent_udp(&port);
 	assert_true(fd >= 0);
 
-	// One silent resolver gets up to 3/4 of timeout_ms, while the 80 ms default ends far sooner.
+	// One silent resolver gets up to 3/4 of timeout_ms. Without timeout_ms the provider, called
+	// directly outside a seed manager, uses the 2000 ms default, so it ends later.
 	char body[CF_BODY_MAX];
 	snprintf(body, sizeof(body), CF_HEAD
 		"    discovery:\n"
@@ -2382,7 +2383,8 @@ TEST(cf_dns_provider, "the dns provider from the file uses its servers and timeo
 	assert_int_eq(status, AEROSPIKE_ERR_CLIENT);
 	assert_int_eq(default_status, AEROSPIKE_ERR_CLIENT);
 
-	if (yaml_ms < 250 || yaml_ms > 5000 || default_ms >= 250) {
+	if (yaml_ms < 250 || yaml_ms > 5000 || default_ms < 1000 || default_ms > 5000 ||
+		default_ms <= yaml_ms) {
 		fail("refresh took %" PRIu64 " ms with timeout_ms 600 and %" PRIu64 " ms by default",
 			yaml_ms, default_ms);
 	}

@@ -31,20 +31,10 @@ extern "C" {
  * TYPES
  *****************************************************************************/
 
-typedef struct as_peers_collided_s {
-	char name[AS_NODE_NAME_SIZE]; // Actual name of a node that a colliding peer resolved to.
-	char peer[AS_NODE_NAME_SIZE]; // Advertised name of that peer.
-} as_peers_collided;
-
 typedef struct as_peers_s {
 	as_vector /* as_node* */ nodes;
 	as_vector /* as_node */ nodes_to_remove;
 	as_vector /* as_host */ invalid_hosts;
-
-	// Collisions found after validation in this tend, so a later peer that resolves to the same
-	// node is rejected too.
-	as_vector /* as_peers_collided */ collided;
-
 	uint32_t refresh_count;
 	bool gen_changed;
 

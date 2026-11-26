@@ -177,7 +177,8 @@ live_log_count(uint32_t from, const char* const* needles, uint32_t size)
 }
 
 // Does the list of a -26 in line hold entry ("<address> is used by <owner>") as a whole entry:
-// after ": " or ", ", and before ", ", " and " or " (".
+// after ": " or ", ", and before ", ", " and ", ". " (". Not tried: ..." or ". Give ...") or the
+// "..." of a list cut to fit the error buffer.
 static bool
 live_has_entry(const char* line, const char* entry)
 {
@@ -188,7 +189,7 @@ live_has_entry(const char* line, const char* entry)
 		const char* end = p + size;
 
 		if (start && (strncmp(end, ", ", 2) == 0 || strncmp(end, " and ", 5) == 0 ||
-			strncmp(end, " (", 2) == 0)) {
+			strncmp(end, ". ", 2) == 0 || strncmp(end, "...", 3) == 0)) {
 			return true;
 		}
 	}
@@ -218,10 +219,10 @@ live_collisions(uint32_t from, const char* translator, const char* a, const char
 	const char* address, uint32_t* forward, uint32_t* reverse)
 {
 	char named[300];
-	snprintf(named, sizeof(named), "(address translator %s)", translator);
+	snprintf(named, sizeof(named), "Address translator %s left node ", translator);
 	char peer_a[300], peer_b[300], used_by_a[600], used_by_b[600];
-	snprintf(peer_a, sizeof(peer_a), "Peer %s has no address of its own: ", a);
-	snprintf(peer_b, sizeof(peer_b), "Peer %s has no address of its own: ", b);
+	snprintf(peer_a, sizeof(peer_a), "left node %s with no address of its own: ", a);
+	snprintf(peer_b, sizeof(peer_b), "left node %s with no address of its own: ", b);
 	snprintf(used_by_a, sizeof(used_by_a), "%s is used by %s", address, a);
 	snprintf(used_by_b, sizeof(used_by_b), "%s is used by %s", address, b);
 

@@ -47,9 +47,11 @@ struct fnode_s {
 	bool running;
 	char name[32];
 
-	// Name that connections accepted after fnode_set_new_name() answer, when renamed is true.
+	// Name that connections accepted after fnode_set_new_name() answer, when renamed is true, or
+	// from accept number rename_at on, when that is not zero (fnode_set_name_after()).
 	char new_name[32];
 	bool renamed;
+	uint32_t rename_at;
 
 	// IPv4 address the node listens on.
 	char host[32];
@@ -140,6 +142,11 @@ fnode_set_partitions(fnode* n, bool partitions);
 // new connection.
 void
 fnode_set_new_name(fnode* n, const char* name);
+
+// Like fnode_set_new_name(), but only connections accepted after the next count accepts answer
+// name, so the next count connections still answer the current name.
+void
+fnode_set_name_after(fnode* n, uint32_t count, const char* name);
 
 // Stop or resume accepting. A silent node fills its accept backlog, so the kernel drops further
 // SYNs and a connect to it hangs until its deadline (Linux). Return false when silent and no

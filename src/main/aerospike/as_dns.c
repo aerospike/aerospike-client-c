@@ -115,7 +115,8 @@ typedef struct dns_server_s {
 	socklen_t addr_len;
 } dns_server;
 
-// Immutable after creation.
+// Immutable after creation, except timeout_ms. as_dns_seed_provider_apply_mode_default() sets it
+// from seed manager validation, before any refresh of this state can run.
 typedef struct dns_state_s {
 	uint32_t magic;
 	dns_name* names;
@@ -125,6 +126,11 @@ typedef struct dns_state_s {
 	as_dns_record_type record_type;
 	uint16_t port;
 	char* tls_name;
+
+	// As configured; 0 selects the mode default.
+	uint32_t configured_timeout_ms;
+
+	// Effective refresh timeout.
 	uint32_t timeout_ms;
 } dns_state;
 
@@ -1853,11 +1859,6 @@ dns_validate(as_error* err, const as_dns_seed_provider_config* config)
 			"Invalid DNS seed provider tls_name: empty");
 	}
 
-	if (config->timeout_ms == 0) {
-		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
-			"Invalid DNS seed provider timeout_ms: 0");
-	}
-
 	if (config->servers_size && !config->servers) {
 		return as_error_set_message(err, AEROSPIKE_ERR_PARAM,
 			"Invalid DNS seed provider servers: null");
@@ -1883,7 +1884,8 @@ dns_create(as_error* err, const as_dns_seed_provider_config* config, dns_state**
 	st->magic = DNS_STATE_MAGIC;
 	st->record_type = config->record_type;
 	st->port = config->port;
-	st->timeout_ms = config->timeout_ms;
+	st->configured_timeout_ms = config->timeout_ms;
+	st->timeout_ms = config->timeout_ms ? config->timeout_ms : AS_DNS_DEFAULT_THREAD_TIMEOUT_MS;
 	st->names = cf_calloc(config->names_size, sizeof(dns_name));
 
 	if (!st->names || (config->tls_name && !(st->tls_name = cf_strdup(config->tls_name)))) {
@@ -1978,7 +1980,7 @@ as_dns_seed_provider_config_init(as_dns_seed_provider_config* config)
 	memset(config, 0, sizeof(as_dns_seed_provider_config));
 	config->record_type = AS_DNS_RECORD_A;
 	config->port = AS_DNS_DEFAULT_PORT;
-	config->timeout_ms = AS_DNS_DEFAULT_TIMEOUT_MS;
+	config->timeout_ms = 0;
 }
 
 as_status
@@ -2024,4 +2026,25 @@ as_dns_seed_provider_timeout(const as_seed_provider* provider, uint32_t* timeout
 	}
 	*timeout_ms = st->timeout_ms;
 	return true;
+}
+
+void
+as_dns_seed_provider_apply_mode_default(const as_seed_provider* provider, bool tend)
+{
+	if (!provider || provider->refresh != dns_refresh || !provider->udata) {
+		return;
+	}
+
+	dns_state* st = provider->udata;
+
+	if (st->magic != DNS_STATE_MAGIC || st->configured_timeout_ms != 0) {
+		return;
+	}
+
+	// A plain store is safe. as_seed_manager_create() first waits for any refresh started by an
+	// earlier connection and fails while one still runs, and the discovery thread and the tend
+	// start only after validation, so this store happens before every read in dns_refresh().
+	// Java returns a copy instead; a copy would break the udata identity that the inflight
+	// tracking and the deferred destroy rely on.
+	st->timeout_ms = tend ? AS_DNS_DEFAULT_TEND_TIMEOUT_MS : AS_DNS_DEFAULT_THREAD_TIMEOUT_MS;
 }

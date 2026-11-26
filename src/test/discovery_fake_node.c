@@ -289,7 +289,7 @@ fnode_run(void* arg)
 
 			pthread_mutex_lock(&n->lock);
 			bool reject = n->reject;
-			renamed[n_clients] = n->renamed;
+			renamed[n_clients] = n->renamed || (n->rename_at && n->accepts >= n->rename_at);
 
 			if (n->accepts++ == 0) {
 				n->first_accept_us = cf_getus();
@@ -450,6 +450,15 @@ fnode_set_new_name(fnode* n, const char* name)
 	pthread_mutex_lock(&n->lock);
 	snprintf(n->new_name, sizeof(n->new_name), "%s", name);
 	n->renamed = true;
+	pthread_mutex_unlock(&n->lock);
+}
+
+void
+fnode_set_name_after(fnode* n, uint32_t count, const char* name)
+{
+	pthread_mutex_lock(&n->lock);
+	snprintf(n->new_name, sizeof(n->new_name), "%s", name);
+	n->rename_at = n->accepts + count;
 	pthread_mutex_unlock(&n->lock);
 }
 

@@ -182,7 +182,7 @@ log_line(uint32_t i)
 // Tests: configuration and ownership
 //---------------------------------
 
-TEST(dns_config_defaults, "defaults are A, port 3000, no TLS name, 80 ms and system resolvers")
+TEST(dns_config_defaults, "defaults are A, port 3000, no TLS name, timeout 0 (mode default) and system resolvers")
 {
 	as_dns_seed_provider_config cfg;
 	memset(&cfg, 0xa5, sizeof(cfg));
@@ -193,11 +193,12 @@ TEST(dns_config_defaults, "defaults are A, port 3000, no TLS name, 80 ms and sys
 	assert_int_eq(cfg.port, 3000);
 	assert_int_eq(cfg.port, AS_DNS_DEFAULT_PORT);
 	assert_null(cfg.tls_name);
-	assert_int_eq(cfg.timeout_ms, 80);
-	assert_int_eq(cfg.timeout_ms, AS_DNS_DEFAULT_TIMEOUT_MS);
+	assert_int_eq(cfg.timeout_ms, 0);
 	assert_null(cfg.servers);
 	assert_int_eq(cfg.servers_size, 0);
 	assert_int_eq(AS_DNS_DEFAULT_SERVER_PORT, 53);
+	assert_int_eq(AS_DNS_DEFAULT_THREAD_TIMEOUT_MS, 2000);
+	assert_int_eq(AS_DNS_DEFAULT_TEND_TIMEOUT_MS, 80);
 
 	const char* names[] = {"seeds.example.com"};
 	const char* servers[] = {"127.0.0.1"};
@@ -302,8 +303,6 @@ TEST(dns_config_invalid, "invalid names, values and resolvers are rejected at cr
 			"Invalid DNS seed provider port: 0"},
 		{{"a.example.com"}, 1, -1, 1, "", 1, "127.0.0.1", false,
 			"Invalid DNS seed provider tls_name: empty"},
-		{{"a.example.com"}, 1, -1, 1, NULL, 0, "127.0.0.1", false,
-			"Invalid DNS seed provider timeout_ms: 0"},
 		{{"a.example.com"}, 1, -1, 1, NULL, 1, NULL, true,
 			"Invalid DNS seed provider servers: null"},
 		{{"a.example.com"}, 1, -1, 1, NULL, 1, NULL, false,
@@ -358,6 +357,17 @@ TEST(dns_config_invalid, "invalid names, values and resolvers are rejected at cr
 	assert_int_eq(as_discovery_dns_seed_provider(&err, NULL, &provider), AEROSPIKE_ERR_PARAM);
 	assert_int_eq(as_discovery_dns_seed_provider(&err, &cfg, NULL), AEROSPIKE_ERR_PARAM);
 	assert_string_eq(err.message, "Invalid DNS seed provider");
+
+	// timeout_ms 0 selects the mode default and builds.
+	const char* names[] = {"a.example.com"};
+	const char* servers[] = {"127.0.0.1"};
+	cfg.names = names;
+	cfg.names_size = 1;
+	cfg.servers = servers;
+	cfg.servers_size = 1;
+	cfg.timeout_ms = 0;
+	assert_int_eq(as_discovery_dns_seed_provider(&err, &cfg, &provider), AEROSPIKE_OK);
+	provider.destroy(provider.udata);
 }
 
 TEST(dns_config_servers, "explicit resolvers accept ip, ip:port, bare IPv6, [IPv6] and [IPv6]:port; names accept a trailing dot")
@@ -486,11 +496,11 @@ TEST(dns_config_registration, "the config helper copies its input, replaces a pr
 	(void)first;
 
 	// A failed replacement leaves the registration unchanged.
-	cfg.timeout_ms = 0;
+	cfg.port = 0;
 	assert_int_eq(as_config_set_dns_seed_provider(&config, &cfg, &err), AEROSPIKE_ERR_PARAM);
 	assert_true(config.discovery.provider_registered);
 	assert_true(config.discovery.provider.udata == second);
-	cfg.timeout_ms = 80;
+	cfg.port = AS_DNS_DEFAULT_PORT;
 
 	config.discovery.registration_locked = true;
 	assert_int_eq(as_config_set_dns_seed_provider(&config, &cfg, &err), AEROSPIKE_ERR_PARAM);
@@ -2887,6 +2897,99 @@ TEST(dns_tend_validation, "execution-mode validation rejects a DNS timeout above
 	stub_stop(&s);
 }
 
+TEST(dns_timeout_mode_default, "timeout_ms 0 is 2000 ms in thread mode and 80 ms in tend mode, recomputed on every connect; a direct refresh uses 2000 ms")
+{
+	DISCOVERY_SCOPED(dns_stub, s, stub_stop);
+	assert_true(stub_start(&s));
+	stub_a(&s, "seeds.example.com", "10.0.0.1");
+
+	as_config config;
+	as_error err;
+	as_seed_manager* m = NULL;
+
+	// Thread mode: 2000 ms.
+	mgr_config(&config, AS_DISCOVERY_EXECUTION_THREAD, 1000);
+	config.discovery.refresh_interval_ms = 600000;
+	assert_int_eq(mgr_register(&config, &s, "seeds.example.com", 0, &err), AEROSPIKE_OK);
+	config.discovery.refresh_timeout_ms = 1999;
+	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "DNS seed provider timeout_ms 2000 exceeds discovery "
+		"refresh_timeout_ms 1999. Lower timeout_ms or raise refresh_timeout_ms");
+	config.discovery.refresh_timeout_ms = 2000;
+	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_OK);
+	as_seed_manager_destroy(m);
+
+	// The same config in tend mode: 80 ms, so the earlier 2000 ms was not kept.
+	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_TEND;
+	config.discovery.refresh_interval_ms = 1000;
+	config.discovery.tend_refresh_deadline_ms = 79;
+	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "DNS seed provider timeout_ms 80 exceeds discovery "
+		"tend_refresh_deadline_ms 79. Lower timeout_ms or use execution_mode thread");
+	config.discovery.tend_refresh_deadline_ms = 80;
+	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_OK);
+	as_seed_manager_destroy(m);
+
+	// Back to thread mode: 2000 ms again, so the 80 ms was not kept either.
+	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_THREAD;
+	config.discovery.refresh_interval_ms = 600000;
+	config.discovery.refresh_timeout_ms = 1999;
+	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "DNS seed provider timeout_ms 2000 exceeds discovery "
+		"refresh_timeout_ms 1999. Lower timeout_ms or raise refresh_timeout_ms");
+	assert_int_eq(stub_get(&s, &s.udp_queries), 0);
+	as_config_destroy(&config);
+
+	// Fresh tend-mode config with the default.
+	mgr_config(&config, AS_DISCOVERY_EXECUTION_TEND, 1000);
+	config.discovery.tend_refresh_deadline_ms = 79;
+	assert_int_eq(mgr_register(&config, &s, "seeds.example.com", 0, &err), AEROSPIKE_OK);
+	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "DNS seed provider timeout_ms 80 exceeds discovery "
+		"tend_refresh_deadline_ms 79. Lower timeout_ms or use execution_mode thread");
+	config.discovery.tend_refresh_deadline_ms = 80;
+	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_OK);
+	as_seed_manager_destroy(m);
+	as_config_destroy(&config);
+
+	// An explicit timeout is kept in either mode.
+	mgr_config(&config, AS_DISCOVERY_EXECUTION_TEND, 1000);
+	config.discovery.tend_refresh_deadline_ms = 149;
+	assert_int_eq(mgr_register(&config, &s, "seeds.example.com", 150, &err), AEROSPIKE_OK);
+	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "DNS seed provider timeout_ms 150 exceeds discovery "
+		"tend_refresh_deadline_ms 149. Lower timeout_ms or use execution_mode thread");
+	config.discovery.execution_mode = AS_DISCOVERY_EXECUTION_THREAD;
+	config.discovery.refresh_interval_ms = 600000;
+	config.discovery.refresh_timeout_ms = 149;
+	assert_int_eq(as_seed_manager_create(&err, &config, &m), AEROSPIKE_ERR_PARAM);
+	assert_string_eq(err.message, "DNS seed provider timeout_ms 150 exceeds discovery "
+		"refresh_timeout_ms 149. Lower timeout_ms or raise refresh_timeout_ms");
+	as_config_destroy(&config);
+	assert_int_eq(stub_get(&s, &s.udp_queries), 0);
+
+	// A provider refreshed directly, outside a seed manager, uses 2000 ms.
+	stub_set(&s, &s.silent, true);
+	const char* names[] = {"seeds.example.com"};
+	dns_setup d;
+	as_dns_seed_provider_config* cfg = setup_init(&d, names, 1, &s, NULL);
+	cfg->timeout_ms = 0;
+	as_seed_provider provider;
+	assert_int_eq(as_discovery_dns_seed_provider(&err, cfg, &provider), AEROSPIKE_OK);
+
+	char buf[256];
+	uint64_t begin = cf_getms();
+	assert_int_eq(refresh_str(&provider, &err, buf, sizeof(buf)), AEROSPIKE_ERR_CLIENT);
+	uint64_t elapsed = cf_getms() - begin;
+	info("direct refresh with timeout_ms 0: elapsed=%llu ms", (unsigned long long)elapsed);
+	assert_true(elapsed >= 1000);
+	assert_true(elapsed <= 5000);
+	assert_string_eq(err.message,
+		"DNS seed discovery failed for every name: seeds.example.com: timeout");
+	provider.destroy(provider.udata);
+	stub_stop(&s);
+}
+
 TEST(dns_tend_silent_resolver, "timeout_ms equal to tend_refresh_deadline_ms with silent resolvers ends before the deadline and never trips")
 {
 	// This checks the budget shape: 1 name and 1 silent resolver end at about 300 ms, 2 names and
@@ -3450,6 +3553,7 @@ SUITE(discovery_dns, "pluggable discovery bounded DNS seed provider tests")
 	suite_add(dns_no_thread);
 	suite_add(dns_no_leaked_descriptors);
 	suite_add(dns_tend_validation);
+	suite_add(dns_timeout_mode_default);
 	suite_add(dns_tend_silent_resolver);
 	suite_add(dns_snapshot_retention);
 	suite_add(dns_thread_mode);

@@ -72,9 +72,18 @@ extern "C" {
 #define AS_DNS_DEFAULT_PORT 3000
 
 /**
- * Default total time in milliseconds of one DNS seed provider refresh.
+ * Total time in milliseconds of one DNS seed provider refresh when
+ * as_dns_seed_provider_config.timeout_ms is 0 and discovery runs with
+ * AS_DISCOVERY_EXECUTION_THREAD, or when the provider is called directly.
  */
-#define AS_DNS_DEFAULT_TIMEOUT_MS 80
+#define AS_DNS_DEFAULT_THREAD_TIMEOUT_MS 2000
+
+/**
+ * Total time in milliseconds of one DNS seed provider refresh when
+ * as_dns_seed_provider_config.timeout_ms is 0 and discovery runs with
+ * AS_DISCOVERY_EXECUTION_TEND.
+ */
+#define AS_DNS_DEFAULT_TEND_TIMEOUT_MS 80
 
 /**
  * Default port of a DNS resolver.
@@ -291,13 +300,19 @@ typedef struct as_dns_seed_provider_config_s {
 
 	/**
 	 * Total time in milliseconds of one refresh, across every name, record type,
-	 * SRV target, resolver and UDP or TCP exchange. Must be > 0. It must not
-	 * exceed discovery.tend_refresh_deadline_ms with AS_DISCOVERY_EXECUTION_TEND,
-	 * or discovery.refresh_timeout_ms with AS_DISCOVERY_EXECUTION_THREAD;
+	 * SRV target, resolver and UDP or TCP exchange. 0 (default) selects the mode
+	 * default: 2000 (AS_DNS_DEFAULT_THREAD_TIMEOUT_MS) in thread mode, 80
+	 * (AS_DNS_DEFAULT_TEND_TIMEOUT_MS) in tend mode. A provider called directly,
+	 * outside a client, uses 2000. The value must not exceed
+	 * discovery.tend_refresh_deadline_ms with AS_DISCOVERY_EXECUTION_TEND, or
+	 * discovery.refresh_timeout_ms with AS_DISCOVERY_EXECUTION_THREAD;
 	 * otherwise aerospike_connect() fails with AEROSPIKE_ERR_PARAM. With the
 	 * default tend deadline of 100 ms only a local resolver answers reliably in
 	 * time.
-	 * Default: AS_DNS_DEFAULT_TIMEOUT_MS
+	 * In thread mode with the default, an unresponsive resolver holds the first
+	 * refresh of aerospike_connect(), and aerospike_close() while a refresh is
+	 * in flight, for up to about 2000 ms.
+	 * Default: 0 (mode default)
 	 */
 	uint32_t timeout_ms;
 
@@ -1226,8 +1241,11 @@ as_discovery_pass_through_translator(as_address_translator* translator);
 
 /**
  * Initialize a DNS seed provider configuration with its defaults: no names,
- * AS_DNS_RECORD_A, AS_DNS_DEFAULT_PORT, no TLS name, AS_DNS_DEFAULT_TIMEOUT_MS
- * and the system resolvers.
+ * AS_DNS_RECORD_A, AS_DNS_DEFAULT_PORT, no TLS name, timeout_ms 0 and the
+ * system resolvers. A timeout_ms of 0 selects the mode default: 2000 in thread
+ * mode, 80 in tend mode. In thread mode an unresponsive resolver then holds the
+ * first refresh, and aerospike_close() while a refresh is in flight, for up to
+ * about 2000 ms.
  *
  * @ingroup discovery_api
  */
@@ -1534,7 +1552,7 @@ as_discovery_conformance_merge(as_error* err, as_seed_merge_policy policy,
  *
  * A translated host and port that another peer also has is shared: hostnames
  * compare case-insensitively and nothing is resolved. Every shared host of the
- * reply is found before any is removed. A shared host is never used, so a peer
+ * reply is found before any peer is checked. A shared host is never used, so a peer
  * that still has a host of its own becomes a node, and a peer whose every host
  * is shared collides and does not. Each colliding peer is reported once, with
  * an AEROSPIKE_ERR_TRANSLATION_COLLISION message naming the peer, its shared

@@ -32,6 +32,16 @@ extern "C" {
 bool
 as_dns_seed_provider_timeout(const as_seed_provider* provider, uint32_t* timeout_ms);
 
+/**
+ * When provider is the built-in DNS seed provider configured with timeout_ms 0, set its
+ * effective refresh timeout to the mode default: AS_DNS_DEFAULT_TEND_TIMEOUT_MS when tend is
+ * true, otherwise AS_DNS_DEFAULT_THREAD_TIMEOUT_MS. The value is recomputed from the configured
+ * one on every call, so an earlier connect leaves no trace. Called only from seed manager
+ * validation, before any refresh of the provider can run.
+ */
+void
+as_dns_seed_provider_apply_mode_default(const as_seed_provider* provider, bool tend);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

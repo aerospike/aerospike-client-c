@@ -841,6 +841,11 @@ validate(
 	*threaded = (d->provider_registered && d->binding_provider) ||
 		(*periodic && d->execution_mode == AS_DISCOVERY_EXECUTION_THREAD);
 
+	// Java picks the DNS default by threaded. The mode gives the same answer here: DNS is always
+	// periodic, and a built-in name cannot be a binding provider.
+	as_dns_seed_provider_apply_mode_default(provider,
+		d->execution_mode == AS_DISCOVERY_EXECUTION_TEND);
+
 	if (!*periodic) {
 		if (*threaded && d->refresh_timeout_ms == 0) {
 			// A binding provider's single call runs on the discovery thread.

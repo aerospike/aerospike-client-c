@@ -937,13 +937,14 @@ TEST(discovery_conformance_merge, "L1 merge rows publish one snapshot per discov
 	hosts_destroy(empty);
 }
 
-// The cluster's collision message for peer, whose shared hosts and their owners are list.
+// The cluster's collision message for peer, whose shared hosts and their owners are list (Java
+// collisionMessage). The pre-connect check never stops on a socket, so nothing is "Not tried".
 static const char*
 collision_text(char* buf, size_t size, const char* translator, const char* peer,
 	const char* list)
 {
-	snprintf(buf, size, "Peer %s has no address of its own: %s (address translator %s). "
-		"Give each node its own reachable address or mapping", peer, list, translator);
+	snprintf(buf, size, "Address translator %s left node %s with no address of its own: %s. "
+		"Give each node its own reachable address or mapping", translator, peer, list);
 	return buf;
 }
 
@@ -1234,8 +1235,8 @@ TEST(discovery_conformance_collision_hosts, "FR-46 collision peers with several 
 		collision_text(text, sizeof(text), "static-map", "B", "203.0.113.1:3000 is used by A"));
 	as_conformance_collisions_destroy(&out);
 
-	// Shared hosts are all found before any is removed: B shares :31001 with A and :31002 with
-	// C, so B and C have nothing left while A keeps :31003.
+	// Shared hosts are all found before any peer is validated: B shares :31001 with A and :31002
+	// with C, so B and C have nothing left while A keeps :31003.
 	as_endpoint before_removal[] = {
 		{.node_name = "A", .host = "h", .port = 31001},
 		{.node_name = "A", .host = "h", .port = 31003},
@@ -1322,6 +1323,7 @@ TEST(discovery_conformance_collision_hosts, "FR-46 collision peers with several 
 	assert_int_eq(out.errors_size, 6);
 	assert_string_eq(out.errors[0], collision_text(text, sizeof(text), "pass-through", "A",
 		"h:1 is used by B, h:2 is used by C, h:3 is used by D and 2 more"));
+	assert_int_eq(collision_errors_naming(&out, "Not tried"), 0);
 	as_conformance_collisions_destroy(&out);
 
 	// A strict miss drops only that host: A keeps 203.0.113.3. M misses on every host, so it is
@@ -1342,7 +1344,7 @@ TEST(discovery_conformance_collision_hosts, "FR-46 collision peers with several 
 		AEROSPIKE_OK);
 	assert_true(collision_nodes_are(&out, only_a, 1));
 	assert_int_eq(out.errors_size, 2);
-	assert_int_eq(collision_errors_naming(&out, "Peer M "), 0);
+	assert_int_eq(collision_errors_naming(&out, "left node M "), 0);
 	assert_int_eq(collision_errors_naming(&out, "used by M"), 0);
 	as_conformance_collisions_destroy(&out);
 

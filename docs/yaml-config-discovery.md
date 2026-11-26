@@ -142,13 +142,17 @@ name in `names` and returns the addresses as seed hosts. The keys map onto
 | `record_type` | string | `a` (A and AAAA records), `srv` (SRV records) | `a` |
 | `port` | int | 1 to 65535: port set on hosts resolved from A and AAAA records; ignored for `srv`, which uses each record's port | `3000` |
 | `tls_name` | string | TLS name set on every returned host | none (the configured-seed default) |
-| `timeout_ms` | int | at least 1: total milliseconds of one refresh, across every name, record type, SRV target and resolver | `80` |
+| `timeout_ms` | int | at least 1: total milliseconds of one refresh, across every name, record type, SRV target and resolver | `2000` in thread mode, `80` in tend mode |
 | `servers` | list of string | resolver addresses, `ip[:port]`, with an IPv6 address in brackets when a port is given (`"[2001:db8::1]:53"`), tried in order | the system resolvers: the `nameserver` entries of `/etc/resolv.conf`, or the DNS servers of the active network adapters on Windows, read once when the provider is built |
 
 `timeout_ms` must not exceed `tend_refresh_deadline_ms` in `tend` mode, or `refresh_timeout_ms`
-in `thread` mode (checked at connect, see above). With the default tend deadline of 100 ms only
-a local resolver answers reliably in time; in `thread` mode, the default, the 10000 ms
-`refresh_timeout_ms` leaves room for any resolver.
+in `thread` mode (checked at connect, see above). Without the key the mode default applies, so in
+`thread` mode a `refresh_timeout_ms` below 2000 fails `aerospike_connect()` unless `timeout_ms`
+is set. With the default tend deadline of 100 ms only a local resolver answers reliably in time;
+in `thread` mode, the default, the 10000 ms `refresh_timeout_ms` leaves room for any resolver.
+In `thread` mode with the default, an unresponsive resolver makes the first refresh of
+`aerospike_connect()` take up to about 2000 ms before the client falls back to the configured
+seeds, and `aerospike_close()` can wait as long for a refresh in flight.
 
 Every returned host is a numeric IP address. When some names resolve, their hosts are returned
 and each failed name is logged at warning level. When no name yields a host, the refresh fails

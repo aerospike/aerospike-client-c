@@ -1849,6 +1849,7 @@ connect_error(as_config* config, as_error* err)
 
 #define PEER_MISMATCH "is different than actual node"
 #define PEER_FAILED "Failed to connect to peer"
+#define PEER_COLLISION "with no address of its own"
 
 TEST(nodes_peer_wrong_node_tries_next,
 	"U-17 a peer address that is another node goes on to the peer's next address")
@@ -1977,7 +1978,7 @@ TEST(nodes_peer_known_node_skipped,
 	as_config config;
 	nodes_config(&config, &s);
 	aerospike* client = NULL;
-	log_count_start_many(PEER_MISMATCH, skip, "has no address of its own", PEER_FAILED, NULL);
+	log_count_start_many(PEER_MISMATCH, skip, PEER_COLLISION, PEER_FAILED, NULL);
 	as_status status = nodes_connect(&client, &config);
 	uint32_t counts[LOG_COUNT_MAX];
 	log_count_stop_many(counts);
@@ -2052,7 +2053,7 @@ run_known_host(const char* label, const char* second_name, known_host_result* r)
 		hostname, port);
 	set_peers(&s, "[[X,,[%s:%u]]]", hostname, port);
 	fnode_bump_peers_generation(&s);
-	log_count_start_many(PEER_MISMATCH, skip, "has no address of its own", PEER_FAILED, NULL);
+	log_count_start_many(PEER_MISMATCH, skip, PEER_COLLISION, PEER_FAILED, NULL);
 	r->tend = tend(cluster);
 	log_count_stop_many(r->counts);
 
@@ -2120,8 +2121,10 @@ TEST(nodes_peer_socket_collision_stops,
 	// B keeps its tend connection, so the client still sees B there, while a new connection to
 	// the same socket answers X.
 	fnode_set_new_name(&holder, "X");
-	log_count_start_many(PEER_MISMATCH, "answer at the same address", "has no address of its own",
-		PEER_FAILED, NULL);
+	char collision[256];
+	snprintf(collision, sizeof(collision), "Address translator static-map left node X with no "
+		"address of its own: %s:%u is used by B. Give each node", hostname, port);
+	log_count_start_many(PEER_MISMATCH, collision, "skips address", PEER_FAILED, NULL);
 	set_peers(&s, "[[B,,[%s:%u]],[X,,[%s:%u]]]", SECOND, port, hostname, port);
 	fnode_bump_peers_generation(&s);
 	as_status status = tend(cluster);
@@ -2149,6 +2152,205 @@ TEST(nodes_peer_socket_collision_stops,
 	assert_int_eq(fnode_get(&x, &x.accepts), 0);
 	assert_int_eq(counts[0], 0);
 	assert_that(counts[1] >= 1, "no collision was reported");
+	assert_int_eq(counts[2], 0);
+	assert_int_eq(counts[3], 0);
+}
+
+TEST(nodes_peer_newcomer_socket_kept,
+	"U-17 FR-47 a peer that reaches the socket of a newcomer of the same tend, answering another name, stops and the newcomer is kept")
+{
+	DISCOVERY_SCOPED(fnode, s, fnode_stop);
+	DISCOVERY_SCOPED(fnode, holder, fnode_stop);
+	assert_true(peer_seed(&s));
+	uint16_t port = free_port();
+	assert_int_ne(port, 0);
+	assert_true(start_named(&holder, "B", SECOND, port));
+	char hostname[64];
+	stagger_hostname(hostname, "newcomer-socket", SECOND);
+
+	as_config config;
+	nodes_config(&config, &s);
+	aerospike* client = NULL;
+	assert_int_eq(nodes_connect(&client, &config), AEROSPIKE_OK);
+	as_cluster* cluster = client->cluster;
+	uint32_t before = node_count(cluster);
+
+	// B validates first in the tend and becomes a newcomer on its socket. The next connection to
+	// that socket, N's, answers the third name W, as behind a load balancer.
+	fnode_set_name_after(&holder, 1, "W");
+	char collision[256];
+	snprintf(collision, sizeof(collision), "Address translator static-map left node N with no "
+		"address of its own: %s:%u is used by B. Give each node", hostname, port);
+	log_count_start_many(PEER_MISMATCH, collision, "skips address", PEER_FAILED, NULL);
+	set_peers(&s, "[[B,,[%s:%u]],[N,,[%s:%u]]]", SECOND, port, hostname, port);
+	fnode_bump_peers_generation(&s);
+	as_status status = tend(cluster);
+	uint32_t counts[LOG_COUNT_MAX];
+	log_count_stop_many(counts);
+
+	uint32_t size = node_count(cluster);
+	as_node* b = get_node(cluster, "B");
+	bool b_at_holder = node_at(b, &holder);
+	as_node* n = get_node(cluster, "N");
+	as_node* w = get_node(cluster, "W");
+
+	// B stays on later tends, and N keeps colliding.
+	log_count_start(collision);
+	as_status next_status = tend(cluster);
+	uint32_t again = log_count_stop();
+	as_node* b_now = get_node(cluster, "B");
+	bool b_kept = b && b_now == b && as_node_is_active(b);
+
+	if (b_now) {
+		as_node_release(b_now);
+	}
+
+	if (b) {
+		as_node_release(b);
+	}
+
+	if (n) {
+		as_node_release(n);
+	}
+
+	if (w) {
+		as_node_release(w);
+	}
+	nodes_close(client);
+
+	assert_int_eq(before, 1);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(size, 2);
+	assert_true(b_at_holder);
+	assert_null(n);
+	assert_null(w);
+	assert_int_eq(counts[0], 0);
+	assert_that(counts[1] >= 1, "N's -26 does not name its host and B");
+	assert_int_eq(counts[2], 0);
+	assert_int_eq(counts[3], 0);
+	assert_int_eq(next_status, AEROSPIKE_OK);
+	assert_true(b_kept);
+	assert_that(again >= 1, "N's -26 is not reported on the next tend");
+}
+
+TEST(nodes_peer_collided_name_joins,
+	"U-17 FR-47 a peer named as the node that answered at another node's socket joins at its own address in the same tend")
+{
+	DISCOVERY_SCOPED(fnode, s, fnode_stop);
+	DISCOVERY_SCOPED(fnode, holder, fnode_stop);
+	DISCOVERY_SCOPED(fnode, w, fnode_stop);
+	assert_true(peer_seed(&s));
+	uint16_t port = free_port();
+	assert_int_ne(port, 0);
+	assert_true(start_named(&holder, "B", SECOND, port));
+	assert_true(start_named(&w, "W", THIRD, port));
+	char hostname[64];
+	stagger_hostname(hostname, "collided-name", SECOND);
+	set_peers(&s, "[[B,,[%s:%u]]]", SECOND, port);
+
+	as_config config;
+	nodes_config(&config, &s);
+	aerospike* client = NULL;
+	assert_int_eq(nodes_connect(&client, &config), AEROSPIKE_OK);
+	as_cluster* cluster = client->cluster;
+	uint32_t before = node_count(cluster);
+
+	// B keeps its tend connection, while new connections to B's socket answer W. P reaches B's
+	// socket and collides there, then W validates at its own address.
+	fnode_set_new_name(&holder, "W");
+	char collision[256];
+	snprintf(collision, sizeof(collision), "Address translator static-map left node P with no "
+		"address of its own: %s:%u is used by B. Give each node", hostname, port);
+	log_count_start_many(PEER_MISMATCH, collision, "left node W ", PEER_FAILED, NULL);
+	set_peers(&s, "[[B,,[%s:%u]],[P,,[%s:%u]],[W,,[%s:%u]]]", SECOND, port, hostname, port,
+		THIRD, port);
+	fnode_bump_peers_generation(&s);
+	as_status status = tend(cluster);
+	uint32_t counts[LOG_COUNT_MAX];
+	log_count_stop_many(counts);
+
+	uint32_t size = node_count(cluster);
+	as_node* b = get_node(cluster, "B");
+	as_node* p = get_node(cluster, "P");
+	as_node* node = get_node(cluster, "W");
+	bool b_at_holder = node_at(b, &holder);
+	bool w_at_own = node_at(node, &w);
+
+	if (b) {
+		as_node_release(b);
+	}
+
+	if (p) {
+		as_node_release(p);
+	}
+
+	if (node) {
+		as_node_release(node);
+	}
+	nodes_close(client);
+
+	assert_int_eq(before, 2);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(size, 3);
+	assert_true(b_at_holder);
+	assert_null(p);
+	assert_true(w_at_own);
+	assert_int_eq(counts[0], 0);
+	assert_that(counts[1] >= 1, "P's -26 does not name its host and B");
+	assert_int_eq(counts[2], 0);
+	assert_int_eq(counts[3], 0);
+}
+
+TEST(nodes_peer_known_then_socket_one_entry,
+	"U-17 FR-47 a host whose first address answers as a known node and whose second is another node's socket is listed once in the -26, as used by that node")
+{
+	DISCOVERY_SCOPED(fnode, s, fnode_stop);
+	DISCOVERY_SCOPED(fnode, impostor, fnode_stop);
+	DISCOVERY_SCOPED(fnode, holder, fnode_stop);
+	assert_true(peer_seed(&s));
+	uint16_t port = free_port();
+	assert_int_ne(port, 0);
+	assert_true(start_named(&impostor, "S", FIRST, port));
+	assert_true(start_named(&holder, "B", SECOND, port));
+	char hostname[64];
+	stagger_hostname(hostname, "known-socket", FIRST, SECOND);
+	set_peers(&s, "[[B,,[%s:%u]]]", SECOND, port);
+
+	as_config config;
+	nodes_config(&config, &s);
+	aerospike* client = NULL;
+	assert_int_eq(nodes_connect(&client, &config), AEROSPIKE_OK);
+	as_cluster* cluster = client->cluster;
+	uint32_t before = node_count(cluster);
+
+	// FIRST answers as the seed S on another socket, so it is only skipped. SECOND is B's own
+	// socket, which answers B, so X stops there and the host's entry names B instead of S.
+	char collision[256];
+	snprintf(collision, sizeof(collision), "Address translator static-map left node X with no "
+		"address of its own: %s:%u is used by B. Give each node", hostname, port);
+	log_count_start_many(PEER_MISMATCH, collision, "is used by S", PEER_FAILED, NULL);
+	set_peers(&s, "[[B,,[%s:%u]],[X,,[%s:%u]]]", SECOND, port, hostname, port);
+	fnode_bump_peers_generation(&s);
+	as_status status = tend(cluster);
+	uint32_t counts[LOG_COUNT_MAX];
+	log_count_stop_many(counts);
+
+	uint32_t size = node_count(cluster);
+	as_node* x = get_node(cluster, "X");
+	uint32_t impostor_accepts = fnode_get(&impostor, &impostor.accepts);
+
+	if (x) {
+		as_node_release(x);
+	}
+	nodes_close(client);
+
+	assert_int_eq(before, 2);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(size, 2);
+	assert_null(x);
+	assert_that(impostor_accepts >= 1, "the first address was not validated");
+	assert_int_eq(counts[0], 0);
+	assert_that(counts[1] >= 1, "the -26 does not list the host once, as used by B");
 	assert_int_eq(counts[2], 0);
 	assert_int_eq(counts[3], 0);
 }
@@ -2841,7 +3043,7 @@ TEST(nodes_move_collision_skipped,
 	snprintf(warning, sizeof(warning),
 		"Address %s:%u of %s is also node %s, so node %s does not move to it", SECOND, port,
 		hostname, MOVE_OTHER, MOVE_NODE);
-	log_count_start_many("Move node", warning, "(address translator ", NULL);
+	log_count_start_many("Move node", warning, PEER_COLLISION, NULL);
 	bool kept[4];
 	bool b_kept[4];
 
@@ -2861,6 +3063,93 @@ TEST(nodes_move_collision_skipped,
 	assert_int_eq(counts[0], 0);
 	assert_that(counts[1] >= 1, "no collision warning names X, B and %s:%u", SECOND, port);
 	assert_that(counts[2] == 0, "a move collision was reported as a translation collision");
+}
+
+// Two failing nodes move in one tend onto one candidate socket. The first move takes it; the
+// socket then answers the second node's name, so the second move is skipped with the move warning
+// and the first moved node is kept (Java findCollidingName drops nothing).
+TEST(nodes_move_newcomer_socket_kept,
+	"U-16 a node moved earlier in the tend keeps the candidate socket that a second move collides with")
+{
+	move_setup(env, port);
+	DISCOVERY_SCOPED(fnode, x1, fnode_stop);
+	DISCOVERY_SCOPED(fnode, y1, fnode_stop);
+	DISCOVERY_SCOPED(fnode, c, fnode_stop);
+	assert_true(start_named(&x1, MOVE_NODE, FIRST, port));
+	assert_true(start_named(&y1, MOVE_OTHER, THIRD, port));
+	assert_true(start_named(&c, MOVE_NODE, SECOND, port));
+	char host_x[64];
+	char host_y[64];
+	stagger_hostname(host_x, "move-x", FIRST, SECOND);
+	stagger_hostname(host_y, "move-y", THIRD, SECOND);
+
+	// X and Y know each other by hostname, so both have a hostname to move with.
+	set_peers(&x1, "[[%s,,[%s:%u]]]", MOVE_OTHER, host_y, port);
+	set_peers(&y1, "[[%s,,[%s:%u]]]", MOVE_NODE, host_x, port);
+	set_peers(&c, "[[%s,,[%s:%u]]]", MOVE_OTHER, host_y, port);
+	assert_true(move_connect(&env, host_x, port, 1000));
+
+	as_cluster* cluster = env.client->cluster;
+	assert_int_eq(node_count(cluster), 2);
+	as_node* x = get_node(cluster, MOVE_NODE);
+	as_node* y = get_node(cluster, MOVE_OTHER);
+	assert_true(node_at(x, &x1));
+	assert_true(node_at(y, &y1));
+	assert_true(x->hostname && y->hostname);
+
+	fail_node(&x1);
+	fail_node(&y1);
+	bool kept = true;
+
+	for (int i = 0; i < AS_NODE_MOVE_FAILED_TENDS - 1; i++) {
+		kept = tend(cluster) == AEROSPIKE_OK && holds_name(cluster, x) && holds_name(cluster, y) &&
+			kept;
+	}
+
+	// X moves first, on the first new connection to c. Y's move is the next one, which answers Y.
+	fnode_set_name_after(&c, 1, MOVE_OTHER);
+	char moved_x[256];
+	char warning[256];
+	move_message(moved_x, sizeof(moved_x), host_x, &x1, &c);
+	snprintf(warning, sizeof(warning),
+		"Address %s:%u of %s is also node %s, so node %s does not move to it", SECOND, port,
+		host_y, MOVE_NODE, MOVE_OTHER);
+	log_count_start_many(moved_x, warning, "Move node " MOVE_OTHER " ", PEER_COLLISION, NULL);
+	as_status status = tend(cluster);
+	uint32_t counts[LOG_COUNT_MAX];
+	log_count_stop_many(counts);
+
+	as_node* x_now = get_node(cluster, MOVE_NODE);
+	as_node* y_now = get_node(cluster, MOVE_OTHER);
+	bool x_at_c = node_at(x_now, &c);
+	bool x_old_active = as_node_is_active(x);
+	bool y_same = y_now == y;
+	bool y_at_y1 = node_at(y_now, &y1);
+	uint32_t size = node_count(cluster);
+
+	if (x_now) {
+		as_node_release(x_now);
+	}
+
+	if (y_now) {
+		as_node_release(y_now);
+	}
+	as_node_release(y);
+	as_node_release(x);
+
+	assert_true(kept);
+	assert_int_eq(status, AEROSPIKE_OK);
+	assert_int_eq(counts[0], 1);
+	assert_that(counts[1] >= 1, "no move warning names %s:%u, %s and %s", SECOND, port, host_y,
+		MOVE_NODE);
+	assert_int_eq(counts[2], 0);
+	assert_that(counts[3] == 0, "a move collision was reported as a translation collision");
+	assert_that(x_at_c, "the node moved first was dropped");
+	assert_false(x_old_active);
+	assert_true(y_same);
+	assert_true(y_at_y1);
+	assert_int_eq(size, 2);
+	assert_one_node_per_name(cluster);
 }
 
 TEST(nodes_move_ip_literal_no_move,
@@ -3482,6 +3771,9 @@ SUITE(discovery_nodes, "pluggable discovery node lifecycle tests")
 	suite_add(nodes_peer_known_host_logged_once);
 	suite_add(nodes_peer_known_and_unknown_fails);
 	suite_add(nodes_peer_socket_collision_stops);
+	suite_add(nodes_peer_newcomer_socket_kept);
+	suite_add(nodes_peer_collided_name_joins);
+	suite_add(nodes_peer_known_then_socket_one_entry);
 	suite_add(nodes_peer_hung_address_joins_in_one_tend);
 	suite_add(nodes_valid_addresses_pruned);
 	suite_add(nodes_move_not_before_third_failed_tend);
@@ -3492,6 +3784,7 @@ SUITE(discovery_nodes, "pluggable discovery node lifecycle tests")
 	suite_add(nodes_move_silent_candidate_within_bound);
 	suite_add(nodes_move_other_name_skipped);
 	suite_add(nodes_move_collision_skipped);
+	suite_add(nodes_move_newcomer_socket_kept);
 	suite_add(nodes_move_ip_literal_no_move);
 	suite_add(nodes_move_single_address_no_move);
 	suite_add(nodes_move_no_lookup_without_failures);

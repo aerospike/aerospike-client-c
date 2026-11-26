@@ -65,7 +65,7 @@ jobs:
           echo "enterprise=${ENTERPRISE}" >> "${GITHUB_OUTPUT}"
           echo "layers=${layers}" >> "${GITHUB_OUTPUT}"
       - name: Report skipped layers
-        uses: aerospike/aerospike-client-conformance/.github/actions/report-skipped-layers@42db5e9c508226cc0ad1496d7dff1cb23dac2bb0 # main
+        uses: aerospike/aerospike-client-conformance/.github/actions/report-skipped-layers@0f720992d1ce3247dd17b309a0edb8b541e1e2df # main
         with:
           layers: ${{ steps.gate.outputs.layers }}
 
@@ -76,7 +76,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@42db5e9c508226cc0ad1496d7dff1cb23dac2bb0 # main
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@0f720992d1ce3247dd17b309a0edb8b541e1e2df # main
     with:
       client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -84,7 +84,7 @@ jobs:
       profile: default
       edition: ee
       server-image: aerospike/aerospike-server-enterprise:8.2.0.0
-      conformance-ref: 42db5e9c508226cc0ad1496d7dff1cb23dac2bb0
+      conformance-ref: 0f720992d1ce3247dd17b309a0edb8b541e1e2df
     secrets:
       FEATURES_CONF: ${{ secrets.AES_FEATURES_CONF }}
 
@@ -92,12 +92,12 @@ jobs:
     name: N-6 and TLS name matching (EE)
     needs: gate
     if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@42db5e9c508226cc0ad1496d7dff1cb23dac2bb0 # main
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@0f720992d1ce3247dd17b309a0edb8b541e1e2df # main
     with:
       environment: tls-matching
       command: bash src/test/discovery_env/run.sh tls-matching
       server-image: aerospike/aerospike-server-enterprise:8.2.0.0
-      conformance-ref: 42db5e9c508226cc0ad1496d7dff1cb23dac2bb0
+      conformance-ref: 0f720992d1ce3247dd17b309a0edb8b541e1e2df
     secrets:
       features-conf: ${{ secrets.AES_FEATURES_CONF }}
 
@@ -105,12 +105,12 @@ jobs:
     name: N-17 CN-only certificate rejected (EE, expected to fail until the next major, FR-45)
     needs: gate
     if: ${{ needs.gate.outputs.enterprise == 'true' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@42db5e9c508226cc0ad1496d7dff1cb23dac2bb0 # main
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@0f720992d1ce3247dd17b309a0edb8b541e1e2df # main
     with:
       environment: tls-matching
       command: bash src/test/discovery_env/run.sh tls-matching n17
       server-image: aerospike/aerospike-server-enterprise:8.2.0.0
-      conformance-ref: 42db5e9c508226cc0ad1496d7dff1cb23dac2bb0
+      conformance-ref: 0f720992d1ce3247dd17b309a0edb8b541e1e2df
     secrets:
       features-conf: ${{ secrets.AES_FEATURES_CONF }}
 

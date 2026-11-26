@@ -713,6 +713,41 @@ TEST(cf_every_discovery_key, "every discovery field, ip_map and use_services_alt
 	cf_close(client);
 }
 
+TEST(cf_record_type_any_case, "the dns record_type is accepted in any case: A, a, SRV, srv and Srv")
+{
+	static const char* const values[] = {"A", "a", "SRV", "srv", "Srv"};
+
+	for (uint32_t i = 0; i < sizeof(values) / sizeof(values[0]); i++) {
+		const char* value = values[i];
+		char body[CF_BODY_MAX];
+		snprintf(body, sizeof(body), CF_HEAD
+			"    discovery:\n"
+			"      provider: dns\n"
+			"      dns:\n"
+			"        names: [seeds.example.com]\n"
+			"        record_type: %s\n"
+			"        servers: ['127.0.0.1:53']\n", value);
+		aerospike* client = cf_init_default(body);
+
+		if (!client) {
+			fail("record_type %s: no client: %s", value, cf_log_first(AS_LOG_LEVEL_ERROR));
+		}
+
+		char line[128];
+		snprintf(line, sizeof(line), "Set static.client.discovery.dns.record_type = %s", value);
+
+		if (!client->config.discovery.provider_registered ||
+			strcmp(client->config.discovery.provider.name, "dns") != 0 ||
+			cf_log_find(AS_LOG_LEVEL_ERROR, "") != 0 ||
+			cf_log_find(AS_LOG_LEVEL_INFO, line) != 1) {
+			cf_close(client);
+			fail("record_type %s: not applied as a dns provider with one info line: %s", value,
+				cf_log_first(AS_LOG_LEVEL_ERROR));
+		}
+		cf_close(client);
+	}
+}
+
 TEST(cf_port_map, "the port-map translator maps a host:port key and a node-name key, and on_miss is strict")
 {
 	aerospike* client = cf_init_default(CF_HEAD
@@ -997,6 +1032,8 @@ static const cf_invalid cf_invalid_rows[] = {
 	 "Invalid static.client.discovery.execution_mode: background. valid values: thread, tend"},
 	{"    discovery:\n      provider: dns\n      dns:\n        record_type: aaaa\n",
 	 "Invalid static.client.discovery.dns.record_type: aaaa. valid values: a, srv"},
+	{"    discovery:\n      provider: dns\n      dns:\n        record_type: SRVX\n",
+	 "Invalid static.client.discovery.dns.record_type: SRVX. valid values: a, srv"},
 	{"    discovery:\n      provider: aws-tags\n      aws:\n        address_field: ipv6\n",
 	 "Invalid static.client.discovery.aws.address_field: ipv6. valid values: private_ip, "
 	 "public_ip, private_dns, public_dns"},
@@ -2390,6 +2427,80 @@ TEST(cf_dns_provider, "the dns provider from the file uses its servers and timeo
 	}
 }
 
+// QTYPE of the first query waiting on fd, or -1 when there is none or it is malformed.
+static int
+cf_dns_first_qtype(int fd)
+{
+	uint8_t buf[512];
+	ssize_t n = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
+
+	if (n < 12) {
+		return -1;
+	}
+
+	size_t pos = 12;
+
+	while (pos < (size_t)n && buf[pos] != 0) {
+		pos += 1 + buf[pos];
+	}
+
+	if (pos + 3 > (size_t)n) {
+		return -1;
+	}
+	return (buf[pos + 1] << 8) | buf[pos + 2];
+}
+
+// The srv forms show that the value is applied. For a and A the QTYPE is also the default's, so
+// cf_record_type_any_case, which checks that they are accepted and logged, is their proof.
+TEST(cf_dns_record_type_query, "the dns record_type in any case sets the query type: A or AAAA for a forms, SRV for srv forms")
+{
+	static const char* const values[] = {"A", "a", "SRV", "srv", "Srv"};
+
+	for (uint32_t i = 0; i < sizeof(values) / sizeof(values[0]); i++) {
+		const char* value = values[i];
+		bool srv = value[0] == 's' || value[0] == 'S';
+		uint16_t port = 0;
+		int fd = cf_silent_udp(&port);
+		assert_true(fd >= 0);
+
+		char body[CF_BODY_MAX];
+		snprintf(body, sizeof(body), CF_HEAD
+			"    discovery:\n"
+			"      provider: dns\n"
+			"      dns:\n"
+			"        names: [seeds.example.com]\n"
+			"        record_type: %s\n"
+			"        timeout_ms: 200\n"
+			"        servers: ['127.0.0.1:%u']\n", value, port);
+		aerospike* client = cf_init_default(body);
+
+		if (!client) {
+			close(fd);
+			fail("record_type %s: no client: %s", value, cf_log_first(AS_LOG_LEVEL_ERROR));
+		}
+
+		if (!client->config.discovery.provider_registered ||
+			strcmp(client->config.discovery.provider.name, "dns") != 0) {
+			cf_close(client);
+			close(fd);
+			fail("record_type %s: no dns provider: %s", value, cf_log_first(AS_LOG_LEVEL_ERROR));
+		}
+
+		as_error err;
+		as_seed_candidates out;
+		cf_refresh(client, &err, &out);
+		as_seed_candidates_destroy(&out);
+		cf_close(client);
+
+		int qtype = cf_dns_first_qtype(fd);
+		close(fd);
+
+		if (srv ? qtype != 33 : (qtype != 1 && qtype != 28)) {
+			fail("record_type %s: first query has QTYPE %d", value, qtype);
+		}
+	}
+}
+
 TEST(cf_aws_provider, "the aws-tags provider from the file sends its region and filters and returns its port and tls_name")
 {
 	DISCOVERY_SCOPED(aws_stub, s, aws_stub_stop);
@@ -3050,6 +3161,7 @@ SUITE(discovery_config_file, "YAML discovery and translation keys")
 	suite_after(after);
 
 	suite_add(cf_every_discovery_key);
+	suite_add(cf_record_type_any_case);
 	suite_add(cf_port_map);
 	suite_add(cf_pass_through);
 	suite_add(cf_static_map);
@@ -3074,6 +3186,7 @@ SUITE(discovery_config_file, "YAML discovery and translation keys")
 	suite_add(cf_registered_locale);
 #if defined(DISCOVERY_FAKE_SERVERS)
 	suite_add(cf_dns_provider);
+	suite_add(cf_dns_record_type_query);
 	suite_add(cf_aws_provider);
 	suite_add(cf_reload_keeps_static_alternate);
 	suite_add(cf_reload_skips_static);

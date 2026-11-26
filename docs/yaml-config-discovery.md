@@ -140,7 +140,7 @@ name in `names` and returns the addresses as seed hosts. The keys map onto
 | Key | Type | Values | Default |
 | --- | --- | --- | --- |
 | `names` | list of string | one or more DNS names, no duplicates (compared case-insensitively, trailing dot optional), queried as absolute names | required |
-| `record_type` | string | `a` (A and AAAA records), `srv` (SRV records) | `a` |
+| `record_type` | string | `a` (A and AAAA records) or `srv` (SRV records), in any case (`A`, `SRV`, `Srv`) | `a` |
 | `port` | int | 1 to 65535: port set on hosts resolved from A and AAAA records; ignored for `srv`, which uses each record's port | `3000` |
 | `tls_name` | string | TLS name set on every returned host | none (the configured-seed default) |
 | `timeout_ms` | int | at least 1: total milliseconds of one refresh, across every name, record type, SRV target and resolver | `2000` in thread mode, `80` in tend mode |
@@ -375,7 +375,8 @@ registrations set in code. Code registrations are not destroyed.
 - An unknown enum value, for example
   `Invalid static.client.discovery.execution_mode: background. valid values: thread, tend`. The
   same applies to `provider`, `merge_policy`, `dns.record_type`, `aws.address_field`,
-  `translation.provider` and `translation.on_miss`.
+  `translation.provider` and `translation.on_miss`. Enum values are matched case-sensitively,
+  except `dns.record_type`.
 - A known key with a value of the wrong kind, for example `discovery: static`, `ip_map: 10.0.0.1`
   or `dns.port: [1]`: `Invalid static.client.discovery: expected a map, not a scalar`. A list
   element or map value that is not a scalar, and a filter that is not a map, are reported the

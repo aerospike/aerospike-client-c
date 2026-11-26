@@ -2241,18 +2241,10 @@ parse_uint32_strict(
 }
 
 static bool
-as_parse_enum(
-	as_yaml* yaml, const char* path, const char* value, const char* const* names, uint32_t size,
-	uint32_t* out
+as_enum_error(
+	as_yaml* yaml, const char* path, const char* value, const char* const* names, uint32_t size
 	)
 {
-	for (uint32_t i = 0; i < size; i++) {
-		if (strcmp(value, names[i]) == 0) {
-			*out = i;
-			return true;
-		}
-	}
-
 	as_string_builder sb;
 	as_string_builder_inita(&sb, 256, false);
 
@@ -2266,6 +2258,36 @@ as_parse_enum(
 	as_error_update(&yaml->err, AEROSPIKE_ERR_PARAM, "Invalid %s: %s. valid values: %s",
 		path, value, sb.data);
 	return false;
+}
+
+static bool
+as_parse_enum(
+	as_yaml* yaml, const char* path, const char* value, const char* const* names, uint32_t size,
+	uint32_t* out
+	)
+{
+	for (uint32_t i = 0; i < size; i++) {
+		if (strcmp(value, names[i]) == 0) {
+			*out = i;
+			return true;
+		}
+	}
+	return as_enum_error(yaml, path, value, names, size);
+}
+
+static bool
+as_parse_enum_nocase(
+	as_yaml* yaml, const char* path, const char* value, const char* const* names, uint32_t size,
+	uint32_t* out
+	)
+{
+	for (uint32_t i = 0; i < size; i++) {
+		if (strcasecmp(value, names[i]) == 0) {
+			*out = i;
+			return true;
+		}
+	}
+	return as_enum_error(yaml, path, value, names, size);
 }
 
 static void
@@ -3972,7 +3994,7 @@ as_parse_dns_field(as_yaml* yaml, const char* path, const char* name)
 	bool rv = true;
 
 	if (strcmp(name, "record_type") == 0) {
-		if ((rv = as_parse_enum(yaml, key, value, as_yaml_record_types,
+		if ((rv = as_parse_enum_nocase(yaml, key, value, as_yaml_record_types,
 				AS_YAML_COUNT(as_yaml_record_types), &v))) {
 			d->dns.record_type = (as_dns_record_type)v;
 		}

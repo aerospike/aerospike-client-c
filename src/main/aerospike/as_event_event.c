@@ -684,10 +684,19 @@ as_event_tls_connect(as_event_command* cmd, as_event_connection* conn)
 	int rv = as_tls_connect_once(&conn->socket);
 
 	if (rv < -2) {
+		// Read before the retry, which closes the socket. The name is the node's.
+		const char* rejected = as_tls_rejected_name(conn->socket.ssl);
+
 		if (! as_event_socket_retry(cmd)) {
 			// Failed, error has been logged.
 			as_error err;
-			as_error_set_message(&err, AEROSPIKE_ERR_TLS_ERROR, "TLS connection failed");
+
+			if (rejected) {
+				as_error_update(&err, AEROSPIKE_ERR_TLS_ERROR, "Invalid TLS name: %s", rejected);
+			}
+			else {
+				as_error_set_message(&err, AEROSPIKE_ERR_TLS_ERROR, "TLS connection failed");
+			}
 			as_event_socket_error(cmd, &err);
 		}
 		return false;

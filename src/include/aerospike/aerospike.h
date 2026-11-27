@@ -264,6 +264,9 @@ aerospike_init_lua(as_config_lua* config);
  * aerospike_destroy(&as);
  * @endcode
  *
+ * With async event loops, unless as_event_set_single_thread(true) was called,
+ * this does nothing; see aerospike_close().
+ *
  * @param as 		The aerospike instance to destroy
  *
  * @relates aerospike
@@ -281,7 +284,10 @@ aerospike_destroy(aerospike* as);
  * Once you are finished using the connection, then you must close it via
  * the `aerospike_close()` function.
  *
- * If connect fails, then you do not need to call `aerospike_close()`.
+ * If connect fails with sync-only configurations, you do not need to call
+ * `aerospike_close()`. With async event loops, call `aerospike_close()` after a
+ * failed connect to release a registered seed provider and address translator
+ * (see `aerospike_close()`).
  *
  * @param as 		The aerospike instance to connect to a cluster.
  * @param err 		If an error occurs, the err will be populated.
@@ -299,6 +305,17 @@ aerospike_connect(aerospike* as, as_error* err);
  * @code
  * aerospike_close(&as, &err);
  * @endcode
+ *
+ * With async event loops, call aerospike_close() even when the client never
+ * connected, or its connect failed. That releases the registered seed provider
+ * and address translator, because aerospike_destroy() does nothing in that mode.
+ * A released client cannot connect until each released registration is
+ * registered again. To connect with the defaults instead, create a new
+ * aerospike object.
+ *
+ * For an unconnected client this releases only the plugins. The rest of the
+ * configuration (hosts, names, TLS strings) and an aerospike_new() allocation
+ * are not freed.
  *
  * @param as 		The aerospike instance to disconnect from a cluster.
  * @param err 		If an error occurs, the err will be populated.

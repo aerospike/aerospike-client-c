@@ -220,9 +220,16 @@ as_socket_create_and_connect(
 	
 	// Initiate non-blocking connect.
 	if (! as_socket_start_connect(sock, addr, deadline_ms)) {
+		// Read before the close, which frees the SSL.
+		const char* rejected = sock->tls_handshake_failed ? as_tls_rejected_name(sock->ssl) : NULL;
 		as_socket_close(sock);
 		char name[AS_IP_ADDRESS_SIZE];
 		as_address_name(addr, name, sizeof(name));
+
+		if (rejected) {
+			return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Invalid TLS name: %s (%s)",
+				rejected, name);
+		}
 		return as_error_update(err, AEROSPIKE_ERR_CONNECTION, "Socket connect failed: %s", name);
 	}
 	return AEROSPIKE_OK;

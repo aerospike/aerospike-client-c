@@ -21,6 +21,15 @@
 		BF8123032F00000200000001 /* string.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123022F00000200000001 /* string.c */; };
 		BF9750111E4EC8C900B737CF /* libev.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750101E4EC8C900B737CF /* libev.a */; settings = {ATTRIBUTES = (Weak, ); }; };
 		BF9750131E4ECA1C00B737CF /* libuv.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BF9750121E4ECA1C00B737CF /* libuv.a */; settings = {ATTRIBUTES = (Weak, ); }; };
+		BF8123042F10000100000001 /* discovery_contract.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000100000002 /* discovery_contract.c */; };
+		BF8123042F10000200000001 /* discovery_translation.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000200000002 /* discovery_translation.c */; };
+		BF8123042F10000300000001 /* discovery_seed_manager.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000300000002 /* discovery_seed_manager.c */; };
+		BF8123042F10000400000001 /* discovery_dns.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000400000002 /* discovery_dns.c */; };
+		BF8123042F10000500000001 /* discovery_fake_node.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000500000002 /* discovery_fake_node.c */; };
+		BF8123042F10000B00000001 /* discovery_nodes.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000B00000002 /* discovery_nodes.c */; };
+		BF8123042F10000700000001 /* discovery_aws.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000700000002 /* discovery_aws.c */; };
+		BF8123042F10000800000001 /* discovery_aws_stub.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000800000002 /* discovery_aws_stub.c */; };
+		BF8123042F10000A00000001 /* discovery_config_file.c in Sources */ = {isa = PBXBuildFile; fileRef = BF8123042F10000A00000002 /* discovery_config_file.c */; };
 		BF998A25307821E2004E6915 /* metrics_basics.c in Sources */ = {isa = PBXBuildFile; fileRef = BF998A24307821E2004E6915 /* metrics_basics.c */; };
 		BFA5A5B530ACDCD4001AC5FB /* query_topk.c in Sources */ = {isa = PBXBuildFile; fileRef = BFA5A5B430ACDCD4001AC5FB /* query_topk.c */; };
 		BFA5A5B930ACDE00001AC5FB /* query_guardrails.c in Sources */ = {isa = PBXBuildFile; fileRef = BFA5A5B830ACDE00001AC5FB /* query_guardrails.c */; };
@@ -116,6 +125,17 @@
 		BF8A328A1E4E73FD00DE2F4D /* libssl.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libssl.dylib; path = /usr/local/opt/openssl/lib/libssl.dylib; sourceTree = "<absolute>"; };
 		BF9750101E4EC8C900B737CF /* libev.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libev.a; path = /usr/local/lib/libev.a; sourceTree = "<group>"; };
 		BF9750121E4ECA1C00B737CF /* libuv.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libuv.a; path = /usr/local/lib/libuv.a; sourceTree = "<group>"; };
+		BF8123042F10000100000002 /* discovery_contract.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_contract.c; path = ../src/test/discovery_contract.c; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000200000002 /* discovery_translation.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_translation.c; path = ../src/test/discovery_translation.c; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000300000002 /* discovery_seed_manager.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_seed_manager.c; path = ../src/test/discovery_seed_manager.c; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000400000002 /* discovery_dns.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_dns.c; path = ../src/test/discovery_dns.c; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000500000002 /* discovery_fake_node.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_fake_node.c; path = ../src/test/discovery_fake_node.c; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000B00000002 /* discovery_nodes.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_nodes.c; path = ../src/test/discovery_nodes.c; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000600000002 /* discovery_fake_node.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = discovery_fake_node.h; path = ../src/test/discovery_fake_node.h; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000700000002 /* discovery_aws.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_aws.c; path = ../src/test/discovery_aws.c; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000800000002 /* discovery_aws_stub.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_aws_stub.c; path = ../src/test/discovery_aws_stub.c; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000900000002 /* discovery_aws_stub.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = discovery_aws_stub.h; path = ../src/test/discovery_aws_stub.h; sourceTree = SOURCE_ROOT; };
+		BF8123042F10000A00000002 /* discovery_config_file.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = discovery_config_file.c; path = ../src/test/discovery_config_file.c; sourceTree = SOURCE_ROOT; };
 		BF998A24307821E2004E6915 /* metrics_basics.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = metrics_basics.c; path = ../src/test/metrics_basics.c; sourceTree = SOURCE_ROOT; };
 		BFA5A5B430ACDCD4001AC5FB /* query_topk.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = query_topk.c; path = ../src/test/aerospike_query/query_topk.c; sourceTree = SOURCE_ROOT; };
 		BFA5A5B830ACDE00001AC5FB /* query_guardrails.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; name = query_guardrails.c; path = ../src/test/aerospike_query/query_guardrails.c; sourceTree = SOURCE_ROOT; };
@@ -277,6 +297,17 @@
 				BFC65C231C92260A0079DF5A /* lua */,
 				BFC65C0B1C9225850079DF5A /* util */,
 				BFC65BFC1C92250B0079DF5A /* aerospike_test.c */,
+				BF8123042F10000100000002 /* discovery_contract.c */,
+				BF8123042F10000200000002 /* discovery_translation.c */,
+				BF8123042F10000300000002 /* discovery_seed_manager.c */,
+				BF8123042F10000400000002 /* discovery_dns.c */,
+				BF8123042F10000500000002 /* discovery_fake_node.c */,
+				BF8123042F10000600000002 /* discovery_fake_node.h */,
+				BF8123042F10000B00000002 /* discovery_nodes.c */,
+				BF8123042F10000700000002 /* discovery_aws.c */,
+				BF8123042F10000800000002 /* discovery_aws_stub.c */,
+				BF8123042F10000900000002 /* discovery_aws_stub.h */,
+				BF8123042F10000A00000002 /* discovery_config_file.c */,
 				BF998A24307821E2004E6915 /* metrics_basics.c */,
 				BFCF5E9B302383C9004A0E7A /* config_basics.c */,
 				BFC65BFD1C92250B0079DF5A /* aerospike_test.h */,
@@ -545,6 +576,15 @@
 				BFC65C0A1C92256A0079DF5A /* batch.c in Sources */,
 				BFD74AE61CFE6E4B00D79E15 /* map_udf.c in Sources */,
 				BFC65C611C9227860079DF5A /* query_geospatial.c in Sources */,
+				BF8123042F10000100000001 /* discovery_contract.c in Sources */,
+				BF8123042F10000200000001 /* discovery_translation.c in Sources */,
+				BF8123042F10000300000001 /* discovery_seed_manager.c in Sources */,
+				BF8123042F10000400000001 /* discovery_dns.c in Sources */,
+				BF8123042F10000500000001 /* discovery_fake_node.c in Sources */,
+				BF8123042F10000B00000001 /* discovery_nodes.c in Sources */,
+				BF8123042F10000700000001 /* discovery_aws.c in Sources */,
+				BF8123042F10000800000001 /* discovery_aws_stub.c in Sources */,
+				BF8123042F10000A00000001 /* discovery_config_file.c in Sources */,
 				BF998A25307821E2004E6915 /* metrics_basics.c in Sources */,
 				BFC65C1C1C9225AB0079DF5A /* test_aerospike.c in Sources */,
 				BFCF5E9C302383C9004A0E7A /* config_basics.c in Sources */,

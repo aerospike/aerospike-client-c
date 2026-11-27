@@ -388,10 +388,19 @@ extern char* aerospike_client_language;
 
 typedef struct as_metrics_exporter_slot_s {
 	as_metrics_exporter* exporter;
+	// Sequence number of the last nodes_departed entry this exporter exported.
+	// See as_cluster.metrics_departed_seq.
+	uint64_t departed_seq;
 	uint32_t consecutive_failures;
 	uint32_t suspend_remaining;
 	bool owned;
 } as_metrics_exporter_slot;
+
+// One entry in as_cluster.metrics_nodes_departed. Entries are in seq order.
+typedef struct as_metrics_departed_s {
+	as_metrics_node_snapshot* snap;
+	uint64_t seq;
+} as_metrics_departed;
 
 #if defined(_MSC_VER)
 struct as_metrics_cpu_state_s {
@@ -420,6 +429,7 @@ struct as_metrics_runtime_s {
 static as_status as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool force, as_error* err);
 static void as_metrics_runtime_free(as_metrics_runtime* rt);
 static void as_metrics_snapshot_clone_nodes_departed(const as_cluster* cluster, as_metrics_snapshot* snap);
+static void as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, const as_metrics_node_snapshot* prev);
 
 #if defined(__linux__)
 static as_status
@@ -824,6 +834,9 @@ as_metrics_node_snapshot_create(as_node* node, as_metrics_node_snapshot** snapsh
 		snap->namespace_count++;
 	}
 
+	if (node->metrics_prior) {
+		as_metrics_node_snapshot_merge(snap, node->metrics_prior);
+	}
 	*snapshot = snap;
 }
 
@@ -1080,7 +1093,8 @@ as_metrics_departed_find(as_vector* departed, const char* name)
 	}
 
 	for (uint32_t i = 0; i < departed->size; i++) {
-		as_metrics_node_snapshot* snap = as_vector_get_ptr(departed, i);
+		as_metrics_departed* entry = as_vector_get(departed, i);
+		as_metrics_node_snapshot* snap = entry->snap;
 
 		if (snap && snap->name && strcmp(snap->name, name) == 0) {
 			return (int)i;
@@ -1099,9 +1113,9 @@ as_metrics_departed_clear(as_cluster* cluster)
 	}
 
 	for (uint32_t i = 0; i < departed->size; i++) {
-		as_metrics_node_snapshot* snap = as_vector_get_ptr(departed, i);
+		as_metrics_departed* entry = as_vector_get(departed, i);
 
-		as_metrics_node_snapshot_destroy(snap);
+		as_metrics_node_snapshot_destroy(entry->snap);
 	}
 	as_vector_clear(departed);
 }
@@ -1120,9 +1134,9 @@ as_metrics_snapshot_clone_nodes_departed(const as_cluster* cluster, as_metrics_s
 	snap->nodes_departed = cf_malloc(sizeof(as_metrics_node_snapshot*) * n);
 
 	for (uint32_t i = 0; i < n; i++) {
-		as_metrics_node_snapshot* src = as_vector_get_ptr(departed, i);
+		as_metrics_departed* entry = as_vector_get(departed, i);
 
-		snap->nodes_departed[i] = as_metrics_node_snapshot_clone(src);
+		snap->nodes_departed[i] = as_metrics_node_snapshot_clone(entry->snap);
 	}
 	snap->nodes_departed_count = n;
 }
@@ -1195,8 +1209,8 @@ as_metrics_find_namespace_snapshot(as_metrics_node_snapshot* snap, const char* n
 	return NULL;
 }
 
-// A rejoined node is a new as_node with counters at zero. Add the pending final
-// into the new final so the node keeps one entry that spans each stint.
+// A rejoined node is a new as_node with counters at zero. Add its earlier
+// stints, as_node.metrics_prior, so its counters continue across the rejoin.
 // Identity and gauges come from snap.
 static void
 as_metrics_node_snapshot_merge(as_metrics_node_snapshot* snap, const as_metrics_node_snapshot* prev)
@@ -1232,20 +1246,10 @@ as_metrics_departed_add(as_cluster* cluster, as_node* node)
 	as_metrics_node_snapshot_create(node, &snap);
 
 	if (!cluster->metrics_nodes_departed) {
-		cluster->metrics_nodes_departed = as_vector_create(sizeof(as_metrics_node_snapshot*), 4);
+		cluster->metrics_nodes_departed = as_vector_create(sizeof(as_metrics_departed), 4);
 	}
 
 	as_vector* departed = cluster->metrics_nodes_departed;
-	int existing_node_idx = as_metrics_departed_find(departed, snap->name);
-
-	if (existing_node_idx >= 0) {
-		as_metrics_node_snapshot* prev = as_vector_get_ptr(departed, (uint32_t)existing_node_idx);
-
-		as_metrics_node_snapshot_merge(snap, prev);
-		as_vector_set(departed, (uint32_t)existing_node_idx, &snap);
-		as_metrics_node_snapshot_destroy(prev);
-		return;
-	}
 
 	if (departed->size >= AS_METRICS_NODES_DEPARTED_MAX) {
 		as_log_warn(
@@ -1255,7 +1259,26 @@ as_metrics_departed_add(as_cluster* cluster, as_node* node)
 		return;
 	}
 
-	as_vector_append(departed, &snap);
+	as_metrics_departed entry = {
+		.snap = snap,
+		.seq = ++cluster->metrics_departed_seq
+	};
+	as_vector_append(departed, &entry);
+}
+
+void
+as_metrics_node_rejoin(as_cluster* cluster, as_node* node)
+{
+	as_vector* departed = cluster->metrics_nodes_departed;
+	int idx = as_metrics_departed_find(departed, node->name);
+
+	if (idx < 0) {
+		return;
+	}
+
+	as_metrics_departed* entry = as_vector_get(departed, (uint32_t)idx);
+	node->metrics_prior = entry->snap;
+	as_vector_remove(departed, (uint32_t)idx);
 }
 
 void
@@ -1270,10 +1293,79 @@ as_metrics_departed_destroy(as_cluster* cluster)
 	cluster->metrics_nodes_departed = NULL;
 }
 
-static bool
-as_metrics_export_slots(as_metrics_runtime* rt, const as_metrics_snapshot* snap, bool force)
+// Point snap->nodes_departed at the entries after exported_seq. all holds clones of
+// every as_cluster.metrics_nodes_departed entry, in the same order. subset has
+// room for all_count entries.
+static void
+as_metrics_snapshot_set_departed(
+	const as_cluster* cluster, uint64_t exported_seq, as_metrics_node_snapshot** all,
+	uint32_t all_count, as_metrics_node_snapshot** subset, as_metrics_snapshot* snap
+	)
 {
-	bool any_ok = false;
+	as_vector* departed = cluster->metrics_nodes_departed;
+	uint32_t n = 0;
+
+	for (uint32_t i = 0; i < all_count; i++) {
+		as_metrics_departed* entry = as_vector_get(departed, i);
+
+		if (entry->seq > exported_seq) {
+			subset[n++] = all[i];
+		}
+	}
+
+	snap->nodes_departed = NULL;
+
+	if (n > 0) {
+		snap->nodes_departed = subset;
+	}
+	snap->nodes_departed_count = n;
+}
+
+// Remove the departed entries that every exporter has exported. With no
+// exporter, entries are kept. Entries are in seq order, so they are a prefix.
+static void
+as_metrics_departed_drain(as_cluster* cluster, as_metrics_runtime* rt)
+{
+	as_vector* departed = cluster->metrics_nodes_departed;
+
+	if (!departed || rt->slots->size == 0) {
+		return;
+	}
+
+	uint64_t min_seq = UINT64_MAX;
+
+	for (uint32_t i = 0; i < rt->slots->size; i++) {
+		as_metrics_exporter_slot* slot = as_vector_get(rt->slots, i);
+
+		if (slot->departed_seq < min_seq) {
+			min_seq = slot->departed_seq;
+		}
+	}
+
+	while (departed->size > 0) {
+		as_metrics_departed* entry = as_vector_get(departed, 0);
+
+		if (entry->seq > min_seq) {
+			break;
+		}
+
+		as_metrics_node_snapshot_destroy(entry->snap);
+		as_vector_remove(departed, 0);
+	}
+}
+
+static void
+as_metrics_export_slots(as_cluster* cluster, as_metrics_runtime* rt, as_metrics_snapshot* snap, bool force)
+{
+	// Each exporter gets the departed entries it has not exported, so an exporter
+	// that fails or is suspended still gets a departed node's final sample later.
+	as_metrics_node_snapshot** all = snap->nodes_departed;
+	uint32_t all_count = snap->nodes_departed_count;
+	as_metrics_node_snapshot** subset = NULL;
+
+	if (all_count > 0) {
+		subset = cf_malloc(sizeof(as_metrics_node_snapshot*) * all_count);
+	}
 
 	for (uint32_t i = 0; i < rt->slots->size; i++) {
 		as_metrics_exporter_slot* slot = as_vector_get(rt->slots, i);
@@ -1286,6 +1378,8 @@ as_metrics_export_slots(as_metrics_runtime* rt, const as_metrics_snapshot* snap,
 		as_error err;
 		as_error_reset(&err);
 		as_status status = AEROSPIKE_ERR_CLIENT;
+
+		as_metrics_snapshot_set_departed(cluster, slot->departed_seq, all, all_count, subset, snap);
 
 		if (slot->exporter && slot->exporter->export_fn) {
 			status = slot->exporter->export_fn(slot->exporter, &err, snap);
@@ -1308,10 +1402,13 @@ as_metrics_export_slots(as_metrics_runtime* rt, const as_metrics_snapshot* snap,
 		else {
 			slot->consecutive_failures = 0;
 			slot->suspend_remaining = 0;
-			any_ok = true;
+			slot->departed_seq = cluster->metrics_departed_seq;
 		}
 	}
-	return any_ok;
+
+	snap->nodes_departed = all;
+	snap->nodes_departed_count = all_count;
+	cf_free(subset);
 }
 
 static bool
@@ -1335,7 +1432,6 @@ static as_status
 as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool force, as_error* err)
 {
 	as_metrics_snapshot* snap = NULL;
-	bool exported = false;
 	// One snapshot is shared by every exporter. When the file exporter is present,
 	// include the learn-metrics fields even if operational metrics are off.
 	as_status status;
@@ -1352,11 +1448,8 @@ as_metrics_runtime_export(as_cluster* cluster, as_metrics_runtime* rt, bool forc
 	}
 
 	as_metrics_snapshot_clone_nodes_departed(cluster, snap);
-	exported = as_metrics_export_slots(rt, snap, force);
-
-	if (exported) {
-		as_metrics_departed_clear(cluster);
-	}
+	as_metrics_export_slots(cluster, rt, snap, force);
+	as_metrics_departed_drain(cluster, rt);
 	as_metrics_snapshot_destroy(snap);
 	return AEROSPIKE_OK;
 }

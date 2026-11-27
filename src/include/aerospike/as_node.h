@@ -547,6 +547,14 @@ typedef struct as_node_s {
 
 	/**
 	 * @private
+	 * Final metrics from earlier stints of this node, moved out of
+	 * as_metrics_snapshot.nodes_departed when the node rejoined. Added into each
+	 * snapshot of this node. Guarded by as_cluster.metrics_lock.
+	 */
+	struct as_metrics_node_snapshot_s* metrics_prior;
+
+	/**
+	 * @private
 	 * Number of consecutive tends whose refresh of this node failed. Tend thread only.
 	 */
 	uint32_t failed_tends;

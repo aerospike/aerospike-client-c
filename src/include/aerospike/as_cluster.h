@@ -614,11 +614,19 @@ typedef struct as_cluster_s {
 
 	/**
 	 * @private
-	 * Final samples for nodes that left, one entry per node name. Kept until a
-	 * successful export. On-demand snapshots copy this list and do not clear it.
+	 * Final samples for nodes that left, one entry per node name. Kept until
+	 * every exporter has exported the entry. On-demand snapshots copy this list
+	 * and do not clear it.
 	 * Rejoin and repeat-departure behavior: see as_metrics_snapshot.nodes_departed.
 	 */
 	as_vector* metrics_nodes_departed;
+
+	/**
+	 * @private
+	 * Sequence number of the last entry added to metrics_nodes_departed. Each
+	 * exporter tracks the last sequence number it exported.
+	 */
+	uint64_t metrics_departed_seq;
 
 	/**
 	 * @private
@@ -1079,19 +1087,42 @@ as_cluster_sample_operational(as_cluster* cluster);
 
 /**
  * @private
- * Draw the sampler once for this user call and increment command count when
- * it is sampled. Returns the sampler decision, so node commands and retries of
- * that same call can reuse it. See as_cluster_sample_operational().
+ * Draw the sampler once for this batch, scan, or query user call and increment
+ * command count when it is sampled. Returns the sampler decision, so node
+ * commands and retries of that same call can reuse it. call_begin is set to the
+ * start of the call's cluster latency sample, or 0 when the call is not sampled.
+ * See as_cluster_sample_operational() and as_cluster_add_call_latency().
  */
 static inline bool
-as_cluster_sample_command(as_cluster* cluster)
+as_cluster_sample_command(as_cluster* cluster, uint64_t* call_begin)
 {
+	*call_begin = 0;
+
 	if (!as_cluster_sample_operational(cluster)) {
 		return false;
 	}
 
 	as_incr_uint64(&cluster->command_count);
+	*call_begin = cf_getns();
 	return true;
+}
+
+/**
+ * @private
+ * Record one cluster latency sample for a successful batch, scan, or query user
+ * call that started at call_begin. The sample covers every node command and
+ * retry of that call. Its node commands do not record cluster latency.
+ * No-op when call_begin is 0. See as_command.metrics_whole_call.
+ */
+static inline void
+as_cluster_add_call_latency(as_cluster* cluster, as_latency_type latency_type, uint64_t call_begin)
+{
+	if (call_begin == 0) {
+		return;
+	}
+
+	uint64_t elapsed = cf_getns() - call_begin;
+	as_cluster_add_command_latency(cluster, latency_type, elapsed);
 }
 
 /**

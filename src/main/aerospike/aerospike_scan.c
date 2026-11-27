@@ -62,6 +62,9 @@ typedef struct as_scan_task_s {
 	uint64_t task_id;
 	uint64_t cluster_key;
 	bool first;
+	// Sampler decision for this user scan. Node commands reuse it.
+	// See as_command_execute_sample().
+	bool metrics_sampled;
 } as_scan_task;
 
 typedef struct as_scan_complete_task_s {
@@ -139,6 +142,9 @@ as_scan_partition_notify(as_async_scan_executor* se, as_error* err)
 {
 	if (err) {
 		as_partition_error(se->pt->parts_all);
+	}
+	else {
+		as_cluster_add_call_latency(se->cluster, AS_LATENCY_TYPE_QUERY, se->executor.metrics_call_begin);
 	}
 
 	as_scan_partition_executor_destroy(se);
@@ -758,7 +764,7 @@ as_scan_command_execute(as_scan_task* task)
 	// the caller, as_scan_partitions().
 	cmd.max_retries = 0;
 
-	status = as_command_execute(&cmd, &err);
+	status = as_command_execute_sample(&cmd, &err, true, task->metrics_sampled);
 
 	// Free command memory.
 	as_command_buffer_free(buf, sb.size);
@@ -829,7 +835,8 @@ as_scan_generic(
 	aerospike_scan_foreach_callback callback, void* udata, uint64_t* task_id_ptr
 	)
 {
-	as_cluster_sample_command(cluster);
+	uint64_t call_begin;
+	bool sampled = as_cluster_sample_command(cluster, &call_begin);
 	as_status status = as_scan_validate(err, policy, scan);
 
 	if (status != AEROSPIKE_OK) {
@@ -862,7 +869,8 @@ as_scan_generic(
 		.error_mutex = &error_mutex,
 		.task_id = task_id,
 		.cluster_key = cluster_key,
-		.first = true
+		.first = true,
+		.metrics_sampled = sampled
 	};
 
 	if (scan->concurrent) {
@@ -923,6 +931,10 @@ as_scan_generic(
 		status = AEROSPIKE_OK;
 	}
 
+	if (status == AEROSPIKE_OK) {
+		as_cluster_add_call_latency(cluster, AS_LATENCY_TYPE_QUERY, call_begin);
+	}
+
 	// If completely successful, make the callback that signals completion.
 	if (callback && status == AEROSPIKE_OK) {
 		callback(NULL, udata);
@@ -949,7 +961,8 @@ as_scan_partitions(
 	as_cluster* cluster, as_error* err, const as_policy_scan* policy, const as_scan* scan,
 	as_partition_tracker* pt, aerospike_scan_foreach_callback callback, void* udata)
 {
-	bool sampled = as_cluster_sample_command(cluster);
+	uint64_t call_begin;
+	bool sampled = as_cluster_sample_command(cluster, &call_begin);
 	uint64_t parent_id = as_random_get_uint64();
 	as_status status = AEROSPIKE_OK;
 
@@ -983,7 +996,8 @@ as_scan_partitions(
 			.error_mutex = &error_mutex,
 			.task_id = task_id,
 			.cluster_key = 0,
-			.first = false
+			.first = false,
+			.metrics_sampled = sampled
 		};
 
 		if (scan->concurrent && n_nodes > 1) {
@@ -1062,6 +1076,7 @@ as_scan_partitions(
 	}
 
 	if (status == AEROSPIKE_OK) {
+		as_cluster_add_call_latency(cluster, AS_LATENCY_TYPE_QUERY, call_begin);
 		callback(NULL, udata);
 	}
 	return status;
@@ -1181,7 +1196,7 @@ as_scan_partition_execute_async(as_async_scan_executor* se, as_partition_tracker
 		cmd->ubuf = NULL;
 		cmd->ubuf_size = 0;
 		cmd->latency_type = AS_LATENCY_TYPE_QUERY;
-		as_event_command_select_sample(cmd, false);
+		as_event_command_apply_sample(cmd, ee->metrics_sample_decision, false);
 		ee->commands[i] = cmd;
 	}
 
@@ -1255,6 +1270,7 @@ as_scan_partition_retry_async(as_async_scan_executor* se_old, as_error* err)
 	ee->notify = true;
 	ee->valid = true;
 	ee->metrics_sample_decision = ee_old->metrics_sample_decision;
+	ee->metrics_call_begin = ee_old->metrics_call_begin;
 
 	if (ee->metrics_sample_decision) {
 		as_cluster_add_retry(se->cluster);
@@ -1270,7 +1286,8 @@ as_scan_partition_async(
 	as_event_loop* event_loop
 	)
 {
-	bool sampled = as_cluster_sample_command(cluster);
+	uint64_t call_begin;
+	bool sampled = as_cluster_sample_command(cluster, &call_begin);
 	pt->sleep_between_retries = 0;
 	as_status status = as_partition_tracker_assign(pt, cluster, scan->ns, err);
 
@@ -1346,6 +1363,7 @@ as_scan_partition_async(
 	ee->notify = true;
 	ee->valid = true;
 	ee->metrics_sample_decision = sampled;
+	ee->metrics_call_begin = call_begin;
 
 	return as_scan_partition_execute_async(se, pt, err);
 }

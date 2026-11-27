@@ -35,7 +35,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@0f720992d1ce3247dd17b309a0edb8b541e1e2df # main
+    uses: aerospike/aerospike-client-conformance/.github/workflows/l2-proxy.yaml@ad070c54237112d8cbab2df0b40144a2df43e5fc # main
     with:
       client-repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
       commit: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -43,37 +43,37 @@ jobs:
       profile: all
       edition: ce
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: 0f720992d1ce3247dd17b309a0edb8b541e1e2df
+      conformance-ref: ad070c54237112d8cbab2df0b40144a2df43e5fc
 
   env-dns:
     name: N-4 DNS environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@0f720992d1ce3247dd17b309a0edb8b541e1e2df # main
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@ad070c54237112d8cbab2df0b40144a2df43e5fc # main
     with:
       environment: dns
       command: bash src/test/discovery_env/run.sh dns
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: 0f720992d1ce3247dd17b309a0edb8b541e1e2df
+      conformance-ref: ad070c54237112d8cbab2df0b40144a2df43e5fc
 
   env-collision:
     name: N-18 collision environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@0f720992d1ce3247dd17b309a0edb8b541e1e2df # main
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@ad070c54237112d8cbab2df0b40144a2df43e5fc # main
     with:
       environment: collision
       command: bash src/test/discovery_env/run.sh collision
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: 0f720992d1ce3247dd17b309a0edb8b541e1e2df
+      conformance-ref: ad070c54237112d8cbab2df0b40144a2df43e5fc
 
   env-yaml:
     name: YAML translation environment (CE)
     if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@0f720992d1ce3247dd17b309a0edb8b541e1e2df # main
+    uses: aerospike/aerospike-client-conformance/.github/workflows/test-envs.yaml@ad070c54237112d8cbab2df0b40144a2df43e5fc # main
     with:
       environment: yaml
       command: bash src/test/discovery_env/run.sh yaml
       server-image: aerospike/aerospike-server:8.2.0.0
-      conformance-ref: 0f720992d1ce3247dd17b309a0edb8b541e1e2df
+      conformance-ref: ad070c54237112d8cbab2df0b40144a2df43e5fc
 
   l2-summary:
     name: L2 rows

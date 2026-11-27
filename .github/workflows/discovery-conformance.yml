@@ -82,7 +82,7 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           repository: aerospike/aerospike-client-conformance
-          ref: 0f720992d1ce3247dd17b309a0edb8b541e1e2df
+          ref: ad070c54237112d8cbab2df0b40144a2df43e5fc
           path: conformance
 
       # The collect action and the schema step pip-install into whatever python3 is on PATH, so
@@ -125,7 +125,7 @@ jobs:
 
       - name: Collect conformance report
         if: ${{ !cancelled() && steps.l1.outcome != 'skipped' }}
-        uses: aerospike/aerospike-client-conformance/.github/actions/collect-conformance-report@0f720992d1ce3247dd17b309a0edb8b541e1e2df # main
+        uses: aerospike/aerospike-client-conformance/.github/actions/collect-conformance-report@ad070c54237112d8cbab2df0b40144a2df43e5fc # main
         with:
           reports-directory: target/conformance
           fixtures-directory: conformance

@@ -252,7 +252,7 @@ as_metrics_policy_init(as_metrics_policy* policy)
 	policy->latency_columns = 7;
 	policy->latency_shift = 1;
 	policy->latency_unit = AS_METRICS_LATENCY_MILLISECONDS;
-	policy->operational_enabled = false;
+	policy->operational_enabled = true;
 	policy->usage_enabled = false;
 	policy->sampler_range = 1;
 	policy->sampler_threshold = 1;
@@ -382,7 +382,7 @@ as_metrics_policy_add_label(as_metrics_policy* policy, const char* name, const c
 //---------------------------------
 
 #define AS_METRICS_EXPORTER_MAX_FAILURES 3
-#define AS_METRICS_EXPORTER_SUSPEND_CYCLES 3
+#define AS_METRICS_EXPORTER_RETRY_INTERVALS 10
 
 extern char* aerospike_client_language;
 
@@ -743,6 +743,16 @@ as_metrics_copy_latency(as_metrics_latency_snapshot* dst, as_latency* latency, u
 		}
 		dst->buckets = buckets;
 		dst->bucket_count = size;
+	}
+	dst->sum = as_load_uint64(&latency->sum);
+	dst->count = as_load_uint64(&latency->count);
+
+	// A sample being recorded can bump count before it lowers min.
+	uint64_t min = as_load_uint64(&latency->min);
+
+	if (dst->count > 0 && min != UINT64_MAX) {
+		dst->min = min;
+		dst->max = as_load_uint64(&latency->max);
 	}
 	as_latency_release(latency);
 }
@@ -1155,6 +1165,10 @@ as_metrics_add_latency_buckets(
 	if (!dst->buckets) {
 		dst->buckets = as_metrics_clone_latency_buckets(src);
 		dst->bucket_count = src->bucket_count;
+		dst->sum = src->sum;
+		dst->count = src->count;
+		dst->min = src->min;
+		dst->max = src->max;
 		return;
 	}
 
@@ -1165,6 +1179,20 @@ as_metrics_add_latency_buckets(
 	for (uint8_t k = 0; k < dst->bucket_count; k++) {
 		dst->buckets[k] += src->buckets[k];
 	}
+
+	if (src->count == 0) {
+		return;
+	}
+
+	if (dst->count == 0 || src->min < dst->min) {
+		dst->min = src->min;
+	}
+
+	if (src->max > dst->max) {
+		dst->max = src->max;
+	}
+	dst->sum += src->sum;
+	dst->count += src->count;
 }
 
 static void
@@ -1392,11 +1420,15 @@ as_metrics_export_slots(as_cluster* cluster, as_metrics_runtime* rt, as_metrics_
 			as_log_warn("Metrics exporter error: %s %s", as_error_string(status), err.message);
 			slot->consecutive_failures++;
 
+			// A suspended exporter is offered every 10th interval. Each failed
+			// retry suspends it again until one export succeeds.
 			if (slot->consecutive_failures >= AS_METRICS_EXPORTER_MAX_FAILURES) {
-				slot->suspend_remaining = AS_METRICS_EXPORTER_SUSPEND_CYCLES;
-				slot->consecutive_failures = 0;
-				as_log_warn("Metrics exporter suspended after %u consecutive failures",
-					AS_METRICS_EXPORTER_MAX_FAILURES);
+				slot->suspend_remaining = AS_METRICS_EXPORTER_RETRY_INTERVALS - 1;
+
+				if (slot->consecutive_failures == AS_METRICS_EXPORTER_MAX_FAILURES) {
+					as_log_warn("Metrics exporter suspended after %u consecutive failures",
+						AS_METRICS_EXPORTER_MAX_FAILURES);
+				}
 			}
 		}
 		else {

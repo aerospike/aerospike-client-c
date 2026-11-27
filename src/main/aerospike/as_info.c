@@ -299,10 +299,6 @@ as_info_command(
 		return status;
 	}
 
-	if (metrics) {
-		as_node_add_bytes_out(metrics, size);
-	}
-
 	// Read response
 	as_proto header;
 	status = as_socket_read_deadline(err, sock, node, (uint8_t*)&header, sizeof(as_proto), 0, deadline_ms, NULL);
@@ -330,11 +326,6 @@ as_info_command(
 			if (status) {
 				return status;
 			}
-			
-			if (metrics) {
-				bytes_in += read_len;
-				as_node_add_bytes_in(metrics, bytes_in);
-			}
 
 			buf[read_len] = 0;
 			return as_error_update(err, AEROSPIKE_ERR_CLIENT,
@@ -351,11 +342,7 @@ as_info_command(
 			return status;
 		}
 		response[header.sz] = 0;
-		
-		if (metrics) {
-			bytes_in += header.sz;
-			as_node_add_bytes_in(metrics, bytes_in);
-		}
+		bytes_in += header.sz;
 
 		char* error = 0;
 		status = as_info_validate(response, &error);
@@ -368,6 +355,12 @@ as_info_command(
 		}
 		
 		*values = response;
+	}
+
+	// Only a successful info request adds bytes. See as_metrics_namespace_snapshot.bytes_in.
+	if (metrics) {
+		as_node_add_bytes_out(metrics, size);
+		as_node_add_bytes_in(metrics, bytes_in);
 	}
 	return status;
 }

@@ -86,20 +86,18 @@ as_lookup_next(as_address_iterator* iter, struct sockaddr** addr)
  * @private
  * Release memory associated with address iterator.
  */
-static inline void
-as_lookup_end(as_address_iterator* iter)
-{
-	freeaddrinfo(iter->addresses);
-}
+void
+as_lookup_end(as_address_iterator* iter);
 
 /**
  * @private
- * Lookup and validate node.
+ * Lookup and validate node. alternate_missing, when not NULL, is set when the failure is a
+ * missing alternate address.
  */
 as_status
 as_lookup_node(
 	struct as_cluster_s* cluster, as_error* err, struct as_host_s* host, struct sockaddr* addr,
-	bool detect_load_balancer, struct as_node_info_s* node_info
+	bool detect_load_balancer, struct as_node_info_s* node_info, bool* alternate_missing
 	);
 
 #ifdef __cplusplus

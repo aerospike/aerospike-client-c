@@ -17,6 +17,7 @@
 #pragma once 
 
 #include <aerospike/as_error.h>
+#include <aerospike/as_discovery.h>
 #include <aerospike/as_host.h>
 #include <aerospike/as_policy.h>
 #include <aerospike/as_password.h>
@@ -64,6 +65,19 @@ extern "C" {
  * Minimum tend interval in milliseconds.
  */
 #define AS_TEND_INTERVAL_MIN 250
+
+/**
+ * Idle time in seconds after which a pooled connection above the minimum connection count is
+ * trimmed when max_socket_idle is 0.
+ */
+#define AS_CLUSTER_IDLE_TRIM_DEFAULT_SEC 55
+
+/**
+ * Number of tend iterations between connection balancing runs, which trim idle connections.
+ * In libevent single-thread mode async connections are balanced instead by a fixed 30 second
+ * timer in each event loop registered with as_event_loop_register_aerospike().
+ */
+#define AS_CLUSTER_BALANCE_TENDS 30
 
 /**
  * Default interval in milliseconds between dynamic configuration check for file modifications.
@@ -208,6 +222,22 @@ typedef struct as_config_lua_s {
 
 /**
  * TLS module config
+ *
+ * Server identity: each node is authenticated as its TLS name, which comes from the seed
+ * (as_host.tls_name, defaulting to cluster_name or the host name) or from the server's peers
+ * reply. Seed discovery and address translation change only the transport host and port, never
+ * the TLS name. The name is matched per RFC 9525: an IP address against a SAN iPAddress entry,
+ * any other name against a SAN dNSName entry, compared case-insensitively, with at most one
+ * left-most wildcard label matching exactly one label. A name shaped like an IP address that is
+ * not a valid one (it contains a colon, or only digits and dots, such as 010.0.0.1) matches no
+ * entry. The subject CN is not an identifier.
+ *
+ * Deprecated: when that match fails, the previous matching is still accepted as a fallback: a
+ * match against the subject CN (even when SAN entries are present), or a TLS name that is an IP
+ * address or shaped like one, matched as text against a SAN dNSName entry or the CN. A fallback
+ * match logs a warning once per TLS name per process. The fallback will be removed in the next
+ * major release; issue certificates with a matching SAN dNSName or iPAddress entry. See
+ * https://github.com/aerospike/aerospike-client-c/blob/master/docs/discovery-plugin-guide.md
  *
  * @relates as_config
  */
@@ -465,6 +495,7 @@ typedef struct as_config_s {
 	/**
 	 * Seed hosts. Populate with one or more hosts in the cluster that you intend to connect with.
 	 * Do not set directly.  Use as_config_add_hosts() or as_config_add_host() to add seed hosts.
+	 * May be left empty when a seed provider is registered (see discovery).
 	 */
 	as_vector* hosts;
 	
@@ -519,8 +550,23 @@ typedef struct as_config_s {
 	 * The key is the IP address returned from friend info requests to other servers.  The
 	 * value is the real IP address used to connect to the server.
 	 *
+	 * The match is exact and host-only, and the port is unchanged. It applies to
+	 * configured seeds, as_cluster_add_seed() hosts, node addresses used to reseed,
+	 * and advertised peer and service addresses. Seeds returned by a seed provider
+	 * are used as returned, unless one equals a configured seed by name and port.
+	 *
+	 * Ignored while an address translator is registered, configured seeds included;
+	 * aerospike_connect() then logs a warning.
+	 *
+	 * The YAML config file keys static.client.ip_map and
+	 * static.client.translation.static_map replace it as a whole.
+	 *
 	 * A deep copy of ip_map is performed in aerospike_connect().  The caller is
 	 * responsible for memory deallocation of the original data structure.
+	 *
+	 * When the config file sets ip_map, aerospike_init() points ip_map at a
+	 * client-owned copy that aerospike_destroy() frees. Free only the array you
+	 * assigned, never aerospike.config.ip_map.
 	 */
 	as_addr_map* ip_map;
 	
@@ -529,6 +575,30 @@ typedef struct as_config_s {
 	 * Default: 0
 	 */
 	uint32_t ip_map_size;
+
+	/**
+	 * Pluggable seed discovery configuration. When no provider is registered
+	 * the static provider over the configured seeds is used, which adds no
+	 * thread and no periodic work.
+	 *
+	 * The provider supplies the hosts used to bootstrap and, when the cluster
+	 * has no active node, to reseed. Cluster membership still comes from the
+	 * servers. Its result is merged with hosts per merge_policy; hosts may be
+	 * empty when a provider is registered. Discovered hosts without a TLS name
+	 * get the same default as configured hosts when TLS is enabled.
+	 */
+	as_discovery_config discovery;
+
+	/**
+	 * Pluggable address translation configuration. When no translator is
+	 * registered the static map over ip_map is used, including for configured
+	 * seeds.
+	 *
+	 * A registered translator is invoked for every peer and service endpoint a
+	 * server advertises, never for configured seeds. While a translator is
+	 * registered, ip_map is ignored and configured seeds are used as configured.
+	 */
+	as_translation_config translation;
 	
 	/**
 	 * Minimum number of synchronous connections allowed per server node.  Preallocate min
@@ -537,7 +607,8 @@ typedef struct as_config_s {
 	 *
 	 * Server proto-fd-idle-ms and client max_socket_idle should be set to zero (no reap) if
 	 * min_conns_per_node is greater than zero.  Reaping connections can defeat the purpose
-	 * of keeping connections in reserve for a future burst of activity.
+	 * of keeping connections in reserve for a future burst of activity.  Behind a load
+	 * balancer that drops idle flows, set max_socket_idle below its idle timeout instead.
 	 *
 	 * Servers 8.1+ have deprecated proto-fd-idle-ms. When proto-fd-idle-ms is ultimately removed,
 	 * the server will stop automatically reaping based on socket idle timeouts.
@@ -566,7 +637,8 @@ typedef struct as_config_s {
 	 *
 	 * Server proto-fd-idle-ms and client max_socket_idle should be set to zero (no reap) if
 	 * async_min_conns_per_node is greater than zero.  Reaping connections can defeat the purpose
-	 * of keeping connections in reserve for a future burst of activity.
+	 * of keeping connections in reserve for a future burst of activity.  Behind a load
+	 * balancer that drops idle flows, set max_socket_idle below its idle timeout instead.
 	 *
 	 * Servers 8.1+ have deprecated proto-fd-idle-ms. When proto-fd-idle-ms is ultimately removed,
 	 * the server will stop automatically reaping based on socket idle timeouts.
@@ -627,7 +699,10 @@ typedef struct as_config_s {
 	 *
 	 * Connection pools are now implemented by a LIFO stack.  Connections at the tail of the
 	 * stack will always be the least used.  These connections are checked for max_socket_idle
-	 * once every 30 tend iterations (usually 30 seconds).
+	 * once every AS_CLUSTER_BALANCE_TENDS tend iterations (usually 30 seconds, scaling with
+	 * tender_interval).  In libevent single-thread mode, async connections are checked instead
+	 * every 30 seconds by a timer in each event loop registered with
+	 * as_event_loop_register_aerospike().
 	 *
 	 * If server's proto-fd-idle-ms is greater than zero, then max_socket_idle should be
 	 * at least a few seconds less than the server's proto-fd-idle-ms, so the client does not
@@ -636,8 +711,18 @@ typedef struct as_config_s {
 	 * If server's proto-fd-idle-ms is zero (no reap), then max_socket_idle should also be zero.
 	 * Connections retrieved from a pool in commands will not be checked for max_socket_idle
 	 * when max_socket_idle is zero.  Idle connections will still be trimmed down from peak
-	 * connections to min connections (min_conns_per_node and async_min_conns_per_node) using a
-	 * hard-coded 55 second limit in the cluster tend thread.
+	 * connections to min connections (min_conns_per_node and async_min_conns_per_node) using an
+	 * AS_CLUSTER_IDLE_TRIM_DEFAULT_SEC (55 second) limit, on the schedule above.  Pipeline
+	 * connections are not trimmed.
+	 *
+	 * Behind a load balancer or endpoint that drops idle flows (an AWS Network Load Balancer or
+	 * PrivateLink endpoint drops them after 350 seconds by default), max_socket_idle should be
+	 * below its idle timeout, for example 340, when min connections are above zero, when
+	 * pipelining is used, when the timeout is lower than about 85 seconds, when
+	 * tender_interval is above about 9.8 seconds, or in libevent single-thread mode without
+	 * as_event_loop_register_aerospike() in every event loop.  With the other defaults, idle
+	 * connections are closed within about 85 seconds.  See
+	 * https://github.com/aerospike/aerospike-client-c/blob/master/docs/discovery-plugin-guide.md
 	 *
 	 * Servers 8.1+ have deprecated proto-fd-idle-ms. When proto-fd-idle-ms is ultimately removed,
 	 * the server will stop automatically reaping based on socket idle timeouts.
@@ -767,6 +852,18 @@ typedef struct as_config_s {
 	 * Peers addresses: peers-clear-alt
 	 * Peers TLS addresses: peers-tls-alt
 	 *
+	 * When true, every node must have an alternate address:
+	 * - A seed whose service-*-alt reply is empty is not used. If no seed is
+	 *   usable, aerospike_connect() fails with AEROSPIKE_ERR_INVALID_NODE when
+	 *   fail_if_not_connected is true; otherwise it logs a warning and connects
+	 *   with no nodes.
+	 * - A peer that is missing from the alternate peers list, or listed with no
+	 *   hosts, is not added. It is logged at error level on every tend until it
+	 *   is fixed. During aerospike_connect() with fail_if_not_connected, when only
+	 *   the seed node is found, connect fails with AEROSPIKE_ERR_INVALID_NODE.
+	 *
+	 * Each such error names use_services_alternate and alternate-access-address.
+	 *
 	 * Default: false
 	 */
 	bool use_services_alternate;
@@ -894,6 +991,390 @@ AS_EXTERN void
 as_config_destroy(as_config* config);
 
 /**
+ * Register a seed provider. The function table is validated (size, version,
+ * non-empty name, refresh and needs_periodic_refresh) and copied, including
+ * name. On success the config takes ownership of provider->udata and destroys
+ * it exactly once (see as_seed_provider.destroy); a previous registration is
+ * destroyed, unless it has the same udata (below). On failure ownership stays
+ * with the caller.
+ *
+ * Registering the non-NULL udata that is registered on this config right now
+ * destroys nothing; the registration is replaced and keeps that udata, and the
+ * new destroy replaces the previous one. While it stays registered, udata is
+ * destroyed once per distinct pointer, not once per registration: a caller that
+ * takes a reference for each registration must not take another when
+ * registering the same udata again. A udata registered on several configs is
+ * owned by each of them: each calls it independently and each destroys it once.
+ *
+ * The client cannot build this instance again, so a sync aerospike_close()
+ * destroys it, and aerospike_connect() then fails with AEROSPIKE_ERR_PARAM until
+ * a provider is registered again (as_discovery_config.provider_released); the
+ * same udata may be registered again then, as a new registration. A successful
+ * registration also ends a release by aerospike_close() of an unconnected async
+ * client. Providers set by the built-in setters, the config file,
+ * as_config_select_seed_provider() or as_config_set_seed_provider_factory() are
+ * rebuilt by aerospike_connect() instead; register a factory with the latter to
+ * keep the provider across close and reconnect.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for an invalid table or while a client created
+ * from this config is connected.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_seed_provider(as_config* config, const as_seed_provider* provider, as_error* err);
+
+/**
+ * Register an address translator. The function table is validated (size,
+ * version, non-empty name and translate) and copied, including name. On
+ * success the config takes ownership of translator->udata and destroys it
+ * exactly once (see as_address_translator.destroy); a previous registration is
+ * destroyed, unless it has the same udata (below). On failure ownership stays
+ * with the caller.
+ *
+ * Registering the non-NULL udata that is registered on this config right now
+ * destroys nothing; the registration is replaced and keeps that udata, and the
+ * new destroy replaces the previous one. While it stays registered, udata is
+ * destroyed once per distinct pointer, not once per registration: a caller that
+ * takes a reference for each registration must not take another when
+ * registering the same udata again. A udata registered on several configs is
+ * owned by each of them: each calls it independently and each destroys it once.
+ *
+ * The client cannot build this instance again, so a sync aerospike_close()
+ * destroys it, and aerospike_connect() then fails with AEROSPIKE_ERR_PARAM until
+ * a translator is registered again (as_translation_config.provider_released). A
+ * successful registration also ends a release by aerospike_close() of an
+ * unconnected async client. Translators set by the built-in setters, the config
+ * file, as_config_select_address_translator() or
+ * as_config_set_address_translator_factory() are rebuilt by aerospike_connect()
+ * instead; register a factory with the latter to keep the translator across
+ * close and reconnect.
+ *
+ * While a translator is registered, as_config.ip_map is ignored, configured
+ * seeds included.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for an invalid table or while a client created
+ * from this config is connected.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_address_translator(as_config* config, const as_address_translator* translator,
+	as_error* err);
+
+/**
+ * Register a seed provider built by factory, which the client keeps to build the provider
+ * again: a sync aerospike_close() destroys the instance, and the next aerospike_connect() on
+ * the same aerospike object calls the factory again, so the provider need not be registered
+ * again after each close. This is as_config_set_seed_provider() for a provider that can be
+ * rebuilt, and as_config_register_seed_provider() followed by as_config_select_seed_provider()
+ * without a name the config file could select.
+ *
+ * The factory fills the function table as described for as_seed_provider_factory, and receives
+ * an empty client-owned options map. It is called once here, on the registering thread, and
+ * again on the thread that calls aerospike_connect() after each sync aerospike_close(). A
+ * factory failure then fails that connect with "Failed to rebuild the seed provider: factory
+ * failed: ...", and the next connect calls the factory again.
+ *
+ * Ownership: on success the registration owns udata and calls destroy(udata) (optional) once,
+ * when the registration ends: it is replaced, as_config_destroy() or aerospike_destroy() runs,
+ * or aerospike_close() of an async client ends it. destroy(udata) runs once per successful
+ * registration, also when the same udata is registered again, so a caller that registers a
+ * udata again needs a reference for each registration. Each instance holds its own reference
+ * to the state it shares with udata, as as_seed_provider_factory requires, because the instance
+ * destroy ends only that connection's instance and may run after destroy(udata). Replacing the
+ * registration destroys its instance, also when the new instance has the same udata pointer.
+ * On failure the caller keeps udata and the previous registration is unchanged.
+ *
+ * An async client releases every registration at aerospike_close(), so aerospike_connect() on
+ * the same aerospike object then fails until a provider is registered again.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for a NULL config or factory, while a client created from this
+ * config is connected, or when the factory returns an invalid table ("factory returned an
+ * invalid provider"), the factory's status ("factory failed: ...") when it fails, and
+ * AEROSPIKE_ERR_CLIENT when memory runs out.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_seed_provider_factory(as_config* config, as_seed_provider_factory factory,
+	void (*destroy)(void* udata), void* udata, as_error* err);
+
+/**
+ * Register an address translator built by factory, which the client keeps to build the
+ * translator again after a sync aerospike_close(). Same rules as
+ * as_config_set_seed_provider_factory(), with "Failed to rebuild the address translator: ..."
+ * at reconnect and "factory returned an invalid translator" for an invalid table. As with
+ * as_config_set_address_translator(), ip_map is then ignored.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_address_translator_factory(as_config* config,
+	as_address_translator_factory factory, void (*destroy)(void* udata), void* udata,
+	as_error* err);
+
+/**
+ * Register the built-in port-map translator. entries maps an advertised
+ * host:port, or a node name, to the host:port to connect to; see
+ * as_discovery_port_map_translator() for the grammar. The entries are
+ * validated and copied; the caller keeps ownership of its strings. As with
+ * as_config_set_address_translator(), ip_map is then ignored. A sync
+ * aerospike_close() destroys the translator and aerospike_connect() builds it
+ * again from the copied entries.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for an invalid entry (the message names it) or
+ * while a client created from this config is connected. On failure the
+ * previous registration is unchanged.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_port_map_translator(as_config* config, const as_addr_map* entries, uint32_t size,
+	as_error* err);
+
+/**
+ * Register the built-in pass-through translator, which returns every advertised
+ * endpoint unchanged as a successful mapping, so it succeeds even with
+ * translation.on_miss set to AS_TRANSLATION_STRICT. As with
+ * as_config_set_address_translator(), ip_map is then ignored. Rebuilt by
+ * aerospike_connect() after a sync aerospike_close().
+ *
+ * Returns AEROSPIKE_ERR_PARAM while a client created from this config is
+ * connected.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_pass_through_translator(as_config* config, as_error* err);
+
+/**
+ * Register the built-in DNS seed provider; see as_discovery_dns_seed_provider()
+ * for its behavior. The configuration is validated and copied, and the system
+ * resolvers are read when servers is empty; the caller keeps ownership of dns
+ * and its strings. A sync aerospike_close() destroys the provider and
+ * aerospike_connect() builds it again from the copied configuration, reading
+ * the system resolvers again when servers is empty; a rebuild failure fails
+ * that connect.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for an invalid configuration (the message names
+ * the value), when no system resolver is usable and servers is empty, or while
+ * a client created from this config is connected. On failure the previous
+ * registration is unchanged.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_dns_seed_provider(as_config* config, const as_dns_seed_provider_config* dns,
+	as_error* err);
+
+/**
+ * Register the built-in AWS EC2 seed provider; see as_discovery_aws_seed_provider() for its
+ * behavior. The configuration is validated and copied and the TLS context created; the caller
+ * keeps ownership of aws and its strings. A sync aerospike_close() destroys the provider and
+ * aerospike_connect() builds it again from the copied configuration, loading ca_file and
+ * ca_path and resolving credentials again; a rebuild failure fails that connect.
+ *
+ * On success the registration owns aws->credentials_hook.udata, which every rebuilt provider
+ * shares. The hook destroy runs once, when the registration has ended (it is replaced, or the
+ * config is destroyed) and the last provider built from it is destroyed. A provider whose get
+ * is still running is destroyed when get returns, so the hook destroy can run on the discovery
+ * thread after aerospike_destroy() returns. On any failure the caller keeps udata.
+ *
+ * The provider is thread-only: registration fails while discovery.execution_mode is
+ * AS_DISCOVERY_EXECUTION_TEND, and aerospike_connect() fails if execution_mode is changed to it
+ * afterwards. Set execution_mode before registering.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for an invalid configuration (the message names the value), in
+ * tend mode, or while a client created from this config is connected,
+ * AEROSPIKE_ERR_TLS_ERROR when ca_file or ca_path cannot be loaded, and AEROSPIKE_ERR_CLIENT
+ * when memory runs out. On failure the previous registration is unchanged.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_aws_seed_provider(as_config* config, const as_aws_seed_provider_config* aws,
+	as_error* err);
+
+/**
+ * Register a seed provider implemented by a language binding (Python, Node.js), built by
+ * factory. Factory, ownership, replacement, rebuild and error rules are those of
+ * as_config_set_seed_provider_factory(), so close followed by aerospike_connect() works on the
+ * same aerospike object.
+ *
+ * factory fills the whole function table: name, refresh, needs_periodic_refresh, destroy and
+ * udata. needs_periodic_refresh is pure C and must not enter the runtime, so the client never
+ * calls into the binding to decide it. The factory may enter the runtime the way refresh does
+ * (Python: aerospike_connect() runs with the GIL released, so the factory acquires it).
+ * Node.js runs with async event loops, where aerospike_close() ends the registration, so its
+ * factory is only called here, on the registering thread.
+ *
+ * The registration is only valid with AS_DISCOVERY_EXECUTION_THREAD: it fails while
+ * execution_mode is AS_DISCOVERY_EXECUTION_TEND and aerospike_connect() fails if
+ * execution_mode is changed to it afterwards, also for a rebuilt provider.
+ *
+ * Every refresh call, including the initial one, runs on the client-owned
+ * discovery thread, periodic or not, and never on the connecting or tend
+ * thread. aerospike_connect() waits at most discovery.refresh_timeout_ms for
+ * the initial result; as_seed_provider.refresh states the close and reconnect
+ * bounds. refresh must enter the runtime safely (for example acquire the Python
+ * GIL) and return hosts copied with as_seed_candidates_append(), or a non-OK
+ * as_status with err set; the client then keeps the previous seeds. Only
+ * refresh and the factory may wait for the runtime thread: the instance destroy
+ * must not (see as_seed_provider.destroy).
+ *
+ * The thread that calls aerospike_connect(), aerospike_close() or
+ * aerospike_destroy() must not hold anything the callback needs:
+ * - Node.js: call aerospike_connect() from a worker thread (for example an
+ *   AsyncWorker), not the JS main thread. Otherwise every connect waits up to
+ *   refresh_timeout_ms and continues without the result (it then uses the
+ *   configured seeds and fails if there are none). aerospike_close() and
+ *   aerospike_destroy() may run on the JS main thread while its loop is the
+ *   registered event loop: close then waits for a running refresh on a client
+ *   thread, which also completes the destroy.
+ * - Python: release the GIL around connect, close and destroy.
+ *
+ * A binding translate callback is not supported. To let the config file or
+ * as_config_select_seed_provider() select a binding provider by name, register its factory with
+ * as_config_register_binding_seed_provider() instead.
+ *
+ * Returns what as_config_set_seed_provider_factory() returns, and AEROSPIKE_ERR_PARAM in tend
+ * mode. On failure the previous registration is unchanged.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_set_binding_seed_provider(as_config* config, as_seed_provider_factory factory,
+	void (*destroy)(void* udata), void* udata, as_error* err);
+
+/**
+ * Register a seed provider factory under name, so that static.client.discovery.provider in the
+ * config file or as_config_select_seed_provider() can select it. Names are case-sensitive and
+ * separate from the address translator names. Registering does not call the factory; see
+ * as_seed_provider_factory for its contract.
+ *
+ * The config file is loaded by aerospike_init() or aerospike_new() from a copy of config, so a
+ * factory the file names must be registered on config before that call; otherwise the file is
+ * invalid and ignored as a whole. Registrations are carried into the aerospike object with the
+ * rest of config.
+ *
+ * On success the config owns udata and calls destroy(udata) (optional) exactly once, when the
+ * config is destroyed (aerospike_destroy(), as_config_destroy()) or released by
+ * aerospike_close() of an unconnected async client. On failure udata stays with the caller.
+ *
+ * Returns AEROSPIKE_ERR_PARAM for a NULL config, a NULL or empty name ("Invalid seed provider
+ * name: <name>"), a built-in name such as dns ("... '<name>': built-in name"), a name already
+ * registered ("... '<name>': already registered"), a NULL factory, or while a client created
+ * from this config is connected.
+ *
+ * A factory implemented by a language binding is registered with
+ * as_config_register_binding_seed_provider() instead.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_register_seed_provider(as_config* config, const char* name,
+	as_seed_provider_factory factory, void (*destroy)(void* udata), void* udata, as_error* err);
+
+/**
+ * Register a seed provider factory implemented by a language binding (Python, Node.js) under
+ * name, so that static.client.discovery.provider in the config file or
+ * as_config_select_seed_provider() can select it. Name, ownership and error rules are those of
+ * as_config_register_seed_provider(); binding and other factories share one set of names.
+ * Registering does not call the factory.
+ *
+ * A selected instance is a binding provider (as_discovery_config.binding_provider) and follows
+ * the threading, blocking and timeout rules of as_config_set_binding_seed_provider(): every
+ * refresh call, including the initial one, runs on the client-owned discovery thread, periodic
+ * or not, and never on the connecting or tend thread; aerospike_connect() waits at most
+ * discovery.refresh_timeout_ms for the initial result, which must be > 0. A sync
+ * aerospike_close() destroys the instance and the rebuilt instance is a binding provider too.
+ *
+ * The provider is only valid with AS_DISCOVERY_EXECUTION_THREAD, and the factory is never called
+ * in AS_DISCOVERY_EXECUTION_TEND. Registration does not check execution_mode, since the config
+ * file sets it after the registration. In tend mode:
+ * - as_config_select_seed_provider() fails with AEROSPIKE_ERR_PARAM.
+ * - The config file keeps the selection without building it, and its other keys apply.
+ *   aerospike_connect() fails with AEROSPIKE_ERR_PARAM ("Binding seed provider requires thread
+ *   execution mode"). After execution_mode is set to AS_DISCOVERY_EXECUTION_THREAD, connect
+ *   calls the factory, so a factory error shows there and not at init.
+ * - aerospike_connect() fails the same way when execution_mode is changed to tend after a
+ *   selection, also after a sync aerospike_close().
+ *
+ * The factory may enter the runtime the way refresh does. It is called on the thread that calls
+ * as_config_select_seed_provider(), on the thread that calls aerospike_init() or
+ * aerospike_new() when the config file selects it in thread mode, and on the thread that calls
+ * aerospike_connect() after each sync aerospike_close() or after a selection by the file in
+ * tend mode:
+ * - Python: aerospike_connect() runs with the GIL released, so the factory acquires it.
+ * - Node.js: with async event loops aerospike_close() ends the registration, so only connect
+ *   after a selection by the file in tend mode calls the factory, on the connecting worker
+ *   thread. A factory called from aerospike_new() or a select on the JS main thread runs on
+ *   that thread, so it must not wait for it.
+ *
+ * Returns what as_config_register_seed_provider() returns.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_register_binding_seed_provider(as_config* config, const char* name,
+	as_seed_provider_factory factory, void (*destroy)(void* udata), void* udata, as_error* err);
+
+/**
+ * Register an address translator factory under name, so that
+ * static.client.translation.provider in the config file or
+ * as_config_select_address_translator() can select it. Same rules as
+ * as_config_register_seed_provider(); the built-in names are static-map, port-map and
+ * pass-through.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_register_address_translator(as_config* config, const char* name,
+	as_address_translator_factory factory, void (*destroy)(void* udata), void* udata,
+	as_error* err);
+
+/**
+ * Select a registered seed provider factory from code: call it with options and register the
+ * instance it returns as with as_config_set_seed_provider(), except that a sync
+ * aerospike_close() destroys the instance and aerospike_connect() calls the factory again with
+ * the same options, which the client keeps until the selection is replaced or the config is
+ * destroyed. A factory error on that call fails the connect.
+ *
+ * options may be NULL (an empty map). It is copied before the call, so the caller keeps it and
+ * may destroy it, or let a stack map go, right after this returns. The copy is a msgpack round
+ * trip: every map arrives as an as_orderedmap, an as_pair as a two-element list, and a value
+ * that cannot be packed (an as_rec) fails the selection with "Invalid options: cannot copy".
+ *
+ * Returns AEROSPIKE_ERR_PARAM for a NULL config, a NULL or unregistered name, a built-in name
+ * (use its own setter), options that cannot be copied, an invalid table returned by the
+ * factory, or while a client created from this config is connected; a factory error returns
+ * the factory's status. The message names the selected name. On failure the previous
+ * registration is unchanged. Built-in requirements such as the thread execution mode of the
+ * AWS provider do not apply here; aerospike_connect() validates every provider. The exception
+ * is a factory registered with as_config_register_binding_seed_provider(): in
+ * AS_DISCOVERY_EXECUTION_TEND the selection fails with AEROSPIKE_ERR_PARAM ("Invalid seed
+ * provider '<name>': Binding seed provider requires thread execution mode") before the factory
+ * is called.
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_select_seed_provider(as_config* config, const char* name, const as_map* options,
+	as_error* err);
+
+/**
+ * Select a registered address translator factory from code: call it with options and register
+ * the instance it returns as with as_config_set_address_translator(). Same rules as
+ * as_config_select_seed_provider().
+ *
+ * @relates as_config
+ */
+AS_EXTERN as_status
+as_config_select_address_translator(as_config* config, const char* name,
+	const as_map* options, as_error* err);
+
+/**
  * Add seed host(s) from a string with format: hostname1[:tlsname1][:port1],...
  * Hostname may also be an IP address in the following formats.
  *
@@ -905,6 +1386,10 @@ as_config_destroy(as_config* config);
  *
  * The host addresses will be copied.
  * The caller is responsible for the original string.
+ *
+ * An empty TLS name is the same as none: with TLS enabled, the host gets the
+ * default TLS name (cluster_name, or the host name). See as_config_tls for how
+ * the TLS name is matched against the server certificate.
  *
  * @code
  * as_config config;
@@ -1137,6 +1622,10 @@ as_config_tls_set_certstring(as_config* config, const char* certstring)
  * Add TLS host to seed the cluster.
  * The host address and TLS name will be copied.
  * The caller is responsible for the original address string.
+ *
+ * An empty TLS name is the same as none: with TLS enabled, the host gets the
+ * default TLS name (cluster_name, or the host name). See as_config_tls for how
+ * the TLS name is matched against the server certificate.
  *
  * @code
  * as_config config;

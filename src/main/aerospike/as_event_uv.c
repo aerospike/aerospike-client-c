@@ -777,8 +777,15 @@ as_uv_tls_handle_error(as_event_command* cmd, int rv, int e)
 	}
 
 	as_error err;
-	as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "TLS failed: %d %d %d %s",
-					rv, e, errcode, errbuf);
+	const char* rejected = cmd->conn->tls ? as_tls_rejected_name(cmd->conn->tls->ssl) : NULL;
+
+	if (rejected) {
+		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "Invalid TLS name: %s", rejected);
+	}
+	else {
+		as_error_update(&err, AEROSPIKE_ERR_ASYNC_CONNECTION, "TLS failed: %d %d %d %s",
+						rv, e, errcode, errbuf);
+	}
 	as_event_parse_error(cmd, &err);
 }
 

@@ -24,6 +24,7 @@
 #include <aerospike/as_info.h>
 #include <aerospike/as_log_macros.h>
 #include <aerospike/as_lookup.h>
+#include <aerospike/as_lookup_internal.h>
 #include <aerospike/as_password.h>
 #include <aerospike/as_peers.h>
 #include <aerospike/as_random.h>
@@ -38,6 +39,8 @@
 #include <citrusleaf/alloc.h>
 #include <citrusleaf/cf_byte_order.h>
 #include <citrusleaf/cf_clock.h>
+
+#include "as_discovery_internal.h"
 
 //---------------------------------
 // Globals
@@ -224,7 +227,7 @@ as_cluster_validate_size(as_cluster* cluster, as_error* err, uint32_t* size)
 /**
  * Add nodes using copy on write semantics.
  */
-void
+static void
 as_cluster_add_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_add)
 {
 	// Log node additions.
@@ -277,9 +280,14 @@ as_cluster_add_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_a
 const char*
 as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname)
 {
-	// Return alternate IP address if specified in ip_map.
+	// Configured seeds are only rewritten by the implicit static map over ip_map.
+	// A registered translator never rewrites configured seeds, and ip_map is then NULL.
 	// Useful when there are both internal and external addresses for the same node.
 	const char* alt = hostname;
+
+	if (cluster->translator_registered) {
+		return alt;
+	}
 
 	if (cluster->ip_map) {
 		as_vector* ip_map = cluster->ip_map;
@@ -295,6 +303,235 @@ as_cluster_get_alternate_host(as_cluster* cluster, const char* hostname)
 		}
 	}
 	return alt;
+}
+
+as_status
+as_cluster_translate_address(
+	as_cluster* cluster, as_error* err, const char* node_name, const char* tls_name,
+	const char* host, uint16_t port, as_endpoint_source source, as_host* out
+	)
+{
+	as_endpoint endpoint = {
+		.node_name = node_name,
+		.tls_name = tls_name,
+		.host = host,
+		.port = port,
+		.source = source
+	};
+
+	as_host mapped = {.name = NULL, .tls_name = NULL, .port = 0};
+	const char* name;
+	bool found;
+
+	if (cluster->translator_registered) {
+		name = cluster->translator.name;
+		found = cluster->translator.translate(&endpoint, &mapped, cluster->translator.udata);
+	}
+	else {
+		as_vector* ip_map = cluster->ip_map;
+		name = "static-map";
+		found = ip_map ?
+			as_discovery_static_map_translate((as_addr_map*)ip_map->list, ip_map->size, &endpoint, &mapped) :
+			false;
+	}
+	return as_discovery_complete_translation(err, name, cluster->translation_on_miss, &endpoint,
+		found, &mapped, out);
+}
+
+static bool
+as_cluster_find_node_by_reference(as_vector* /* <as_node*> */ nodes_to_remove, as_node* filter);
+
+// Return true if a node of the array other than the nodes being removed has the name.
+static bool
+as_cluster_has_live_name(as_nodes* nodes, as_vector* /* <as_node*> */ remove, const char* name)
+{
+	for (uint32_t i = 0; i < nodes->size; i++) {
+		as_node* node = nodes->array[i];
+
+		if (strcmp(node->name, name) == 0 && ! as_cluster_find_node_by_reference(remove, node)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static void
+as_cluster_close_node(as_cluster* cluster, as_node* node)
+{
+	// There is no need to delete nodes from partition tables because the nodes
+	// have already been set to inactive. Further connection requests will result
+	// in an exception and a different node will be tried.
+	as_error err;
+	as_status status = AEROSPIKE_OK;
+
+	pthread_mutex_lock(&cluster->metrics_lock);
+
+	if (cluster->metrics_enabled) {
+		status = as_metrics_runtime_node_close(&err, cluster, node);
+	}
+	pthread_mutex_unlock(&cluster->metrics_lock);
+
+	if (status != AEROSPIKE_OK) {
+		// Metrics failures should not interrupt cluster tend.
+		// Log warning and continue processing.
+		as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
+	}
+	as_node_deactivate(node);
+}
+
+/**
+ * Remove and add nodes in one copy on write swap: log and notify each change, update the feature
+ * flags and put the old array on the garbage collector stack. Removed nodes are released with the
+ * old array, and are neither closed nor removed from shared memory here.
+ */
+void
+as_cluster_replace_nodes_copy(
+	as_cluster* cluster, as_vector* /* <as_node*> */ add, as_vector* /* <as_node*> */ remove
+	)
+{
+	as_nodes* nodes_old = cluster->nodes;
+	uint32_t keep = 0;
+
+	for (uint32_t i = 0; i < nodes_old->size; i++) {
+		if (! as_cluster_find_node_by_reference(remove, nodes_old->array[i])) {
+			keep++;
+		}
+	}
+
+	as_nodes* nodes_new = as_nodes_create(keep + add->size);
+	uint32_t count = 0;
+
+	for (uint32_t i = 0; i < nodes_old->size; i++) {
+		as_node* node = nodes_old->array[i];
+
+		if (as_cluster_find_node_by_reference(remove, node)) {
+			as_log_info("Remove node %s %s", node->name, as_node_get_address_string(node));
+			as_cluster_event_notify(cluster, node, AS_CLUSTER_REMOVE_NODE);
+			// Released when nodes_old is destroyed.
+		}
+		else {
+			// Reserve because nodes_old releases its nodes when destroyed.
+			as_node_reserve(node);
+			nodes_new->array[count++] = node;
+		}
+	}
+
+	for (uint32_t i = 0; i < add->size; i++) {
+		// New nodes already have ref_count set to 1, so no need to reserve.
+		as_node* node = as_vector_get_ptr(add, i);
+		as_log_info("Add node %s %s", node->name, as_node_get_address_string(node));
+		as_cluster_event_notify(cluster, node, AS_CLUSTER_ADD_NODE);
+		nodes_new->array[count++] = node;
+	}
+
+	set_nodes(cluster, nodes_new);
+
+	cluster->has_partition_query = as_cluster_has_partition_query(nodes_new);
+	cluster->has_order_by = as_cluster_has_order_by(nodes_new);
+	cluster->has_query_ops_projection_ext = as_cluster_has_query_ops_projection_ext(nodes_new);
+
+	if (nodes_new->size == 0) {
+		as_cluster_event_notify(cluster, NULL, AS_CLUSTER_DISCONNECTED);
+	}
+
+	// Put old nodes on garbage collector stack.
+	as_gc_item item;
+	item.data = nodes_old;
+	item.release_fn = (as_release_fn)release_nodes;
+	as_vector_append(cluster->gc, &item);
+}
+
+/**
+ * Add and remove nodes in one copy on write swap, so readers never see two nodes with one name
+ * and the name of a replaced node is never missing. A node is registered under its name only
+ * when no node added after it has the same name, so an older node of that name is removed too.
+ * A newcomer whose name is still held is dropped. Removed nodes are deactivated only after the
+ * swap is published. On return add holds the added nodes and remove is cleared. Return true if
+ * any node was added.
+ */
+static bool
+as_cluster_swap_nodes(
+	as_cluster* cluster, as_vector* /* <as_node*> */ add, as_vector* /* <as_node*> */ remove
+	)
+{
+	as_nodes* nodes_old = cluster->nodes;
+
+	for (uint32_t i = 0; i < nodes_old->size; i++) {
+		as_node* node = nodes_old->array[i];
+
+		for (uint32_t j = i + 1; j < nodes_old->size; j++) {
+			if (strcmp(nodes_old->array[j]->name, node->name) == 0) {
+				as_peers_append_unique_node(remove, node);
+				break;
+			}
+		}
+	}
+
+	uint32_t add_size = 0;
+
+	for (uint32_t i = 0; i < add->size; i++) {
+		as_node* node = as_vector_get_ptr(add, i);
+		bool duplicate = as_cluster_has_live_name(nodes_old, remove, node->name);
+
+		for (uint32_t j = 0; j < add_size && ! duplicate; j++) {
+			duplicate = strcmp(((as_node*)as_vector_get_ptr(add, j))->name, node->name) == 0;
+		}
+
+		if (duplicate) {
+			// The newcomer has no connections other than its tend socket yet.
+			as_log_warn("Drop duplicate node %s %s", node->name, as_node_get_address_string(node));
+			as_node_release(node);
+			continue;
+		}
+		as_vector_set(add, add_size++, &node);
+	}
+	add->size = add_size;
+
+	if (add->size == 0 && remove->size == 0) {
+		return false;
+	}
+
+	// A collision can still drop a validated peer until it is added, so its connections are
+	// created only now. The published array still holds only active nodes meanwhile.
+	for (uint32_t i = 0; i < add->size; i++) {
+		as_node_create_min_connections(as_vector_get_ptr(add, i));
+	}
+
+	as_cluster_replace_nodes_copy(cluster, add, remove);
+	as_lookup_prune_valid_addresses(cluster, cluster->nodes);
+
+	for (uint32_t i = 0; i < remove->size; i++) {
+		as_cluster_close_node(cluster, as_vector_get_ptr(remove, i));
+	}
+
+	if (cluster->shm_info) {
+		if (remove->size > 0) {
+			// Shared memory keeps one slot per node name. A slot whose name is added again
+			// keeps its active flag, and as_shm_add_nodes() changes its address in place, so
+			// other processes never see the name missing.
+			as_vector cleared;
+			as_vector_inita(&cleared, sizeof(as_node*), remove->size);
+
+			for (uint32_t i = 0; i < remove->size; i++) {
+				as_node* node = as_vector_get_ptr(remove, i);
+
+				if (! as_peers_find_local_node(add, node->name)) {
+					as_vector_append(&cleared, &node);
+				}
+			}
+
+			if (cleared.size > 0) {
+				as_shm_remove_nodes(cluster, &cleared);
+			}
+			as_vector_destroy(&cleared);
+		}
+
+		if (add->size > 0) {
+			as_shm_add_nodes(cluster, add);
+		}
+	}
+	as_vector_clear(remove);
+	return add->size > 0;
 }
 
 static void
@@ -330,40 +567,126 @@ as_cluster_refresh_peers(as_cluster* cluster, as_peers* peers)
 			}
 		}
 
-		if (peer_nodes->size > 0) {
-			// Add new peer nodes to cluster.
-			as_cluster_add_nodes(cluster, peer_nodes);
-			as_vector_clear(&nodes);
-		}
-		else {
+		// Add new peer nodes and remove the nodes they replace in one swap.
+		if (! as_cluster_swap_nodes(cluster, peer_nodes, &peers->nodes_to_remove)) {
 			break;
 		}
+		as_vector_clear(&nodes);
 	}
 	as_vector_destroy(&nodes);
 }
 
-static as_status
-as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool enable_warnings)
+// Return true if addr is one of the addresses of iter.
+static bool
+as_cluster_is_resolved(as_address_iterator* iter, struct sockaddr* addr)
 {
+	for (struct addrinfo* ai = iter->addresses; ai; ai = ai->ai_next) {
+		if (as_address_equals(ai->ai_addr, addr)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+// Room kept for "; and N more" until the last seed is listed.
+#define AS_SEED_FAILURES_TAIL 24
+
+// The init error when no seed connects: each seed with the first error it failed with.
+typedef struct as_seed_failures_s {
+	char message[AS_ERROR_MESSAGE_MAX_SIZE];
+	uint32_t len;
+	uint32_t count;
+	uint32_t added;
+	uint32_t omitted;
+} as_seed_failures;
+
+static void
+as_seed_failures_init(as_seed_failures* f, uint32_t count)
+{
+	int len = snprintf(f->message, sizeof(f->message), "Failed to connect to [%u] host(s): ", count);
+	f->len = len > 0 ? (uint32_t)len : 0;
+	f->count = count;
+	f->added = 0;
+	f->omitted = 0;
+}
+
+// List the next seed, with no message when it is NULL. A seed that does not fit, and every seed
+// after it, is counted in "; and N more". The first seed is cut to fit instead.
+static void
+as_seed_failures_add(as_seed_failures* f, const as_host* host, const char* message)
+{
+	uint32_t index = f->added++;
+
+	if (f->omitted > 0) {
+		f->omitted++;
+		return;
+	}
+
+	char entry[AS_ERROR_MESSAGE_MAX_SIZE];
+	int n = snprintf(entry, sizeof(entry), "%s%s %u%s%s", index > 0 ? "; " : "", host->name,
+		host->port, message ? " " : "", message ? message : "");
+	size_t len = n < 0 ? 0 : ((size_t)n < sizeof(entry) ? (size_t)n : sizeof(entry) - 1);
+	size_t reserve = index + 1 < f->count ? AS_SEED_FAILURES_TAIL : 0;
+	size_t room = sizeof(f->message) - 1 - f->len - reserve;
+
+	if (len > room) {
+		if (index > 0) {
+			f->omitted++;
+			return;
+		}
+		len = room;
+	}
+	memcpy(f->message + f->len, entry, len);
+	f->len += (uint32_t)len;
+	f->message[f->len] = 0;
+}
+
+static const char*
+as_seed_failures_end(as_seed_failures* f)
+{
+	if (f->omitted > 0) {
+		snprintf(f->message + f->len, sizeof(f->message) - f->len, "; and %u more", f->omitted);
+	}
+	return f->message;
+}
+
+static as_status
+as_cluster_seed_node(
+	as_cluster* cluster, as_error* err, as_peers* peers, as_seed_snapshot* seeds,
+	bool enable_warnings
+	)
+{
+	const as_vector* hosts = as_seed_snapshot_hosts(seeds);
 	as_node* node = NULL;
 	as_node* fallback = NULL;
 	as_node_info node_info;
 	as_error error_local;
 	as_error_init(&error_local);
 	as_status conn_status = AEROSPIKE_ERR_CLIENT;
-	
-	pthread_mutex_lock(&cluster->seed_lock);
-	as_vector* seeds = cluster->seeds;
 
-	for (uint32_t i = 0; i < seeds->size && node == NULL; i++) {
-		as_host* seed = as_vector_get(seeds, i);
+	// Keep the first translation, collision or alternate address error so initialization reports
+	// it instead of a generic connection failure.
+	as_error topology_error;
+	bool has_topology_error = false;
+
+	if (hosts->size == 0) {
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "No seed host to connect to");
+	}
+
+	as_seed_failures failures;
+	as_seed_failures_init(&failures, hosts->size);
+
+	for (uint32_t i = 0; i < hosts->size && node == NULL; i++) {
+		as_host* seed = as_vector_get((as_vector*)hosts, i);
 
 		as_host host;
-		host.name = (char*)as_cluster_get_alternate_host(cluster, seed->name);
+		host.name = as_seed_snapshot_uses_ip_map(seeds, i) ?
+			(char*)as_cluster_get_alternate_host(cluster, seed->name) : seed->name;
 		host.tls_name = seed->tls_name;
 		host.port = seed->port;
 
 		if (as_peers_find_invalid_host(peers, &host)) {
+			as_seed_failures_add(&failures, &host, NULL);
 			continue;
 		}
 
@@ -376,20 +699,28 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 			if (enable_warnings) {
 				as_log_warn("Failed to lookup %s %d. %s %s", host.name, host.port, as_error_string(status), error_local.message);
 			}
+			as_seed_failures_add(&failures, &host, error_local.message);
 			continue;
 		}
 
 		struct sockaddr* addr;
 		bool found_node = false;
+		bool listed = false;
+		bool alternate_missing;
 
 		while (as_lookup_next(&iter, &addr)) {
-			status = as_lookup_node(cluster, &error_local, &host, addr, true, &node_info);
+			status = as_lookup_node(cluster, &error_local, &host, addr, true, &node_info,
+				&alternate_missing);
 			
 			if (status == AEROSPIKE_OK) {
 				node = as_node_create(cluster, &node_info);
 
 				if (iter.hostname_is_alias) {
 					as_node_set_hostname(node, host.name);
+
+					// Load balancer detection may have replaced the address.
+					node->hostname_resolved = as_cluster_is_resolved(&iter,
+						(struct sockaddr*)&node_info.addr);
 				}
 
 				peers->refresh_count = 0;
@@ -403,6 +734,11 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 					conn_status = status;
 					as_node_destroy(node);
 					node = NULL;
+
+					if (! listed) {
+						as_seed_failures_add(&failures, &host, error_local.message);
+						listed = true;
+					}
 					continue;
 				}
 				found_node = true;
@@ -432,15 +768,29 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 					as_log_warn("Failed to connect to seed %s %d. %s %s", host.name, host.port, as_error_string(status), error_local.message);
 				}
 				conn_status = status;
+
+				if (! has_topology_error &&
+					(alternate_missing || as_peers_is_topology_error(status))) {
+					topology_error = error_local;
+					has_topology_error = true;
+				}
+
+				if (! listed) {
+					as_seed_failures_add(&failures, &host, error_local.message);
+					listed = true;
+				}
 			}
 		}
 		as_lookup_end(&iter);
 
 		if (! found_node) {
 			as_peers_add_invalid_host(peers, &host);
+
+			if (! listed) {
+				as_seed_failures_add(&failures, &host, NULL);
+			}
 		}
 	}
-	pthread_mutex_unlock(&cluster->seed_lock);
 
 	if (! node && fallback) {
 		node = fallback;
@@ -450,7 +800,16 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 	}
 
 	if (! node) {
-		return as_error_set_message(err, conn_status, "Failed to connect");
+		if (has_topology_error) {
+			*err = topology_error;
+			return err->code;
+		}
+
+		if (peers->has_topology_error) {
+			*err = peers->topology_error;
+			return err->code;
+		}
+		return as_error_set_message(err, conn_status, as_seed_failures_end(&failures));
 	}
 
 	as_node_create_min_connections(node);
@@ -464,6 +823,7 @@ as_cluster_seed_node(as_cluster* cluster, as_error* err, as_peers* peers, bool e
 
 	for (uint32_t i = 0; i < peer_nodes->size; i++) {
 		as_node* n = as_vector_get_ptr(peer_nodes, i);
+		as_node_create_min_connections(n);
 		as_vector_append(&nodes_to_add, &n);
 	}
 
@@ -537,66 +897,6 @@ as_cluster_find_node_by_reference(as_vector* /* <as_node*> */ nodes_to_remove, a
 	return false;
 }
 
-/**
- * Remove nodes using copy on write semantics.
- */
-void
-as_cluster_remove_nodes_copy(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove)
-{
-	// Create temporary nodes array.
-	// Since nodes are only marked for deletion using node references in the nodes array,
-	// and the tend thread is the only thread modifying nodes, we are guaranteed that nodes
-	// in nodes_to_remove exist.  Therefore, we know the final array size.
-	as_nodes* nodes_old = cluster->nodes;
-	as_nodes* nodes_new = as_nodes_create(nodes_old->size - nodes_to_remove->size);
-	as_node* node;
-	uint32_t count = 0;
-		
-	// Add nodes that are not in remove list.
-	for (uint32_t i = 0; i < nodes_old->size; i++) {
-		node = nodes_old->array[i];
-		
-		if (as_cluster_find_node_by_reference(nodes_to_remove, node)) {
-			as_log_info("Remove node %s %s", node->name, as_node_get_address_string(node));
-			as_cluster_event_notify(cluster, node, AS_CLUSTER_REMOVE_NODE);
-			// No need to release node here because it will be released when nodes_old is destroyed.
-		}
-		else {
-			if (count < nodes_new->size) {
-				// This node need to be reserved because when nodes_old is destroyed,
-				// this node will also be released.
-				as_node_reserve(node);
-				nodes_new->array[count++] = node;
-			}
-			else {
-				as_log_error("Remove node error. Node count exceeded %u, %s %s", count, node->name, as_node_get_address_string(node));
-			}
-		}
-	}
-		
-	// Do sanity check to make sure assumptions are correct.
-	if (count < nodes_new->size) {
-		as_log_warn("Node remove mismatch. Expected %u Received %u", nodes_new->size, count);
-	}
-
-	// Replace nodes with copy.
-	set_nodes(cluster, nodes_new);
-
-	cluster->has_partition_query = as_cluster_has_partition_query(nodes_new);
-	cluster->has_order_by = as_cluster_has_order_by(nodes_new);
-	cluster->has_query_ops_projection_ext = as_cluster_has_query_ops_projection_ext(nodes_new);
-
-	if (nodes_new->size == 0) {
-		as_cluster_event_notify(cluster, NULL, AS_CLUSTER_DISCONNECTED);
-	}
-
-	// Put old nodes on garbage collector stack.
-	as_gc_item item;
-	item.data = nodes_old;
-	item.release_fn = (as_release_fn)release_nodes;
-	as_vector_append(cluster->gc, &item);
-}
-
 bool
 as_cluster_sample_operational(as_cluster* cluster)
 {
@@ -662,43 +962,6 @@ as_cluster_add_command_latency(as_cluster* cluster, as_latency_type latency_type
 	}
 
 	as_latency_add(cluster->command_latency[latency_type], elapsed_nanos);
-}
-
-static void
-as_cluster_remove_nodes(as_cluster* cluster, as_vector* /* <as_node*> */ nodes_to_remove)
-{
-	// There is no need to delete nodes from partition tables because the nodes
-	// have already been set to inactive. Further connection requests will result
-	// in an exception and a different node will be tried.
-	as_error err;
-	
-	// Set node to inactive.
-	for (uint32_t i = 0; i < nodes_to_remove->size; i++) {
-		as_node* node = as_vector_get_ptr(nodes_to_remove, i);
-		as_status status = AEROSPIKE_OK;
-
-		pthread_mutex_lock(&cluster->metrics_lock);
-
-		if (cluster->metrics_enabled) {
-			status = as_metrics_runtime_node_close(&err, cluster, node);
-		}
-		pthread_mutex_unlock(&cluster->metrics_lock);
-		
-		if (status != AEROSPIKE_OK) {
-			// Metrics failures should not interrupt cluster tend.
-			// Log warning and continue processing.
-			as_log_warn("Metrics error: %s %s", as_error_string(status), err.message);
-		}
-		as_node_deactivate(node);
-	}
-
-	// Remove all nodes at once to avoid copying entire array multiple times.
-	as_cluster_remove_nodes_copy(cluster, nodes_to_remove);
-	
-	// Update shared memory nodes.
-	if (cluster->shm_info) {
-		as_shm_remove_nodes(cluster, nodes_to_remove);
-	}
 }
 
 static as_status
@@ -811,8 +1074,8 @@ as_cluster_manage(as_cluster* cluster)
 {
 	cluster->tend_count++;
 
-	// Balance connections every 30 tend intervals.
-	if (cluster->tend_count % 30 == 0) {
+	// Balance connections every AS_CLUSTER_BALANCE_TENDS tend intervals.
+	if (cluster->tend_count % AS_CLUSTER_BALANCE_TENDS == 0) {
 		as_cluster_balance_connections(cluster);
 	}
 
@@ -892,11 +1155,8 @@ as_cluster_init_error(as_vector* invalid_hosts, as_error* err)
 	return err->code;
 }
 
-/**
- * Check health of all nodes in the cluster.
- */
-as_status
-as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
+static as_status
+as_cluster_tend_nodes(as_cluster* cluster, as_error* err, bool is_init)
 {
 	// All node additions/deletions are performed in tend thread.
 	// Garbage collect data structures released in previous tend.
@@ -913,8 +1173,12 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 	as_vector_inita(&peers.invalid_hosts, sizeof(as_host), 4);
 	peers.refresh_count = 0;
 	peers.gen_changed = false;
+	peers.view_changed = false;
+	peers.has_topology_error = false;
+	peers.alternate_missing = false;
 
 	as_nodes* nodes = cluster->nodes;
+	as_nodes* initial_nodes = nodes;
 	bool rebalance = false;
 	
 	for (uint32_t i = 0; i < nodes->size; i++) {
@@ -926,7 +1190,16 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 	
 	// If active nodes don't exist, seed cluster.
 	if (nodes->size == 0) {
-		as_status status = as_cluster_seed_node(cluster, err, &peers, is_init);
+		// Reseed now from the seeds in hand. A refresh woken here, or one already running, only
+		// affects later attempts.
+		as_seed_snapshot* seeds = as_seed_manager_reserve(cluster->seed_manager);
+
+		if (! is_init) {
+			as_seed_manager_request_urgent(cluster->seed_manager);
+		}
+
+		as_status status = as_cluster_seed_node(cluster, err, &peers, seeds, is_init);
+		as_seed_snapshot_release(seeds);
 		
 		if (status != AEROSPIKE_OK) {
 			as_cluster_destroy_peers(&peers);
@@ -935,11 +1208,18 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 
 		nodes = cluster->nodes;
 
-		// Abort cluster init if all peers of the seed are not reachable and
-		// fail_if_not_connected is true.
+		// Abort cluster init if all peers of the seed are not reachable, or a peer has no
+		// alternate address, and fail_if_not_connected is true. Collisions and translation
+		// misses alone do not fail init.
 		if (is_init && cluster->fail_if_not_connected && nodes->size == 1 &&
-			peers.invalid_hosts.size > 0) {
-			status = as_cluster_init_error(&peers.invalid_hosts, err);
+			(peers.invalid_hosts.size > 0 || peers.alternate_missing)) {
+			if (peers.has_topology_error) {
+				*err = peers.topology_error;
+				status = err->code;
+			}
+			else {
+				status = as_cluster_init_error(&peers.invalid_hosts, err);
+			}
 			as_cluster_destroy_peers(&peers);
 			return status;
 		}
@@ -977,9 +1257,16 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 					as_log_info("Node %s refresh failed: %s %s",
 						node->name, as_error_string(status), error_local.message);
 					peers.gen_changed = true;
+					node->failed_tends++;
 					as_cluster_node_failure(node);
 				}
 			}
+		}
+
+		// Move nodes that failed their last tends to another address of their hostname. The
+		// swap below adds each moved node and removes the node it replaces.
+		for (uint32_t i = 0; i < nodes->size; i++) {
+			as_peers_move_node(&peers, cluster, nodes->array[i]);
 		}
 
 		// Refresh peers when necessary.
@@ -1004,20 +1291,14 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 
 			// Remove nodes determined by refreshed peers.
 			as_cluster_find_nodes_to_remove(cluster, &peers);
-
-			// Remove nodes in a batch.
-			if (peers.nodes_to_remove.size > 0) {
-				as_cluster_remove_nodes(cluster, &peers.nodes_to_remove);
-				nodes = cluster->nodes;
-			}
 		}
 
-		// Add peer nodes to cluster.
-		if (peers.nodes.size > 0) {
-			as_cluster_add_nodes(cluster, &peers.nodes);
+		// Add peer nodes and remove the nodes they replace in one swap. The swap also runs
+		// without peer changes, so a node that no longer holds its name is removed on every tend.
+		if (as_cluster_swap_nodes(cluster, &peers.nodes, &peers.nodes_to_remove)) {
 			as_cluster_refresh_peers(cluster, &peers);
-			nodes = cluster->nodes;
 		}
+		nodes = cluster->nodes;
 	}
 
 	cluster->invalid_node_count += as_peers_invalid_count(&peers);
@@ -1061,9 +1342,35 @@ as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
 		as_incr_uint32(&cluster->shm_info->cluster_shm->rebalance_gen);
 	}
 
+	// Notify the translator once per tend when the node set or an advertised address changed.
+	// The initial view is never reported.
+	bool view_changed = peers.view_changed || cluster->nodes != initial_nodes;
+
 	as_cluster_destroy_peers(&peers);
+
+	if (cluster->translation_view_callback && ! is_init && view_changed) {
+		uint32_t generation = ++cluster->translation_view_generation;
+		cluster->translator.on_cluster_view_changed(generation, cluster->translator.udata);
+	}
+
 	as_cluster_manage(cluster);
 	return AEROSPIKE_OK;
+}
+
+/**
+ * Check health of all nodes in the cluster.
+ */
+as_status
+as_cluster_tend(as_cluster* cluster, as_error* err, bool is_init)
+{
+	as_status status = as_cluster_tend_nodes(cluster, err, is_init);
+
+	// Seed refresh runs after the reseed attempt and also when that attempt failed, so discovery
+	// can recover the cluster on a later tend.
+	if (! is_init) {
+		as_seed_manager_tend(cluster->seed_manager);
+	}
+	return status;
 }
 
 /**
@@ -1131,57 +1438,25 @@ as_cluster_tender(void* data)
 	return NULL;
 }
 
-static int
-as_cluster_find_seed(as_vector* seeds, const char* hostname, uint16_t port) {
-	for (uint32_t i = 0; i < seeds->size; i++) {
-		as_host* seed = as_vector_get(seeds, i);
-
-		if (seed->port == port && strcmp(seed->name, hostname) == 0) {
-			return (int)i;
-		}
-	}
-	return -1;
-}
-
 void
 as_cluster_add_seed(as_cluster* cluster, const char* hostname, const char* tls_name, uint16_t port)
 {
-	pthread_mutex_lock(&cluster->seed_lock);
-	as_vector* seeds = cluster->seeds;
-
-	if (as_cluster_find_seed(seeds, hostname, port) < 0) {
-		as_host* seed = as_vector_reserve(seeds);
-		as_host_copy_fields(seed, hostname, tls_name, port);
-		as_log_debug("Add seed %s %d", seed->name, seed->port);
-	}
-	pthread_mutex_unlock(&cluster->seed_lock);
+	as_host host = {.name = (char*)hostname, .tls_name = (char*)tls_name, .port = port};
+	as_vector hosts;
+	as_vector_inita(&hosts, sizeof(as_host), 1);
+	as_vector_append(&hosts, &host);
+	as_seed_manager_add_hosts(cluster->seed_manager, &hosts);
+	as_vector_destroy(&hosts);
 }
 
 void
 as_cluster_remove_seed(as_cluster* cluster, const char* hostname, uint16_t port)
 {
-	pthread_mutex_lock(&cluster->seed_lock);
-	as_vector* seeds = cluster->seeds;
-
-	// Remove all seeds even if there are duplicates.
-	int index;
-
-	do {
-		index = as_cluster_find_seed(seeds, hostname, port);
-
-		if (index >= 0) {
-			as_host* seed = as_vector_get(seeds, index);
-			as_host_destroy(seed);
-			as_vector_remove(seeds, index);
-			as_log_debug("Remove seed %s %d", hostname, port);
-		}
-	} while (index >= 0);
-
-	pthread_mutex_unlock(&cluster->seed_lock);
+	as_seed_manager_remove_host(cluster->seed_manager, hostname, port);
 }
 
 static void
-as_cluster_add_seed_address(as_cluster* cluster, as_node* node, as_address* address)
+as_cluster_add_seed_address(as_vector* hosts, as_node* node, as_address* address)
 {
 	struct sockaddr* addr = (struct sockaddr*)&address->addr;
 	char address_name[AS_IP_ADDRESS_SIZE];
@@ -1189,29 +1464,37 @@ as_cluster_add_seed_address(as_cluster* cluster, as_node* node, as_address* addr
 	as_address_short_name(addr, address_name, sizeof(address_name));
 	uint16_t port = as_address_port(addr);
 
-	as_cluster_add_seed(cluster, address_name, node->tls_name, port);
+	as_host_copy_fields(as_vector_reserve(hosts), address_name, node->tls_name, port);
 }
 
 void
 as_cluster_add_seeds(as_cluster* cluster)
 {
-	// Add other nodes as seeds, if they don't already exist.
+	// Add other nodes as seeds, if they don't already exist. Publish them as one snapshot.
 	as_nodes* nodes = cluster->nodes;
+	as_vector* hosts = as_vector_create(sizeof(as_host), 16);
 
 	for (uint32_t i = 0; i < nodes->size; i++) {
 		as_node* node = nodes->array[i];
 		as_address* addresses = node->addresses;
 
 		for (uint32_t j = 0; j < node->address4_size; j++) {
-			as_cluster_add_seed_address(cluster, node, &addresses[j]);
+			as_cluster_add_seed_address(hosts, node, &addresses[j]);
 		}
 		
 		uint32_t max = AS_ADDRESS4_MAX + node->address6_size;
 		
 		for (uint32_t j = AS_ADDRESS4_MAX; j < max; j++) {
-			as_cluster_add_seed_address(cluster, node, &addresses[j]);
+			as_cluster_add_seed_address(hosts, node, &addresses[j]);
 		}
 	}
+
+	as_seed_manager_add_hosts(cluster->seed_manager, hosts);
+
+	for (uint32_t i = 0; i < hosts->size; i++) {
+		as_host_destroy(as_vector_get(hosts, i));
+	}
+	as_vector_destroy(hosts);
 }
 
 as_status
@@ -1368,7 +1651,7 @@ as_cluster_set_max_socket_idle(as_cluster* cluster, uint32_t max_socket_idle_sec
 {
 	if (max_socket_idle_sec == 0) {
 		cluster->max_socket_idle_ns_tran = 0;
-		cluster->max_socket_idle_ns_trim = (uint64_t)55 * 1000 * 1000 * 1000;
+		cluster->max_socket_idle_ns_trim = (uint64_t)AS_CLUSTER_IDLE_TRIM_DEFAULT_SEC * 1000 * 1000 * 1000;
 	}
 	else {
 		cluster->max_socket_idle_ns_tran = (uint64_t)max_socket_idle_sec * 1000 * 1000 * 1000;
@@ -1379,13 +1662,22 @@ as_cluster_set_max_socket_idle(as_cluster* cluster, uint32_t max_socket_idle_sec
 static as_status
 as_cluster_force_single_node(as_cluster* cluster, as_error* err)
 {
+	as_seed_snapshot* seeds = as_seed_manager_reserve(cluster->seed_manager);
+	const as_vector* hosts = as_seed_snapshot_hosts(seeds);
+
+	if (hosts->size == 0) {
+		as_seed_snapshot_release(seeds);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Cluster seed(s) failed");
+	}
+
 	// Validate first seed.
-	as_host* host = as_vector_get(cluster->seeds, 0);
+	as_host* host = as_vector_get((as_vector*)hosts, 0);
 
 	as_address_iterator iter;
 	as_status status = as_lookup_host(&iter, err, host->name, host->port);
 
 	if (status != AEROSPIKE_OK) {
+		as_seed_snapshot_release(seeds);
 		return status;
 	}
 
@@ -1395,7 +1687,7 @@ as_cluster_force_single_node(as_cluster* cluster, as_error* err)
 
 	while (as_lookup_next(&iter, &addr)) {
 		as_error_reset(err);
-		status = as_lookup_node(cluster, err, host, addr, true, &node_info);
+		status = as_lookup_node(cluster, err, host, addr, true, &node_info, NULL);
 
 		if (status == AEROSPIKE_OK) {
 			node = as_node_create(cluster, &node_info);
@@ -1403,6 +1695,7 @@ as_cluster_force_single_node(as_cluster* cluster, as_error* err)
 		}
 	}
 	as_lookup_end(&iter);
+	as_seed_snapshot_release(seeds);
 
 	if (! node) {
 		// Return last error.
@@ -1541,20 +1834,34 @@ as_cluster_create(aerospike* as, as_error* err)
 		return err->code;
 	}
 
+	if (config->auth_mode == AS_AUTH_PKI && *(config->password)) {
+		return as_error_set_message(err, AEROSPIKE_FORBIDDEN_PASSWORD,
+			"Password authentication is disabled for PKI-only users. Please authenticate using your certificate.");
+	}
+
+	if (config->translation.on_miss != AS_TRANSLATION_PASS_THROUGH &&
+		config->translation.on_miss != AS_TRANSLATION_STRICT) {
+		return as_error_update(err, AEROSPIKE_ERR_PARAM, "Invalid translation on_miss: %d",
+			(int)config->translation.on_miss);
+	}
+
+	// Validates the discovery settings. The provider is not refreshed yet.
+	as_seed_manager* seed_manager;
+
+	if (as_seed_manager_create(err, config, &seed_manager) != AEROSPIKE_OK) {
+		return err->code;
+	}
+
 	as_config_massage_error_rate(config);
 
 	char* pass_hash = NULL;
 
-	if (config->auth_mode == AS_AUTH_PKI) {
-		if (*(config->password)) {
-			return as_error_set_message(err, AEROSPIKE_FORBIDDEN_PASSWORD,
-				"Password authentication is disabled for PKI-only users. Please authenticate using your certificate.");
-		}
-	}
-	else if (*(config->user)) {
+	if (config->auth_mode != AS_AUTH_PKI && *(config->user)) {
 		pass_hash = cf_malloc(AS_PASSWORD_HASH_SIZE);
 
 		if (! as_password_get_constant_hash(config->password, pass_hash)) {
+			cf_free(pass_hash);
+			as_seed_manager_destroy(seed_manager);
 			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "Failed to hash password");
 		}
 	}
@@ -1565,6 +1872,7 @@ as_cluster_create(aerospike* as, as_error* err)
 	WSADATA data;
 	if (WSAStartup(version, &data) != 0) {
 		cf_free(pass_hash);
+		as_seed_manager_destroy(seed_manager);
 		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "WSAStartup failed")
 	}
 #endif
@@ -1621,6 +1929,16 @@ as_cluster_create(aerospike* as, as_error* err)
 	cluster->use_services_alternate = config->use_services_alternate;
 	cluster->rack_aware = config->rack_aware;
 	cluster->fail_if_not_connected = config->fail_if_not_connected;
+	cluster->translation_on_miss = config->translation.on_miss;
+	cluster->translation_view_generation = 0;
+	cluster->translator_registered = config->translation.provider.translate != NULL;
+	cluster->translation_view_callback = false;
+	memset(&cluster->translator, 0, sizeof(cluster->translator));
+
+	if (cluster->translator_registered) {
+		cluster->translator = config->translation.provider;
+		cluster->translation_view_callback = cluster->translator.on_cluster_view_changed != NULL;
+	}
 
 	if (config->rack_ids) {
 		uint32_t max = config->rack_ids->size;
@@ -1638,28 +1956,29 @@ as_cluster_create(aerospike* as, as_error* err)
 
 	as_cluster_set_max_socket_idle(cluster, config->max_socket_idle);
 
-	// Initialize seed hosts.  Round initial capacity up to multiple of 16.
-	as_vector* src = config->hosts;
-	as_vector* trg = as_vector_create(sizeof(as_host), (src->size + 15) & ~15);
-	for (uint32_t i = 0; i < src->size; i++) {
-		as_host* src_seed = as_vector_get(src, i);
-		as_host* trg_seed = as_vector_reserve(trg);
-		as_host_copy(src_seed, trg_seed);
-	}
-	cluster->seeds = trg;
-	pthread_mutex_init(&cluster->seed_lock, NULL);
+	cluster->seed_manager = seed_manager;
 	pthread_mutex_init(&cluster->metrics_lock, NULL);
 
-	// Initialize IP map translation if provided.
+	// Initialize IP map translation if provided. ip_map is ignored while a translator is
+	// registered, configured seeds included.
 	if (config->ip_map && config->ip_map_size > 0) {
-		cluster->ip_map = as_vector_create(sizeof(as_addr_map), config->ip_map_size);
+		if (cluster->translator_registered) {
+			char label[AS_DISCOVERY_TRANSLATOR_LABEL_SIZE];
+			as_log_warn("ip_map is ignored while address translator %s is registered, configured "
+				"seeds included. Move the mappings into the translator (for example port-map "
+				"entries) and configure seeds with reachable addresses",
+				as_discovery_translator_label(label, cluster->translator.name));
+		}
+		else {
+			cluster->ip_map = as_vector_create(sizeof(as_addr_map), config->ip_map_size);
 
-		for (uint32_t i = 0; i < config->ip_map_size; i++) {
-			as_addr_map* src_addr = &config->ip_map[i];
-			as_addr_map* trg_addr = as_vector_reserve(cluster->ip_map);
+			for (uint32_t i = 0; i < config->ip_map_size; i++) {
+				as_addr_map* src_addr = &config->ip_map[i];
+				as_addr_map* trg_addr = as_vector_reserve(cluster->ip_map);
 
-			trg_addr->orig = cf_strdup(src_addr->orig);
-			trg_addr->alt = cf_strdup(src_addr->alt);
+				trg_addr->orig = cf_strdup(src_addr->orig);
+				trg_addr->alt = cf_strdup(src_addr->alt);
+			}
 		}
 	}
 
@@ -1777,18 +2096,28 @@ as_cluster_create(aerospike* as, as_error* err)
 		}
 	}
 
-	if (config->force_single_node) {
-		if (config->use_shm) {
-			as_cluster_destroy(cluster);
-			return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "force_single_node does not support shared memory tending");
-		}
+	if (config->force_single_node && config->use_shm) {
+		as_cluster_destroy(cluster);
+		return as_error_set_message(err, AEROSPIKE_ERR_CLIENT, "force_single_node does not support shared memory tending");
+	}
 
+	// Every bootstrap path reads the seeds published here.
+	if (as_seed_manager_start(cluster->seed_manager, err) != AEROSPIKE_OK) {
+		as_cluster_destroy(cluster);
+		return err->code;
+	}
+
+	if (config->force_single_node) {
 		as_status status = as_cluster_force_single_node(cluster, err);
 
 		if (status != AEROSPIKE_OK) {
 			as_cluster_destroy(cluster);
 			return status;
 		}
+
+		// The forced node is never reseeded, so later seed refreshes would have no effect.
+		as_seed_manager_stop(cluster->seed_manager);
+		as_seed_manager_connected(cluster->seed_manager);
 		as->cluster = cluster;
 		return status;
 	}
@@ -1827,6 +2156,7 @@ as_cluster_create(aerospike* as, as_error* err)
 		pthread_attr_destroy(&attr);
 	}
 
+	as_seed_manager_connected(cluster->seed_manager);
 	as->cluster = cluster;
 	return AEROSPIKE_OK;
 }
@@ -1834,6 +2164,15 @@ as_cluster_create(aerospike* as, as_error* err)
 void
 as_cluster_destroy(as_cluster* cluster)
 {
+	// Stop seed refreshes first so that none starts while tend is joined. Wait at most
+	// refresh_timeout_ms (the remaining connect budget when connect failed) for an in-progress
+	// refresh. A refresh still running then finishes on the discovery thread, which owns the seed
+	// manager and runs any deferred provider destroy. Tend may still read seeds; urgent requests
+	// are ignored from now on.
+	if (cluster->seed_manager) {
+		as_seed_manager_stop(cluster->seed_manager);
+	}
+
 	// Stop tend thread and wait till finished.
 	pthread_mutex_lock(&cluster->tend_lock);
 
@@ -1874,6 +2213,7 @@ as_cluster_destroy(as_cluster* cluster)
 	// Release everything in garbage collector.
 	as_cluster_gc(cluster->gc);
 	as_vector_destroy(cluster->gc);
+	as_lookup_destroy_valid_addresses(cluster);
 		
 	// Flush and destroy the timeout recovery queue.
 	// Pending recover entries still own their sockets; abort closes them
@@ -1908,15 +2248,9 @@ as_cluster_destroy(as_cluster* cluster)
 	as_vector_destroy(cluster->rack_ids);
 
 	// Destroy seeds.
-	pthread_mutex_lock(&cluster->seed_lock);
-	as_vector* seeds = cluster->seeds;
-	for (uint32_t i = 0; i < seeds->size; i++) {
-		as_host* seed = as_vector_get(seeds, i);
-		as_host_destroy(seed);
+	if (cluster->seed_manager) {
+		as_seed_manager_destroy(cluster->seed_manager);
 	}
-	as_vector_destroy(seeds);
-	pthread_mutex_unlock(&cluster->seed_lock);
-	pthread_mutex_destroy(&cluster->seed_lock);
 	pthread_mutex_destroy(&cluster->metrics_lock);
 
 	// Destroy tend lock and condition.
